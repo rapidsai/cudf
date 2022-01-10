@@ -1706,21 +1706,19 @@ def test_read_parquet_partitioned_filtered(
         row_groups=row_groups,
         categorical_partitions=use_cat,
     )
+    expect["b"] = expect["b"].astype(str)
+    expect["c"] = expect["c"].astype(int)
     if use_cat:
         assert got.dtypes["b"] == "category"
         assert got.dtypes["c"] == "category"
+        got["b"] = got["b"].astype(str)
+        got["c"] = got["c"].astype(int)
     else:
         # Check that we didn't get categorical
         # columns, but convert back to categorical
         # for comparison with pandas
         assert got.dtypes["b"] == "object"
         assert got.dtypes["c"] == "int"
-        got["b"] = pd.Categorical(
-            got["b"].to_pandas(), categories=list("abcd")
-        )
-        got["c"] = pd.Categorical(
-            got["c"].to_pandas(), categories=np.arange(4)
-        )
     assert_eq(expect, got)
 
     # Filter on non-partitioned column.
@@ -2262,6 +2260,15 @@ def test_parquet_decimal_precision_empty(tmpdir):
 
 def test_parquet_reader_brotli(datadir):
     fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_one_level_list(datadir):
+    fname = datadir / "one_level_list.parquet"
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname).to_pandas(nullable=True)

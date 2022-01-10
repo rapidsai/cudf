@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,12 +33,18 @@ namespace cudf {
 //! Utility functions
 namespace util {
 /**
- * Finds the smallest integer not less than `number_to_round` and modulo `S` is
- * zero. This function assumes that `number_to_round` is non-negative and
- * `modulus` is positive.
+ * @brief Rounds `number_to_round` up to the next multiple of modulus
+ *
+ * @tparam S type to return
+ * @param number_to_round number that is being rounded
+ * @param modulus value to which to round
+ * @return smallest integer greater than `number_to_round` and modulo `S` is zero.
+ *
+ * @note This function assumes that `number_to_round` is non-negative and
+ * `modulus` is positive. The safety is in regard to rollover.
  */
 template <typename S>
-inline S round_up_safe(S number_to_round, S modulus)
+S round_up_safe(S number_to_round, S modulus)
 {
   auto remainder = number_to_round % modulus;
   if (remainder == 0) { return number_to_round; }
@@ -50,16 +56,42 @@ inline S round_up_safe(S number_to_round, S modulus)
 }
 
 /**
- * Finds the largest integer not greater than `number_to_round` and modulo `S` is
- * zero. This function assumes that `number_to_round` is non-negative and
- * `modulus` is positive.
+ * @brief Rounds `number_to_round` down to the last multiple of modulus
+ *
+ * @tparam S type to return
+ * @param number_to_round number that is being rounded
+ * @param modulus value to which to round
+ * @return largest integer not greater than `number_to_round` and modulo `S` is zero.
+ *
+ * @note This function assumes that `number_to_round` is non-negative and
+ * `modulus` is positive and does not check for overflow.
  */
 template <typename S>
-inline S round_down_safe(S number_to_round, S modulus)
+S round_down_safe(S number_to_round, S modulus) noexcept
 {
   auto remainder    = number_to_round % modulus;
   auto rounded_down = number_to_round - remainder;
   return rounded_down;
+}
+
+/**
+ * @brief Rounds `number_to_round` up to the next multiple of modulus
+ *
+ * @tparam S type to return
+ * @param number_to_round number that is being rounded
+ * @param modulus value to which to round
+ * @return smallest integer greater than `number_to_round` and modulo `S` is zero.
+ *
+ * @note This function assumes that `number_to_round` is non-negative and
+ * `modulus` is positive and does not check for overflow.
+ */
+template <typename S>
+constexpr S round_up_unsafe(S number_to_round, S modulus) noexcept
+{
+  auto remainder = number_to_round % modulus;
+  if (remainder == 0) { return number_to_round; }
+  auto rounded_up = number_to_round - remainder + modulus;
+  return rounded_up;
 }
 
 /**
@@ -75,16 +107,16 @@ inline S round_down_safe(S number_to_round, S modulus)
  * the result will be incorrect
  */
 template <typename S, typename T>
-constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept
+constexpr S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept
 {
   return (dividend + divisor - 1) / divisor;
 }
 
 namespace detail {
 template <typename I>
-constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>,
-                                        I dividend,
-                                        I divisor) noexcept
+constexpr I div_rounding_up_safe(std::integral_constant<bool, false>,
+                                 I dividend,
+                                 I divisor) noexcept
 {
   // TODO: This could probably be implemented faster
   return (dividend > divisor) ? 1 + div_rounding_up_unsafe(dividend - divisor, divisor)
@@ -92,9 +124,7 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>,
 }
 
 template <typename I>
-constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>,
-                                        I dividend,
-                                        I divisor) noexcept
+constexpr I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend, I divisor) noexcept
 {
   auto quotient  = dividend / divisor;
   auto remainder = dividend % divisor;
@@ -116,14 +146,14 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>,
  * approach of using (dividend + divisor - 1) / divisor
  */
 template <typename I>
-constexpr inline I div_rounding_up_safe(I dividend, I divisor) noexcept
+constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
 {
   using i_is_a_signed_type = std::integral_constant<bool, std::is_signed<I>::value>;
   return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
 }
 
 template <typename I>
-constexpr inline bool is_a_power_of_two(I val) noexcept
+constexpr bool is_a_power_of_two(I val) noexcept
 {
   static_assert(std::is_integral<I>::value, "This function only applies to integral types");
   return ((val - 1) & val) == 0;
@@ -153,7 +183,7 @@ constexpr inline bool is_a_power_of_two(I val) noexcept
  * @return Absolute value if value type is signed.
  */
 template <typename T>
-constexpr inline auto absolute_value(T value) -> T
+constexpr auto absolute_value(T value) -> T
 {
   if constexpr (cuda::std::is_signed<T>()) return numeric::detail::abs(value);
   return value;

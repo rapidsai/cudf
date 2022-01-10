@@ -1406,3 +1406,13 @@ def test_error_values():
         match="TimeDelta Arrays is not yet implemented in cudf",
     ):
         s.values
+
+
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize("name", [None, "delta-index"])
+def test_create_TimedeltaIndex(dtype, name):
+    gdi = cudf.TimedeltaIndex(
+        [1132223, 2023232, 342234324, 4234324], dtype=dtype, name=name
+    )
+    pdi = gdi.to_pandas()
+    assert_eq(pdi, gdi)

@@ -803,6 +803,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
   }
 
+  /**
+   * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   * 
+   * The boolColumn must have the same number of rows as the current column.
+   * The result column will have the same number of rows as the current column. 
+   * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   * 
+   * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the row value is undefined.
+   * 
+   * @param boolColumn bool column whose value is to be used as the validity mask.
+   * @return Deep copy of the column with replaced validity mask.
+   */    
+  public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
+    return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // DATE/TIME
   /////////////////////////////////////////////////////////////////////////////
@@ -3151,8 +3170,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key is null
    * 2. The column vector list value is null
-   * 3. The list row does not contain the key, and contains at least
-   *    one null.
    * @param key the scalar to look up
    * @return a Boolean ColumnVector with the result of the lookup
    */
@@ -3164,16 +3181,67 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a column of bool values indicating whether the list rows of the first
    * column contain the corresponding values in the second column.
+   * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key value is null
    * 2. The column vector list value is null
-   * 3. The list row does not contain the key, and contains at least
-   *    one null.
    * @param key the ColumnVector with look up values
    * @return a Boolean ColumnVector with the result of the lookup
    */
   public final ColumnVector listContainsColumn(ColumnView key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the list rows of the specified
+   * column contain null elements.
+   * Output `column[i]` is set to null iff the input list row is null.
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContainsNulls() {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsNulls(getNativeView()));
+  }
+
+  /**
+   * Enum to choose behaviour of listIndexOf functions:
+   *   1. FIND_FIRST finds the first occurrence of a search key.
+   *   2. FIND_LAST finds the last occurrence of a search key.
+   */
+  public enum FindOptions {FIND_FIRST, FIND_LAST};
+
+  /**
+   * Create a column of int32 indices, indicating the position of the scalar search key
+   * in each list row.
+   * All indices are 0-based. If a search key is not found, the index is set to -1.
+   * The index is set to null if one of the following is true: 
+   * 1. The search key is null.
+   * 2. The list row is null.
+   * @param key The scalar search key
+   * @param findOption Whether to find the first index of the key, or the last.
+   * @return The resultant column of int32 indices
+   */
+  public final ColumnVector listIndexOf(Scalar key, FindOptions findOption) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
+    return new ColumnVector(listIndexOfScalar(getNativeView(), key.getScalarHandle(), isFindFirst));
+  }
+
+  /**
+   * Create a column of int32 indices, indicating the position of each row in the
+   * search key column in the corresponding row of the lists column.
+   * All indices are 0-based. If a search key is not found, the index is set to -1.
+   * The index is set to null if one of the following is true: 
+   * 1. The search key row is null.
+   * 2. The list row is null.
+   * @param key ColumnView of search keys.
+   * @param findOption Whether to find the first index of the key, or the last.
+   * @return The resultant column of int32 indices
+   */
+  public final ColumnVector listIndexOf(ColumnView keys, FindOptions findOption) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
+    return new ColumnVector(listIndexOfColumn(getNativeView(), keys.getNativeView(), isFindFirst));
   }
 
   /**
@@ -3597,6 +3665,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
 
+  /**
+   * Native method to search list rows for null elements.
+   * @param nativeView the column view handle of the list
+   * @return column handle of the resultant boolean column 
+   */
+  private static native long listContainsNulls(long nativeView);
+
+  /**
+   * Native method to find the first (or last) index of a specified scalar key,
+   * in each row of a list column.
+   * @param nativeView the column view handle of the list
+   * @param scalarKeyHandle handle to the scalar search key
+   * @param isFindFirst Whether to find the first index of the key, or the last.
+   * @return column handle of the resultant column of int32 indices
+   */
+  private static native long listIndexOfScalar(long nativeView, long scalarKeyHandle, boolean isFindFirst);
+
+  /**
+   * Native method to find the first (or last) index of each search key in the specified column,
+   * in each row of a list column.
+   * @param nativeView the column view handle of the list
+   * @param scalarColumnHandle handle to the search key column
+   * @param isFindFirst Whether to find the first index of the key, or the last.
+   * @return column handle of the resultant column of int32 indices
+   */
+  private static native long listIndexOfColumn(long nativeView, long keyColumnHandle, boolean isFindFirst);
+
   private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
 
   private static native long getElement(long nativeView, int index);
@@ -3751,6 +3846,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
+
+  /**
+   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   * 
+   * The boolColumn must have the same number of rows as the exemplar column.
+   * The result column will have the same number of rows as the exemplar.
+   * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   * 
+   * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the resultant row value is undefined.
+   * 
+   * @param exemplarViewHandle column view of the column that is deep copied.
+   * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
+   * @return Deep copy of the column with replaced null mask.
+   */                                                      
+  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
+                                                             long boolColumnViewHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.

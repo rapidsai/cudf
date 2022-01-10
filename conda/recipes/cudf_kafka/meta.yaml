@@ -1,9 +1,9 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set py_version = environ.get('python', '3.8') %}
 
 package:
   name: cudf_kafka
@@ -14,7 +14,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: py{{ py_version.replace('.', '') }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -26,14 +26,15 @@ requirements:
   build:
     - cmake >=3.20.1
   host:
-    - python
+    - python {{ py_version }}
     - cython >=0.29,<0.30
-    - setuptools
     - cudf {{ version }}
     - libcudf_kafka {{ version }}
+    - setuptools
   run:
+    - python {{ py_version }}
     - libcudf_kafka {{ version }}
-    - python-confluent-kafka
+    - python-confluent-kafka >=1.7.0,<1.8.0a0=py{{ py_version.replace('.', '') }}*
     - cudf {{ version }}
 
 test:                                   # [linux64]

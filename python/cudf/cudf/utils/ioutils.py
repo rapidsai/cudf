@@ -107,7 +107,7 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
     docstring=_docstring_read_parquet_metadata
@@ -186,7 +186,7 @@ Examples
 See Also
 --------
 cudf.io.parquet.read_parquet_metadata
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 cudf.read_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
@@ -198,9 +198,10 @@ Write a DataFrame to the parquet format.
 
 Parameters
 ----------
-path : str
+path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
-    while writing a partitioned dataset.
+    while writing a partitioned dataset. Use list of str with partition_offsets
+    to write parts of the dataframe to different files.
 compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
@@ -218,6 +219,16 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+partition_offsets : list, optional, default None
+    Offsets to partition the dataframe by. Should be used when path is list
+    of str. Should be a list of integers of size ``len(path) + 1``
+statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    Level at which column statistics should be included in file.
+metadata_file_path : str, optional, default None
+    If specified, this function will return a binary blob containing the footer
+    metadata of the written parquet file. The returned blob will have the
+    ``chunk.file_path`` field set to the ``metadata_file_path`` for each chunk.
+    When using with ``partition_offsets``, should be same size as ``len(path)``
 int96_timestamps : bool, default False
     If ``True``, write timestamps in int96 format. This will convert
     timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
@@ -230,11 +241,14 @@ row_group_size_bytes: integer or None, default None
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
+**kwargs
+    To request metadata binary blob when using with ``partition_cols``, Pass
+    ``return_metadata=True`` instead of specifying ``metadata_file_path``
 
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
@@ -253,7 +267,7 @@ Combined parquet metadata blob
 
 See Also
 --------
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 """
 doc_merge_parquet_filemetadata = docfmt_partial(
     docstring=_docstring_merge_parquet_filemetadata
@@ -392,8 +406,8 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
-cudf.io.parquet.to_parquet
+cudf.read_parquet
+cudf.DataFrame.to_parquet
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -660,7 +674,7 @@ item : object
 
 See Also
 --------
-cudf.io.hdf.to_hdf : Write a HDF file from a DataFrame.
+cudf.DataFrame.to_hdf : Write a HDF file from a DataFrame.
 """
 doc_read_hdf = docfmt_partial(docstring=_docstring_read_hdf)
 
@@ -731,8 +745,8 @@ errors : str, default 'strict'
 See Also
 --------
 cudf.read_hdf : Read from HDF file.
-cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
-cudf.io.feather.to_feather : Write out feather-format for DataFrames.
+cudf.DataFrame.to_parquet : Write a DataFrame to the binary parquet format.
+cudf.DataFrame.to_feather : Write out feather-format for DataFrames.
 """
 doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
 
@@ -762,7 +776,7 @@ Examples
 
 See Also
 --------
-cudf.io.feather.to_feather
+cudf.DataFrame.to_feather
 """
 doc_read_feather = docfmt_partial(docstring=_docstring_read_feather)
 
@@ -776,7 +790,7 @@ path : str
 
 See Also
 --------
-cudf.io.feather.read_feather
+cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
@@ -945,7 +959,7 @@ Read the file with ``cudf.read_csv``
 
 See Also
 --------
-cudf.io.csv.to_csv
+cudf.DataFrame.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
