@@ -587,20 +587,23 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
         tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
     // copy entire row 8 bytes at a time
-    auto const chunks_per_row = util::div_rounding_up_unsafe(tile_row_size, 8);
+    constexpr auto bytes_per_chunk = 8;
+    auto const chunks_per_row = util::div_rounding_up_unsafe(tile_row_size, bytes_per_chunk);
     auto const total_chunks = chunks_per_row * tile.num_rows();
 
     for (auto i = threadIdx.x; i < total_chunks; i += blockDim.x) {
       // determine source address of my chunk
       auto const relative_row = i / chunks_per_row;
-      auto const relative_chunk_offset = (i % chunks_per_row) * 8;
+      auto const relative_chunk_offset = (i % chunks_per_row) * bytes_per_chunk;
       auto const output_dest = tile_output_buffer +
                                row_offsets(relative_row + tile.start_row, row_batch_start) +
                                column_offset + relative_chunk_offset;
       auto const input_src = &shared[processing_index % stages_count]
                                     [tile_row_size * relative_row + relative_chunk_offset];
 
-      cuda::memcpy_async(output_dest, input_src, cuda::aligned_size_t<8>(8), processing_barrier);
+      cuda::memcpy_async(output_dest, input_src,
+                         cuda::aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
+                         processing_barrier);
     }
   }
 
@@ -670,8 +673,8 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
 
     auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, 32);
     auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, 32);
-    auto const validity_data_row_length =
-        util::round_up_unsafe(util::div_rounding_up_unsafe(num_tile_cols, 8), JCUDF_ROW_ALIGNMENT);
+    auto const validity_data_row_length = util::round_up_unsafe(
+        util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
     auto const total_sections = num_sections_x * num_sections_y;
 
     int const warp_id = threadIdx.x / warp_size;
@@ -703,7 +706,7 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
           auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
           // lead thread in each warp writes data
           auto const validity_write_offset =
-              validity_data_row_length * (relative_row + i) + relative_col / 8;
+              validity_data_row_length * (relative_row + i) + relative_col / CHAR_BIT;
           if (threadIdx.x % warp_size == 0) {
             *reinterpret_cast<int32_t *>(&this_shared_tile[validity_write_offset]) = validity_data;
           }
@@ -715,16 +718,17 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     group.sync();
 
     auto const output_data_base =
-        output_data[tile.batch_number] + validity_offset + tile.start_col / 8;
+        output_data[tile.batch_number] + validity_offset + tile.start_col / CHAR_BIT;
 
     // now async memcpy the shared memory out to the final destination 4 bytes at a time since we do
     // 32-row chunks
-    auto const row_bytes = util::div_rounding_up_unsafe(num_tile_cols, 8);
-    auto const chunks_per_row = util::div_rounding_up_unsafe(row_bytes, 8);
+    constexpr auto bytes_per_chunk = 8;
+    auto const row_bytes = util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT);
+    auto const chunks_per_row = util::div_rounding_up_unsafe(row_bytes, bytes_per_chunk);
     auto const total_chunks = chunks_per_row * tile.num_rows();
     auto &processing_barrier =
         shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
-    auto const tail_bytes = row_bytes % 8;
+    auto const tail_bytes = row_bytes % bytes_per_chunk;
     auto const row_batch_start =
         tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
@@ -732,7 +736,7 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       // determine source address of my chunk
       auto const relative_row = i / chunks_per_row;
       auto const col_chunk = i % chunks_per_row;
-      auto const relative_chunk_offset = col_chunk * 8;
+      auto const relative_chunk_offset = col_chunk * bytes_per_chunk;
       auto const output_dest = output_data_base +
                                row_offsets(relative_row + tile.start_row, row_batch_start) +
                                relative_chunk_offset;
@@ -742,7 +746,9 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       if (tail_bytes > 0 && col_chunk == chunks_per_row - 1)
         cuda::memcpy_async(output_dest, input_src, tail_bytes, processing_barrier);
       else
-        cuda::memcpy_async(output_dest, input_src, cuda::aligned_size_t<8>(8), processing_barrier);
+        cuda::memcpy_async(output_dest, input_src,
+                           cuda::aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
+                           processing_barrier);
     }
   }
 
@@ -936,8 +942,9 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     auto const tile_start_row = tile.start_row;
     auto const num_tile_cols = tile.num_cols();
     auto const num_tile_rows = tile.num_rows();
-    auto const num_sections_x = util::div_rounding_up_safe(num_tile_cols, 8);
-    auto const num_sections_y = util::div_rounding_up_safe(num_tile_rows, 32);
+    constexpr auto rows_per_read = 32;
+    auto const num_sections_x = util::div_rounding_up_safe(num_tile_cols, CHAR_BIT);
+    auto const num_sections_y = util::div_rounding_up_safe(num_tile_rows, rows_per_read);
     auto const validity_data_col_length = num_sections_y * 4; // words to bytes
     auto const total_sections = num_sections_x * num_sections_y;
     int const warp_id = threadIdx.x / warp_size;
@@ -950,8 +957,8 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
       // convert section to row and col
       auto const section_x = my_section_idx % num_sections_x;
       auto const section_y = my_section_idx / num_sections_x;
-      auto const relative_col = section_x * 8;
-      auto const relative_row = section_y * 32 + lane_id;
+      auto const relative_col = section_x * CHAR_BIT;
+      auto const relative_row = section_y * rows_per_read + lane_id;
       auto const absolute_col = relative_col + tile_start_col;
       auto const absolute_row = relative_row + tile_start_row;
       auto const row_batch_start =
@@ -961,18 +968,18 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
 
       if (absolute_row < num_rows) {
         auto const my_byte = input_data[row_offsets(absolute_row, row_batch_start) +
-                                        validity_offset + absolute_col / 8];
+                                        validity_offset + absolute_col / CHAR_BIT];
 
         // so every thread that is participating in the warp has a byte, but it's row-based
         // data and we need it in column-based. So we shuffle the bits around to make
         // the bytes we actually write.
-        for (int i = 0, byte_mask = 1; i < 8 && relative_col + i < num_columns;
+        for (int i = 0, byte_mask = 1; i < CHAR_BIT && relative_col + i < num_columns;
              ++i, byte_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
           // lead thread in each warp writes data
           if (threadIdx.x % warp_size == 0) {
             auto const validity_write_offset =
-                validity_data_col_length * (relative_col + i) + relative_row / 8;
+                validity_data_col_length * (relative_col + i) + relative_row / CHAR_BIT;
 
             *reinterpret_cast<int32_t *>(&this_shared_tile[validity_write_offset]) = validity_data;
           }
@@ -984,19 +991,20 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     group.sync();
 
     // now async memcpy the shared memory out to the final destination 8 bytes at a time
-    auto const col_bytes = util::div_rounding_up_unsafe(num_tile_rows, 8);
-    auto const chunks_per_col = util::div_rounding_up_unsafe(col_bytes, 8);
+    constexpr auto bytes_per_chunk = 8;
+    auto const col_bytes = util::div_rounding_up_unsafe(num_tile_rows, CHAR_BIT);
+    auto const chunks_per_col = util::div_rounding_up_unsafe(col_bytes, bytes_per_chunk);
     auto const total_chunks = chunks_per_col * num_tile_cols;
     auto &processing_barrier =
         shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
-    auto const tail_bytes = col_bytes % 8;
+    auto const tail_bytes = col_bytes % bytes_per_chunk;
 
     for (auto i = threadIdx.x; i < total_chunks; i += blockDim.x) {
       // determine source address of my chunk
       auto const relative_col = i / chunks_per_col;
       auto const row_chunk = i % chunks_per_col;
       auto const absolute_col = relative_col + tile_start_col;
-      auto const relative_chunk_byte_offset = row_chunk * 8;
+      auto const relative_chunk_byte_offset = row_chunk * bytes_per_chunk;
       auto const output_dest = output_nm[absolute_col] + word_index(tile_start_row) + row_chunk * 2;
       auto const input_src =
           &this_shared_tile[validity_data_col_length * relative_col + relative_chunk_byte_offset];
@@ -1004,7 +1012,9 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
       if (tail_bytes > 0 && row_chunk == chunks_per_col - 1) {
         cuda::memcpy_async(output_dest, input_src, tail_bytes, processing_barrier);
       } else {
-        cuda::memcpy_async(output_dest, input_src, cuda::aligned_size_t<8>(8), processing_barrier);
+        cuda::memcpy_async(output_dest, input_src,
+                           cuda::aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
+                           processing_barrier);
       }
     }
   }
@@ -1144,7 +1154,8 @@ static inline int32_t compute_fixed_width_layout(std::vector<data_type> const &s
   // Now we need to add in space for validity
   // Eventually we can think about nullable vs not nullable, but for now we will just always add
   // it in
-  int32_t const validity_bytes_needed = util::div_rounding_up_safe<int32_t>(schema.size(), 8);
+  int32_t const validity_bytes_needed =
+      util::div_rounding_up_safe<int32_t>(schema.size(), CHAR_BIT);
   // validity comes at the end and is byte aligned so we can pack more in.
   at_offset += validity_bytes_needed;
   // Now we need to pad the end so all rows are 64 bit aligned
@@ -1189,7 +1200,7 @@ static size_type compute_column_information(iterator begin, iterator end,
 
   return util::round_up_unsafe(
       fixed_width_size_per_row +
-          util::div_rounding_up_safe(static_cast<size_type>(std::distance(begin, end)), 8),
+          util::div_rounding_up_safe(static_cast<size_type>(std::distance(begin, end)), CHAR_BIT),
       JCUDF_ROW_ALIGNMENT);
 }
 
@@ -1211,9 +1222,9 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
       [&]() {
         if (desired_rows_and_columns > num_columns) {
           // not many columns, group it into 8s and ship it off
-          return std::min(8, num_columns);
+          return std::min(CHAR_BIT, num_columns);
         } else {
-          return util::round_down_safe(desired_rows_and_columns, 8);
+          return util::round_down_safe(desired_rows_and_columns, CHAR_BIT);
         }
       }(),
       JCUDF_ROW_ALIGNMENT);
@@ -1221,8 +1232,8 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
   // we fit as much as we can given the column stride
   // note that an element in the table takes just 1 bit, but a row with a single
   // element still takes 8 bytes!
-  auto const bytes_per_row =
-      util::round_up_safe(util::div_rounding_up_unsafe(column_stride, 8), JCUDF_ROW_ALIGNMENT);
+  auto const bytes_per_row = util::round_up_safe(
+      util::div_rounding_up_unsafe(column_stride, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
   auto const row_stride =
       std::min(num_rows, util::round_down_safe(shmem_limit_per_tile / bytes_per_row, 64));
 
@@ -1250,7 +1261,8 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
 }
 
 /**
- * @brief functor that returns the size of a row or 0 is row is greater than the number of rows in the table
+ * @brief functor that returns the size of a row or 0 is row is greater than the number of rows in
+ * the table
  *
  * @tparam RowSize iterator that returns the size of a specific row
  */
