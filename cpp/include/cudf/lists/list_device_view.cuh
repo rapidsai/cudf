@@ -69,7 +69,7 @@ class list_device_view {
    * The offset of this element as stored in the child column (i.e. 5)
    * may be fetched using this method.
    */
-  CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const
   {
     cudf_assert(idx >= 0 && idx < size() && "idx out of bounds");
     return begin_offset + idx;
@@ -91,7 +91,7 @@ class list_device_view {
   /**
    * @brief Checks whether element is null at specified index in the list row.
    */
-  CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
   {
     cudf_assert(idx >= 0 && idx < size() && "Index out of bounds.");
     auto element_offset = begin_offset + idx;
@@ -101,17 +101,23 @@ class list_device_view {
   /**
    * @brief Checks whether this list row is null.
    */
-  CUDA_DEVICE_CALLABLE bool is_null() const { return lists_column.is_null(_row_index); }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE bool is_null() const
+  {
+    return lists_column.is_null(_row_index);
+  }
 
   /**
    * @brief Fetches the number of elements in this list row.
    */
-  CUDA_DEVICE_CALLABLE size_type size() const { return _size; }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type size() const { return _size; }
 
   /**
    * @brief Fetches the lists_column_device_view that contains this list.
    */
-  CUDA_DEVICE_CALLABLE lists_column_device_view const& get_column() const { return lists_column; }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE lists_column_device_view const& get_column() const
+  {
+    return lists_column;
+  }
 
   template <typename T>
   struct pair_accessor;
@@ -141,7 +147,7 @@ class list_device_view {
    *   2. `p.second == false`
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_begin() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_begin() const
   {
     return const_pair_iterator<T>{thrust::counting_iterator<size_type>(0), pair_accessor<T>{*this}};
   }
@@ -151,7 +157,7 @@ class list_device_view {
    * list_device_view.
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_end() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_end() const
   {
     return const_pair_iterator<T>{thrust::counting_iterator<size_type>(size()),
                                   pair_accessor<T>{*this}};
@@ -173,7 +179,7 @@ class list_device_view {
    *   2. `p.second == false`
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_begin() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_begin() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(0),
                                       pair_rep_accessor<T>{*this}};
@@ -184,7 +190,7 @@ class list_device_view {
    * list_device_view.
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_end() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_end() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(size()),
                                       pair_rep_accessor<T>{*this}};

@@ -428,7 +428,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     uint32_t rowgroups_in_chunk = s->chunk.num_rowgroups;
     s->rowgroup_start           = s->chunk.rowgroup_id;
     s->rowgroup_end             = s->rowgroup_start + rowgroups_in_chunk;
-    s->is_compressed            = (strm_info != NULL);
+    s->is_compressed            = (strm_info != nullptr);
   }
   __syncthreads();
   while (s->rowgroup_start < s->rowgroup_end) {
@@ -480,7 +480,7 @@ __global__ void __launch_bounds__(block_size)
                             device_2dspan<rowgroup_rows const> rowgroup_bounds,
                             device_2dspan<size_type> set_counts)
 {
-  typedef cub::BlockReduce<size_type, block_size> BlockReduce;
+  using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
   auto const column_id   = blockIdx.x;

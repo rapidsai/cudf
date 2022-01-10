@@ -79,7 +79,7 @@ struct expression_result {
     subclass().template set_value<Element>(index, result);
   }
 
-  CUDA_DEVICE_CALLABLE bool is_valid() const { return subclass().is_valid(); }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE bool is_valid() const { return subclass().is_valid(); }
 
   CUDA_DEVICE_CALLABLE T value() const { return subclass().value(); }
 };
@@ -113,7 +113,7 @@ struct value_expression_result
   /**
    * @brief Returns true if the underlying data is valid and false otherwise.
    */
-  CUDA_DEVICE_CALLABLE bool is_valid() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE bool is_valid() const
   {
     if constexpr (has_nulls) { return _obj.has_value(); }
     return true;
@@ -179,7 +179,7 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  CUDA_DEVICE_CALLABLE bool is_valid() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE bool is_valid() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
@@ -191,7 +191,7 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  CUDA_DEVICE_CALLABLE mutable_column_device_view value() const
+  [[nodiscard]] CUDA_DEVICE_CALLABLE mutable_column_device_view value() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.

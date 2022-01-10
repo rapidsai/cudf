@@ -41,11 +41,8 @@ void BM_contiguous_split_common(benchmark::State& state,
   }
 
   std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());
-  std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) {
-    auto ret = in.release();
-    ret->null_count();
-    return ret;
-  });
+  std::transform(
+    src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) { return in.release(); });
   cudf::table src_table(std::move(columns));
 
   for (auto _ : state) {

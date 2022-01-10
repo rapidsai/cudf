@@ -19,8 +19,8 @@
 #include "parquet_common.hpp"
 
 #include <algorithm>
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -65,11 +65,11 @@ struct MilliSeconds {
 };
 struct MicroSeconds {
 };
-typedef struct TimeUnit_isset {
+using TimeUnit_isset = struct TimeUnit_isset {
   TimeUnit_isset() : MILLIS(false), MICROS(false) {}
   bool MILLIS;
   bool MICROS;
-} TimeUnit_isset;
+};
 
 struct TimeUnit {
   TimeUnit_isset isset;
@@ -97,7 +97,7 @@ struct BsonType {
 };
 
 // thrift generated code simplified.
-typedef struct LogicalType_isset {
+using LogicalType_isset = struct LogicalType_isset {
   LogicalType_isset()
     : STRING(false),
       MAP(false),
@@ -125,7 +125,7 @@ typedef struct LogicalType_isset {
   bool UNKNOWN;
   bool JSON;
   bool BSON;
-} LogicalType_isset;
+};
 
 struct LogicalType {
   LogicalType_isset isset;
@@ -197,16 +197,19 @@ struct SchemaElement {
   //     required int32 num;
   //  };
   // }
-  bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+  [[nodiscard]] bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
 
   // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
   // One-level LIST encoding: Only allows required lists with required cells:
   //   repeated value_type name
-  bool is_one_level_list() const { return repetition_type == REPEATED and num_children == 0; }
+  [[nodiscard]] bool is_one_level_list() const
+  {
+    return repetition_type == REPEATED and num_children == 0;
+  }
 
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
-  bool is_struct() const
+  [[nodiscard]] bool is_struct() const
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
@@ -369,7 +372,7 @@ class CompactProtocolReader {
     m_base = m_cur = base;
     m_end          = base + len;
   }
-  ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
+  [[nodiscard]] ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
   unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
   void skip_bytes(size_t bytecnt) noexcept
   {

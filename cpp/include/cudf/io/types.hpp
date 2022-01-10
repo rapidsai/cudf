@@ -155,14 +155,8 @@ struct source_info {
 
   source_info() = default;
 
-  explicit source_info(std::vector<std::string> const& file_paths)
-    : _type(io_type::FILEPATH), _filepaths(file_paths)
-  {
-  }
-  explicit source_info(std::string const& file_path)
-    : _type(io_type::FILEPATH), _filepaths({file_path})
-  {
-  }
+  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
 
   explicit source_info(std::vector<host_buffer> const& host_buffers)
     : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
@@ -182,11 +176,11 @@ struct source_info {
   {
   }
 
-  auto type() const { return _type; }
-  auto const& filepaths() const { return _filepaths; }
-  auto const& buffers() const { return _buffers; }
-  auto const& files() const { return _files; }
-  auto const& user_sources() const { return _user_sources; }
+  [[nodiscard]] auto type() const { return _type; }
+  [[nodiscard]] auto const& filepaths() const { return _filepaths; }
+  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& files() const { return _files; }
+  [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
   io_type _type = io_type::FILEPATH;
@@ -200,7 +194,7 @@ struct source_info {
  */
 struct sink_info {
   sink_info() = default;
-  sink_info(size_t num_sinks) : _type(io_type::VOID), _num_sinks(num_sinks) {}
+  sink_info(size_t num_sinks) : _num_sinks(num_sinks) {}
 
   explicit sink_info(std::vector<std::string> const& file_paths)
     : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
@@ -226,11 +220,11 @@ struct sink_info {
   {
   }
 
-  auto type() const { return _type; }
-  auto num_sinks() const { return _num_sinks; }
-  auto const& filepaths() const { return _filepaths; }
-  auto const& buffers() const { return _buffers; }
-  auto const& user_sinks() const { return _user_sinks; }
+  [[nodiscard]] auto type() const { return _type; }
+  [[nodiscard]] auto num_sinks() const { return _num_sinks; }
+  [[nodiscard]] auto const& filepaths() const { return _filepaths; }
+  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& user_sinks() const { return _user_sinks; }
 
  private:
   io_type _type     = io_type::VOID;
@@ -344,51 +338,51 @@ class column_in_metadata {
    * @param i Index of the child to get
    * @return this for chaining
    */
-  column_in_metadata const& child(size_type i) const { return children[i]; }
+  [[nodiscard]] column_in_metadata const& child(size_type i) const { return children[i]; }
 
   /**
    * @brief Get the name of this column
    */
-  std::string get_name() const { return _name; }
+  [[nodiscard]] std::string get_name() const { return _name; }
 
   /**
    * @brief Get whether nullability has been explicitly set for this column.
    */
-  bool is_nullability_defined() const { return _nullable.has_value(); }
+  [[nodiscard]] bool is_nullability_defined() const { return _nullable.has_value(); }
 
   /**
    * @brief Gets the explicitly set nullability for this column.
    * @throws If nullability is not explicitly defined for this column.
    *         Check using `is_nullability_defined()` first.
    */
-  bool nullable() const { return _nullable.value(); }
+  [[nodiscard]] bool nullable() const { return _nullable.value(); }
 
   /**
    * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
    */
-  bool is_map() const { return _list_column_is_map; }
+  [[nodiscard]] bool is_map() const { return _list_column_is_map; }
 
   /**
    * @brief Get whether to encode this timestamp column using deprecated int96 physical type
    */
-  bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
+  [[nodiscard]] bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
 
   /**
    * @brief Get whether precision has been set for this decimal column
    */
-  bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
+  [[nodiscard]] bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
 
   /**
    * @brief Get the decimal precision that was set for this column.
    * @throws If decimal precision was not set for this column.
    *         Check using `is_decimal_precision_set()` first.
    */
-  uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+  [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
 
   /**
    * @brief Get the number of children of this column
    */
-  size_type num_children() const { return children.size(); }
+  [[nodiscard]] size_type num_children() const { return children.size(); }
 };
 
 class table_input_metadata {

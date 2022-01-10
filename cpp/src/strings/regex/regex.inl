@@ -246,7 +246,7 @@ __device__ inline int32_t reprog_device::regexec(
       expanded = false;
 
       for (int16_t i = 0; i < jnk.list1->size; i++) {
-        int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
+        auto inst_id        = static_cast<int32_t>(jnk.list1->inst_ids[i]);
         int2& range         = jnk.list1->ranges[i];
         const reinst* inst  = get_inst(inst_id);
         int32_t id_activate = -1;
@@ -283,7 +283,7 @@ __device__ inline int32_t reprog_device::regexec(
             break;
           case BOW: {
             auto codept           = utf8_to_codepoint(c);
-            char32_t last_c       = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
+            auto last_c           = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
             auto last_codept      = utf8_to_codepoint(last_c);
             bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
             bool last_alphaNumeric =
@@ -296,7 +296,7 @@ __device__ inline int32_t reprog_device::regexec(
           }
           case NBOW: {
             auto codept           = utf8_to_codepoint(c);
-            char32_t last_c       = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
+            auto last_c           = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
             auto last_codept      = utf8_to_codepoint(last_c);
             bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
             bool last_alphaNumeric =
@@ -323,7 +323,7 @@ __device__ inline int32_t reprog_device::regexec(
     bool continue_execute = true;
     jnk.list2->reset();
     for (int16_t i = 0; continue_execute && i < jnk.list1->size; i++) {
-      int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
+      auto inst_id        = static_cast<int32_t>(jnk.list1->inst_ids[i]);
       int2& range         = jnk.list1->ranges[i];
       const reinst* inst  = get_inst(inst_id);
       int32_t id_activate = -1;
@@ -415,11 +415,11 @@ __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
   auto const schar = get_inst(_startinst_id)->u1.c;
 
   auto const relists_size = relist::alloc_size(_insts_count);
-  u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
+  auto* listmem           = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
   listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
 
-  relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
-  relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
+  auto* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
+  auto* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
 
   reljunk jnk(list1, list2, stype, schar);
   return regexec(dstr, jnk, begin, end, group_id);

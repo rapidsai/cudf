@@ -85,9 +85,7 @@ std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_colum
   }
   std::vector<std::unique_ptr<cudf::column>> columns(num_columns);
   std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](column_wrapper<T>& in) {
-    auto ret = in.release();
-    ret->has_nulls();
-    return ret;
+    return in.release();
   });
   return std::make_unique<cudf::table>(std::move(columns));
 }

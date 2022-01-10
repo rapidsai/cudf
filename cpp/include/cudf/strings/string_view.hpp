@@ -51,20 +51,20 @@ class string_view {
   /**
    * @brief Return the number of bytes in this string
    */
-  CUDA_HOST_DEVICE_CALLABLE size_type size_bytes() const { return _bytes; }
+  [[nodiscard]] CUDA_HOST_DEVICE_CALLABLE size_type size_bytes() const { return _bytes; }
   /**
    * @brief Return the number of characters in this string
    */
-  CUDA_DEVICE_CALLABLE size_type length() const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type length() const;
   /**
    * @brief Return a pointer to the internal device array
    */
-  CUDA_HOST_DEVICE_CALLABLE const char* data() const { return _data; }
+  [[nodiscard]] CUDA_HOST_DEVICE_CALLABLE const char* data() const { return _data; }
 
   /**
    * @brief Return true if string has no characters
    */
-  CUDA_HOST_DEVICE_CALLABLE bool empty() const { return size_bytes() == 0; }
+  [[nodiscard]] CUDA_HOST_DEVICE_CALLABLE bool empty() const { return size_bytes() == 0; }
 
   /**
    * @brief Handy iterator for navigating through encoded characters.
@@ -96,8 +96,8 @@ class string_view {
     CUDA_DEVICE_CALLABLE bool operator>(const const_iterator&) const;
     CUDA_DEVICE_CALLABLE bool operator>=(const const_iterator&) const;
     CUDA_DEVICE_CALLABLE char_utf8 operator*() const;
-    CUDA_DEVICE_CALLABLE size_type position() const;
-    CUDA_DEVICE_CALLABLE size_type byte_offset() const;
+    [[nodiscard]] CUDA_DEVICE_CALLABLE size_type position() const;
+    [[nodiscard]] CUDA_DEVICE_CALLABLE size_type byte_offset() const;
 
    private:
     const char* p{};
@@ -109,11 +109,11 @@ class string_view {
   /**
    * @brief Return new iterator pointing to the beginning of this string
    */
-  CUDA_DEVICE_CALLABLE const_iterator begin() const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE const_iterator begin() const;
   /**
    * @brief Return new iterator pointing past the end of this string
    */
-  CUDA_DEVICE_CALLABLE const_iterator end() const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE const_iterator end() const;
 
   /**
    * @brief Return single UTF-8 character at the given character position
@@ -126,7 +126,7 @@ class string_view {
    *
    * @param pos Character position
    */
-  CUDA_DEVICE_CALLABLE size_type byte_offset(size_type pos) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type byte_offset(size_type pos) const;
 
   /**
    * @brief Comparing target string with this string. Each character is compared
@@ -141,7 +141,7 @@ class string_view {
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    */
-  CUDA_DEVICE_CALLABLE int compare(const string_view& str) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE int compare(const string_view& str) const;
   /**
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
@@ -193,9 +193,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if str is not found in this string.
    */
-  CUDA_DEVICE_CALLABLE size_type find(const string_view& str,
-                                      size_type pos   = 0,
-                                      size_type count = -1) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type find(const string_view& str,
+                                                    size_type pos   = 0,
+                                                    size_type count = -1) const;
   /**
    * @brief Returns the character position of the first occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
@@ -221,9 +221,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDA_DEVICE_CALLABLE size_type find(char_utf8 character,
-                                      size_type pos   = 0,
-                                      size_type count = -1) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type find(char_utf8 character,
+                                                    size_type pos   = 0,
+                                                    size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where the
    * argument str is found in this string within the character range [pos,pos+n).
@@ -234,9 +234,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDA_DEVICE_CALLABLE size_type rfind(const string_view& str,
-                                       size_type pos   = 0,
-                                       size_type count = -1) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type rfind(const string_view& str,
+                                                     size_type pos   = 0,
+                                                     size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
@@ -262,9 +262,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDA_DEVICE_CALLABLE size_type rfind(char_utf8 character,
-                                       size_type pos   = 0,
-                                       size_type count = -1) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type rfind(char_utf8 character,
+                                                     size_type pos   = 0,
+                                                     size_type count = -1) const;
 
   /**
    * @brief Return a sub-string of this string. The original string and device
@@ -274,7 +274,7 @@ class string_view {
    * @param length Number of characters from start to include in the sub-string.
    * @return New instance pointing to a subset of the characters within this instance.
    */
-  CUDA_DEVICE_CALLABLE string_view substr(size_type start, size_type length) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE string_view substr(size_type start, size_type length) const;
 
   /**
    * @brief Return minimum value associated with the string type
@@ -300,7 +300,7 @@ class string_view {
   /**
    * @brief Default constructor represents an empty string.
    */
-  CUDA_HOST_DEVICE_CALLABLE string_view() : _data(""), _bytes(0), _length(0) {}
+  CUDA_HOST_DEVICE_CALLABLE string_view() : _data("") {}
 
   /**
    * @brief Create instance from existing device char array.
@@ -330,7 +330,7 @@ class string_view {
    * @param bytepos Byte position from start of _data.
    * @return The character position for the specified byte.
    */
-  CUDA_DEVICE_CALLABLE size_type character_offset(size_type bytepos) const;
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type character_offset(size_type bytepos) const;
 };
 
 namespace strings {
