@@ -282,7 +282,7 @@ def sort_values(
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
-    df4 = df3.map_partitions(sort_function, **sort_function_kwargs)
+    df4 = df3.map_partitions(sort_function, **sort_kwargs)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)
