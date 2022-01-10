@@ -484,7 +484,7 @@ class json_state : private parser {
 
   const char* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
                                       // current element - not the name
-  string_view cur_el_name;  // name of the current element (if applicable)
+  string_view cur_el_name;            // name of the current element (if applicable)
   json_element_type cur_el_type{json_element_type::NONE};     // type of the current element
   json_element_type parent_el_type{json_element_type::NONE};  // parent element type
   get_json_object_options options;                            // behavior options
