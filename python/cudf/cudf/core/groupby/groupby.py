@@ -660,9 +660,30 @@ class GroupBy(Serializable):
 
         Parameters
         ----------
+        function: str or callable
+            Aggregation to apply to each group. Note that currently,
+            only aggregations are supported by `transform`.
 
         Returns
         -------
+        A Series or DataFrame of the same size as the input, with the
+        result of the aggregation per group broadcasted to the group
+        size.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          import cudf
+          df = cudf.DataFrame({'a': [2, 1, 1, 2, 2], 'b': [1, 2, 3, 4, 5]})
+          df.groupby('a').transform('max')
+             b
+          0  5
+          1  3
+          2  3
+          3  5
+          4  5
+
         """
         try:
             # first, try aggregating:
