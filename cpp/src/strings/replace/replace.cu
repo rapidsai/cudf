@@ -39,8 +39,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 
@@ -859,5 +858,4 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
   return detail::replace(strings, targets, repls, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

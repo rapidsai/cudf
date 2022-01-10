@@ -20,10 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::gpu {
 // Minimal thrift implementation for parsing page headers
 // https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 
@@ -488,7 +485,4 @@ void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
   gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
 }  // namespace cudf

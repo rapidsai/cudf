@@ -31,8 +31,7 @@
 
 #include <type_traits>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 namespace {
 
@@ -265,12 +264,4 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 
   return type_dispatcher(col.type(), minmax_functor{}, col, stream, mr);
 }
-}  // namespace detail
-
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  const column_view& col, rmm::mr::device_memory_resource* mr)
-{
-  return detail::minmax(col, rmm::cuda_stream_default, mr);
-}
-
 }  // namespace cudf

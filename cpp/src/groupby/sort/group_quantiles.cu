@@ -32,9 +32,7 @@
 
 #include <thrust/for_each.h>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 namespace {
 
 template <typename ResultType, typename Iterator>
@@ -171,6 +169,4 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                          mr);
 }
 
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

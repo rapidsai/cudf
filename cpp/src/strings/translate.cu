@@ -33,8 +33,7 @@
 
 #include <algorithm>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 using translate_table = thrust::pair<char_utf8, char_utf8>;
 
@@ -129,5 +128,4 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
   return detail::translate(strings, chars_table, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

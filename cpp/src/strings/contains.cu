@@ -29,8 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 /**
@@ -53,7 +52,7 @@ struct contains_fn {
 
   __device__ bool operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) return false;
     string_view d_str = d_strings.element<string_view>(idx);
     int32_t begin     = 0;
     int32_t end       = bmatch ? 1    // match only the beginning of the string;
@@ -262,5 +261,4 @@ std::unique_ptr<column> count_re(strings_column_view const& strings,
   return detail::count_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

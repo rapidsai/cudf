@@ -32,8 +32,7 @@
 
 #include <numeric>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   table_view const& input_table, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
@@ -61,14 +60,6 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                               mr);
 
   return std::make_pair(std::move(keys_table), std::move(indices_column));
-}
-
-}  // namespace detail
-
-std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
-  cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
-{
-  return detail::encode(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

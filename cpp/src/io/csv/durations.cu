@@ -26,10 +26,7 @@
 
 #include <strings/convert/utilities.cuh>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace csv {
+namespace cudf::io::detail::csv {
 
 namespace {
 
@@ -229,7 +226,4 @@ std::unique_ptr<column> pandas_format_durations(column_view const& durations,
   return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, stream, mr);
 }
 
-}  // namespace csv
-}  // namespace detail
-}  // namespace io
 }  // namespace cudf

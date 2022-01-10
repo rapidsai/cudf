@@ -32,8 +32,7 @@
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 
 namespace {
@@ -187,5 +186,4 @@ std::unique_ptr<column> extract_all(strings_column_view const& strings,
   return detail::extract_all(strings, pattern, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

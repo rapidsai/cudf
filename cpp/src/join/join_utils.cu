@@ -23,8 +23,7 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
 {
@@ -151,5 +150,4 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
   return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
-}  // namespace detail
 }  // namespace cudf

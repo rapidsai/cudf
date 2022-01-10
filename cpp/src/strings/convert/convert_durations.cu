@@ -29,8 +29,7 @@
 #include <map>
 #include <vector>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 
 namespace {
@@ -156,7 +155,7 @@ struct format_compiler {
 
   format_item const* compiled_format_items() { return d_items.data(); }
 
-  size_type items_count() const { return static_cast<size_type>(d_items.size()); }
+  [[nodiscard]] size_type items_count() const { return static_cast<size_type>(d_items.size()); }
 };
 
 template <typename T>
@@ -753,5 +752,4 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
   return detail::to_durations(strings, duration_type, format, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

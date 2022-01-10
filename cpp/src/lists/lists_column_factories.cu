@@ -26,8 +26,7 @@
 #include <thrust/sequence.h>
 
 namespace cudf {
-namespace lists {
-namespace detail {
+namespace lists::detail {
 
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& value,
                                                             size_type size,
@@ -83,7 +82,6 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   return std::move(res->release()[0]);
 }
 
-}  // namespace detail
 }  // namespace lists
 
 /**

@@ -27,8 +27,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 
-namespace cudf {
-namespace dictionary {
+namespace cudf::dictionary {
 namespace detail {
 
 namespace {
@@ -181,5 +180,4 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
   return detail::get_index(dictionary, key, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace dictionary
 }  // namespace cudf

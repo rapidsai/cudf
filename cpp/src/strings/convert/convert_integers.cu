@@ -35,8 +35,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 
 namespace detail {
 namespace {
@@ -405,5 +404,4 @@ std::unique_ptr<column> from_integers(column_view const& integers,
   return detail::from_integers(integers, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

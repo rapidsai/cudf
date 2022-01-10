@@ -179,8 +179,8 @@ struct PyMod {
     std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
   {
-    double x1 = static_cast<double>(x);
-    double y1 = static_cast<double>(y);
+    auto x1 = static_cast<double>(x);
+    auto y1 = static_cast<double>(y);
     return fmod(fmod(x1, y1) + y1, y1);
   }
 

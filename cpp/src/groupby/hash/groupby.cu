@@ -54,10 +54,7 @@
 
 #include <cuda/std/atomic>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace hash {
+namespace cudf::groupby::detail::hash {
 namespace {
 
 /**
@@ -663,7 +660,4 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 
   return std::make_pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
-}  // namespace hash
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

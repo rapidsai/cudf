@@ -30,10 +30,7 @@
 
 #include <nvcomp/snappy.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::gpu {
 
 using cudf::detail::device_2dspan;
 
@@ -1040,7 +1037,7 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char* ptr = 0;
+      const char* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
         auto string_val = string_column->element<string_view>(string_idx);
@@ -1380,7 +1377,4 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
     strm_desc, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
 }  // namespace cudf

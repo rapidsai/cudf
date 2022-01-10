@@ -32,8 +32,7 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace lists {
+namespace cudf::lists {
 namespace detail {
 namespace {
 /**
@@ -284,5 +283,4 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
   return detail::concatenate_list_elements(input, null_policy, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace lists
 }  // namespace cudf

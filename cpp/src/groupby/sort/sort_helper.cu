@@ -88,10 +88,7 @@ struct permuted_row_equality_comparator {
 
 }  // namespace
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace sort {
+namespace cudf::groupby::detail::sort {
 
 sort_groupby_helper::sort_groupby_helper(table_view const& keys,
                                          null_policy include_null_keys,
@@ -346,7 +343,4 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view st
                               mr);
 }
 
-}  // namespace sort
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

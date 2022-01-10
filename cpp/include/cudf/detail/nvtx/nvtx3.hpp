@@ -862,13 +862,13 @@ class color {
    * @brief Returns the `color`s argb hex code
    *
    */
-  constexpr value_type get_value() const noexcept { return _value; }
+  [[nodiscard]] constexpr value_type get_value() const noexcept { return _value; }
 
   /**
    * @brief Return the NVTX color type of the color.
    *
    */
-  constexpr nvtxColorType_t get_type() const noexcept { return _type; }
+  [[nodiscard]] constexpr nvtxColorType_t get_type() const noexcept { return _type; }
 
   color()             = delete;
   ~color()            = default;
@@ -935,7 +935,7 @@ class category {
    * @brief Returns the id of the category.
    *
    */
-  constexpr id_type get_id() const noexcept { return id_; }
+  [[nodiscard]] constexpr id_type get_id() const noexcept { return id_; }
 
   category()                = delete;
   ~category()               = default;
@@ -1224,7 +1224,7 @@ class registered_message {
    * @brief Returns the registered message's handle
    *
    */
-  nvtxStringHandle_t get_handle() const noexcept { return handle_; }
+  [[nodiscard]] nvtxStringHandle_t get_handle() const noexcept { return handle_; }
 
   registered_message()                          = delete;
   ~registered_message()                         = default;
@@ -1351,13 +1351,13 @@ class message {
    * @brief Return the union holding the value of the message.
    *
    */
-  NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept { return value_; }
+  [[nodiscard]] NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept { return value_; }
 
   /**
    * @brief Return the type information about the value the union holds.
    *
    */
-  NVTX3_RELAXED_CONSTEXPR nvtxMessageType_t get_type() const noexcept { return type_; }
+  [[nodiscard]] NVTX3_RELAXED_CONSTEXPR nvtxMessageType_t get_type() const noexcept { return type_; }
 
  private:
   nvtxMessageType_t const type_{};  ///< message type
@@ -1457,13 +1457,13 @@ class payload {
    * @brief Return the union holding the value of the payload
    *
    */
-  NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept { return value_; }
+  [[nodiscard]] NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept { return value_; }
 
   /**
    * @brief Return the information about the type the union holds.
    *
    */
-  NVTX3_RELAXED_CONSTEXPR nvtxPayloadType_t get_type() const noexcept { return type_; }
+  [[nodiscard]] NVTX3_RELAXED_CONSTEXPR nvtxPayloadType_t get_type() const noexcept { return type_; }
 
  private:
   nvtxPayloadType_t const type_;  ///< Type of the payload value
@@ -1622,7 +1622,7 @@ class event_attributes {
    * @brief Get raw pointer to underlying NVTX attributes object.
    *
    */
-  constexpr value_type const* get() const noexcept { return &attributes_; }
+  [[nodiscard]] constexpr value_type const* get() const noexcept { return &attributes_; }
 
  private:
   value_type attributes_{};  ///< The NVTX attributes structure

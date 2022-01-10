@@ -30,9 +30,7 @@
 #include <memory>
 #include <numeric>
 
-namespace cudf {
-namespace structs {
-namespace detail {
+namespace cudf::structs::detail {
 
 /**
  * @copydoc cudf::structs::detail::concatenate
@@ -78,6 +76,4 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                              mr);
 }
 
-}  // namespace detail
-}  // namespace structs
 }  // namespace cudf

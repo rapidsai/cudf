@@ -43,8 +43,7 @@
 #include <memory>
 #include <utility>
 
-namespace cudf {
-namespace groupby {
+namespace cudf::groupby {
 // Constructor
 groupby::groupby(table_view const& keys,
                  null_policy include_null_keys,
@@ -316,5 +315,4 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                         std::make_unique<cudf::table>(std::move(results)));
 }
 
-}  // namespace groupby
 }  // namespace cudf

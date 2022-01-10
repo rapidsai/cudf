@@ -23,9 +23,7 @@
 
 #include <thrust/gather.h>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
@@ -69,6 +67,4 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                            mr);
 }
 
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

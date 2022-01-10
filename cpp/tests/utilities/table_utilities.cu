@@ -3,8 +3,7 @@
 
 #include <gmock/gmock.h>
 
-namespace cudf {
-namespace test {
+namespace cudf::test {
 void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs)
 {
   EXPECT_EQ(lhs.num_rows(), rhs.num_rows());
@@ -30,5 +29,4 @@ void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs)
   }
 }
 
-}  // namespace test
 }  // namespace cudf

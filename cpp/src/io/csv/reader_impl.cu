@@ -60,10 +60,7 @@ using cudf::device_span;
 using cudf::host_span;
 using cudf::detail::make_device_uvector_async;
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace csv {
+namespace cudf::io::detail::csv {
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
@@ -935,7 +932,4 @@ table_with_metadata read_csv(std::unique_ptr<cudf::io::datasource>&& source,
   return read_csv(source.get(), options, parse_options, stream, mr);
 }
 
-}  // namespace csv
-}  // namespace detail
-}  // namespace io
 }  // namespace cudf

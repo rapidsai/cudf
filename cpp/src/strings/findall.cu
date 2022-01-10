@@ -32,8 +32,7 @@
 
 #include <thrust/extrema.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 using string_index_pair = thrust::pair<const char*, size_type>;
 using findall_result    = thrust::pair<size_type, string_index_pair>;
@@ -67,7 +66,7 @@ struct findall_fn {
     string_view d_str      = d_strings.element<string_view>(idx);
     auto const nchars      = d_str.length();
     int32_t spos           = 0;
-    int32_t epos           = static_cast<int32_t>(nchars);
+    auto epos           = static_cast<int32_t>(nchars);
     size_type column_count = 0;
     while (spos <= nchars) {
       if (prog.find<stack_size>(idx, d_str, spos, epos) <= 0) break;  // no more matches found
@@ -213,5 +212,4 @@ std::unique_ptr<table> findall_re(strings_column_view const& strings,
   return detail::findall_re(strings, pattern, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

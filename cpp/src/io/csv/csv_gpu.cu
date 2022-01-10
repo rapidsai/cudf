@@ -47,10 +47,7 @@ using namespace ::cudf::io;
 
 using cudf::device_span;
 
-namespace cudf {
-namespace io {
-namespace csv {
-namespace gpu {
+namespace cudf::io::csv::gpu {
 
 /// Block dimension for dtype detection and conversion kernels
 constexpr uint32_t csvparse_block_dim = 128;
@@ -1048,7 +1045,4 @@ uint32_t __host__ gather_row_offsets(const parse_options_view& options,
   return dim_grid;
 }
 
-}  // namespace gpu
-}  // namespace csv
-}  // namespace io
 }  // namespace cudf

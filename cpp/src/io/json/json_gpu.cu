@@ -41,10 +41,7 @@
 
 using cudf::device_span;
 
-namespace cudf {
-namespace io {
-namespace json {
-namespace gpu {
+namespace cudf::io::json::gpu {
 using namespace ::cudf;
 
 namespace {
@@ -770,7 +767,4 @@ void collect_keys_info(parse_options_view const& options,
   CUDA_TRY(cudaGetLastError());
 }
 
-}  // namespace gpu
-}  // namespace json
-}  // namespace io
 }  // namespace cudf

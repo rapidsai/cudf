@@ -33,8 +33,7 @@
 
 #include <regex>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 
@@ -181,5 +180,4 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
     strings, pattern, replacement, flags, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

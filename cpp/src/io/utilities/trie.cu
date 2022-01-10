@@ -30,8 +30,7 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string>& keys,
                                                              rmm::cuda_stream_view stream)
@@ -104,5 +103,4 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
   return cudf::detail::make_device_uvector_sync(nodes, stream);
 }
 
-}  // namespace detail
 }  // namespace cudf

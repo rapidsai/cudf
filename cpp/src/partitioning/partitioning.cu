@@ -257,7 +257,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
     reinterpret_cast<size_type*>(block_output + OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD);
   auto partition_offset_global = partition_offset_shared + num_partitions + 1;
 
-  typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
+  using BlockScan = int;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions
@@ -709,8 +709,7 @@ struct dispatch_map_type {
 };
 }  // namespace
 
-namespace detail {
-namespace local {
+namespace detail::local {
 template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
@@ -734,26 +733,6 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
     return hash_partition_table<hash_function, false>(
       input, table_to_hash, num_partitions, seed, stream, mr);
   }
-}
-}  // namespace local
-
-std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
-  table_view const& t,
-  column_view const& partition_map,
-  size_type num_partitions,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS(t.num_rows() == partition_map.size(),
-               "Size mismatch between table and partition map.");
-  CUDF_EXPECTS(not partition_map.has_nulls(), "Unexpected null values in partition_map.");
-
-  if (num_partitions == 0 or t.num_rows() == 0) {
-    return std::make_pair(empty_like(t), std::vector<size_type>{});
-  }
-
-  return cudf::type_dispatcher(
-    partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, stream, mr);
 }
 }  // namespace detail
 

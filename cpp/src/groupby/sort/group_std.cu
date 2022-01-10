@@ -31,9 +31,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 namespace {
 
 template <typename ResultType, typename Iterator>
@@ -49,7 +47,7 @@ struct var_transform {
   {
     if (d_values.is_null(i)) return 0.0;
 
-    ResultType x = static_cast<ResultType>(values_iter[i]);
+    auto x = static_cast<ResultType>(values_iter[i]);
 
     size_type group_idx  = d_group_labels[i];
     size_type group_size = d_group_sizes[group_idx];
@@ -168,6 +166,4 @@ std::unique_ptr<column> group_var(column_view const& values,
     values_type, var_functor{}, values, group_means, group_sizes, group_labels, ddof, stream, mr);
 }
 
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

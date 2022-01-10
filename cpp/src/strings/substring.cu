@@ -30,8 +30,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 /**
@@ -411,5 +410,4 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

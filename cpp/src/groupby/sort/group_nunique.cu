@@ -27,9 +27,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 namespace {
 struct nunique_functor {
   template <typename T>
@@ -124,6 +122,4 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                          mr);
 }
 
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

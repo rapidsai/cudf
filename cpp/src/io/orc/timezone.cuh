@@ -24,7 +24,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 
-#include <stdint.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -121,7 +121,7 @@ class timezone_table {
     : gmt_offset{gmt_offset}, ttimes{std::move(ttimes)}, offsets{std::move(offsets)}
   {
   }
-  timezone_table_view view() const { return {gmt_offset, ttimes, offsets}; }
+  [[nodiscard]] timezone_table_view view() const { return {gmt_offset, ttimes, offsets}; }
 };
 
 /**

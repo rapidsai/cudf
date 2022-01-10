@@ -16,8 +16,7 @@
 
 #include <sort/sort_impl.cuh>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 namespace {
 
 /**
@@ -141,5 +140,4 @@ std::unique_ptr<column> sorted_order<false>(column_view const& input,
   return sorted_indices;
 }
 
-}  // namespace detail
 }  // namespace cudf

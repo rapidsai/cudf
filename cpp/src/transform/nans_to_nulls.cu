@@ -26,8 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 struct dispatch_nan_to_null {
   template <typename T>
   std::enable_if_t<std::is_floating_point<T>::value,
@@ -86,15 +85,6 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   if (input.is_empty()) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   return cudf::type_dispatcher(input.type(), dispatch_nan_to_null{}, input, stream, mr);
-}
-
-}  // namespace detail
-
-std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

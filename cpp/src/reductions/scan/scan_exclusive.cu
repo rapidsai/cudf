@@ -28,8 +28,7 @@
 
 #include <thrust/scan.h>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 namespace {
 
 /**
@@ -98,7 +97,5 @@ std::unique_ptr<column> scan_exclusive(const column_view& input,
 
   return output;
 }
-
-}  // namespace detail
 
 }  // namespace cudf

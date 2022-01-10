@@ -35,8 +35,7 @@
 
 #include <algorithm>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 
@@ -287,5 +286,4 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

@@ -26,8 +26,7 @@
 
 #include <thrust/binary_search.h>
 
-namespace cudf {
-namespace lists {
+namespace cudf::lists {
 namespace detail {
 
 /**
@@ -493,6 +492,5 @@ std::unique_ptr<column> build_lists_child_column_recursive(
                                                       mr);
 }
 
-}  // namespace detail
 }  // namespace lists
 }  // namespace cudf

@@ -29,9 +29,7 @@
 
 #include <memory>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace cudf::lists::detail {
 
 namespace {
 
@@ -136,6 +134,4 @@ std::unique_ptr<column> concatenate(
                            mr);
 }
 
-}  // namespace detail
-}  // namespace lists
 }  // namespace cudf

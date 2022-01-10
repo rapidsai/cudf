@@ -30,8 +30,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf {
-namespace lists {
+namespace cudf::lists {
 namespace detail {
 /**
  * @brief Returns a numeric column containing lengths of each element.
@@ -77,5 +76,4 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
   return detail::count_elements(input, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace lists
 }  // namespace cudf

@@ -21,10 +21,7 @@
 
 using cudf::device_span;
 
-namespace cudf {
-namespace io {
-namespace avro {
-namespace gpu {
+namespace cudf::io::avro::gpu {
 constexpr int num_warps             = 16;
 constexpr int max_shared_schema_len = 1000;
 
@@ -120,7 +117,7 @@ avro_decode_row(schemadesc_s const* schema,
           if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
         } else {  // string or enum
           size_t count    = 0;
-          const char* ptr = 0;
+          const char* ptr = nullptr;
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
             if (idx < global_dictionary.size()) {
@@ -328,7 +325,4 @@ void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
     blocks, schema, global_dictionary, avro_data, schema_len, min_row_size, max_rows, first_row);
 }
 
-}  // namespace gpu
-}  // namespace avro
-}  // namespace io
 }  // namespace cudf

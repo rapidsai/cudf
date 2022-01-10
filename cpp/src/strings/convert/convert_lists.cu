@@ -22,8 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 
@@ -237,5 +236,4 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   return detail::format_list_column(input, na_rep, separators, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

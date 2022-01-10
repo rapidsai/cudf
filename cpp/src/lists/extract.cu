@@ -30,8 +30,7 @@
 
 #include <limits>
 
-namespace cudf {
-namespace lists {
+namespace cudf::lists {
 namespace detail {
 namespace {
 
@@ -163,5 +162,4 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
   return detail::extract_list_element(lists_column, indices, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace lists
 }  // namespace cudf

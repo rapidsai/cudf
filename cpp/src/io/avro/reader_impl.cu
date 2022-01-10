@@ -46,10 +46,7 @@
 
 using cudf::device_span;
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace avro {
+namespace cudf::io::detail::avro {
 
 // Import functionality that's independent of legacy code
 using namespace cudf::io::avro;
@@ -570,7 +567,4 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata_out)};
 }
 
-}  // namespace avro
-}  // namespace detail
-}  // namespace io
 }  // namespace cudf

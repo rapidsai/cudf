@@ -34,8 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 
@@ -204,5 +203,4 @@ std::unique_ptr<column> swapcase(strings_column_view const& strings,
   return detail::swapcase(strings, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

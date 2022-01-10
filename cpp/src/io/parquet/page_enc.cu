@@ -31,10 +31,7 @@
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::gpu {
 // Spark doesn't support RLE encoding for BOOLEANs
 #ifdef ENABLE_BOOL_RLE
 constexpr bool enable_bool_rle = true;
@@ -1068,7 +1065,7 @@ __global__ void __launch_bounds__(128, 8)
   }
   if (t == 0) {
     uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
-    uint32_t actual_data_size    = static_cast<uint32_t>(s->cur - base);
+    auto actual_data_size    = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
     s->comp_in.srcDevice         = base;
@@ -1244,7 +1241,7 @@ class header_encoder {
     *header_end = current_header_ptr;
   }
 
-  inline __device__ uint8_t* get_ptr(void) { return current_header_ptr; }
+  inline __device__ uint8_t* get_ptr() { return current_header_ptr; }
 
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
@@ -1974,7 +1971,4 @@ void GatherPages(device_span<EncColumnChunk> chunks,
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
 }  // namespace cudf

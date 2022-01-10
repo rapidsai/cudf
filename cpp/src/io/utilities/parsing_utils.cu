@@ -8,8 +8,7 @@
 
 #include <algorithm>
 
-namespace cudf {
-namespace io {
+namespace cudf::io {
 namespace {
 // When processing the input in chunks, this is the maximum size of each chunk.
 // Only one chunk is loaded on the GPU at a time, so this value is chosen to
@@ -198,5 +197,4 @@ cudf::size_type count_all_from_set(host_span<char const> data,
   return find_all_from_set<void>(data, keys, 0, nullptr, stream);
 }
 
-}  // namespace io
 }  // namespace cudf

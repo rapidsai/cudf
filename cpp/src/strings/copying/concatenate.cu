@@ -33,9 +33,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace cudf::strings::detail {
 // Benchmark data, shared at https://github.com/rapidsai/cudf/pull/4703, shows
 // that the single kernel optimization generally performs better, but when the
 // number of chars/col is beyond a certain threshold memcpy performs better.
@@ -310,6 +308,4 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                              std::move(null_mask));
 }
 
-}  // namespace detail
-}  // namespace strings
 }  // namespace cudf

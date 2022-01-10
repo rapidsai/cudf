@@ -34,8 +34,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 // Convert strings column to boolean column
 std::unique_ptr<column> to_booleans(strings_column_view const& strings,
@@ -156,5 +155,4 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   return detail::from_booleans(booleans, true_string, false_string, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

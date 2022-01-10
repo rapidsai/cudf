@@ -33,8 +33,7 @@
 
 #include <thrust/logical.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 //
 std::unique_ptr<column> all_characters_of_type(
@@ -224,5 +223,4 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
     strings, types_to_remove, replacement, types_to_keep, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

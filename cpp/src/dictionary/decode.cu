@@ -26,8 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace dictionary {
+namespace cudf::dictionary {
 namespace detail {
 /**
  * @brief Decode a column from a dictionary.
@@ -70,5 +69,4 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
   return detail::decode(source, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace dictionary
 }  // namespace cudf

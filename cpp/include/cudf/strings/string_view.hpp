@@ -96,8 +96,8 @@ class string_view {
     CUDA_DEVICE_CALLABLE bool operator>(const const_iterator&) const;
     CUDA_DEVICE_CALLABLE bool operator>=(const const_iterator&) const;
     CUDA_DEVICE_CALLABLE char_utf8 operator*() const;
-    CUDA_DEVICE_CALLABLE size_type position() const;
-    CUDA_DEVICE_CALLABLE size_type byte_offset() const;
+    [[nodiscard]] CUDA_DEVICE_CALLABLE size_type position() const;
+    [[nodiscard]] CUDA_DEVICE_CALLABLE size_type byte_offset() const;
 
    private:
     const char* p{};
@@ -300,7 +300,7 @@ class string_view {
   /**
    * @brief Default constructor represents an empty string.
    */
-  CUDA_HOST_DEVICE_CALLABLE string_view() : _data(""), _bytes(0), _length(0) {}
+  CUDA_HOST_DEVICE_CALLABLE string_view() : _data("") {}
 
   /**
    * @brief Create instance from existing device char array.

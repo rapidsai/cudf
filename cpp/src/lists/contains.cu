@@ -30,8 +30,7 @@
 #include <thrust/logical.h>
 #include <type_traits>
 
-namespace cudf {
-namespace lists {
+namespace cudf::lists {
 
 namespace {
 
@@ -427,5 +426,4 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
   return detail::index_of(lists, search_keys, find_option, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace lists
 }  // namespace cudf

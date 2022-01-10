@@ -143,8 +143,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 }
 }  // namespace
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
@@ -252,19 +251,6 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
     thrust::host, rotated_iter_begin, rotated_iter_begin + num_partitions, ret_pair.second.begin());
 
   return ret_pair;
-}
-
-}  // namespace detail
-
-std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
-  table_view const& input,
-  cudf::size_type num_partitions,
-  cudf::size_type start_partition     = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  CUDF_FUNC_RANGE();
-  return cudf::detail::round_robin_partition(
-    input, num_partitions, start_partition, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

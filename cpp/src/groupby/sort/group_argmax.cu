@@ -23,9 +23,7 @@
 
 #include <thrust/gather.h>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 std::unique_ptr<column> group_argmax(column_view const& values,
                                      size_type num_groups,
                                      cudf::device_span<size_type const> group_labels,
@@ -59,6 +57,4 @@ std::unique_ptr<column> group_argmax(column_view const& values,
   return indices;
 }
 
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

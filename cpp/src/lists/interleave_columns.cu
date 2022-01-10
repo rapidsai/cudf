@@ -33,9 +33,7 @@
 #include <thrust/copy.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace cudf::lists::detail {
 namespace {
 /**
  * @brief Generate list offsets and list validities for the output lists column from the table_view
@@ -415,6 +413,4 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                            mr);
 }
 
-}  // namespace detail
-}  // namespace lists
 }  // namespace cudf

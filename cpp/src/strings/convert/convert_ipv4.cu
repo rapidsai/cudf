@@ -29,8 +29,7 @@
 #include <thrust/count.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 /**
@@ -270,5 +269,4 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
   return detail::is_ipv4(strings, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

@@ -91,17 +91,17 @@ struct unbound_list_view {
   /**
    * @brief Returns number of elements in this list row.
    */
-  CUDA_DEVICE_CALLABLE size_type size() const { return _size; }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type size() const { return _size; }
 
   /**
    * @brief Returns whether this row came from the `scatter()` source or target
    */
-  CUDA_DEVICE_CALLABLE label_type label() const { return _label; }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE label_type label() const { return _label; }
 
   /**
    * @brief Returns the index in the source/target column
    */
-  CUDA_DEVICE_CALLABLE size_type row_index() const { return _row_index; }
+  [[nodiscard]] CUDA_DEVICE_CALLABLE size_type row_index() const { return _row_index; }
 
   /**
    * @brief Binds to source/target column (depending on SOURCE/TARGET labels),
@@ -111,7 +111,7 @@ struct unbound_list_view {
    * @param scatter_target Target column for the scatter operation
    * @return A (bound) list_view for the row that this object represents
    */
-  CUDA_DEVICE_CALLABLE list_device_view
+  [[nodiscard]] CUDA_DEVICE_CALLABLE list_device_view
   bind_to_column(lists_column_device_view const& scatter_source,
                  lists_column_device_view const& scatter_target) const
   {

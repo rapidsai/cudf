@@ -27,10 +27,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
+namespace cudf::io::orc::gpu {
 constexpr int init_hash_bits = 12;
 
 struct dictinit_state_s {
@@ -476,7 +473,4 @@ void BuildStripeDictionaries(device_2dspan<StripeDictionary> d_stripes_dicts,
     <<<dim_grid_build, dim_block, 0, stream.value()>>>(d_stripes_dicts);
 }
 
-}  // namespace gpu
-}  // namespace orc
-}  // namespace io
 }  // namespace cudf

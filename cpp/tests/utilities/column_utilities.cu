@@ -48,9 +48,7 @@
 #include <numeric>
 #include <sstream>
 
-namespace cudf {
-
-namespace test {
+namespace cudf::test {
 
 namespace {
 
@@ -1221,5 +1219,4 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                      });
 }
 
-}  // namespace test
 }  // namespace cudf

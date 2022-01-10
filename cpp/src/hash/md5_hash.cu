@@ -32,9 +32,7 @@
 
 #include <iterator>
 
-namespace cudf {
-
-namespace detail {
+namespace cudf::detail {
 
 namespace {
 
@@ -347,5 +345,4 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
 }
 
-}  // namespace detail
 }  // namespace cudf

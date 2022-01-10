@@ -32,8 +32,7 @@
 
 #include <thrust/transform_scan.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
@@ -134,5 +133,4 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   return detail::join_strings(strings, separator, narep, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

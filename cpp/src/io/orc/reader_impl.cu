@@ -44,10 +44,7 @@
 #include <algorithm>
 #include <iterator>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::detail::orc {
 using namespace cudf::io::orc;
 
 namespace {
@@ -371,7 +368,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   size_t decomp_offset           = 0;
   uint32_t max_uncomp_block_size = 0;
   uint32_t start_pos             = 0;
-  uint32_t start_pos_uncomp      = (uint32_t)num_compressed_blocks;
+  auto start_pos_uncomp      = (uint32_t)num_compressed_blocks;
   for (size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
@@ -1316,7 +1313,4 @@ table_with_metadata reader::read(orc_reader_options const& options, rmm::cuda_st
     options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);
 }
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
 }  // namespace cudf

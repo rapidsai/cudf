@@ -31,8 +31,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 namespace {
 /**
@@ -196,5 +195,4 @@ std::unique_ptr<column> code_points(strings_column_view const& strings,
   return detail::code_points(strings, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace strings
 }  // namespace cudf

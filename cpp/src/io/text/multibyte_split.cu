@@ -200,9 +200,7 @@ __global__ void multibyte_split_kernel(
 
 }  // namespace
 
-namespace cudf {
-namespace io {
-namespace text {
+namespace cudf::io::text {
 namespace detail {
 
 void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
@@ -391,6 +389,4 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   return result;
 }
 
-}  // namespace text
-}  // namespace io
 }  // namespace cudf

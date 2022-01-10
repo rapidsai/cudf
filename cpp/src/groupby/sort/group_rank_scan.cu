@@ -24,9 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 namespace {
 /**
  * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
@@ -122,6 +120,4 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
     mr);
 }
 
-}  // namespace detail
-}  // namespace groupby
 }  // namespace cudf
