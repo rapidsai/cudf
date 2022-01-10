@@ -126,32 +126,21 @@ def write_to_dataset(
 
     if partition_cols is not None and len(partition_cols) > 0:
 
-        data_cols = df.columns.drop(partition_cols)
-        if len(data_cols) == 0:
-            raise ValueError("No data left to save outside partition columns")
-
-        part_names, part_offsets, _, grouped_df = df.groupby(
-            partition_cols
-        )._grouped()
-        if not preserve_index:
-            grouped_df.reset_index(drop=True, inplace=True)
-        grouped_df.drop(columns=partition_cols, inplace=True)
-        # Copy the entire keys df in one operation rather than using iloc
-        part_names = part_names.to_pandas().to_frame(index=False)
-
-        full_paths = []
-        metadata_file_paths = []
-        for keys in part_names.itertuples(index=False):
-            subdir = fs.sep.join(
-                [f"{name}={val}" for name, val in zip(partition_cols, keys)]
-            )
-            prefix = fs.sep.join([root_path, subdir])
-            fs.mkdirs(prefix, exist_ok=True)
-            filename = filename or uuid4().hex + ".parquet"
-            full_path = fs.sep.join([prefix, filename])
-            full_paths.append(full_path)
-            if return_metadata:
-                metadata_file_paths.append(fs.sep.join([subdir, filename]))
+        (
+            full_paths,
+            metadata_file_paths,
+            grouped_df,
+            part_offsets,
+            _,
+        ) = _get_partitioned(
+            df,
+            root_path,
+            partition_cols,
+            filename,
+            fs,
+            preserve_index,
+            **kwargs,
+        )
 
         if return_metadata:
             kwargs["metadata_file_path"] = metadata_file_paths
