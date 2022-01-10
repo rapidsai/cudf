@@ -41,13 +41,6 @@ namespace {
 // align all column size allocations to this boundary so that all output column buffers
 // start at that alignment.
 static constexpr std::size_t split_align = 64;
-inline __device__ std::size_t _round_up_safe(std::size_t number_to_round, std::size_t modulus)
-{
-  auto remainder = number_to_round % modulus;
-  if (remainder == 0) { return number_to_round; }
-  auto rounded_up = number_to_round - remainder + modulus;
-  return rounded_up;
-}
 
 /**
  * @brief Struct which contains information on a source buffer.
@@ -848,8 +841,8 @@ void copy_data(size_t total_bytes,
 
       // make sure chunks are padded/aligned to 64 bytes.
       size_t const chunk_size =
-        max(size_t{split_align}, _round_up_safe(bytes / ideal_num_chunks, split_align));
-      size_t const num_chunks = _round_up_safe(bytes, chunk_size) / chunk_size;
+        max(size_t{split_align}, util::round_up_unsafe(bytes / ideal_num_chunks, split_align));
+      size_t const num_chunks = util::round_up_unsafe(bytes, chunk_size) / chunk_size;
       return thrust::pair<size_t, size_t>{num_chunks, chunk_size};
     });
 
@@ -1134,7 +1127,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       std::size_t const bytes =
         static_cast<std::size_t>(num_elements) * static_cast<std::size_t>(element_size);
 
-      return dst_buf_info{_round_up_safe(bytes, split_align),
+      return dst_buf_info{util::round_up_unsafe(bytes, split_align),
                           num_elements,
                           element_size,
                           num_rows,

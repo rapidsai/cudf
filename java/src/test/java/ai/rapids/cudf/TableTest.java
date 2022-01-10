@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialColumnsAreEqual;
@@ -80,6 +81,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
+  private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -289,6 +291,115 @@ public class TableTest extends CudfTestBase {
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
       assertEquals(2, t.getNumberOfColumns());
+    }
+  }
+
+  @Test
+  void testReadJSONFile() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "name")
+        .column(DType.INT32, "age")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("Michael", "Andy", "Justin")
+        .column(null, 30, 19)
+        .build();
+        Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONFileWithDifferentColumnOrder() {
+    Schema schema = Schema.builder()
+        .column(DType.INT32, "age")
+        .column(DType.STRING, "name")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(null, 30, 19)
+        .column("Michael", "Andy", "Justin")
+        .build();
+         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONBufferInferred() {
+    JSONOptions opts = JSONOptions.builder()
+        .withDayFirst(true)
+        .build();
+    byte[] data = ("[false,A,1,2,05/03/2001]\n" +
+        "[true,B,2,3,31/10/2010]'\n" +
+        "[false,C,3,4,20/10/1994]\n" +
+        "[true,D,4,5,18/10/1990]").getBytes(StandardCharsets.UTF_8);
+    try (Table expected = new Table.TestBuilder()
+        .column(false, true, false, true)
+        .column("A", "B", "C", "D")
+        .column(1L, 2L, 3L, 4L)
+        .column(2L, 3L, 4L, 5L)
+        .timestampMillisecondsColumn(983750400000L, 1288483200000L, 782611200000L, 656208000000L)
+        .build();
+         Table table = Table.readJSON(Schema.INFERRED, opts, data)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONBuffer() {
+    // JSON reader will set the column according to the iterator if can't infer the name
+    // So we must set the same name accordingly
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "0")
+        .column(DType.INT32, "1")
+        .column(DType.INT32, "2")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .build();
+    byte[] data = ("[A,1,2]\n" +
+        "[B,2,3]'\n" +
+        "[C,3,4]\n" +
+        "[D,4,5]").getBytes(StandardCharsets.UTF_8);
+    try (Table expected = new Table.TestBuilder()
+        .column("A", "B", "C", "D")
+        .column(1, 2, 3, 4)
+        .column(2, 3, 4, 5)
+        .build();
+         Table table = Table.readJSON(schema, opts, data)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONBufferWithOffset() {
+    // JSON reader will set the column according to the iterator if can't infer the name
+    // So we must set the same name accordingly
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "0")
+        .column(DType.INT32, "1")
+        .column(DType.INT32, "2")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .build();
+    int bytesToIgnore = 8;
+    byte[] data = ("[A,1,2]\n" +
+        "[B,2,3]'\n" +
+        "[C,3,4]\n" +
+        "[D,4,5]").getBytes(StandardCharsets.UTF_8);
+    try (Table expected = new Table.TestBuilder()
+        .column("B", "C", "D")
+        .column(2, 3, 4)
+        .column(3, 4, 5)
+        .build();
+         Table table = Table.readJSON(schema, opts, data,
+             bytesToIgnore, data.length - bytesToIgnore)) {
+      assertTablesAreEqual(expected, table);
     }
   }
 
@@ -7336,8 +7447,42 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void fixedWidthRowsRoundTripWide() {
+    TestBuilder tb = new TestBuilder();
+    IntStream.range(0, 10).forEach(i -> tb.column(3l, 9l, 4l, 2l, 20l, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(5, 1, 0, 2, 7, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(true, false, false, true, false, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(new Byte[]{2, 3, 4, 5, 9, null}));
+    IntStream.range(0, 10).forEach(i -> tb.decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d,
+        9.5d, 0.9d, 7.23d, 2.8d, null));
+    IntStream.range(0, 10).forEach(i -> tb.decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null));
+    try (Table origTable = tb.build()) {
+      ColumnVector[] rowMajorTable = origTable.convertToRows();
+      try {
+        // We didn't overflow
+        assert rowMajorTable.length == 1;
+        ColumnVector cv = rowMajorTable[0];
+        assert cv.getRowCount() == origTable.getRowCount();
+        DType[] types = new DType[origTable.getNumberOfColumns()];
+        for (int i = 0; i < origTable.getNumberOfColumns(); i++) {
+          types[i] = origTable.getColumn(i).getType();
+        }
+        try (Table backAgain = Table.convertFromRows(cv, types)) {
+          assertTablesAreEqual(origTable, backAgain);
+        }
+      } finally {
+        for (ColumnVector cv : rowMajorTable) {
+          cv.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void fixedWidthRowsRoundTrip() {
-    try (Table t = new TestBuilder()
+    try (Table origTable = new TestBuilder()
         .column(3l, 9l, 4l, 2l, 20l, null)
         .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
         .column(5, 1, 0, 2, 7, null)
@@ -7347,25 +7492,21 @@ public class TableTest extends CudfTestBase {
         .decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
         .decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null)
         .build()) {
-      ColumnVector[] rows = t.convertToRows();
+      ColumnVector[] rowMajorTable = origTable.convertToRowsFixedWidthOptimized();
       try {
         // We didn't overflow
-        assert rows.length == 1;
-        ColumnVector cv = rows[0];
-        assert cv.getRowCount() == t.getRowCount();
-//        try (HostColumnVector hcv = cv.copyToHost()) {
-//          hcv.getChildColumnView(0).getDataBuffer().printBuffer(8);
-//        }
-
-        DType[] types = new DType[t.getNumberOfColumns()];
-        for (int i = 0; i < t.getNumberOfColumns(); i++) {
-          types[i] = t.getColumn(i).getType();
+        assert rowMajorTable.length == 1;
+        ColumnVector cv = rowMajorTable[0];
+        assert cv.getRowCount() == origTable.getRowCount();
+        DType[] types = new DType[origTable.getNumberOfColumns()];
+        for (int i = 0; i < origTable.getNumberOfColumns(); i++) {
+          types[i] = origTable.getColumn(i).getType();
         }
-        try (Table backAgain = Table.convertFromRows(cv, types)) {
-          assertTablesAreEqual(t, backAgain);
+        try (Table backAgain = Table.convertFromRowsFixedWidthOptimized(cv, types)) {
+          assertTablesAreEqual(origTable, backAgain);
         }
       } finally {
-        for (ColumnVector cv : rows) {
+        for (ColumnVector cv : rowMajorTable) {
           cv.close();
         }
       }

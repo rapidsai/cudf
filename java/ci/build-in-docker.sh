@@ -19,7 +19,6 @@
 set -ex
 gcc --version
 
-PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 SKIP_JAVA_TESTS=${SKIP_JAVA_TESTS:-true}
 BUILD_CPP_TESTS=${BUILD_CPP_TESTS:-OFF}
 ENABLE_CUDA_STATIC_RUNTIME=${ENABLE_CUDA_STATIC_RUNTIME:-ON}
@@ -28,6 +27,7 @@ RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
 ENABLE_NVTX=${ENABLE_NVTX:-ON}
 ENABLE_GDS=${ENABLE_GDS:-OFF}
 OUT=${OUT:-out}
+CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
 
 SIGN_FILE=$1
 #Set absolute path for OUT_PATH
@@ -54,7 +54,9 @@ export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 rm -rf "$WORKSPACE/cpp/build"
 mkdir -p "$WORKSPACE/cpp/build"
 cd "$WORKSPACE/cpp/build"
-cmake .. -DUSE_NVTX=$ENABLE_NVTX \
+cmake .. -G"${CMAKE_GENERATOR}" \
+         -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+         -DUSE_NVTX=$ENABLE_NVTX \
          -DCUDF_USE_ARROW_STATIC=ON \
          -DCUDF_ENABLE_ARROW_S3=OFF \
          -DBUILD_TESTS=$BUILD_CPP_TESTS \
@@ -62,8 +64,12 @@ cmake .. -DUSE_NVTX=$ENABLE_NVTX \
          -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
          -DBUILD_SHARED_LIBS=OFF
 
-make -j$PARALLEL_LEVEL
-make install DESTDIR=$INSTALL_PREFIX
+if [[ -z "${PARALLEL_LEVEL}" ]]; then
+    cmake --build .
+else
+    cmake --build . --parallel $PARALLEL_LEVEL
+fi
+cmake --install .
 
 ###### Build cudf jar ######
 BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\

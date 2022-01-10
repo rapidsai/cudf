@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,15 +45,12 @@ class hostdevice_vector {
     return *this;
   }
 
-  explicit hostdevice_vector(size_t max_size,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  explicit hostdevice_vector(size_t max_size, rmm::cuda_stream_view stream)
     : hostdevice_vector(max_size, max_size, stream)
   {
   }
 
-  explicit hostdevice_vector(size_t initial_size,
-                             size_t max_size,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
     : num_elements(initial_size), max_elements(max_size)
   {
     if (max_elements != 0) {
@@ -148,9 +145,7 @@ namespace detail {
 template <typename T>
 class hostdevice_2dvector {
  public:
-  hostdevice_2dvector(size_t rows,
-                      size_t columns,
-                      rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  hostdevice_2dvector(size_t rows, size_t columns, rmm::cuda_stream_view stream)
     : _size{rows, columns}, _data{rows * columns, stream}
   {
   }

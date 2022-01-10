@@ -64,6 +64,7 @@ from cudf.core.indexed_frame import (
     _FrameIndexer,
     _get_label_range_or_mask,
     _indices_from_labels,
+    doc_reset_index_template,
 )
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils import cudautils, docutils
@@ -830,30 +831,22 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
-    def reset_index(self, drop=False, inplace=False):
-        """
-        Reset index to RangeIndex
-
-        Parameters
-        ----------
-        drop : bool, default False
-            Just reset the index, without inserting it as a column in
-            the new DataFrame.
-        inplace : bool, default False
-            Modify the Series in place (do not create a new object).
-
-        Returns
-        -------
-        Series or DataFrame or None
-            When `drop` is False (the default), a DataFrame is returned.
-            The newly created columns will come first in the DataFrame,
-            followed by the original Series values.
-            When `drop` is True, a `Series` is returned.
-            In either case, if ``inplace=True``, no value is returned.
-
-        Examples
-        --------
-        >>> import cudf
+    @docutils.doc_apply(
+        doc_reset_index_template.format(
+            klass="Series",
+            argument="""
+        name : object, optional
+            The name to use for the column containing the original Series
+            values. Uses self.name by default. This argument is ignored when
+            ``drop`` is True.""",
+            return_type="Series or DataFrame or None",
+            return_doc=""" For Series, When drop is False (the default), a DataFrame
+            is returned. The newly created columns will come first in the
+            DataFrame, followed by the original Series values. When `drop` is
+            True, a `Series` is returned. In either case, if ``inplace=True``,
+            no value is returned.
+""",
+            example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
         10    a
@@ -873,19 +866,51 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    c
         3    d
         dtype: object
-        """
+
+        You can also use ``reset_index`` with MultiIndex.
+
+        >>> s2 = cudf.Series(
+        ...             range(4), name='foo',
+        ...             index=cudf.MultiIndex.from_tuples([
+        ...                     ('bar', 'one'), ('bar', 'two'),
+        ...                     ('baz', 'one'), ('baz', 'two')],
+        ...                     names=['a', 'b']
+        ...      ))
+        >>> s2
+        a    b
+        bar  one    0
+             two    1
+        baz  one    2
+             two    3
+        Name: foo, dtype: int64
+        >>> s2.reset_index(level='a')
+               a  foo
+        b
+        one  bar    0
+        two  bar    1
+        one  baz    2
+        two  baz    3
+""",
+        )
+    )
+    def reset_index(self, level=None, drop=False, name=None, inplace=False):
+        if not drop and inplace:
+            raise TypeError(
+                "Cannot reset_index inplace on a Series "
+                "to create a DataFrame"
+            )
+        data, index = self._reset_index(level=level, drop=drop)
         if not drop:
-            if inplace is True:
-                raise TypeError(
-                    "Cannot reset_index inplace on a Series "
-                    "to create a DataFrame"
-                )
-            return self.to_frame().reset_index(drop=drop)
-        else:
-            if inplace is True:
-                self._index = RangeIndex(len(self))
-            else:
-                return self._from_data(self._data, index=RangeIndex(len(self)))
+            if name is None:
+                name = 0 if self.name is None else self.name
+            data[name] = data.pop(self.name)
+            return cudf.core.dataframe.DataFrame._from_data(data, index)
+        # For ``name`` behavior, see:
+        # https://github.com/pandas-dev/pandas/issues/44575
+        return self._mimic_inplace(
+            Series._from_data(data, index, name if inplace else None),
+            inplace=inplace,
+        )
 
     def set_index(self, index):
         """Returns a new Series with a different index.
@@ -2264,83 +2289,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {self.name: self._column[rinds]}, self.index._values[rinds]
         )
 
-    def one_hot_encoding(self, cats, dtype="float64"):
-        """Perform one-hot-encoding
-
-        Parameters
-        ----------
-        cats : sequence of values
-                values representing each category.
-        dtype : numpy.dtype
-                specifies the output dtype.
-
-        Returns
-        -------
-        Sequence
-            A sequence of new series for each category. Its length is
-            determined by the length of ``cats``.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['a', 'b', 'c', 'a'])
-        >>> s
-        0    a
-        1    b
-        2    c
-        3    a
-        dtype: object
-        >>> s.one_hot_encoding(['a', 'c', 'b'])
-        [0    1.0
-        1    0.0
-        2    0.0
-        3    1.0
-        dtype: float64, 0    0.0
-        1    0.0
-        2    1.0
-        3    0.0
-        dtype: float64, 0    0.0
-        1    1.0
-        2    0.0
-        3    0.0
-        dtype: float64]
-        """
-
-        warnings.warn(
-            "Series.one_hot_encoding is deprecated and will be removed in "
-            "future, use `get_dummies` instead.",
-            FutureWarning,
-        )
-
-        if hasattr(cats, "to_arrow"):
-            cats = cats.to_pandas()
-        else:
-            cats = pd.Series(cats, dtype="object")
-        dtype = cudf.dtype(dtype)
-
-        try:
-            cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
-        except TypeError:
-            raise ValueError("Cannot convert `cats` as cudf column.")
-
-        if self._column.size * cats_col.size >= np.iinfo("int32").max:
-            raise ValueError(
-                "Size limitation exceeded: series.size * category.size < "
-                "np.iinfo('int32').max. Consider reducing size of category"
-            )
-
-        res = libcudf.transform.one_hot_encode(self._column, cats_col)
-        if dtype.type == np.bool_:
-            return [
-                Series._from_data({None: x}, index=self._index)
-                for x in list(res.values())
-            ]
-        else:
-            return [
-                Series._from_data({None: x.astype(dtype)}, index=self._index)
-                for x in list(res.values())
-            ]
-
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding.
 
@@ -3119,45 +3067,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if normalize:
             res = res / float(res._column.sum())
         return res
-
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in this column.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 120, 30])
-        >>> series
-        0     10
-        1    120
-        2     30
-        dtype: int64
-        >>> series.hash_values(method="murmur3")
-        0   -1930516747
-        1     422619251
-        2    -941520876
-        dtype: int32
-        >>> series.hash_values(method="md5")
-        0    7be4bbacbfdb05fb3044e36c22b41e8b
-        1    947ca8d2c5f0f27437f156cfbfab0969
-        2    d0580ef52d27c043c8e341fd5039b166
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
