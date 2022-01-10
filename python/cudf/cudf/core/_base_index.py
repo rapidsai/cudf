@@ -147,7 +147,7 @@ class BaseIndex(Serializable):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return cudf.Index(
                 self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
@@ -829,7 +829,7 @@ class BaseIndex(Serializable):
         >>> idx = cudf.Index([1.0, 2.0, np.nan, 4.0])
         >>> idx.is_floating()
         True
-        >>> idx = cudf.Index([1, 2, 3, 4, np.nan])
+        >>> idx = cudf.Index([1, 2, 3, 4, np.nan], nan_as_null=False)
         >>> idx.is_floating()
         True
         >>> idx = cudf.Index([1, 2, 3, 4])
@@ -1413,6 +1413,16 @@ class BaseIndex(Serializable):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+    def _split_columns_by_levels(self, levels):
+        if isinstance(levels, int) and levels > 0:
+            raise ValueError(f"Out of bound level: {levels}")
+        return (
+            [self._data[self.name]],
+            [],
+            ["index" if self.name is None else self.name],
+            [],
+        )
 
 
 def _get_result_name(left_name, right_name):

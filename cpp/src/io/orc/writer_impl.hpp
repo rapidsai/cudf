@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <string>
@@ -349,7 +349,7 @@ class writer::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
   stripe_size_limits max_stripe_size;
   size_type row_index_stride;
@@ -369,6 +369,8 @@ class writer::impl {
   bool const single_write_mode;
   // optional user metadata
   std::unique_ptr<table_input_metadata> table_meta;
+  // optional user metadata
+  std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
 

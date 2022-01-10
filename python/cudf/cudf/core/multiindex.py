@@ -386,7 +386,7 @@ class MultiIndex(Frame, BaseIndex):
         else:
             preprocess = self.copy(deep=False)
 
-        if any(col.has_nulls for col in preprocess._data.columns):
+        if any(col.has_nulls() for col in preprocess._data.columns):
             preprocess_df = preprocess.to_frame(index=False)
             for name, col in preprocess._data.items():
                 if isinstance(
@@ -658,11 +658,11 @@ class MultiIndex(Frame, BaseIndex):
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """Computes the valid set of indices of values in the lookup"""
         lookup = cudf.DataFrame()
-        for name, row in zip(index.names, row_tuple):
+        for i, row in enumerate(row_tuple):
             if isinstance(row, slice) and row == slice(None):
                 continue
-            lookup[name] = cudf.Series(row)
-        frame = index.to_frame(index=False)
+            lookup[i] = cudf.Series(row)
+        frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
         data_table = cudf.concat(
             [
                 frame,
@@ -729,16 +729,26 @@ class MultiIndex(Frame, BaseIndex):
         for k in range(size, len(index._data)):
             out_index.insert(
                 out_index._num_columns,
-                k if index.names is None else index.names[k],
+                k,
                 cudf.Series._from_data({None: index._data.columns[k]}),
             )
 
-        if len(result) == 1 and size == 0 and not slice_access:
-            # If the final result is one row and it was not mapped into
-            # directly, return a Series with a tuple as name.
+        # determine if we should downcast from a DataFrame to a Series
+        need_downcast = (
+            isinstance(result, cudf.DataFrame)
+            and len(result) == 1  # only downcast if we have a single row
+            and not slice_access  # never downcast if we sliced
+            and (
+                size == 0  # index_key was an integer
+                # we indexed into a single row directly, using its label:
+                or len(index_key) == self.nlevels
+            )
+        )
+        if need_downcast:
             result = result.T
-            result = result[result._data.names[0]]
-        elif len(result) == 0 and not slice_access:
+            return result[result._data.names[0]]
+
+        if len(result) == 0 and not slice_access:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             result = cudf.Series._from_data(
@@ -1733,3 +1743,39 @@ class MultiIndex(Frame, BaseIndex):
         if sort is None and len(other):
             return midx.sort_values()
         return midx
+
+    def _split_columns_by_levels(self, levels):
+        # This function assumes that for levels with duplicate names, they are
+        # specified by indices, not name by ``levels``. E.g. [None, None] can
+        # only be specified by 0, 1, not "None".
+
+        if levels is None:
+            return (
+                list(self._data.columns),
+                [],
+                [
+                    f"level_{i}" if name is None else name
+                    for i, name in enumerate(self.names)
+                ],
+                [],
+            )
+
+        # Normalize named levels into indices
+        level_names = list(self.names)
+        level_indices = {
+            lv if isinstance(lv, int) else level_names.index(lv)
+            for lv in levels
+        }
+
+        # Split the columns
+        data_columns, index_columns = [], []
+        data_names, index_names = [], []
+        for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
+            if i in level_indices:
+                name = f"level_{i}" if name is None else name
+                data_columns.append(col)
+                data_names.append(name)
+            else:
+                index_columns.append(col)
+                index_names.append(name)
+        return data_columns, index_columns, data_names, index_names
