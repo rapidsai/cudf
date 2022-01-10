@@ -244,21 +244,77 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
+  rmm::device_uvector<size_type> nullcnt(input.size(), stream);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    input.begin<T>(),
-                    input.end<T>(),
-                    thrust::make_counting_iterator<size_type>(0),
-                    pairs.begin(),
-                    [beta] __device__(T input, size_type index) -> pair_type<T> {
-                      if (index == 0) {
-                        return {beta, input};
-                      } else {
-                        return {beta, (1.0 - beta) * input};
-                      }
-                    });
-
+  /*
   if (input.has_nulls()) {
+    nullcnt = null_roll_up(input, stream);
+    auto device_view = column_device_view::create(input);
+    auto valid_it    = detail::make_validity_iterator(*device_view);
+
+    auto data = thrust::make_zip_iterator(thrust::make_tuple(input.begin<T>(), valid_it, nullcnt.begin(), thrust::make_counting_iterator<size_type>(0)));
+
+    thrust::transform(rmm::exec_policy(stream),
+                      data,
+                      data + input.size(),
+                      pairs.begin(),
+                      [beta] __device__(thrust::tuple<T, bool, size_type, size_type> data) -> pair_type<T> {
+                        T input = thrust::get<0>(data);
+                        bool is_valid = thrust::get<1>(data);
+                        size_type nullcnt = thrust::get<2>(data);
+                        size_type index = thrust::get<3>(data);
+                        
+                        T factor;
+
+                        if {}
+
+
+
+
+
+
+
+
+
+
+                        if (!is_valid) {
+                          return {1.0, 0.0};
+                        } else {
+                          if (index == 0) {
+                            return {beta, input};
+                          } else {
+                            if (nullcnt > 0) {
+                              // compute the denominator for this element
+                              factor = (1.0 - beta) + pow(beta, nullcnt + 1);
+                              return {1.0, factor};
+                            }
+
+                          }
+                        }
+
+                      }
+    );
+
+  }
+
+  */
+  // denominators are all 1 so dont need to be computed
+  // pairs are all (beta, 1-beta x_i) except for the first one
+
+  if (!input.has_nulls()) {
+    thrust::transform(rmm::exec_policy(stream),
+                      input.begin<T>(),
+                      input.end<T>(),
+                      thrust::make_counting_iterator<size_type>(0),
+                      pairs.begin(),
+                      [beta] __device__(T input, size_type index) -> pair_type<T> {
+                        if (index == 0) {
+                          return {beta, input};
+                        } else {
+                          return {beta, (1.0 - beta) * input};
+                        }
+                      });
+  } else {
     /*
     In this case, a denominator actually has to be computed. The formula is
     y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
@@ -272,9 +328,90 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     properly downweight the previous values. But now but we also need to compute
     the normalization factors and divide the results into them at the end.
     */
+    nullcnt = null_roll_up(input, stream);
+    auto device_view = column_device_view::create(input);
+    auto valid_it    = detail::make_validity_iterator(*device_view);
 
-    rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
-    pair_beta_adjust(input, pairs, nullcnt, stream);
+    auto data = thrust::make_zip_iterator(
+      thrust::make_tuple(
+        input.begin<T>(),
+        thrust::make_counting_iterator<size_type>(0),
+        valid_it,
+        nullcnt.begin()
+      )
+    );
+
+    thrust::transform(rmm::exec_policy(stream),
+                      data,
+                      data + input.size(),
+                      pairs.begin(),
+                      [beta] __device__(thrust::tuple<T, size_type, bool, size_type> data) -> pair_type<T> {
+
+                        T input = thrust::get<0>(data);
+                        size_type index = thrust::get<1>(data);
+                        bool is_valid = thrust::get<2>(data);
+                        size_type nullcnt = thrust::get<3>(data);
+
+                        if (index == 0) {
+                          return {beta, input};
+                        } else {
+                          if (is_valid and nullcnt == 0) {
+                            // preceeding value is valid, return normal pair
+                            return {beta, (1.0 - beta) * input};
+                          } else if (is_valid and nullcnt != 0) {
+                            // one or more preceeding values is null, adjust by how many
+                            return {beta * (pow(beta, nullcnt)), (1.0 - beta) * input};
+                          } else {
+                            // value is not valid
+                            return {1.0, 0.0};
+                          }
+                        }
+                      });
+    
+    /*
+
+
+    thrust::transform(rmm::exec_policy(stream),
+                  input.begin<T>(),
+                  input.end<T>(),
+                  thrust::make_counting_iterator<size_type>(0),
+                  pairs.begin(),
+                  [beta] __device__(T input, size_type index) -> pair_type<T> {
+                    if (index == 0) {
+                      return {beta, input};
+                    } else {
+                      return {beta, (1.0 - beta) * input};
+                    }
+                  });
+
+  thrust::transform(rmm::exec_policy(stream),
+                    valid_and_nullcnt,
+                    valid_and_nullcnt + input.size(),
+                    pairs.begin(),
+                    pairs.begin(),
+                    [] __device__(thrust::tuple<bool, int> const valid_and_nullcnt,
+                                  pair_type<T> const pair) -> pair_type<T> {
+                      bool const valid = thrust::get<0>(valid_and_nullcnt);
+                      int const exp    = thrust::get<1>(valid_and_nullcnt);
+                      if (valid and (exp != 0)) {
+                        // The value is non-null, but nulls preceeded it
+                        // must adjust the second element of the pair
+                        T beta  = pair.first;
+                        T scale = pair.second;
+                        return {beta * (pow(beta, exp)), scale};
+                      } else if (!valid) {
+                        // the value is null, carry the previous value forward
+                        // "identity operator" is used
+                        return {1.0, 0.0};
+                      } else {
+                        return pair;
+                      }
+                    });
+}
+
+    */
+                    
+    //pair_beta_adjust(input, pairs, nullcnt, stream);
 
     rmm::device_uvector<T> nullcnt_factor(nullcnt.size(), stream);
 
@@ -291,8 +428,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                         }
                       });
 
-    auto device_view = column_device_view::create(input);
-    auto valid_it    = detail::make_validity_iterator(*device_view);
+    valid_it    = detail::make_validity_iterator(*device_view);
     auto null_and_null_count =
       thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt_factor.begin()));
     thrust::transform(

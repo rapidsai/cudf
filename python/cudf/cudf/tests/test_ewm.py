@@ -11,6 +11,7 @@ from cudf.testing._utils import assert_eq
         [1.0, 2.0, 3.0, 4.0, 5.0],
         [5.0, cudf.NA, 3.0, cudf.NA, 8.5],
         [5.0, cudf.NA, 3.0, cudf.NA, cudf.NA, 4.5],
+        [5.0, cudf.NA, 3.0, 4.0, cudf.NA, 5.0]
     ],
 )
 @pytest.mark.parametrize(
