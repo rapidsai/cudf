@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
@@ -175,16 +176,27 @@ std::unique_ptr<column> rescale(column_view input,
                                 rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
+  using RepType = device_storage_type_t<T>;
 
+  auto const type = cudf::data_type{cudf::type_to_id<T>(), scale};
   if (input.type().scale() >= scale) {
-    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale}, rmm::cuda_stream_default);
-    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
   } else {
     auto const diff = input.type().scale() - scale;
-    auto const scalar =
-      make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, rmm::cuda_stream_default);
-    auto const type = cudf::data_type{cudf::type_to_id<T>(), scale};
+    // The value of fixed point scalar will overflow if the scale difference is larger than the
+    // max digits of underlying integral type. Under this condition, the output values can be
+    // nothing other than zero value. Therefore, we simply return a zero column.
+    if (-diff > cuda::std::numeric_limits<RepType>::digits10) {
+      auto const scalar  = make_fixed_point_scalar<T>(0, scale_type{scale}, stream);
+      auto output_column = make_column_from_scalar(*scalar, input.size(), stream, mr);
+      if (input.nullable()) {
+        auto const null_mask = copy_bitmask(input, stream, mr);
+        output_column->set_null_mask(std::move(null_mask));
+      }
+      return output_column;
+    }
+    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
