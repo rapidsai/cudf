@@ -838,8 +838,27 @@ class ParquetWriter:
         compression=None,
         statistics="ROWGROUP",
         partition_cols=None,
-        fs=None,
     ) -> None:
+        """
+        Write a parquet file or dataset incrementally
+
+        Parameters
+        ----------
+        path : str
+            File path or Root Directory path. Will be used as Root Directory
+            path while writing a partitioned dataset.
+        index : bool, default None
+            If ``True``, include the dataframe’s index(es) in the file output.
+            If ``False``, they will not be written to the file. If ``None``,
+            index(es) other than RangeIndex will be saved as columns.
+        compression : {'snappy', None}, default 'snappy'
+            Name of the compression to use. Use ``None`` for no compression.
+        statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+            Level at which column statistics should be included in file.
+        partition_cols : list, optional, default None
+            Column names by which to partition the dataset
+            Columns are partitioned in the order they are given
+        """
         self.path = path
         self.common_args = {
             "index": index,
@@ -853,7 +872,6 @@ class ParquetWriter:
         # Map of partition_col values to their libparquet.ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map = {}
-        self.fs = fs
         self.filename = None
         if partition_cols is None:
             self._chunked_writers.append(
@@ -865,6 +883,9 @@ class ParquetWriter:
             )
 
     def write_table(self, df):
+        """
+        Write a dataframe to the file/dataset
+        """
         if self.partition_cols is None:
             self._chunked_writers[0][0].write_table(df)
             return
@@ -880,7 +901,6 @@ class ParquetWriter:
             self.path,
             self.partition_cols,
             preserve_index=self.common_args["index"],
-            fs=self.fs,
             filename=self.filename,
         )
 
@@ -931,6 +951,10 @@ class ParquetWriter:
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
     def close(self, metadata_file_path=None):
+        """
+        Close all open files and optionally return footer metadata as a binary
+        blob
+        """
         return_metadata = bool(metadata_file_path)
         if self.partition_cols is not None:
             if isinstance(metadata_file_path, str):
