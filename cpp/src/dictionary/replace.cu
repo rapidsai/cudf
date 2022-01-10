@@ -27,7 +27,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::dictionary::detail {
+namespace cudf {
+namespace dictionary {
+namespace detail {
 namespace {
 
 /**
@@ -137,4 +139,6 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
     std::move(input_matched->release().children.back()), std::move(new_indices), stream, mr);
 }
 
+}  // namespace detail
+}  // namespace dictionary
 }  // namespace cudf

@@ -34,7 +34,8 @@
 
 #include <algorithm>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 
 using char_range = thrust::pair<char_utf8, char_utf8>;
@@ -158,4 +159,5 @@ std::unique_ptr<column> filter_characters(
     strings, characters_to_filter, keep_characters, replacement, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

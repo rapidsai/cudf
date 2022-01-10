@@ -37,7 +37,8 @@
 #include <thrust/reduce.h>         // maximum()
 #include <thrust/transform.h>      // transform()
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 
 using string_index_pair = thrust::pair<const char*, size_type>;
@@ -546,7 +547,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
  */
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
-  [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
+  __device__ size_type count_tokens(size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
     const string_view d_str = d_strings.element<string_view>(idx);
@@ -857,4 +858,5 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
   return detail::rsplit(strings_column, delimiter, maxsplit, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

@@ -28,7 +28,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::strings::detail {
+namespace cudf {
+namespace strings {
+namespace detail {
 std::unique_ptr<column> fill(
   strings_column_view const& strings,
   size_type begin,
@@ -99,4 +101,6 @@ std::unique_ptr<column> fill(
                              std::move(null_mask));
 }
 
+}  // namespace detail
+}  // namespace strings
 }  // namespace cudf

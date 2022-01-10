@@ -27,7 +27,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
@@ -51,6 +52,15 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 
     return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
   }
+}
+
+}  // namespace detail
+
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
+  column_view const& input, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::bools_to_mask(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

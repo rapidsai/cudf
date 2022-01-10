@@ -606,7 +606,7 @@ class hash_join {
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the the join keys .
    */
-  [[nodiscard]] std::size_t inner_join_size(cudf::table_view const& probe,
+  std::size_t inner_join_size(cudf::table_view const& probe,
                               null_equality compare_nulls  = null_equality::EQUAL,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -621,7 +621,7 @@ class hash_join {
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the the join keys .
    */
-  [[nodiscard]] std::size_t left_join_size(cudf::table_view const& probe,
+  std::size_t left_join_size(cudf::table_view const& probe,
                              null_equality compare_nulls  = null_equality::EQUAL,
                              rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 

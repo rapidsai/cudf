@@ -33,7 +33,9 @@
 
 #include <type_traits>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 namespace {
 
 template <typename T>
@@ -204,4 +206,6 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
   return result;
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

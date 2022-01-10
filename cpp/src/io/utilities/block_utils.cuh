@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#include <cstdint>
+#include <stdint.h>
 
 namespace cudf {
 namespace io {
@@ -32,7 +32,7 @@ inline __device__ T shuffle_xor(T var, uint32_t delta)
   return __shfl_xor_sync(~0, var, delta);
 }
 
-inline __device__ void syncwarp() { __syncwarp(); }
+inline __device__ void syncwarp(void) { __syncwarp(); }
 
 inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
@@ -127,7 +127,7 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
 inline __device__ uint32_t unaligned_load32(const uint8_t* p)
 {
   uint32_t ofs        = 3 & reinterpret_cast<uintptr_t>(p);
-  const auto* p32 = reinterpret_cast<const uint32_t*>(p - ofs);
+  const uint32_t* p32 = reinterpret_cast<const uint32_t*>(p - ofs);
   uint32_t v          = p32[0];
   return (ofs) ? __funnelshift_r(v, p32[1], ofs * 8) : v;
 }
@@ -135,7 +135,7 @@ inline __device__ uint32_t unaligned_load32(const uint8_t* p)
 inline __device__ uint64_t unaligned_load64(const uint8_t* p)
 {
   uint32_t ofs        = 3 & reinterpret_cast<uintptr_t>(p);
-  const auto* p32 = reinterpret_cast<const uint32_t*>(p - ofs);
+  const uint32_t* p32 = reinterpret_cast<const uint32_t*>(p - ofs);
   uint32_t v0         = p32[0];
   uint32_t v1         = p32[1];
   if (ofs) {
@@ -148,8 +148,8 @@ inline __device__ uint64_t unaligned_load64(const uint8_t* p)
 template <unsigned int nthreads, bool sync_before_store>
 inline __device__ void memcpy_block(void* dstv, const void* srcv, uint32_t len, uint32_t t)
 {
-  auto* dst       = static_cast<uint8_t*>(dstv);
-  const auto* src = static_cast<const uint8_t*>(srcv);
+  uint8_t* dst       = static_cast<uint8_t*>(dstv);
+  const uint8_t* src = static_cast<const uint8_t*>(srcv);
   uint32_t dst_align_bytes, src_align_bytes, src_align_bits;
   // Align output to 32-bit
   dst_align_bytes = 3 & -reinterpret_cast<intptr_t>(dst);
@@ -166,7 +166,7 @@ inline __device__ void memcpy_block(void* dstv, const void* srcv, uint32_t len, 
   src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
   src_align_bits  = src_align_bytes * 8;
   while (len >= 4) {
-    const auto* src32 = reinterpret_cast<const uint32_t*>(src - src_align_bytes);
+    const uint32_t* src32 = reinterpret_cast<const uint32_t*>(src - src_align_bytes);
     uint32_t copy_cnt     = min(len >> 2, nthreads);
     uint32_t v;
     if (t < copy_cnt) {

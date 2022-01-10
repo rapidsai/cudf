@@ -32,11 +32,12 @@
 
 #include <thrust/fill.h>
 
-namespace cudf::test {
+namespace cudf {
+namespace test {
 
 using namespace cudf;
 
-using expected_value = int;
+typedef thrust::tuple<size_type, double, double> expected_value;
 
 template <typename T>
 struct TDigestAllTypes : public cudf::test::BaseFixture {
@@ -982,4 +983,5 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
 }
 
+}  // namespace test
 }  // namespace cudf

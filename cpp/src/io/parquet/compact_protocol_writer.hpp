@@ -20,8 +20,8 @@
 #include "parquet_common.hpp"
 
 #include <algorithm>
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 #include <string>
 #include <vector>
 

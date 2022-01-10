@@ -30,7 +30,8 @@
 
 #include <thrust/transform.h>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 /**
@@ -417,4 +418,5 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
   return detail::ends_with(strings, targets, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

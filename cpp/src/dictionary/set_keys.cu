@@ -35,7 +35,8 @@
 #include <iterator>
 #include <thrust/binary_search.h>
 
-namespace cudf::dictionary {
+namespace cudf {
+namespace dictionary {
 namespace detail {
 namespace {
 
@@ -242,4 +243,5 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
   return detail::match_dictionaries(input, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace dictionary
 }  // namespace cudf

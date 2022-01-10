@@ -159,27 +159,27 @@ class csv_reader_options {
   /**
    * @brief Returns source info.
    */
-  [[nodiscard]] source_info const& get_source() const { return _source; }
+  source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns compression format of the source.
    */
-  [[nodiscard]] compression_type get_compression() const { return _compression; }
+  compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns number of bytes to skip from source start.
    */
-  [[nodiscard]] std::size_t get_byte_range_offset() const { return _byte_range_offset; }
+  std::size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
    */
-  [[nodiscard]] std::size_t get_byte_range_size() const { return _byte_range_size; }
+  std::size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
    * @brief Returns number of bytes to read with padding.
    */
-  [[nodiscard]] std::size_t get_byte_range_size_with_padding() const
+  std::size_t get_byte_range_size_with_padding() const
   {
     if (_byte_range_size == 0) {
       return 0;
@@ -191,7 +191,7 @@ class csv_reader_options {
   /**
    * @brief Returns number of bytes to pad when reading.
    */
-  [[nodiscard]] std::size_t get_byte_range_padding() const
+  std::size_t get_byte_range_padding() const
   {
     auto const num_names   = _names.size();
     auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
@@ -213,127 +213,127 @@ class csv_reader_options {
   /**
    * @brief Returns names of the columns.
    */
-  [[nodiscard]] std::vector<std::string> const& get_names() const { return _names; }
+  std::vector<std::string> const& get_names() const { return _names; }
 
   /**
    * @brief Returns prefix to be used for column ID.
    */
-  [[nodiscard]] std::string get_prefix() const { return _prefix; }
+  std::string get_prefix() const { return _prefix; }
 
   /**
    * @brief Whether to rename duplicate column names.
    */
-  [[nodiscard]] bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
+  bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
 
   /**
    * @brief Returns names of the columns to be read.
    */
-  [[nodiscard]] std::vector<std::string> const& get_use_cols_names() const { return _use_cols_names; }
+  std::vector<std::string> const& get_use_cols_names() const { return _use_cols_names; }
 
   /**
    * @brief Returns indexes of columns to read.
    */
-  [[nodiscard]] std::vector<int> const& get_use_cols_indexes() const { return _use_cols_indexes; }
+  std::vector<int> const& get_use_cols_indexes() const { return _use_cols_indexes; }
 
   /**
    * @brief Returns number of rows to read.
    */
-  [[nodiscard]] size_type get_nrows() const { return _nrows; }
+  size_type get_nrows() const { return _nrows; }
 
   /**
    * @brief Returns number of rows to skip from start.
    */
-  [[nodiscard]] size_type get_skiprows() const { return _skiprows; }
+  size_type get_skiprows() const { return _skiprows; }
 
   /**
    * @brief Returns number of rows to skip from end.
    */
-  [[nodiscard]] size_type get_skipfooter() const { return _skipfooter; }
+  size_type get_skipfooter() const { return _skipfooter; }
 
   /**
    * @brief Returns header row index.
    */
-  [[nodiscard]] size_type get_header() const { return _header; }
+  size_type get_header() const { return _header; }
 
   /**
    * @brief Returns line terminator.
    */
-  [[nodiscard]] char get_lineterminator() const { return _lineterminator; }
+  char get_lineterminator() const { return _lineterminator; }
 
   /**
    * @brief Returns field delimiter.
    */
-  [[nodiscard]] char get_delimiter() const { return _delimiter; }
+  char get_delimiter() const { return _delimiter; }
 
   /**
    * @brief Returns numeric data thousands separator.
    */
-  [[nodiscard]] char get_thousands() const { return _thousands; }
+  char get_thousands() const { return _thousands; }
 
   /**
    * @brief Returns decimal point character.
    */
-  [[nodiscard]] char get_decimal() const { return _decimal; }
+  char get_decimal() const { return _decimal; }
 
   /**
    * @brief Returns comment line start character.
    */
-  [[nodiscard]] char get_comment() const { return _comment; }
+  char get_comment() const { return _comment; }
 
   /**
    * @brief Whether to treat `\r\n` as line terminator.
    */
-  [[nodiscard]] bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
+  bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
 
   /**
    * @brief Whether to treat whitespace as field delimiter.
    */
-  [[nodiscard]] bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
+  bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
 
   /**
    * @brief Whether to skip whitespace after the delimiter.
    */
-  [[nodiscard]] bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
+  bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
 
   /**
    * @brief Whether to ignore empty lines or parse line values as invalid.
    */
-  [[nodiscard]] bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
+  bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
 
   /**
    * @brief Returns quoting style.
    */
-  [[nodiscard]] quote_style get_quoting() const { return _quoting; }
+  quote_style get_quoting() const { return _quoting; }
 
   /**
    * @brief Returns quoting character.
    */
-  [[nodiscard]] char get_quotechar() const { return _quotechar; }
+  char get_quotechar() const { return _quotechar; }
 
   /**
    * @brief Whether a quote inside a value is double-quoted.
    */
-  [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
+  bool is_enabled_doublequote() const { return _doublequote; }
 
   /**
    * @brief Returns names of columns to read as datetime.
    */
-  [[nodiscard]] std::vector<std::string> const& get_parse_dates_names() const { return _parse_dates_names; }
+  std::vector<std::string> const& get_parse_dates_names() const { return _parse_dates_names; }
 
   /**
    * @brief Returns indexes of columns to read as datetime.
    */
-  [[nodiscard]] std::vector<int> const& get_parse_dates_indexes() const { return _parse_dates_indexes; }
+  std::vector<int> const& get_parse_dates_indexes() const { return _parse_dates_indexes; }
 
   /**
    * @brief Returns names of columns to read as hexadecimal.
    */
-  [[nodiscard]] std::vector<std::string> const& get_parse_hex_names() const { return _parse_hex_names; }
+  std::vector<std::string> const& get_parse_hex_names() const { return _parse_hex_names; }
 
   /**
    * @brief Returns indexes of columns to read as hexadecimal.
    */
-  [[nodiscard]] std::vector<int> const& get_parse_hex_indexes() const { return _parse_hex_indexes; }
+  std::vector<int> const& get_parse_hex_indexes() const { return _parse_hex_indexes; }
 
   /**
    * @brief Returns per-column types.
@@ -1277,52 +1277,52 @@ class csv_writer_options {
   /**
    * @brief Returns sink used for writer output.
    */
-  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
+  sink_info const& get_sink(void) const { return _sink; }
 
   /**
    * @brief Returns table that would be written to output.
    */
-  [[nodiscard]] table_view const& get_table() const { return _table; }
+  table_view const& get_table(void) const { return _table; }
 
   /**
    * @brief Returns optional associated metadata.
    */
-  [[nodiscard]] table_metadata const* get_metadata() const { return _metadata; }
+  table_metadata const* get_metadata(void) const { return _metadata; }
 
   /**
    * @brief Returns string to used for null entries.
    */
-  [[nodiscard]] std::string get_na_rep() const { return _na_rep; }
+  std::string get_na_rep(void) const { return _na_rep; }
 
   /**
    * @brief Whether to write headers to csv.
    */
-  [[nodiscard]] bool is_enabled_include_header() const { return _include_header; }
+  bool is_enabled_include_header(void) const { return _include_header; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
    */
-  [[nodiscard]] size_type get_rows_per_chunk() const { return _rows_per_chunk; }
+  size_type get_rows_per_chunk(void) const { return _rows_per_chunk; }
 
   /**
    * @brief Returns character used for separating lines.
    */
-  [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
+  std::string get_line_terminator(void) const { return _line_terminator; }
 
   /**
    * @brief Returns character used for separating lines.
    */
-  [[nodiscard]] char get_inter_column_delimiter() const { return _inter_column_delimiter; }
+  char get_inter_column_delimiter(void) const { return _inter_column_delimiter; }
 
   /**
    * @brief Returns string used for values != 0 in INT8 types.
    */
-  [[nodiscard]] std::string get_true_value() const { return _true_value; }
+  std::string get_true_value(void) const { return _true_value; }
 
   /**
    * @brief Returns string used for values == 0 in INT8 types.
    */
-  [[nodiscard]] std::string get_false_value() const { return _false_value; }
+  std::string get_false_value(void) const { return _false_value; }
 
   // Setter
   /**

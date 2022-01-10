@@ -30,7 +30,8 @@
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
                                              size_type repeat_times,
@@ -410,4 +411,5 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
   return detail::repeat_strings_output_sizes(input, repeat_times, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

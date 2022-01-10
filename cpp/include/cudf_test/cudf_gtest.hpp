@@ -79,7 +79,7 @@ using Templates0 = Templates<>;
 
 template <typename T>
 struct TypeList {
-  using type = Types<T>;
+  typedef Types<T> type;
 };
 
 template <class... TYPES>

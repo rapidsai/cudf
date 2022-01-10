@@ -22,7 +22,10 @@
 
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
@@ -302,4 +305,7 @@ void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   get_dictionary_indices_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
 }
+}  // namespace gpu
+}  // namespace parquet
+}  // namespace io
 }  // namespace cudf

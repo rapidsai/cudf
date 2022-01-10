@@ -18,7 +18,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
-namespace cudf::reduction {
+namespace cudf {
+namespace reduction {
 
 std::unique_ptr<cudf::scalar> min(column_view const& col,
                                   data_type const output_dtype,
@@ -38,4 +39,5 @@ std::unique_ptr<cudf::scalar> min(column_view const& col,
                                mr);
 }
 
+}  // namespace reduction
 }  // namespace cudf

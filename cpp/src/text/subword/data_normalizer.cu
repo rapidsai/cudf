@@ -27,7 +27,8 @@
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
 
-namespace nvtext::detail {
+namespace nvtext {
+namespace detail {
 namespace {
 
 /**
@@ -249,7 +250,9 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
   chars_per_thread[char_for_thread] = num_new_chars;
 
-  using BlockStore = int;
+  typedef cub::
+    BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>
+      BlockStore;
   __shared__ typename BlockStore::TempStorage temp_storage;
 
   // Now we perform coalesced writes back to global memory using cub.
@@ -334,4 +337,5 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   return uvector_pair(std::move(d_code_points), std::move(d_strings_offsets));
 }
 
+}  // namespace detail
 }  // namespace nvtext

@@ -29,7 +29,8 @@
 
 #include <vector>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 using string_index_pair = thrust::pair<const char*, size_type>;
 
@@ -251,4 +252,5 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
   return detail::rpartition(strings, delimiter, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

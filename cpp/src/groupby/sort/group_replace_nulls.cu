@@ -29,7 +29,9 @@
 
 #include <utility>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 
 std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_value,
                                             device_span<size_type const> group_labels,
@@ -76,4 +78,6 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   return std::move(output->release()[0]);
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

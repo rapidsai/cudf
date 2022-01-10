@@ -26,7 +26,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
@@ -52,4 +53,13 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 
   return std::make_pair(std::move(output_column), table_view(output_column_views));
 }
+}  // namespace detail
+
+std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
+                                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::transpose(input, rmm::cuda_stream_default, mr);
+}
+
 }  // namespace cudf

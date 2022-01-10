@@ -23,7 +23,8 @@
 
 #include <thrust/logical.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 {
@@ -93,4 +94,5 @@ template bool is_relationally_comparable<table_device_view>(table_device_view co
 template bool is_relationally_comparable<mutable_table_device_view>(
   mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
 
+}  // namespace detail
 }  // namespace cudf

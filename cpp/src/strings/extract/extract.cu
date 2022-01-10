@@ -29,7 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 
 namespace {
@@ -155,4 +156,5 @@ std::unique_ptr<table> extract(strings_column_view const& strings,
   return detail::extract(strings, pattern, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

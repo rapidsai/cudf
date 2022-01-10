@@ -21,7 +21,9 @@
 
 #include "column_statistics.cuh"
 
-namespace cudf::io::detail {
+namespace cudf {
+namespace io {
+namespace detail {
 
 template <>
 void merge_group_statistics<detail::io_file_format::ORC>(statistics_chunk* chunks_out,
@@ -35,4 +37,6 @@ void calculate_group_statistics<detail::io_file_format::ORC>(statistics_chunk* c
                                                              uint32_t num_chunks,
                                                              rmm::cuda_stream_view stream);
 
+}  // namespace detail
+}  // namespace io
 }  // namespace cudf

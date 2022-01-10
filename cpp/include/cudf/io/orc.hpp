@@ -102,12 +102,12 @@ class orc_reader_options {
   /**
    * @brief Returns source info.
    */
-  [[nodiscard]] source_info const& get_source() const { return _source; }
+  source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to read.
    */
-  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
+  std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns vector of vectors, stripes to read for each input source
@@ -491,27 +491,27 @@ class orc_writer_options {
   /**
    * @brief Returns sink info.
    */
-  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
+  sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression type.
    */
-  [[nodiscard]] compression_type get_compression() const { return _compression; }
+  compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  [[nodiscard]] bool is_enabled_statistics() const { return _enable_statistics; }
+  bool is_enabled_statistics() const { return _enable_statistics; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
    */
-  [[nodiscard]] auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
+  auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
    */
-  [[nodiscard]] auto get_stripe_size_rows() const { return _stripe_size_rows; }
+  auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
@@ -525,17 +525,17 @@ class orc_writer_options {
   /**
    * @brief Returns table to be written to output.
    */
-  [[nodiscard]] table_view get_table() const { return _table; }
+  table_view get_table() const { return _table; }
 
   /**
    * @brief Returns associated metadata.
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
    */
-  [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
+  std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
 
   // Setters
 
@@ -814,27 +814,27 @@ class chunked_orc_writer_options {
   /**
    * @brief Returns sink info.
    */
-  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
+  sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression type.
    */
-  [[nodiscard]] compression_type get_compression() const { return _compression; }
+  compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  [[nodiscard]] bool is_enabled_statistics() const { return _enable_statistics; }
+  bool is_enabled_statistics() const { return _enable_statistics; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
    */
-  [[nodiscard]] auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
+  auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
    */
-  [[nodiscard]] auto get_stripe_size_rows() const { return _stripe_size_rows; }
+  auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
@@ -848,12 +848,12 @@ class chunked_orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
    */
-  [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
+  std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
 
   // Setters
 

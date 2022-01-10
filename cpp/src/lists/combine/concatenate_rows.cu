@@ -27,7 +27,8 @@
 
 #include <thrust/transform.h>
 
-namespace cudf::lists {
+namespace cudf {
+namespace lists {
 namespace detail {
 /**
  * @copydoc cudf::lists::concatenate_rows
@@ -100,4 +101,5 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   return detail::concatenate_rows(input, null_policy, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace lists
 }  // namespace cudf

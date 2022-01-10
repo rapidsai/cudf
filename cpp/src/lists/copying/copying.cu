@@ -27,7 +27,9 @@
 
 #include <iostream>
 
-namespace cudf::lists::detail {
+namespace cudf {
+namespace lists {
+namespace detail {
 
 // New lists column from a subset of a lists_column_view
 std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
@@ -87,4 +89,6 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            mr);
 }
 
+}  // namespace detail
+}  // namespace lists
 }  // namespace cudf

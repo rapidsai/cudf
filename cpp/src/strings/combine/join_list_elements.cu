@@ -29,7 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 
 namespace {
@@ -60,7 +61,7 @@ struct compute_size_and_concatenate_fn {
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
-  [[nodiscard]] __device__ bool output_is_null(size_type const idx,
+  __device__ bool output_is_null(size_type const idx,
                                  size_type const start_idx,
                                  size_type const end_idx) const noexcept
   {
@@ -126,13 +127,13 @@ struct compute_size_and_concatenate_fn {
 struct scalar_separator_fn {
   string_scalar_device_view const d_separator;
 
-  [[nodiscard]] __device__ bool is_null_list(column_device_view const& lists_dv,
+  __device__ bool is_null_list(column_device_view const& lists_dv,
                                size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx);
   }
 
-  [[nodiscard]] __device__ string_view separator(size_type const) const noexcept { return d_separator.value(); }
+  __device__ string_view separator(size_type const) const noexcept { return d_separator.value(); }
 };
 
 template <typename CompFn>
@@ -221,13 +222,13 @@ struct column_separators_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
-  [[nodiscard]] __device__ bool is_null_list(column_device_view const& lists_dv,
+  __device__ bool is_null_list(column_device_view const& lists_dv,
                                size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx) || (separators_dv.is_null(idx) && !sep_narep_dv.is_valid());
   }
 
-  [[nodiscard]] __device__ string_view separator(size_type const idx) const noexcept
+  __device__ string_view separator(size_type const idx) const noexcept
   {
     return separators_dv.is_valid(idx) ? separators_dv.element<string_view>(idx)
                                        : sep_narep_dv.value();
@@ -324,4 +325,5 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

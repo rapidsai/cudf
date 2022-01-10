@@ -30,7 +30,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 
@@ -107,7 +108,7 @@ struct base_fn {
       if (!d_chars) d_offsets[idx] = 0;
     }
 
-    auto& derived  = static_cast<Derived&>(*this);
+    Derived& derived  = static_cast<Derived&>(*this);
     auto const d_str  = d_column.element<string_view>(idx);
     offset_type bytes = 0;
     auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
@@ -303,4 +304,5 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
   return detail::is_title(input, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

@@ -36,7 +36,9 @@
 #include <algorithm>
 #include <vector>
 
-namespace cudf::dictionary::detail {
+namespace cudf {
+namespace dictionary {
+namespace detail {
 namespace {
 
 /**
@@ -274,4 +276,6 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                 null_count);
 }
 
+}  // namespace detail
+}  // namespace dictionary
 }  // namespace cudf

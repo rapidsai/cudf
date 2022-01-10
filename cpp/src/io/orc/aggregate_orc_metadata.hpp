@@ -47,17 +47,17 @@ class aggregate_orc_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] size_type calc_num_rows() const;
+  size_type calc_num_rows() const;
 
   /**
    * @brief Number of columns in a ORC file.
    */
-  [[nodiscard]] size_type calc_num_cols() const;
+  size_type calc_num_cols() const;
 
   /**
    * @brief Sums up the number of stripes of each source
    */
-  [[nodiscard]] size_type calc_num_stripes() const;
+  size_type calc_num_stripes() const;
 
  public:
   std::vector<metadata> per_file_metadata;
@@ -67,26 +67,26 @@ class aggregate_orc_metadata {
 
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources);
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const { return per_file_metadata[0].ff.types[schema_idx]; }
+  auto const& get_schema(int schema_idx) const { return per_file_metadata[0].ff.types[schema_idx]; }
 
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
-  [[nodiscard]] auto get_num_rows() const { return num_rows; }
+  auto get_num_rows() const { return num_rows; }
 
   auto get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
 
-  [[nodiscard]] auto get_num_stripes() const { return num_stripes; }
+  auto get_num_stripes() const { return num_stripes; }
 
-  [[nodiscard]] auto const& get_types() const { return per_file_metadata[0].ff.types; }
+  auto const& get_types() const { return per_file_metadata[0].ff.types; }
 
-  [[nodiscard]] int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
+  int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
-  [[nodiscard]] auto is_row_grp_idx_present() const { return row_grp_idx_present; }
+  auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 
   /**
    * @brief Returns the name of the given column from the given source.
    */
-  [[nodiscard]] std::string const& column_name(const int source_idx, const int column_id) const
+  std::string const& column_name(const int source_idx, const int column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
@@ -98,7 +98,7 @@ class aggregate_orc_metadata {
    *
    * Full name includes ancestor columns' names.
    */
-  [[nodiscard]] std::string const& column_path(const int source_idx, const int column_id) const
+  std::string const& column_path(const int source_idx, const int column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");

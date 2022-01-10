@@ -30,7 +30,8 @@
 #include <thrust/remove.h>
 #include <thrust/transform_scan.h>
 
-namespace nvtext::detail {
+namespace nvtext {
+namespace detail {
 namespace {
 /**
  * @brief Initializes the token-ids, word-indices, and token counts vectors.
@@ -532,4 +533,5 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                      update_strings_lengths_fn{token_id_counts, device_strings_offsets});
 }
 
+}  // namespace detail
 }  // namespace nvtext

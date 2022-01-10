@@ -29,7 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 /**
@@ -168,4 +169,5 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
     strings, pattern, replacement, max_replace_count, flags, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

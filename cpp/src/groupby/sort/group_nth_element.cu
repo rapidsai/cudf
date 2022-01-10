@@ -31,7 +31,9 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/uninitialized_fill.h>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> group_nth_element(column_view const& values,
                                           column_view const& group_sizes,
                                           cudf::device_span<size_type const> group_labels,
@@ -122,4 +124,6 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

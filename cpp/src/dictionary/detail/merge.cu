@@ -26,7 +26,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::dictionary::detail {
+namespace cudf {
+namespace dictionary {
+namespace detail {
 
 std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                               dictionary_column_view const& rcol,
@@ -67,4 +69,6 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
     lcol.null_count() + rcol.null_count());
 }
 
+}  // namespace detail
+}  // namespace dictionary
 }  // namespace cudf

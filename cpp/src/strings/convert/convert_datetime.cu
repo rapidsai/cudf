@@ -42,7 +42,8 @@
 #include <numeric>
 #include <vector>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 
@@ -155,7 +156,7 @@ struct format_compiler {
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
 
-  [[nodiscard]] int8_t subsecond_precision() const { return specifiers.at('f'); }
+  int8_t subsecond_precision() const { return specifiers.at('f'); }
 };
 
 /**
@@ -193,7 +194,7 @@ struct parse_datetime {
    *
    * @return `1x10^exponent` for `0 <= exponent <= 9`
    */
-  [[nodiscard]] __device__ constexpr int64_t power_of_ten(int32_t const exponent) const
+  __device__ constexpr int64_t power_of_ten(int32_t const exponent) const
   {
     constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
@@ -201,7 +202,7 @@ struct parse_datetime {
   }
 
   // Walk the format_items to parse the string into date/time components
-  [[nodiscard]] __device__ timestamp_components parse_into_parts(string_view const& d_string) const
+  __device__ timestamp_components parse_into_parts(string_view const& d_string) const
   {
     timestamp_components timeparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -309,7 +310,7 @@ struct parse_datetime {
     return timeparts;
   }
 
-  [[nodiscard]] __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
+  __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
   {
     auto const ymd =  // convenient chrono class handles the leap year calculations for us
       cuda::std::chrono::year_month_day(
@@ -688,7 +689,7 @@ struct from_timestamp_base {
    *     modulo(-1,60) -> 59
    * @endcode
    */
-  [[nodiscard]] __device__ int32_t modulo_time(int64_t time, int64_t base) const
+  __device__ int32_t modulo_time(int64_t time, int64_t base) const
   {
     return static_cast<int32_t>(((time % base) + base) % base);
   };
@@ -706,12 +707,12 @@ struct from_timestamp_base {
    *     scale( 61,60) ->  1
    * @endcode
    */
-  [[nodiscard]] __device__ int64_t scale_time(int64_t time, int64_t base) const
+  __device__ int64_t scale_time(int64_t time, int64_t base) const
   {
     return (time - ((time < 0) * (base - 1L))) / base;
   };
 
-  [[nodiscard]] __device__ time_components get_time_components(int64_t tstamp) const
+  __device__ time_components get_time_components(int64_t tstamp) const
   {
     time_components result = {0};
     if constexpr (std::is_same_v<T, cudf::timestamp_D>) { return result; }
@@ -854,7 +855,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
   }
 
   // from https://howardhinnant.github.io/date/date.html
-  [[nodiscard]] __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
+  __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
     cuda::std::chrono::year_month_day const& ymd) const
   {
     auto const days = cuda::std::chrono::sys_days(ymd);
@@ -884,7 +885,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
       static_cast<int32_t>(year));
   }
 
-  [[nodiscard]] __device__ int8_t get_week_of_year(cuda::std::chrono::sys_days const days,
+  __device__ int8_t get_week_of_year(cuda::std::chrono::sys_days const days,
                                      cuda::std::chrono::sys_days const start) const
   {
     return days < start
@@ -1141,4 +1142,5 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   return detail::from_timestamps(timestamps, format, names, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

@@ -40,7 +40,8 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 
@@ -395,4 +396,5 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
   return detail::is_fixed_point(input, decimal_type, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

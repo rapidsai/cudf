@@ -29,7 +29,9 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 namespace {
 /**
  * @brief Struct to store partial results for merging.
@@ -189,4 +191,6 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   return result;
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

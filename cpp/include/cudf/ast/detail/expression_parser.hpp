@@ -166,7 +166,7 @@ class expression_parser {
    *
    * @return cudf::data_type
    */
-  [[nodiscard]] cudf::data_type output_type() const;
+  cudf::data_type output_type() const;
 
   /**
    * @brief Visit a literal expression.
@@ -206,10 +206,10 @@ class expression_parser {
    */
   class intermediate_counter {
    public:
-    intermediate_counter() : used_values() {}
+    intermediate_counter() : used_values(), max_used(0) {}
     cudf::size_type take();
     void give(cudf::size_type value);
-    [[nodiscard]] cudf::size_type get_max_used() const { return max_used; }
+    cudf::size_type get_max_used() const { return max_used; }
 
    private:
     /**
@@ -221,10 +221,10 @@ class expression_parser {
      *
      * @return cudf::size_type Smallest value not already in the container.
      */
-    [[nodiscard]] cudf::size_type find_first_missing() const;
+    cudf::size_type find_first_missing() const;
 
     std::vector<cudf::size_type> used_values;
-    cudf::size_type max_used{0};
+    cudf::size_type max_used;
   };
 
   expression_device_view device_expression_data;  ///< The collection of data required to evaluate

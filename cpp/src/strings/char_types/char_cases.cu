@@ -22,7 +22,9 @@
 #include <cudf/utilities/error.hpp>
 
 //
-namespace cudf::strings::detail {
+namespace cudf {
+namespace strings {
+namespace detail {
 namespace {
 struct special_case_mapping_in {
   uint16_t num_upper_chars;
@@ -193,4 +195,7 @@ void generate_special_mapping_hash_table()
     hash_prime);
 }
 
+}  // namespace detail
+
+}  // namespace strings
 }  // namespace cudf

@@ -18,7 +18,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
                               rmm::cuda_stream_view stream)
@@ -31,4 +32,5 @@ void initialize_with_identity(mutable_table_view& table,
   }
 }
 
+}  // namespace detail
 }  // namespace cudf

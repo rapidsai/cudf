@@ -21,7 +21,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::io::orc::gpu {
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
@@ -401,4 +404,7 @@ void orc_encode_statistics(uint8_t* blob_bfr,
     blob_bfr, groups, chunks, statistics_count);
 }
 
+}  // namespace gpu
+}  // namespace orc
+}  // namespace io
 }  // namespace cudf

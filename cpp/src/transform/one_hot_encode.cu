@@ -32,7 +32,8 @@
 
 #include <algorithm>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 namespace {
 
@@ -120,4 +121,13 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   return type_dispatcher(input.type(), one_hot_encode_launcher{}, input, categories, stream, mr);
 }
 
+}  // namespace detail
+
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
+                                                              column_view const& categories,
+                                                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::one_hot_encode(input, categories, rmm::cuda_stream_default, mr);
+}
 }  // namespace cudf

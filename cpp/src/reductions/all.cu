@@ -19,7 +19,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
-namespace cudf::reduction {
+namespace cudf {
+namespace reduction {
 namespace detail {
 namespace {
 
@@ -94,4 +95,5 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
                                mr);
 }
 
+}  // namespace reduction
 }  // namespace cudf

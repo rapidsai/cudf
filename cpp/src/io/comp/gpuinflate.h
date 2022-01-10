@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cstdint>
+#include <stdint.h>
 
 #include <rmm/cuda_stream_view.hpp>
 

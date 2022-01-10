@@ -26,7 +26,9 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> group_count_valid(column_view const& values,
                                           cudf::device_span<size_type const> group_labels,
                                           size_type num_groups,
@@ -88,4 +90,6 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
   return result;
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

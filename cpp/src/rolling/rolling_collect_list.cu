@@ -26,7 +26,8 @@
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 /**
  * @see cudf::detail::get_list_child_to_list_row_mapping
@@ -152,4 +153,5 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
                                                                           std::move(new_offsets));
 }
 
+}  // namespace detail
 }  // namespace cudf

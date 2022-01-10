@@ -30,7 +30,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::dictionary {
+namespace cudf {
+namespace dictionary {
 namespace detail {
 /**
  * @brief Create a new dictionary column by adding the new keys elements
@@ -130,4 +131,5 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   return detail::add_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace dictionary
 }  // namespace cudf

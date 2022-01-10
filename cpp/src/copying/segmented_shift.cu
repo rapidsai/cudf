@@ -28,7 +28,8 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/transform_iterator.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 namespace {
 
@@ -156,4 +157,5 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                                 mr);
 }
 
+}  // namespace detail
 }  // namespace cudf

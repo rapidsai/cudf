@@ -30,7 +30,8 @@
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 
@@ -130,4 +131,5 @@ std::unique_ptr<column> strip(strings_column_view const& strings,
   return detail::strip(strings, stype, to_strip, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

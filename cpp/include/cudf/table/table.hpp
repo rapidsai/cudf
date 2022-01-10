@@ -71,18 +71,18 @@ class table {
   /**
    * @brief Returns the number of columns in the table
    */
-  [[nodiscard]] size_type num_columns() const noexcept { return _columns.size(); }
+  size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
    */
-  [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
+  size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Returns an immutable, non-owning `table_view` of the contents of
    *this `table`.
    */
-  [[nodiscard]] table_view view() const;
+  table_view view() const;
 
   /**
    * @brief Conversion operator to an immutable, non-owning `table_view` of the
@@ -141,7 +141,7 @@ class table {
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
    */
-  [[nodiscard]] table_view select(std::vector<cudf::size_type> const& column_indices) const
+  table_view select(std::vector<cudf::size_type> const& column_indices) const
   {
     return select(column_indices.begin(), column_indices.end());
   };
@@ -166,7 +166,7 @@ class table {
    * @param i Index of the desired column
    * @return A const reference to the desired column
    */
-  [[nodiscard]] column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
+  column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
 
  private:
   std::vector<std::unique_ptr<column>> _columns{};

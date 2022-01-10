@@ -68,13 +68,13 @@ inline auto make_pool()
  */
 class benchmark : public ::benchmark::Fixture {
  public:
-  void SetUp(const ::benchmark::State& state) override override override override
+  virtual void SetUp(const ::benchmark::State& state)
   {
     mr = make_pool();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
-  void TearDown(const ::benchmark::State& state) override override override override
+  virtual void TearDown(const ::benchmark::State& state)
   {
     // reset default resource to the initial resource
     rmm::mr::set_current_device_resource(nullptr);
@@ -82,8 +82,8 @@ class benchmark : public ::benchmark::Fixture {
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
-  void SetUp(::benchmark::State& st) override override override override { SetUp(const_cast<const ::benchmark::State&>(st)); }
-  void TearDown(::benchmark::State& st) override override override override
+  virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }
+  virtual void TearDown(::benchmark::State& st)
   {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
@@ -102,7 +102,7 @@ class memory_stats_logger {
 
   ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
 
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] [[nodiscard]] size_t peak_memory_usage() const noexcept { return statistics_mr.get_bytes_counter().peak; }
+  size_t peak_memory_usage() const noexcept { return statistics_mr.get_bytes_counter().peak; }
 
  private:
   rmm::mr::device_memory_resource* existing_mr;

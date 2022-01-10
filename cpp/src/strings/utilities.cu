@@ -33,7 +33,9 @@
 
 #include <cstring>
 
-namespace cudf::strings::detail {
+namespace cudf {
+namespace strings {
+namespace detail {
 
 /**
  * @copydoc create_string_vector_from_column
@@ -161,4 +163,6 @@ const special_case_mapping* get_special_case_mapping_table()
   });
 }
 
+}  // namespace detail
+}  // namespace strings
 }  // namespace cudf

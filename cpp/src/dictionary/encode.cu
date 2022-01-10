@@ -29,7 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::dictionary {
+namespace cudf {
+namespace dictionary {
 namespace detail {
 /**
  * @copydoc cudf::dictionary::encode
@@ -93,4 +94,5 @@ std::unique_ptr<column> encode(column_view const& input_column,
   return detail::encode(input_column, indices_type, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace dictionary
 }  // namespace cudf

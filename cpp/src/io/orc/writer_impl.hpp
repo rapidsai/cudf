@@ -62,14 +62,14 @@ struct orc_table_view {
   rmm::device_uvector<uint32_t> d_string_column_indices;
 
   auto num_columns() const noexcept { return columns.size(); }
-  [[nodiscard]] size_type num_rows() const noexcept;
+  size_type num_rows() const noexcept;
   auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
   auto& column(uint32_t idx) { return columns.at(idx); }
-  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
+  auto const& column(uint32_t idx) const { return columns.at(idx); }
 
   auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
-  [[nodiscard]] auto const& string_column(uint32_t idx) const
+  auto const& string_column(uint32_t idx) const
   {
     return columns.at(string_column_indices.at(idx));
   }
@@ -85,8 +85,8 @@ struct stripe_rowgroups {
   uint32_t first;  // first rowgroup in the stripe
   uint32_t size;   // number of rowgroups in the stripe
   stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
-  [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
-  [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
+  auto cbegin() const { return thrust::make_counting_iterator(first); }
+  auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
 
 /**
@@ -123,9 +123,9 @@ class orc_streams {
     std::vector<size_t> offsets;
     size_t non_rle_data_size = 0;
     size_t rle_data_size     = 0;
-    [[nodiscard]] auto data_size() const { return non_rle_data_size + rle_data_size; }
+    auto data_size() const { return non_rle_data_size + rle_data_size; }
   };
-  [[nodiscard]] orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
+  orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                      size_t num_rowgroups) const;
 
   operator std::vector<Stream> const &() const { return streams; }

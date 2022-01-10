@@ -20,7 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::io {
+namespace cudf {
+namespace io {
 constexpr int hash_bits = 12;
 
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
@@ -55,7 +56,7 @@ static inline __device__ uint32_t snap_hash(uint32_t v)
 static inline __device__ uint32_t fetch4(const uint8_t* src)
 {
   uint32_t src_align    = 3 & reinterpret_cast<uintptr_t>(src);
-  const auto* src32 = reinterpret_cast<const uint32_t*>(src - src_align);
+  const uint32_t* src32 = reinterpret_cast<const uint32_t*>(src - src_align);
   uint32_t v            = src32[0];
   return (src_align) ? __funnelshift_r(v, src32[1], src_align * 8) : v;
 }
@@ -267,10 +268,10 @@ __global__ void __launch_bounds__(128)
   const uint8_t* src;
 
   if (!t) {
-    const auto* src = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
-    auto src_len   = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
-    auto* dst       = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
-    auto dst_len   = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
+    const uint8_t* src = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
+    uint32_t src_len   = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
+    uint8_t* dst       = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
+    uint32_t dst_len   = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
     uint8_t* end       = dst + dst_len;
     s->src             = src;
     s->src_len         = src_len;
@@ -353,4 +354,5 @@ cudaError_t __host__ gpu_snap(gpu_inflate_input_s* inputs,
   return cudaSuccess;
 }
 
+}  // namespace io
 }  // namespace cudf

@@ -41,7 +41,8 @@
 
 using cudf::device_span;
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 //
@@ -453,4 +454,5 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   return detail::url_decode(strings, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

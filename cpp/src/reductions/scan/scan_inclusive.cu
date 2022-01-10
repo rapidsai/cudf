@@ -33,7 +33,8 @@
 
 #include <type_traits>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 // logical-and scan of the null mask of the input view
 rmm::device_buffer mask_scan(column_view const& input_view,
@@ -269,4 +270,5 @@ std::unique_ptr<column> scan_inclusive(
 
   return output;
 }
+}  // namespace detail
 }  // namespace cudf

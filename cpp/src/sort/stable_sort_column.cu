@@ -16,7 +16,8 @@
 
 #include <sort/sort_impl.cuh>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 namespace {
 
 struct column_stable_sorted_order_fn {
@@ -109,4 +110,5 @@ std::unique_ptr<column> sorted_order<true>(column_view const& input,
   return sorted_indices;
 }
 
+}  // namespace detail
 }  // namespace cudf

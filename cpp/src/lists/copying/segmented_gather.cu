@@ -24,7 +24,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::lists {
+namespace cudf {
+namespace lists {
 namespace detail {
 
 std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
@@ -119,4 +120,5 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
     source_column, gather_map_list, bounds_policy, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace lists
 }  // namespace cudf

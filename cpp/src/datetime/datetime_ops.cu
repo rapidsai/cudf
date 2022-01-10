@@ -37,7 +37,8 @@
 
 #include <thrust/iterator/constant_iterator.h>
 
-namespace cudf::datetime {
+namespace cudf {
+namespace datetime {
 namespace detail {
 enum class datetime_component {
   INVALID = 0,
@@ -653,4 +654,5 @@ std::unique_ptr<column> extract_quarter(column_view const& column,
   return detail::extract_quarter(column, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace datetime
 }  // namespace cudf

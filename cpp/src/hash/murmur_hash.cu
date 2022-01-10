@@ -25,7 +25,8 @@
 
 #include <thrust/tabulate.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         rmm::cuda_stream_view stream,
@@ -52,4 +53,5 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   return output;
 }
 
+}  // namespace detail
 }  // namespace cudf

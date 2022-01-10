@@ -24,7 +24,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::strings::detail {
+namespace cudf {
+namespace strings {
+namespace detail {
 
 std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                          size_type start,
@@ -76,4 +78,6 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                              std::move(null_mask));
 }
 
+}  // namespace detail
+}  // namespace strings
 }  // namespace cudf

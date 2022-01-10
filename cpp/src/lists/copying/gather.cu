@@ -21,7 +21,9 @@
 
 #include <thrust/binary_search.h>
 
-namespace cudf::lists::detail {
+namespace cudf {
+namespace lists {
+namespace detail {
 
 /**
  * @brief List gatherer function object.
@@ -51,8 +53,8 @@ namespace cudf::lists::detail {
  * @endcode
  */
 struct list_gatherer {
-  using argument_type = size_type;
-  using result_type = size_type;
+  typedef size_type argument_type;
+  typedef size_type result_type;
 
   size_t offset_count;
   size_type const* base_offsets;
@@ -192,4 +194,6 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            mr);
 }
 
+}  // namespace detail
+}  // namespace lists
 }  // namespace cudf

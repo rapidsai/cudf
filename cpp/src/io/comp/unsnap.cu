@@ -22,7 +22,8 @@
 
 #include <cub/cub.cuh>
 
-namespace cudf::io {
+namespace cudf {
+namespace io {
 constexpr int32_t batch_size    = (1 << 5);
 constexpr int32_t batch_count   = (1 << 2);
 constexpr int32_t prefetch_size = (1 << 9);  // 512B, in 32B chunks
@@ -87,8 +88,8 @@ inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
 __device__ void snappy_prefetch_bytestream(unsnap_state_s* s, int t)
 {
   const uint8_t* base  = s->base;
-  auto end         = (uint32_t)(s->end - base);
-  auto align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
+  uint32_t end         = (uint32_t)(s->end - base);
+  uint32_t align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
   int32_t pos          = min(align_bytes, end);
   int32_t blen;
   // Start by prefetching up to the next a 32B-aligned location
@@ -277,7 +278,7 @@ inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
 __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 {
   uint32_t cur        = 0;
-  auto end        = static_cast<uint32_t>(s->end - s->base);
+  uint32_t end        = static_cast<uint32_t>(s->end - s->base);
   uint32_t bytes_left = s->uncompressed_size;
   uint32_t dst_pos    = 0;
   int32_t batch       = 0;
@@ -497,7 +498,7 @@ template <typename Storage>
 __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_storage)
 {
   const uint8_t* literal_base = s->base;
-  auto* out                = static_cast<uint8_t*>(s->in.dstDevice);
+  uint8_t* out                = static_cast<uint8_t*>(s->in.dstDevice);
   int batch                   = 0;
 
   do {
@@ -609,7 +610,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
     __syncwarp();
     if (t == 0) { s->q.batch_len[batch] = 0; }
     batch = (batch + 1) & (batch_count - 1);
-  } while (true);
+  } while (1);
 }
 
 /**
@@ -638,7 +639,7 @@ __global__ void __launch_bounds__(block_size)
   if (t < batch_count) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    const auto* cur = static_cast<const uint8_t*>(s->in.srcDevice);
+    const uint8_t* cur = static_cast<const uint8_t*>(s->in.srcDevice);
     const uint8_t* end = cur + s->in.srcSize;
     s->error           = 0;
     if (log_cyclecount) { s->tstart = clock(); }
@@ -720,4 +721,5 @@ cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
   return cudaSuccess;
 }
 
+}  // namespace io
 }  // namespace cudf

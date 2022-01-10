@@ -27,7 +27,8 @@
 
 #include <thrust/transform.h>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 std::unique_ptr<column> find_multiple(
   strings_column_view const& strings,
@@ -83,4 +84,5 @@ std::unique_ptr<column> find_multiple(strings_column_view const& strings,
   return detail::find_multiple(strings, targets, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

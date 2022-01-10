@@ -278,12 +278,12 @@ class data_type {
   /**
    * @brief Returns the type identifier
    */
-  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
+  constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    */
-  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};

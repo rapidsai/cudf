@@ -38,7 +38,8 @@
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 
-namespace cudf::lists {
+namespace cudf {
+namespace lists {
 namespace detail {
 
 struct SegmentedSortColumn {
@@ -326,4 +327,5 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
     input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace lists
 }  // namespace cudf

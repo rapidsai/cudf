@@ -52,12 +52,12 @@ class datasource {
     /**
      * @brief Returns the buffer size in bytes.
      */
-    [[nodiscard]] virtual size_t size() const = 0;
+    virtual size_t size() const = 0;
 
     /**
      * @brief Returns the address of the data in the buffer.
      */
-    [[nodiscard]] virtual uint8_t const* data() const = 0;
+    virtual uint8_t const* data() const = 0;
 
     /**
      * @brief Base class destructor
@@ -155,7 +155,7 @@ class datasource {
    *
    * @return bool Whether this source supports device_read() calls
    */
-  [[nodiscard]] virtual bool supports_device_read() const { return false; }
+  virtual bool supports_device_read() const { return false; }
 
   /**
    * @brief Estimates whether a direct device read would be more optimal for the given size.
@@ -163,7 +163,7 @@ class datasource {
    * @param size Number of bytes to read
    * @return whether the device read is expected to be more performant for the given size
    */
-  [[nodiscard]] virtual bool is_device_read_preferred(size_t size) const { return supports_device_read(); }
+  virtual bool is_device_read_preferred(size_t size) const { return supports_device_read(); }
 
   /**
    * @brief Returns a device buffer with a subset of data from the source.
@@ -243,31 +243,31 @@ class datasource {
    *
    * @return size_t The size of the source data in bytes
    */
-  [[nodiscard]] virtual size_t size() const = 0;
+  virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
    * @return bool True if there is data, False otherwise
    */
-  [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
+  virtual bool is_empty() const { return size() == 0; }
 
   /**
    * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
    */
   class non_owning_buffer : public buffer {
    public:
-    non_owning_buffer()  {}
+    non_owning_buffer() : _data(0), _size(0) {}
 
     non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
 
-    [[nodiscard]] size_t size() const override { return _size; }
+    size_t size() const override { return _size; }
 
-    [[nodiscard]] uint8_t const* data() const override { return _data; }
+    uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data{nullptr};
-    size_t const _size{0};
+    uint8_t* const _data;
+    size_t const _size;
   };
 
   /**
@@ -297,9 +297,9 @@ class datasource {
     {
     }
 
-    [[nodiscard]] size_t size() const override { return _size; }
+    size_t size() const override { return _size; }
 
-    [[nodiscard]] uint8_t const* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
+    uint8_t const* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
 
    private:
     Container _data;
@@ -330,8 +330,8 @@ class arrow_io_source : public datasource {
       : arrow_buffer(arrow_buffer)
     {
     }
-    [[nodiscard]] size_t size() const override { return arrow_buffer->size(); }
-    [[nodiscard]] uint8_t const* data() const override { return arrow_buffer->data(); }
+    size_t size() const override { return arrow_buffer->size(); }
+    uint8_t const* data() const override { return arrow_buffer->data(); }
   };
 
  public:
@@ -393,7 +393,7 @@ class arrow_io_source : public datasource {
   /**
    * @brief Returns the size of the data in the `arrow` source.
    */
-  [[nodiscard]] size_t size() const override
+  size_t size() const override
   {
     auto result = arrow_file->GetSize();
     CUDF_EXPECTS(result.ok(), "Cannot get file size");

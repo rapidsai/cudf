@@ -25,7 +25,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labels,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
@@ -45,4 +47,6 @@ std::unique_ptr<column> count_scan(cudf::device_span<size_type const> group_labe
   return result;
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

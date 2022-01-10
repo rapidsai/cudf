@@ -20,7 +20,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> group_sum(column_view const& values,
                                   size_type num_groups,
                                   cudf::device_span<size_type const> group_labels,
@@ -39,4 +41,6 @@ std::unique_ptr<column> group_sum(column_view const& values,
                          mr);
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

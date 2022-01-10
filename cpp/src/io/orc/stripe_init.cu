@@ -22,7 +22,10 @@
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::io::orc::gpu {
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 struct compressed_stream_s {
   CompressedStreamInfo info;
   gpu_inflate_input_s ctl;
@@ -425,7 +428,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     uint32_t rowgroups_in_chunk = s->chunk.num_rowgroups;
     s->rowgroup_start           = s->chunk.rowgroup_id;
     s->rowgroup_end             = s->rowgroup_start + rowgroups_in_chunk;
-    s->is_compressed            = (strm_info != nullptr);
+    s->is_compressed            = (strm_info != NULL);
   }
   __syncthreads();
   while (s->rowgroup_start < s->rowgroup_end) {
@@ -477,7 +480,7 @@ __global__ void __launch_bounds__(block_size)
                             device_2dspan<rowgroup_rows const> rowgroup_bounds,
                             device_2dspan<size_type> set_counts)
 {
-  using BlockReduce = int;
+  typedef cub::BlockReduce<size_type, block_size> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
   auto const column_id   = blockIdx.x;
@@ -565,4 +568,7 @@ void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> co
     <<<dim_grid, dim_block, 0, stream.value()>>>(columns, rowgroups, valid_counts);
 }
 
+}  // namespace gpu
+}  // namespace orc
+}  // namespace io
 }  // namespace cudf

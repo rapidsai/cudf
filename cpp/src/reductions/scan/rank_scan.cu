@@ -26,7 +26,8 @@
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 namespace {
 
 /**
@@ -110,4 +111,5 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
     mr);
 }
 
+}  // namespace detail
 }  // namespace cudf

@@ -24,7 +24,9 @@
 
 #include <algorithm>
 
-namespace cudf::strings::detail {
+namespace cudf {
+namespace strings {
+namespace detail {
 namespace {
 /**
  * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
@@ -65,8 +67,8 @@ reprog_device::reprog_device(reprog& prog)
     _num_capturing_groups{prog.groups_count()},
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
-    _classes_count{prog.classes_count()}
-    
+    _classes_count{prog.classes_count()},
+    _relists_mem{nullptr}
 {
 }
 
@@ -175,4 +177,6 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
 
 void reprog_device::destroy() { delete this; }
 
+}  // namespace detail
+}  // namespace strings
 }  // namespace cudf

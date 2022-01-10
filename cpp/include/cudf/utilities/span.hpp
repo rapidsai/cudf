@@ -54,7 +54,7 @@ class span_base {
 
   static constexpr std::size_t extent = Extent;
 
-  constexpr span_base() noexcept : _data(nullptr) {}
+  constexpr span_base() noexcept : _data(nullptr), _size(0) {}
   constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
   // constexpr span_base(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
   constexpr span_base(span_base const& other) noexcept = default;
@@ -71,9 +71,9 @@ class span_base {
   constexpr iterator end() const noexcept { return _data + _size; }
   constexpr pointer data() const noexcept { return _data; }
 
-  [[nodiscard]] constexpr size_type size() const noexcept { return _size; }
-  [[nodiscard]] constexpr size_type size_bytes() const noexcept { return sizeof(T) * _size; }
-  [[nodiscard]] constexpr bool empty() const noexcept { return _size == 0; }
+  constexpr size_type size() const noexcept { return _size; }
+  constexpr size_type size_bytes() const noexcept { return sizeof(T) * _size; }
+  constexpr bool empty() const noexcept { return _size == 0; }
 
   /**
    * @brief Obtains a subspan consisting of the first N elements of the sequence
@@ -99,7 +99,7 @@ class span_base {
 
  private:
   pointer _data;
-  size_type _size{0};
+  size_type _size;
 };
 
 }  // namespace detail
@@ -251,7 +251,7 @@ class base_2dspan {
   constexpr auto data() const noexcept { return _data; }
   constexpr auto size() const noexcept { return _size; }
   constexpr auto count() const noexcept { return size().first * size().second; }
-  [[nodiscard]] constexpr bool is_empty() const noexcept { return count() == 0; }
+  constexpr bool is_empty() const noexcept { return count() == 0; }
 
   static constexpr size_t flatten_index(size_t row, size_t column, size_type size) noexcept
   {
@@ -263,8 +263,8 @@ class base_2dspan {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
   }
 
-  [[nodiscard]] constexpr RowType<T, dynamic_extent> front() const { return (*this)[0]; }
-  [[nodiscard]] constexpr RowType<T, dynamic_extent> back() const { return (*this)[size().first - 1]; }
+  constexpr RowType<T, dynamic_extent> front() const { return (*this)[0]; }
+  constexpr RowType<T, dynamic_extent> back() const { return (*this)[size().first - 1]; }
 
   constexpr base_2dspan subspan(size_t first_row, size_t num_rows) const noexcept
   {

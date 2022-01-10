@@ -53,7 +53,10 @@
 #include <string>
 #include <vector>
 
-namespace cudf::io::detail::csv {
+namespace cudf {
+namespace io {
+namespace detail {
+namespace csv {
 
 using namespace cudf::io::csv;
 using namespace cudf::io;
@@ -123,7 +126,7 @@ struct column_to_strings_fn {
   // fails to compile var-templs);
   //
   template <typename column_type>
-  constexpr static bool is_not_handled()
+  constexpr static bool is_not_handled(void)
   {
     // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
@@ -476,4 +479,7 @@ void write_csv(data_sink* out_sink,
   }
 }
 
+}  // namespace csv
+}  // namespace detail
+}  // namespace io
 }  // namespace cudf

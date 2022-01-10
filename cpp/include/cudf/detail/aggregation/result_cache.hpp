@@ -49,11 +49,11 @@ class result_cache {
 
   result_cache(size_t num_columns) : _cache(num_columns) {}
 
-  [[nodiscard]] bool has_result(column_view const& input, aggregation const& agg) const;
+  bool has_result(column_view const& input, aggregation const& agg) const;
 
   void add_result(column_view const& input, aggregation const& agg, std::unique_ptr<column>&& col);
 
-  [[nodiscard]] column_view get_result(column_view const& input, aggregation const& agg) const;
+  column_view get_result(column_view const& input, aggregation const& agg) const;
 
   std::unique_ptr<column> release_result(column_view const& input, aggregation const& agg);
 

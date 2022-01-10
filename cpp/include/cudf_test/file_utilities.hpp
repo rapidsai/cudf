@@ -58,5 +58,5 @@ class temp_directory {
    *
    * @return string path of the temporary directory
    */
-  [[nodiscard]] const std::string& path() const { return _path; }
+  const std::string& path() const { return _path; }
 };

@@ -26,7 +26,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::binops::compiled {
+namespace cudf {
+namespace binops {
+namespace compiled {
 
 namespace {
 /**
@@ -162,13 +164,13 @@ struct compare_functor {
 // This functor performs null aware binop between two columns or a column and a scalar by
 // iterating over them on the device
 struct null_considering_binop {
-  [[nodiscard]] auto get_device_view(cudf::scalar const& scalar_item) const
+  auto get_device_view(cudf::scalar const& scalar_item) const
   {
     return get_scalar_device_view(
       static_cast<cudf::scalar_type_t<cudf::string_view>&>(const_cast<scalar&>(scalar_item)));
   }
 
-  [[nodiscard]] auto get_device_view(column_device_view const& col_item) const { return col_item; }
+  auto get_device_view(column_device_view const& col_item) const { return col_item; }
 
   template <typename LhsViewT, typename RhsViewT, typename OutT, typename CompareFunc>
   void populate_out_col(LhsViewT const& lhsv,
@@ -379,4 +381,6 @@ void binary_operation(mutable_column_view& out,
   operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
 }
 
+}  // namespace compiled
+}  // namespace binops
 }  // namespace cudf

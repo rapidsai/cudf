@@ -19,8 +19,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <cstdint>
-#include <cstring>
+#include <stdint.h>
+#include <string.h>
 
 namespace nvtext {
 

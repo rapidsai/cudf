@@ -37,7 +37,8 @@
 #include <cmath>
 #include <limits>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 /**
@@ -581,4 +582,5 @@ std::unique_ptr<column> is_float(strings_column_view const& strings,
   return detail::is_float(strings, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

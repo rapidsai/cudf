@@ -30,7 +30,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {
 // this is a [begin,end) pair of character positions when a substring is matched
@@ -205,4 +206,5 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
   return detail::replace_re(strings, patterns, replacements, flags, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

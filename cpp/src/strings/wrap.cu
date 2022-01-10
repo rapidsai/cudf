@@ -30,7 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::strings {
+namespace cudf {
+namespace strings {
 namespace detail {
 namespace {  // anonym.
 
@@ -137,4 +138,5 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   return detail::wrap<detail::execute_wrap>(strings, width, rmm::cuda_stream_default, mr);
 }
 
+}  // namespace strings
 }  // namespace cudf

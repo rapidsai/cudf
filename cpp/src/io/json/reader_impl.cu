@@ -46,7 +46,10 @@
 
 using cudf::host_span;
 
-namespace cudf::io::detail::json {
+namespace cudf {
+namespace io {
+namespace detail {
+namespace json {
 
 using namespace cudf::io;
 using namespace cudf::io::json;
@@ -614,4 +617,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
     parse_opts.view(), dtypes, column_names, column_map.get(), rec_starts, d_data, stream, mr);
 }
 
+}  // namespace json
+}  // namespace detail
+}  // namespace io
 }  // namespace cudf

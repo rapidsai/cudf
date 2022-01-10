@@ -52,7 +52,7 @@ class scalar {
   /**
    * @brief Returns the scalar's logical value type.
    */
-  [[nodiscard]] data_type type() const noexcept;
+  data_type type() const noexcept;
 
   /**
    * @brief Updates the validity of the value.
@@ -72,7 +72,7 @@ class scalar {
    * @return true Value is valid.
    * @return false Value is invalid/null.
    */
-  [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns a raw pointer to the validity bool in device memory.
@@ -82,7 +82,7 @@ class scalar {
   /**
    * @brief Returns a const raw pointer to the validity bool in device memory.
    */
-  [[nodiscard]] bool const* validity_data() const;
+  bool const* validity_data() const;
 
  protected:
   data_type _type{type_id::EMPTY};     ///< Logical type of value in the scalar
@@ -128,7 +128,7 @@ class fixed_width_scalar : public scalar {
  public:
   using value_type = T;
 
-  ~fixed_width_scalar()                          override = default;
+  ~fixed_width_scalar()                          = default;
   fixed_width_scalar(fixed_width_scalar&& other) = default;
 
   fixed_width_scalar& operator=(fixed_width_scalar const& other) = delete;
@@ -278,7 +278,7 @@ class fixed_point_scalar : public scalar {
   using value_type = T;
 
   fixed_point_scalar()                           = delete;
-  ~fixed_point_scalar()                          override = default;
+  ~fixed_point_scalar()                          = default;
   fixed_point_scalar(fixed_point_scalar&& other) = default;
 
   fixed_point_scalar& operator=(fixed_point_scalar const& other) = delete;
@@ -392,7 +392,7 @@ class string_scalar : public scalar {
   using value_type = cudf::string_view;
 
   string_scalar()                      = delete;
-  ~string_scalar()                     override = default;
+  ~string_scalar()                     = default;
   string_scalar(string_scalar&& other) = default;
 
   // string_scalar(string_scalar const& other) = delete;
@@ -479,24 +479,24 @@ class string_scalar : public scalar {
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  [[nodiscard]] std::string to_string(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  std::string to_string(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Get the value of the scalar as a string_view.
    *
    * @param stream CUDA stream used for device memory operations.
    */
-  [[nodiscard]] value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns the size of the string in bytes.
    */
-  [[nodiscard]] size_type size() const;
+  size_type size() const;
 
   /**
    * @brief Returns a raw pointer to the string in device memory.
    */
-  [[nodiscard]] const char* data() const;
+  const char* data() const;
 
  protected:
   rmm::device_buffer _data{};  ///< device memory containing the string
@@ -647,7 +647,7 @@ class duration_scalar : public chrono_scalar<T> {
 class list_scalar : public scalar {
  public:
   list_scalar()                    = delete;
-  ~list_scalar()                   override = default;
+  ~list_scalar()                   = default;
   list_scalar(list_scalar&& other) = default;
 
   list_scalar& operator=(list_scalar const& other) = delete;
@@ -695,7 +695,7 @@ class list_scalar : public scalar {
   /**
    * @brief Returns a non-owning, immutable view to underlying device data.
    */
-  [[nodiscard]] column_view view() const;
+  column_view view() const;
 
  private:
   cudf::column _data;
@@ -707,7 +707,7 @@ class list_scalar : public scalar {
 class struct_scalar : public scalar {
  public:
   struct_scalar()                      = delete;
-  ~struct_scalar()                     override = default;
+  ~struct_scalar()                     = default;
   struct_scalar(struct_scalar&& other) = default;
   struct_scalar& operator=(struct_scalar const& other) = delete;
   struct_scalar& operator=(struct_scalar&& other) = delete;
@@ -765,7 +765,7 @@ class struct_scalar : public scalar {
   /**
    * @brief Returns a non-owning, immutable view to underlying device data.
    */
-  [[nodiscard]] table_view view() const;
+  table_view view() const;
 
  private:
   table _data;

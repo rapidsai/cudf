@@ -20,7 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::reduction {
+namespace cudf {
+namespace reduction {
 
 std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
                                              cudf::data_type const output_dtype,
@@ -36,4 +37,5 @@ std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
     mr);
 }
 
+}  // namespace reduction
 }  // namespace cudf

@@ -30,7 +30,9 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 namespace {
 
 template <typename ResultType, typename Iterator>
@@ -134,4 +136,6 @@ std::unique_ptr<column> group_m2(column_view const& values,
   return type_dispatcher(values_type, m2_functor{}, values, group_means, group_labels, stream, mr);
 }
 
+}  // namespace detail
+}  // namespace groupby
 }  // namespace cudf

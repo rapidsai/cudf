@@ -20,7 +20,7 @@
  */
 
 #pragma once
-#include <cstdint>
+#include <stdint.h>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/string_view.hpp>
