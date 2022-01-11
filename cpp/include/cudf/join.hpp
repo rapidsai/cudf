@@ -914,7 +914,7 @@ mixed_inner_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls = null_equality::EQUAL,
-  std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -967,14 +967,15 @@ mixed_inner_join(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_left_join(table_view const& left_equality,
-                table_view const& right_equality,
-                table_view const& left_conditional,
-                table_view const& right_conditional,
-                ast::expression const& binary_predicate,
-                null_equality compare_nulls = null_equality::EQUAL,
-                std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+mixed_left_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -1026,14 +1027,15 @@ mixed_left_join(table_view const& left_equality,
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_full_join(table_view const& left_equality,
-                table_view const& right_equality,
-                table_view const& left_conditional,
-                table_view const& right_conditional,
-                ast::expression const& binary_predicate,
-                null_equality compare_nulls = null_equality::EQUAL,
-                std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+mixed_full_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a

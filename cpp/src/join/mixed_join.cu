@@ -40,16 +40,17 @@ namespace detail {
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_join(table_view const& left_equality,
-           table_view const& right_equality,
-           table_view const& left_conditional,
-           table_view const& right_conditional,
-           ast::expression const& binary_predicate,
-           null_equality compare_nulls,
-           join_kind join_type,
-           std::optional<std::pair<std::size_t, device_span<size_type>>> const& output_size_data,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
+mixed_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  join_kind join_type,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> const& output_size_data,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
                "The left conditional and equality tables must have the same number of rows.");
@@ -151,7 +152,7 @@ mixed_join(table_view const& left_equality,
   // Using an optional because we only need to allocate a new vector if one was
   // not passed as input, and rmm::device_uvector is not default constructible
   std::optional<rmm::device_uvector<size_type>> matches_per_row{};
-  device_span<size_type> matches_per_row_span{};
+  device_span<size_type const> matches_per_row_span{};
 
   if (output_size_data.has_value()) {
     join_size            = output_size_data->first;
@@ -165,8 +166,10 @@ mixed_join(table_view const& left_equality,
       rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
     // Note that the view goes out of scope after this else statement, but the
     // data owned by matches_per_row stays alive so the data pointer is valid.
-    matches_per_row_span = cudf::device_span<size_type>{matches_per_row->begin(),
-                                                        static_cast<std::size_t>(outer_num_rows)};
+    auto mutable_matches_per_row_span = cudf::device_span<size_type>{
+      matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
+    matches_per_row_span = cudf::device_span<size_type const>{
+      matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
     if (has_nulls) {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -180,7 +183,7 @@ mixed_join(table_view const& left_equality,
           parser.device_expression_data,
           swap_tables,
           size.data(),
-          matches_per_row_span);
+          mutable_matches_per_row_span);
     } else {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -194,7 +197,7 @@ mixed_join(table_view const& left_equality,
           parser.device_expression_data,
           swap_tables,
           size.data(),
-          matches_per_row_span);
+          mutable_matches_per_row_span);
     }
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
@@ -443,7 +446,7 @@ mixed_inner_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -489,7 +492,7 @@ mixed_left_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -535,7 +538,7 @@ mixed_full_join(
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> const output_size_data,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
