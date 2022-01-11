@@ -7,116 +7,39 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import DataFrame, Index, Series
+from cudf import DataFrame
 from cudf.testing import _utils as utils
 
 
-def test_onehot_simple():
-    np.random.seed(0)
-    df = DataFrame()
-    # Populate with data [0, 10)
-    df["vals"] = np.arange(10, dtype=np.int32)
-    # One Hot (Series)
-    for i, col in enumerate(df["vals"].one_hot_encoding(list(range(10)))):
-        arr = col.to_numpy()
-        # Verify 1 in the right position
-        np.testing.assert_equal(arr[i], 1)
-        # Every other slots are 0s
-        np.testing.assert_equal(arr[:i], 0)
-        np.testing.assert_equal(arr[i + 1 :], 0)
-    # One Hot (DataFrame)
-    df2 = df.one_hot_encoding(
-        column="vals", prefix="vals", cats=list(range(10))
-    )
-    assert df2.columns[0] == "vals"
-    for i in range(1, len(df2.columns)):
-        assert df2.columns[i] == "vals_%s" % (i - 1)
-    got = df2[df2.columns[1:]].values_host
-    expect = np.identity(got.shape[0])
-    np.testing.assert_equal(got, expect)
-
-
-def test_onehot_random():
-    df = DataFrame()
-    low = 10
-    high = 17
-    size = 10
-    df["src"] = src = np.random.randint(low=low, high=high, size=size)
-    df2 = df.one_hot_encoding(
-        column="src", prefix="out_", cats=tuple(range(10, 17))
-    )
-    mat = df2[df2.columns[1:]].values_host
-
-    for val in range(low, high):
-        colidx = val - low
-        arr = mat[:, colidx]
-        mask = src == val
-        np.testing.assert_equal(arr, mask)
-
-
-def test_onehot_masked():
-    np.random.seed(0)
-    high = 5
-    size = 100
-    arr = np.random.randint(low=0, high=high, size=size)
-    bitmask = utils.random_bitmask(size)
-    bytemask = np.asarray(
-        utils.expand_bits_to_bytes(bitmask)[:size], dtype=np.bool_
-    )
-    arr[~bytemask] = -1
-
-    df = DataFrame()
-    df["a"] = Series(arr).set_mask(bitmask)
-
-    out = df.one_hot_encoding(
-        "a", cats=list(range(high)), prefix="a", dtype=np.int32
-    )
-
-    assert tuple(out.columns) == ("a", "a_0", "a_1", "a_2", "a_3", "a_4")
-    np.testing.assert_array_equal((out["a_0"] == 1).to_numpy(), arr == 0)
-    np.testing.assert_array_equal((out["a_1"] == 1).to_numpy(), arr == 1)
-    np.testing.assert_array_equal((out["a_2"] == 1).to_numpy(), arr == 2)
-    np.testing.assert_array_equal((out["a_3"] == 1).to_numpy(), arr == 3)
-    np.testing.assert_array_equal((out["a_4"] == 1).to_numpy(), arr == 4)
-
-
-def test_onehot_generic_index():
-    np.random.seed(0)
-    size = 33
-    indices = np.random.randint(low=0, high=100, size=size)
-    df = DataFrame()
-    values = np.random.randint(low=0, high=4, size=size)
-    df["fo"] = Series(values, index=Index(indices))
-    out = df.one_hot_encoding(
-        "fo", cats=df.fo.unique(), prefix="fo", dtype=np.int32
-    )
-    assert set(out.columns) == {"fo", "fo_0", "fo_1", "fo_2", "fo_3"}
-    np.testing.assert_array_equal(values == 0, out.fo_0.to_numpy())
-    np.testing.assert_array_equal(values == 1, out.fo_1.to_numpy())
-    np.testing.assert_array_equal(values == 2, out.fo_2.to_numpy())
-    np.testing.assert_array_equal(values == 3, out.fo_3.to_numpy())
-
-
 @pytest.mark.parametrize(
-    "data",
+    "data, index",
     [
-        np.arange(10),
-        ["abc", "zyx", "pppp"],
-        [],
-        pd.Series(["cudf", "hello", "pandas"] * 10, dtype="category"),
+        (np.arange(10), None),
+        (["abc", "zyx", "pppp"], None),
+        ([], None),
+        (pd.Series(["cudf", "hello", "pandas"] * 10, dtype="category"), None),
+        (range(10), [1, 2, 3, 4, 5] * 2),
     ],
 )
-def test_get_dummies(data):
-    gdf = DataFrame({"x": data})
-    pdf = pd.DataFrame({"x": data})
+def test_get_dummies(data, index):
+    gdf = DataFrame({"x": data}, index=index)
+    pdf = pd.DataFrame({"x": data}, index=index)
 
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(
+        encoded_expected,
+        encoded_actual,
+        check_dtype=False if len(data) == 0 else True,
+    )
     encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(
+        encoded_expected,
+        encoded_actual,
+        check_dtype=False if len(data) == 0 else True,
+    )
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])

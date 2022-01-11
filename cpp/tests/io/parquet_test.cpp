@@ -838,13 +838,13 @@ TEST_F(ParquetWriterTest, MultiIndex)
   expected_metadata.column_metadata[2].set_name("int32s");
   expected_metadata.column_metadata[3].set_name("floats");
   expected_metadata.column_metadata[4].set_name("doubles");
-  expected_metadata.user_data.insert(
-    {"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"});
 
   auto filepath = temp_env->get_temp_filepath("MultiIndex.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
-      .metadata(&expected_metadata);
+      .metadata(&expected_metadata)
+      .key_value_metadata(
+        {{{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}}});
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
@@ -1174,6 +1174,100 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
+
+TEST_F(ParquetWriterTest, PartitionedWrite)
+{
+  auto source = create_compressible_fixed_table<int>(16, 4 * 1024 * 1024, 1000, false);
+
+  auto filepath1 = temp_env->get_temp_filepath("PartitionedWrite1.parquet");
+  auto filepath2 = temp_env->get_temp_filepath("PartitionedWrite2.parquet");
+
+  auto partition1 = cudf::io::partition_info{10, 1024 * 1024};
+  auto partition2 = cudf::io::partition_info{20 * 1024 + 7, 3 * 1024 * 1024};
+
+  auto expected1 =
+    cudf::slice(*source, {partition1.start_row, partition1.start_row + partition1.num_rows});
+  auto expected2 =
+    cudf::slice(*source, {partition2.start_row, partition2.start_row + partition2.num_rows});
+
+  cudf_io::parquet_writer_options args =
+    cudf_io::parquet_writer_options::builder(
+      cudf_io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
+      .partitions({partition1, partition2})
+      .compression(cudf_io::compression_type::NONE);
+  cudf_io::write_parquet(args);
+
+  auto result1 = cudf_io::read_parquet(
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath1)));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected1, result1.tbl->view());
+
+  auto result2 = cudf_io::read_parquet(
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath2)));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected2, result2.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, PartitionedWriteEmptyPartitions)
+{
+  auto source = create_random_fixed_table<int>(4, 4, false);
+
+  auto filepath1 = temp_env->get_temp_filepath("PartitionedWrite1.parquet");
+  auto filepath2 = temp_env->get_temp_filepath("PartitionedWrite2.parquet");
+
+  auto partition1 = cudf::io::partition_info{1, 0};
+  auto partition2 = cudf::io::partition_info{1, 0};
+
+  auto expected1 =
+    cudf::slice(*source, {partition1.start_row, partition1.start_row + partition1.num_rows});
+  auto expected2 =
+    cudf::slice(*source, {partition2.start_row, partition2.start_row + partition2.num_rows});
+
+  cudf_io::parquet_writer_options args =
+    cudf_io::parquet_writer_options::builder(
+      cudf_io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
+      .partitions({partition1, partition2})
+      .compression(cudf_io::compression_type::NONE);
+  cudf_io::write_parquet(args);
+
+  auto result1 = cudf_io::read_parquet(
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath1)));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected1, result1.tbl->view());
+
+  auto result2 = cudf_io::read_parquet(
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath2)));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected2, result2.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, PartitionedWriteEmptyColumns)
+{
+  auto source = create_random_fixed_table<int>(0, 4, false);
+
+  auto filepath1 = temp_env->get_temp_filepath("PartitionedWrite1.parquet");
+  auto filepath2 = temp_env->get_temp_filepath("PartitionedWrite2.parquet");
+
+  auto partition1 = cudf::io::partition_info{1, 0};
+  auto partition2 = cudf::io::partition_info{1, 0};
+
+  auto expected1 =
+    cudf::slice(*source, {partition1.start_row, partition1.start_row + partition1.num_rows});
+  auto expected2 =
+    cudf::slice(*source, {partition2.start_row, partition2.start_row + partition2.num_rows});
+
+  cudf_io::parquet_writer_options args =
+    cudf_io::parquet_writer_options::builder(
+      cudf_io::sink_info(std::vector<std::string>{filepath1, filepath2}), *source)
+      .partitions({partition1, partition2})
+      .compression(cudf_io::compression_type::NONE);
+  cudf_io::write_parquet(args);
+
+  auto result1 = cudf_io::read_parquet(
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath1)));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected1, result1.tbl->view());
+
+  auto result2 = cudf_io::read_parquet(
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info(filepath2)));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected2, result2.tbl->view());
+}
+
 template <typename T>
 std::string create_parquet_file(int num_cols)
 {
@@ -1305,7 +1399,7 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
   std::for_each(table_views.begin(), table_views.end(), [&writer](table_view const& tbl) {
     writer.write(tbl);
   });
-  auto md = writer.close("dummy/path");
+  auto md = writer.close({"dummy/path"});
   CUDF_EXPECTS(md, "The returned metadata should not be null.");
 
   cudf_io::parquet_reader_options read_opts =
@@ -1926,9 +2020,6 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   auto filepath = temp_env->get_temp_filepath("DecimalWrite.parquet");
   cudf_io::parquet_writer_options args =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, table);
-
-  // verify failure if no decimal precision given
-  EXPECT_THROW(cudf_io::write_parquet(args), cudf::logic_error);
 
   cudf_io::table_input_metadata expected_metadata(table);
 
