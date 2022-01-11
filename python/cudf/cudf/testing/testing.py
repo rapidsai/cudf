@@ -7,6 +7,7 @@ from typing import Union
 import cupy as cp
 import numpy as np
 import pandas as pd
+from pandas.core.dtypes.common import is_string_dtype
 
 import cudf
 from cudf.api.types import is_categorical_dtype, is_numeric_dtype
@@ -201,26 +202,31 @@ def assert_column_equal(
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
-
     columns_equal = False
-    try:
-        columns_equal = (
-            (
-                cp.all(left.isnull().values == right.isnull().values)
-                and cp.allclose(
-                    left[left.isnull().unary_operator("not")].values,
-                    right[right.isnull().unary_operator("not")].values,
+    if left.size == right.size == 0:
+        columns_equal = True
+    elif not (
+        (is_string_dtype(left) and is_numeric_dtype(right))
+        or (is_numeric_dtype(left) and is_string_dtype(right))
+    ):
+        try:
+            columns_equal = (
+                (
+                    cp.all(left.isnull().values == right.isnull().values)
+                    and cp.allclose(
+                        left[left.isnull().unary_operator("not")].values,
+                        right[right.isnull().unary_operator("not")].values,
+                    )
                 )
+                if not check_exact and is_numeric_dtype(left)
+                else left.equals(right)
             )
-            if not check_exact and is_numeric_dtype(left)
-            else left.equals(right)
-        )
-    except TypeError as e:
-        if str(e) != "Categoricals can only compare with the same type":
-            raise e
-        if is_categorical_dtype(left) and is_categorical_dtype(right):
-            left = left.astype(left.categories.dtype)
-            right = right.astype(right.categories.dtype)
+        except TypeError as e:
+            if str(e) != "Categoricals can only compare with the same type":
+                raise e
+            if is_categorical_dtype(left) and is_categorical_dtype(right):
+                left = left.astype(left.categories.dtype)
+                right = right.astype(right.categories.dtype)
     if not columns_equal:
         msg1 = f"{left.values_host}"
         msg2 = f"{right.values_host}"
@@ -358,7 +364,6 @@ def assert_index_equal(
                 obj=mul_obj,
             )
         return
-
     assert_column_equal(
         left._columns[0],
         right._columns[0],
