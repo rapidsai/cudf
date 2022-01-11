@@ -7,10 +7,13 @@ from typing import Union
 import cupy as cp
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.common import is_string_dtype
 
 import cudf
-from cudf.api.types import is_categorical_dtype, is_numeric_dtype
+from cudf.api.types import (
+    is_categorical_dtype,
+    is_numeric_dtype,
+    is_string_dtype,
+)
 from cudf.core._compat import PANDAS_GE_110
 
 
