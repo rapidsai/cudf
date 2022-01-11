@@ -68,13 +68,13 @@ inline auto make_pool()
  */
 class benchmark : public ::benchmark::Fixture {
  public:
-  void SetUp(const ::benchmark::State& state) override override override override
+  void SetUp(const ::benchmark::State& state) override
   {
     mr = make_pool();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
-  void TearDown(const ::benchmark::State& state) override override override override
+  void TearDown(const ::benchmark::State& state) override
   {
     // reset default resource to the initial resource
     rmm::mr::set_current_device_resource(nullptr);
@@ -82,11 +82,8 @@ class benchmark : public ::benchmark::Fixture {
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
-  void SetUp(::benchmark::State& st) override override override override
-  {
-    SetUp(const_cast<const ::benchmark::State&>(st));
-  }
-  void TearDown(::benchmark::State& st) override override override override
+  void SetUp(::benchmark::State& st) override { SetUp(const_cast<const ::benchmark::State&>(st)); }
+  void TearDown(::benchmark::State& st) override
   {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
