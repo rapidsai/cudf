@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -498,6 +498,42 @@ public final class ColumnVector extends ColumnView {
     }
     return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
   }
+
+  /**
+   * Create a list column in which each row is a sequence of values starting from a `start` value,
+   * incrementing by one, and its cardinality is specified by a `size` value. The `start` and `size`
+   * values used to generate each list is taken from the corresponding row of the input start and
+   * size columns.
+   * @param start first values in the result sequences
+   * @param size numbers of values in the result sequences
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(ColumnView start, ColumnView size) {
+    assert start.getNullCount() == 0 || size.getNullCount() == 0 : "starts and sizes input " +
+        "columns must not have nulls.";
+    return new ColumnVector(sequences(start.getNativeView(), size.getNativeView(), 0));
+  }
+
+  /**
+   * Create a list column in which each row is a sequence of values starting from a `start` value,
+   * incrementing by a `step` value, and its cardinality is specified by a `size` value.
+   * The values `start`, `step`, and `size` used to generate each list is taken from the
+   * corresponding row of the input starts, steps, and sizes columns.
+   * @param start first values in the result sequences
+   * @param size numbers of values in the result sequences
+   * @param step increment values for the result sequences.
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(ColumnView start, ColumnView size, ColumnView step) {
+    assert start.getNullCount() == 0 || size.getNullCount() == 0 || step.getNullCount() == 0:
+        "start, size and step must not have nulls.";
+    assert step.getType() == start.getType() : "start and step input columns must" +
+        " have the same type.";
+
+    return new ColumnVector(sequences(start.getNativeView(), size.getNativeView(),
+        step.getNativeView()));
+  }
+
   /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
@@ -789,6 +825,9 @@ public final class ColumnVector extends ColumnView {
 
   private static native long sequence(long initialValue, long step, int rows);
 
+  private static native long sequences(long startHandle, long sizeHandle, long stepHandle)
+      throws CudfException;
+
   private static native long fromArrow(int type, long col_length,
       long null_count, ByteBuffer data, ByteBuffer validity,
       ByteBuffer offsets) throws CudfException;
@@ -867,24 +906,6 @@ public final class ColumnVector extends ColumnView {
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
-
-  /**
-   * Close all non-null buffers. Exceptions that occur during the process will
-   * be aggregated into a single exception thrown at the end.
-   */
-  static void closeBuffers(AutoCloseable buffer) {
-    Throwable toThrow = null;
-    if (buffer != null) {
-      try {
-        buffer.close();
-      } catch (Throwable t) {
-        toThrow = t;
-      }
-    }
-    if (toThrow != null) {
-      throw new RuntimeException(toThrow);
-    }
-  }
 
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
@@ -1075,13 +1096,17 @@ public final class ColumnVector extends ColumnView {
       if (!toClose.isEmpty()) {
         try {
           for (MemoryBuffer toCloseBuff : toClose) {
-            closeBuffers(toCloseBuff);
-          }
-        } catch (Throwable t) {
-          if (toThrow != null) {
-            toThrow.addSuppressed(t);
-          } else {
-            toThrow = t;
+            if (toCloseBuff != null) {
+              try {
+                toCloseBuff.close();
+              } catch (Throwable t) {
+                if (toThrow != null) {
+                  toThrow.addSuppressed(t);
+                } else {
+                  toThrow = t;
+                }
+              }
+            }
           }
         } finally {
           toClose.clear();

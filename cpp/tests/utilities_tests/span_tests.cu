@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -248,9 +248,9 @@ class MdSpanTest : public cudf::test::BaseFixture {
 
 TEST(MdSpanTest, CanDetermineEmptiness)
 {
-  auto const vector            = hostdevice_2dvector<int>(1, 2);
-  auto const no_rows_vector    = hostdevice_2dvector<int>(0, 2);
-  auto const no_columns_vector = hostdevice_2dvector<int>(1, 0);
+  auto const vector            = hostdevice_2dvector<int>(1, 2, rmm::cuda_stream_default);
+  auto const no_rows_vector    = hostdevice_2dvector<int>(0, 2, rmm::cuda_stream_default);
+  auto const no_columns_vector = hostdevice_2dvector<int>(1, 0, rmm::cuda_stream_default);
 
   EXPECT_FALSE(host_2dspan<int const>{vector}.is_empty());
   EXPECT_FALSE(device_2dspan<int const>{vector}.is_empty());
@@ -271,7 +271,7 @@ __global__ void readwrite_kernel(device_2dspan<int> result)
 
 TEST(MdSpanTest, DeviceReadWrite)
 {
-  auto vector = hostdevice_2dvector<int>(11, 23);
+  auto vector = hostdevice_2dvector<int>(11, 23, rmm::cuda_stream_default);
 
   readwrite_kernel<<<1, 1>>>(vector);
   readwrite_kernel<<<1, 1>>>(vector);
@@ -281,7 +281,7 @@ TEST(MdSpanTest, DeviceReadWrite)
 
 TEST(MdSpanTest, HostReadWrite)
 {
-  auto vector = hostdevice_2dvector<int>(11, 23);
+  auto vector = hostdevice_2dvector<int>(11, 23, rmm::cuda_stream_default);
   auto span   = host_2dspan<int>{vector};
   span[5][6]  = 5;
   if (span[5][6] == 5) { span[5][6] *= 6; }
@@ -291,7 +291,7 @@ TEST(MdSpanTest, HostReadWrite)
 
 TEST(MdSpanTest, CanGetSize)
 {
-  auto const vector = hostdevice_2dvector<int>(1, 2);
+  auto const vector = hostdevice_2dvector<int>(1, 2, rmm::cuda_stream_default);
 
   EXPECT_EQ(host_2dspan<int const>{vector}.size(), vector.size());
   EXPECT_EQ(device_2dspan<int const>{vector}.size(), vector.size());
@@ -299,7 +299,7 @@ TEST(MdSpanTest, CanGetSize)
 
 TEST(MdSpanTest, CanGetCount)
 {
-  auto const vector = hostdevice_2dvector<int>(11, 23);
+  auto const vector = hostdevice_2dvector<int>(11, 23, rmm::cuda_stream_default);
 
   EXPECT_EQ(host_2dspan<int const>{vector}.count(), 11ul * 23);
   EXPECT_EQ(device_2dspan<int const>{vector}.count(), 11ul * 23);
