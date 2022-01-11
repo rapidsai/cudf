@@ -78,7 +78,7 @@ std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                    auto ret = in.release();
                    // pre-cache the null count
                    [[maybe_unused]] auto const nulls = ret->has_nulls();
-                   return in.release();
+                   return ret;
                  });
   return std::make_unique<cudf::table>(std::move(columns));
 }
