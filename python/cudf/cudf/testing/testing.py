@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._lib.unary import is_nan
 from cudf.api.types import (
     is_categorical_dtype,
     is_numeric_dtype,
@@ -215,7 +216,16 @@ def assert_column_equal(
         try:
             columns_equal = (
                 (
-                    cp.all(left.isnull().values == right.isnull().values)
+                    (
+                        cp.all(left.isnull().values == right.isnull().values)
+                        if not (left.dtype.kind == right.dtype.kind == "f")
+                        else (
+                            cp.all(is_nan(left).values == is_nan(right).values)
+                            and cp.all(
+                                left.isnull().values == right.isnull().values
+                            )
+                        )
+                    )
                     and cp.allclose(
                         left[left.isnull().unary_operator("not")].values,
                         right[right.isnull().unary_operator("not")].values,
@@ -231,16 +241,27 @@ def assert_column_equal(
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
-        msg1 = f"{left.values_host}"
-        msg2 = f"{right.values_host}"
+        ldata = [val for val in left.to_pandas(nullable=True)]
+        rdata = [val for val in right.to_pandas(nullable=True)]
+        msg1 = f"{ldata}"
+        msg2 = f"{rdata}"
         try:
-            diff = left.apply_boolean_mask(left != right).size
+            diff = 0
+            for i in range(left.size):
+                if not null_safe_scalar_equals(left[i], right[i]):
+                    diff += 1
             diff = diff * 100.0 / left.size
         except BaseException:
             diff = 100.0
         raise_assert_detail(
             obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2,
         )
+
+
+def null_safe_scalar_equals(left, right):
+    if left in {cudf.NA, np.nan} or right in {cudf.NA, np.nan}:
+        return left is right
+    return left == right
 
 
 def assert_index_equal(
