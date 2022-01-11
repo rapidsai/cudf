@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,6 +103,8 @@ struct ops_wrapper {
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
                       std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
@@ -150,6 +152,8 @@ struct ops2_wrapper {
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
                       std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;

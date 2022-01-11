@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -578,6 +578,40 @@ auto NullOp_Result(column_view lhs, column_view rhs)
                    return result;
                  });
   return column_wrapper<TypeOut>(result.cbegin(), result.cend(), result_mask.cbegin());
+}
+
+// Yes this is ugly but these logical tests need some things from nullops to work, and this
+// kept the changes smallest
+TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalAnd_Vector_Vector)
+{
+  using TypeOut     = bool;
+  using TypeLhs     = typename TestFixture::TypeLhs;
+  using TypeRhs     = typename TestFixture::TypeRhs;
+  using NULL_AND = cudf::library::operation::NullLogicalAnd<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_AND>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_LOGICAL_AND, data_type(type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalOr_Vector_Vector)
+{
+  using TypeOut     = bool;
+  using TypeLhs     = typename TestFixture::TypeLhs;
+  using TypeRhs     = typename TestFixture::TypeRhs;
+  using NULL_OR = cudf::library::operation::NullLogicalOr<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_OR>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_LOGICAL_OR, data_type(type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullEquals_Vector_Vector)

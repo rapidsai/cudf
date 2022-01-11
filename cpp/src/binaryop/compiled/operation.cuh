@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -413,6 +413,56 @@ struct NullMin {
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
     -> decltype(static_cast<common_t>(static_cast<common_t>(x) < static_cast<common_t>(y) ? x : y));
+};
+
+struct NullLogicalAnd {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x && y)
+  {
+    if (lhs_valid && !x) {
+      output_valid = true;
+      return false;
+    }
+    if (rhs_valid && !y) {
+      output_valid = true;
+      return false;
+    }
+    if (lhs_valid && rhs_valid) {
+      output_valid = true;
+      return true;
+    }
+    output_valid = false;
+    return false;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y);
+};
+
+struct NullLogicalOr {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x || y)
+  {
+    if (lhs_valid && x) {
+      output_valid = true;
+      return true;
+    }
+    if (rhs_valid && y) {
+      output_valid = true;
+      return true;
+    }
+    if (lhs_valid && rhs_valid) {
+      output_valid = true;
+      return false;
+    }
+    output_valid = false;
+    return false;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y);
 };
 
 }  // namespace ops
