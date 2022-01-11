@@ -611,7 +611,10 @@ class standard_value : public abstract_value<T> {
  public:
   using abstract_value<T>::abstract_value;
 
-  [[nodiscard]] std::shared_ptr<Value> clone() const { return std::make_shared<standard_value<T>>(*this); }
+  [[nodiscard]] std::shared_ptr<Value> clone() const
+  {
+    return std::make_shared<standard_value<T>>(*this);
+  }
 };
 
 template <>
@@ -623,7 +626,10 @@ class standard_value<bool> : public abstract_value<bool> {
 
   standard_value(bool* b) : abstract_value(b) { set_default_and_implicit(); }
 
-  [[nodiscard]] std::shared_ptr<Value> clone() const { return std::make_shared<standard_value<bool>>(*this); }
+  [[nodiscard]] std::shared_ptr<Value> clone() const
+  {
+    return std::make_shared<standard_value<bool>>(*this);
+  }
 
  private:
   void set_default_and_implicit()

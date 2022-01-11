@@ -72,7 +72,7 @@ enum class parse_result {
  */
 class parser {
  protected:
-  CUDF_HOST_DEVICE inline parser()  {}
+  CUDF_HOST_DEVICE inline parser() {}
   CUDF_HOST_DEVICE inline parser(const char* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
@@ -223,7 +223,7 @@ class json_state : private parser {
   __device__ json_state() : parser() {}
   __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
-      
+
       options(_options)
   {
   }
@@ -493,13 +493,10 @@ enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR,
  * an array of these operators applied to the incoming json string,
  */
 struct path_operator {
-  CUDF_HOST_DEVICE inline path_operator()
-     
-  {
-  }
+  CUDF_HOST_DEVICE inline path_operator() {}
   CUDF_HOST_DEVICE inline path_operator(path_operator_type _type,
                                         json_element_type _expected_type = NONE)
-    : type(_type),  expected_type{_expected_type}
+    : type(_type), expected_type{_expected_type}
   {
   }
 

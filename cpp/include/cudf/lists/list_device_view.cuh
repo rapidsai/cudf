@@ -111,7 +111,10 @@ class list_device_view {
   /**
    * @brief Fetches the lists_column_device_view that contains this list.
    */
-  [[nodiscard]] __device__ inline lists_column_device_view const& get_column() const { return lists_column; }
+  [[nodiscard]] __device__ inline lists_column_device_view const& get_column() const
+  {
+    return lists_column;
+  }
 
   template <typename T>
   struct pair_accessor;

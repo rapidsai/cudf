@@ -73,7 +73,10 @@ class lists_column_device_view {
    * @brief Indicates whether the row (i.e. list) at the specified
    * index is null.
    */
-  [[nodiscard]] __device__ inline bool is_null(size_type idx) const { return underlying.is_null(idx); }
+  [[nodiscard]] __device__ inline bool is_null(size_type idx) const
+  {
+    return underlying.is_null(idx);
+  }
 
   /**
    * @brief Fetches the offset of the underlying column_device_view,

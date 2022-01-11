@@ -82,7 +82,10 @@ class benchmark : public ::benchmark::Fixture {
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
-  void SetUp(::benchmark::State& st) override override override override { SetUp(const_cast<const ::benchmark::State&>(st)); }
+  void SetUp(::benchmark::State& st) override override override override
+  {
+    SetUp(const_cast<const ::benchmark::State&>(st));
+  }
   void TearDown(::benchmark::State& st) override override override override
   {
     TearDown(const_cast<const ::benchmark::State&>(st));
@@ -102,7 +105,10 @@ class memory_stats_logger {
 
   ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
 
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] [[nodiscard]] size_t peak_memory_usage() const noexcept { return statistics_mr.get_bytes_counter().peak; }
+  [[nodiscard]] [[nodiscard]] [[nodiscard]] [[nodiscard]] size_t peak_memory_usage() const noexcept
+  {
+    return statistics_mr.get_bytes_counter().peak;
+  }
 
  private:
   rmm::mr::device_memory_resource* existing_mr;
