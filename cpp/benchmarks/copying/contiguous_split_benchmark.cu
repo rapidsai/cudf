@@ -37,7 +37,8 @@ void BM_contiguous_split_common(benchmark::State& state,
   std::vector<cudf::size_type> splits;
   if (num_splits > 0) {
     cudf::size_type const split_stride = num_rows / num_splits;
-    auto iter                          = thrust::make_counting_iterator(1);
+    // start after the first element.
+    auto iter = thrust::make_counting_iterator(1);
     splits.reserve(num_splits);
     std::transform(iter,
                    iter + num_splits,
@@ -117,7 +118,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
   cudf::size_type const num_splits  = state.range(2);
   bool const include_validity       = state.range(3) == 0 ? false : true;
 
-  int64_t const string_len = 8;
+  constexpr int64_t string_len = 8;
   std::vector<const char*> h_strings{
     "aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee", "ffffffff", "gggggggg", "hhhhhhhh"};
 

@@ -892,6 +892,8 @@ void copy_data(int num_bufs,
                                           : elements_per_chunk;
 
                      size_type const rows_per_chunk =
+                       // if this is a validity buffer, each element is a bitmask_type, which
+                       // corresponds to 32 rows.
                        out.valid_count > 0 ? elements_per_chunk * 32 : elements_per_chunk;
                      out.num_rows = ((chunk_index + 1) * rows_per_chunk) > in.num_rows
                                       ? in.num_rows - (chunk_index * rows_per_chunk)
