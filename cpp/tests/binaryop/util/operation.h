@@ -333,11 +333,11 @@ struct NullLogicalAnd {
     }
     if (rhs_valid && !y) {
       output_valid = true;
-      return false; 
+      return false;
     }
     if (lhs_valid && rhs_valid) {
       output_valid = true;
-      return true; 
+      return true;
     }
     output_valid = false;
     return false;
@@ -354,11 +354,11 @@ struct NullLogicalOr {
     }
     if (rhs_valid && y) {
       output_valid = true;
-      return true; 
+      return true;
     }
     if (lhs_valid && rhs_valid) {
       output_valid = true;
-      return false; 
+      return false;
     }
     output_valid = false;
     return false;

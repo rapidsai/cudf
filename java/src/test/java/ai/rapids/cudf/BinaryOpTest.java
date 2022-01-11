@@ -1365,19 +1365,40 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testNullAnd() {
-    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(BOOLEANS_1);
-         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(BOOLEANS_2)) {
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(
+        true, true, true,
+        false, false, false,
+        null, null, null);
+         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(
+             true, false, null,
+             true, false, null,
+             true, false, null)) {
       try (ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_AND, icv2, DType.BOOL8);
-           ColumnVector expected = forEach(DType.BOOL8, icv1, icv2,
-               (b, l, r, i) -> b.append(l.getBoolean(i) && r.getBoolean(i)))) {
-        assertColumnsAreEqual(expected, answer, "boolean AND boolean");
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, false, null,
+               false, false, false,
+               null, false, null)) {
+        assertColumnsAreEqual(expected, answer, "boolean NULL AND boolean");
       }
+    }
+  }
 
-      try (Scalar s = Scalar.fromBool(true);
-           ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_AND, s, DType.BOOL8);
-           ColumnVector expected = forEachS(DType.BOOL8, icv1, true,
-               (b, l, r, i) -> b.append(l.getBoolean(i) && r))) {
-        assertColumnsAreEqual(expected, answer, "boolean AND true");
+  @Test
+  public void testNullOr() {
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(
+        true, true, true,
+        false, false, false,
+        null, null, null);
+         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(
+             true, false, null,
+             true, false, null,
+             true, false, null)) {
+      try (ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_OR, icv2, DType.BOOL8);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, true, true,
+               true, false, null,
+               true, null, null)) {
+        assertColumnsAreEqual(expected, answer, "boolean NULL OR boolean");
       }
     }
   }

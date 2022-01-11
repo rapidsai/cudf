@@ -584,9 +584,9 @@ auto NullOp_Result(column_view lhs, column_view rhs)
 // kept the changes smallest
 TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalAnd_Vector_Vector)
 {
-  using TypeOut     = bool;
-  using TypeLhs     = typename TestFixture::TypeLhs;
-  using TypeRhs     = typename TestFixture::TypeRhs;
+  using TypeOut  = bool;
+  using TypeLhs  = typename TestFixture::TypeLhs;
+  using TypeRhs  = typename TestFixture::TypeRhs;
   using NULL_AND = cudf::library::operation::NullLogicalAnd<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs            = lhs_random_column<TypeLhs>(col_size);
@@ -600,9 +600,9 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalAnd_Vector_Vector)
 
 TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalOr_Vector_Vector)
 {
-  using TypeOut     = bool;
-  using TypeLhs     = typename TestFixture::TypeLhs;
-  using TypeRhs     = typename TestFixture::TypeRhs;
+  using TypeOut = bool;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
   using NULL_OR = cudf::library::operation::NullLogicalOr<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs            = lhs_random_column<TypeLhs>(col_size);

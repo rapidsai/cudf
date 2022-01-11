@@ -72,15 +72,11 @@ enum class binary_operator : int32_t {
                          ///< operand when one is null; or invalid when both are null
   GENERIC_BINARY,        ///< generic binary operator to be generated with input
                          ///< ptx code
-  NULL_LOGICAL_AND,      ///< operator && with Spark rules: NULL_LOGICAL_AND(null, null) is null,
-                         ///< NULL_LOGICAL_AND(null, true) is
-  ///< null, NULL_LOGICAL_AND(null, false) is false, and NULL_LOGICAL_AND(valid,
-  ///< valid) == LOGICAL_AND(valid, valid)
-  NULL_LOGICAL_OR,  ///< operator || with Spark rules: NULL_LOGICAL_OR(null, null) is null,
-                    ///< NULL_LOGICAL_OR(null, true) is true,
-                    ///< NULL_LOGICAL_OR(null, false) is null, and NULL_LOGICAL_OR(valid, valid) ==
-                    ///< LOGICAL_OR(valid, valid)
-  INVALID_BINARY    ///< invalid operation
+  NULL_LOGICAL_AND,  ///< operator && with Spark rules: (null, null) is null, (null, true) is null,
+                     ///< (null, false)is false, and (valid, valid) == LOGICAL_AND(valid, valid)
+  NULL_LOGICAL_OR,   ///< operator || with Spark rules: (null, null) is null, (null, true) is true,
+                     ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
+  INVALID_BINARY     ///< invalid operation
 };
 /**
  * @brief Performs a binary operation between a scalar and a column.
