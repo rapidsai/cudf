@@ -139,6 +139,8 @@ struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
   {
+    CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+
     using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
