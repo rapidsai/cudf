@@ -63,7 +63,7 @@ enum class rounding_function {
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -99,7 +99,7 @@ struct extract_component_operator {
 template <typename DurationType>
 struct RoundFunctor {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE auto operator()(rounding_function round_kind, Timestamp dt)
+  __device__ inline auto operator()(rounding_function round_kind, Timestamp dt)
   {
     switch (round_kind) {
       case rounding_function::CEIL: return cuda::std::chrono::ceil<DurationType>(dt);
@@ -121,7 +121,7 @@ struct RoundingDispatcher {
   }
 
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
+  __device__ inline Timestamp operator()(Timestamp const ts) const
   {
     switch (component) {
       case rounding_frequency::DAY:
@@ -161,7 +161,7 @@ static __device__ int16_t const days_until_month[2][13] = {
 // date only (without the time component)
 struct extract_last_day_of_month {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const
+  __device__ inline timestamp_D operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
     const year_month_day ymd(floor<days>(ts));
@@ -175,7 +175,7 @@ struct extract_last_day_of_month {
 // an integer while the other returns a timestamp.
 struct days_in_month_op {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
     auto const date = year_month_day(floor<days>(ts));
@@ -187,7 +187,7 @@ struct days_in_month_op {
 // Extract the day number of the year present in the timestamp
 struct extract_day_num_of_year {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -203,7 +203,7 @@ struct extract_day_num_of_year {
 // Extract the the quarter to which the timestamp belongs to
 struct extract_quarter_op {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -220,7 +220,7 @@ struct extract_quarter_op {
 // Returns true if the year is a leap year
 struct is_leap_year_op {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE bool operator()(Timestamp const ts) const
+  __device__ inline bool operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
     auto const days_since_epoch = floor<days>(ts);
