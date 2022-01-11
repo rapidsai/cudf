@@ -76,8 +76,6 @@ std::unique_ptr<scalar> reduce(
  *
  * This function does not detect overflows in reductions.
  * Using a higher precision `data_type` may prevent overflow.
- * Only `min` and `max` ops are supported for reduction of non-arithmetic
- * types (timestamp, string...).
  * The null values are skipped for the operation.
  * If the segment is empty, the row corresponding to the result of the
  * segment is null.

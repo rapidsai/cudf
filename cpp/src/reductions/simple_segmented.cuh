@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "cudf/detail/null_mask.hpp"
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/reduction.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -41,17 +41,17 @@ namespace detail {
 
 /**
  * @brief Segment reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
- * which directly compute the reduction by a single step reduction call
+ * which directly compute the reduction by a single step reduction call.
  *
  * @tparam InputType    the input column data-type
  * @tparam ResultType   the output data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce
- * @param offsets Indices to segment boundaries
- * @param null_handling If `INCLUDE`, all elements in a segment must be valid
- * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid.
+ * @param col Input column of data to reduce.
+ * @param offsets Indices to segment boundaries.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+ * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+ * the reduced value is valid if any element in the segment is valid.
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
