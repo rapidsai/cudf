@@ -604,9 +604,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
     std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
 
-    std::transform(
-        result.begin(), result.end(), n_result.begin(),
-        [](cudf::column_view const &result_col) { return to_jlong(new cudf::column_view{result_col}); });
+    std::transform(result.begin(), result.end(), n_result.begin(),
+                   [](cudf::column_view const &result_col) {
+                     return to_jlong(new cudf::column_view{result_col});
+                   });
 
     return n_result.get_jArray();
   }
@@ -662,7 +663,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_findAndReplaceAll(JNIEnv 
     column_view *input_column = reinterpret_cast<column_view *>(input_handle);
     column_view *old_values_column = reinterpret_cast<column_view *>(old_values_handle);
     column_view *new_values_column = reinterpret_cast<column_view *>(new_values_handle);
-    return to_jlong(cudf::find_and_replace_all(*input_column, *old_values_column, *new_values_column));
+    return to_jlong(
+        cudf::find_and_replace_all(*input_column, *old_values_column, *new_values_column));
   }
   CATCH_STD(env, 0);
 }
@@ -880,11 +882,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
     }
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
-        case cudf::type_id::BOOL8: 
-          return to_jlong(cudf::strings::from_booleans(*column));
+        case cudf::type_id::BOOL8: return to_jlong(cudf::strings::from_booleans(*column));
         case cudf::type_id::FLOAT32:
-        case cudf::type_id::FLOAT64: 
-          return to_jlong(cudf::strings::from_floats(*column));
+        case cudf::type_id::FLOAT64: return to_jlong(cudf::strings::from_floats(*column));
         case cudf::type_id::INT8:
         case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
@@ -892,20 +892,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::INT32:
         case cudf::type_id::UINT32:
         case cudf::type_id::INT64:
-        case cudf::type_id::UINT64: 
-          return to_jlong(cudf::strings::from_integers(*column));
+        case cudf::type_id::UINT64: return to_jlong(cudf::strings::from_integers(*column));
         case cudf::type_id::DECIMAL32:
         case cudf::type_id::DECIMAL64:
-        case cudf::type_id::DECIMAL128: 
-          return to_jlong(cudf::strings::from_fixed_point(*column));
+        case cudf::type_id::DECIMAL128: return to_jlong(cudf::strings::from_fixed_point(*column));
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
-        case cudf::type_id::BOOL8: 
-          return to_jlong(cudf::strings::to_booleans(*column));
+        case cudf::type_id::BOOL8: return to_jlong(cudf::strings::to_booleans(*column));
         case cudf::type_id::FLOAT32:
-        case cudf::type_id::FLOAT64: 
+        case cudf::type_id::FLOAT64:
           return to_jlong(cudf::strings::to_floats(*column, n_data_type));
         case cudf::type_id::INT8:
         case cudf::type_id::UINT8:
@@ -1066,7 +1063,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(JNIEnv *env, jo
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::jni::native_jstring n_j_udf(env, j_udf);
     std::string n_udf(n_j_udf.get());
-    return to_jlong(cudf::transform(*column, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
+    return to_jlong(
+        cudf::transform(*column, n_udf, cudf::data_type(cudf::type_id::INT32), j_is_ptx));
   }
   CATCH_STD(env, 0);
 }
@@ -1451,8 +1449,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_normalizeNANsAndZeros(JNI
   JNI_NULL_CHECK(env, input_column, "Input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    return to_jlong(
-        cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view *>(input_column)));
+    return to_jlong(cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view *>(input_column)));
   }
   CATCH_STD(env, 0);
 }
