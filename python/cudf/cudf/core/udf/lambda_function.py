@@ -15,7 +15,7 @@ from cudf.core.udf.utils import (
 )
 
 
-def make_lambda_kernel(sr, args):
+def lambda_kernel_from_template(sr, args):
     """
     Function to write numba kernels for `Series.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -80,7 +80,7 @@ def get_lambda_kernel(sr, func, args):
         "pack_return": pack_return,
     }
     exec(
-        make_lambda_kernel(sr, args=args),
+        lambda_kernel_from_template(sr, args=args),
         global_exec_context,
         local_exec_context,
     )

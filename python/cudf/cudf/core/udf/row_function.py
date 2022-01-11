@@ -71,7 +71,7 @@ def get_frame_row_type(dtype):
     return Record(fields, offset, _is_aligned_struct)
 
 
-def make_row_kernel(frame, row_type, args):
+def row_kernel_from_template(frame, row_type, args):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -169,7 +169,7 @@ def get_row_kernel(frame, func, args):
         "row_type": row_type,
     }
 
-    kernel_string = make_row_kernel(frame, row_type, args)
+    kernel_string = row_kernel_from_template(frame, row_type, args)
     exec(kernel_string, global_exec_context, local_exec_context)
     # The python function definition representing the kernel
     _kernel = local_exec_context["_kernel"]
