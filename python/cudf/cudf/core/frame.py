@@ -165,6 +165,16 @@ class Frame:
 
         return cls._from_data(data, index)
 
+    def _from_columns_like_self(
+        self,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        col = self.__class__._from_columns(columns, column_names, index_names)
+        col._copy_type_metadata(self, include_index=bool(index_names))
+        return col
+
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
     ) -> Optional[Frame]:
@@ -554,14 +564,12 @@ class Frame:
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        result = self._from_columns_like_self(
             libcudf.copying.gather(
                 list(self._columns), gather_map, nullify=nullify,
             ),
             self._column_names,
         )
-
-        result._copy_type_metadata(self)
         return result
 
     def _as_column(self):
@@ -1419,7 +1427,7 @@ class Frame:
                 else:
                     frame._data[name] = col
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
                 list(self._index._data.columns + frame._columns),
                 how=how,
@@ -1431,8 +1439,6 @@ class Frame:
             self._column_names,
             self._index.names,
         )
-        result._copy_type_metadata(frame)
-        return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
@@ -2154,8 +2160,7 @@ class Frame:
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
-
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns),
                 keys=range(len(self._columns)),
@@ -2164,11 +2169,6 @@ class Frame:
             ),
             self._column_names,
         )
-        # TODO: _copy_type_metadata is a common pattern to apply after the
-        # roundtrip from libcudf. We should build this into a factory function
-        # to increase reusability.
-        result._copy_type_metadata(self)
-        return result
 
     def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
