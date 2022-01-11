@@ -492,11 +492,11 @@ template <template <typename> class hash_function, typename Nullate>
 class row_hasher {
  public:
   row_hasher() = delete;
-  CUDA_HOST_DEVICE_CALLABLE row_hasher(Nullate has_nulls, table_device_view t)
+  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t)
     : _table{t}, _has_nulls{has_nulls}
   {
   }
-  CUDA_HOST_DEVICE_CALLABLE row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
+  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
     : _table{t}, _seed(seed), _has_nulls{has_nulls}
   {
   }

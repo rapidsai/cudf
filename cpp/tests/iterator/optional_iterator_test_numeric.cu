@@ -39,8 +39,7 @@ template <typename ElementType>
 struct transformer_optional_meanvar {
   using ResultType = thrust::optional<cudf::meanvar<ElementType>>;
 
-  CUDA_HOST_DEVICE_CALLABLE
-  ResultType operator()(thrust::optional<ElementType> const& optional)
+  CUDF_HOST_DEVICE inline ResultType operator()(thrust::optional<ElementType> const& optional)
   {
     if (optional.has_value()) {
       auto v = *optional;
@@ -52,7 +51,7 @@ struct transformer_optional_meanvar {
 
 template <typename T>
 struct optional_to_meanvar {
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
+  CUDF_HOST_DEVICE inline T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
 };
 
 // TODO: enable this test also at __CUDACC_DEBUG__

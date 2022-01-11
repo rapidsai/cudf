@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/groupby/group_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -24,23 +26,8 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <benchmark/benchmark.h>
-
-#include <random>
-
 class Groupby : public cudf::benchmark {
 };
-
-// TODO: put it in a struct so `uniform` can be remade with different min, max
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
-}
 
 void BM_group_shift(benchmark::State& state)
 {
