@@ -564,13 +564,12 @@ class Frame:
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self._from_columns_like_self(
+        return self._from_columns_like_self(
             libcudf.copying.gather(
                 list(self._columns), gather_map, nullify=nullify,
             ),
             self._column_names,
         )
-        return result
 
     def _as_column(self):
         """

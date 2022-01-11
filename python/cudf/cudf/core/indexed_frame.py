@@ -1207,15 +1207,13 @@ class IndexedFrame(Frame):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(
                 list(self._index._columns + self._columns), boolean_mask
             ),
             column_names=self._column_names,
             index_names=self._index.names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
