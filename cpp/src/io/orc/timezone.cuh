@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,10 +57,10 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return GMT offset
  */
-CUDA_HOST_DEVICE_CALLABLE int32_t get_gmt_offset_impl(int64_t const* ttimes,
-                                                      int32_t const* offsets,
-                                                      size_t count,
-                                                      int64_t ts)
+CUDF_HOST_DEVICE inline int32_t get_gmt_offset_impl(int64_t const* ttimes,
+                                                    int32_t const* offsets,
+                                                    size_t count,
+                                                    int64_t ts)
 {
   // Returns start of the range if all elements are larger than the input timestamp
   auto last_less_equal_ttime_idx = [&](long begin_idx, long end_idx, int64_t ts) {
@@ -107,10 +107,13 @@ inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes
   return get_gmt_offset_impl(ttimes.begin(), offsets.begin(), ttimes.size(), ts);
 }
 
-struct timezone_table {
+class timezone_table {
   int32_t gmt_offset = 0;
   rmm::device_uvector<int64_t> ttimes;
   rmm::device_uvector<int32_t> offsets;
+
+ public:
+  // Safe to use the default stream, device_uvectors will not change after they are created empty
   timezone_table() : ttimes{0, rmm::cuda_stream_default}, offsets{0, rmm::cuda_stream_default} {}
   timezone_table(int32_t gmt_offset,
                  rmm::device_uvector<int64_t>&& ttimes,

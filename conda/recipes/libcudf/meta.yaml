@@ -158,6 +158,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
+    - test -f $PREFIX/include/cudf/lists/filling.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
     - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
