@@ -21,7 +21,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-
+#include <thrust/iterator/reverse_iterator.h>
 using hash_value_type = uint32_t;
 
 namespace cudf {
@@ -347,28 +347,32 @@ struct SparkMurmurHash3_32 {
     uint32_t h1           = m_seed;
     constexpr uint32_t c1 = 0xcc9e2d51;
     constexpr uint32_t c2 = 0x1b873593;
+    constexpr uint32_t c3 = 0xe6546b64;
+    constexpr uint32_t rot_c1 = 15;
+    constexpr uint32_t rot_c2 = 13;
     //----------
-    // body
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-    for (int i = -nblocks; i; i++) {
+    // Process all four-byte chunks
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data);
+    for (int i = 0; i < nblocks; i++) {
       uint32_t k1 = blocks[i];
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = rotl32(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = rotl32(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
     //----------
-    // byte by byte tail processing
+    // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
+    // (does not conform to normal MurmurHash3)
     for (int i = nblocks * 4; i < len; i++) {
-      int32_t k1 = data[i];
+      uint32_t k1 = data[i];
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = rotl32(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = rotl32(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
     //----------
     // finalization
@@ -433,7 +437,7 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
 {
-  // Generates the Spark murmur3 hash value, mimicing the conversion
+  // Generates the Spark MurmurHash3 hash value, mimicking the conversion
   // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
   // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
   __int128_t const val    = key.value();
@@ -442,24 +446,42 @@ SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& 
   int8_t const zero_value = sign_bit ? 0xff : 0x00;
   int32_t length          = 15;
 
-  // Search for first non-zero byte in the unscaled value, shortening the hashed data
-  for (; length >= 0 && data[length] == zero_value; --length) {}
-  // Special case for 0 which does not shorten correctly
-  if (length == -1) { return this->compute<uint8_t>(0); }
+  // Special case for 0 and -1 which do not shorten correctly
+  if (val == 0) { return this->compute<uint8_t>(0); }
+  if (val == -1) { return this->compute<int8_t>(-1); }
+  // Searching from the big end, find the first non-zero byte in the unscaled little endian value
+  // The zero bytes that precede that byte are not hashed
+  // for (; length >= 0 && data[length] == zero_value; --length) {}
+
+
+  // typedef thrust::device_vector<int8_t> Iterator;
+  // thrust::device_iterator<int8_t>::reverse_iterator
+  // auto itera = thrust::reverse_iterator<thrust::device_vector<int8_t>>(data + 16);
+  auto reverse = thrust::make_reverse_iterator(data + 16);
+  auto reverseend = thrust::make_reverse_iterator(data);
+
+  // thrust::find_if_no
+  auto first_nonzero_byte = thrust::find_if_not(thrust::device, reverse, reverseend, [zero_value](int8_t const& v){ return v == zero_value; });
+  // length = thrust::distance(data, first_nonzero_byte);
+  return length;
+  
   // Preserve the 2's complement sign bit by adding a byte back on if necessary
   // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign bit
   // 0x00007F would shorten to 0x7f -- no extra byte because the leftmost bit matches the sign bit
   // similarly for negative values 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80
-  if (length != 15 && sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) { ++length; }
+  if (length != 16 && sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) { ++length; }
+
+  return length;
+
+  // auto const length = std::distance(data, first_nonzero_byte);
+  // if (first_nonzero_byte != data && sign_bit ^ (*first_nonzero_byte & static_cast<int8_t>(0x80))) { ++first_nonzero_byte; }
 
   // Convert resulting byte range to big endian
-  __int128_t flipped = 0;
-  int8_t* dflipped   = reinterpret_cast<int8_t*>(&flipped);
-  for (int i = 0; i <= length; i++) {
-    dflipped[i] = data[length - i];
-  }
+  __int128_t big_endian_value = 0;
+  int8_t* big_endian_data   = reinterpret_cast<int8_t*>(&big_endian_value);
+  thrust::reverse_copy(thrust::device, data, data+length+1, big_endian_data);
 
-  return this->compute_bytes(dflipped, length + 1);
+  return this->compute_bytes(big_endian_data, length + 1);
 }
 
 template <>
