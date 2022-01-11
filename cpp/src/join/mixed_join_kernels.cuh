@@ -59,18 +59,14 @@ template <bool has_nulls>
 class pair_expression_equality {
  public:
   __device__ pair_expression_equality(
-    table_device_view build,
-    table_device_view probe,
-    bool swap_tables,
     cudf::ast::detail::expression_evaluator<has_nulls> evaluator,
     cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    null_equality nulls_are_equal = null_equality::EQUAL)
-    : build(build),
-      probe{probe},
+    bool swap_tables,
+    row_equality const& equality_probe)
+    : evaluator{evaluator},
+      thread_intermediate_storage{thread_intermediate_storage},
       swap_tables{swap_tables},
-      nulls_are_equal{nulls_are_equal},
-      evaluator{evaluator},
-      thread_intermediate_storage{thread_intermediate_storage}
+      equality_probe{equality_probe}
   {
   }
 
@@ -85,29 +81,6 @@ class pair_expression_equality {
   __device__ __forceinline__ bool operator()(const pair_type& build_row,
                                              const pair_type& probe_row) const noexcept
   {
-    // TODO: I've inlined the logic from cudf's row_equality_comparator because
-    // that comparator's constructor is not visible on device, and changing it
-    // would require removing an assertion-raising test. I don't think we want
-    // to do that, but should verify before finalizing.
-    auto equal_elements = [=](column_device_view b, column_device_view p) {
-      // Note: we could use nullate::DYNAMIC to avoid the extra template
-      // instantiation, but in this case the performance impact of making that
-      // decision at runtime is substantial since this functor is used within
-      // a complex kernel.
-      auto has_nulls_nullate = []() {
-        if constexpr (has_nulls) {
-          return nullate::YES{};
-        } else if constexpr (!has_nulls) {
-          return nullate::NO{};
-        }
-      }();
-      return cudf::type_dispatcher(
-        b.type(),
-        element_equality_comparator{has_nulls_nullate, b, p, nulls_are_equal},
-        build_row.second,
-        probe_row.second);
-    };
-
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
     // Three levels of checks:
     // 1. Row hashes of the columns involved in the equality condition are equal.
@@ -115,7 +88,7 @@ class pair_expression_equality {
     // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
     if ((probe_row.first == build_row.first) &&
-        (thrust::equal(thrust::seq, build.begin(), build.end(), probe.begin(), equal_elements))) {
+        equality_probe(probe_row.second, build_row.second)) {
       auto const lrow_idx = swap_tables ? build_row.second : probe_row.second;
       auto const rrow_idx = swap_tables ? probe_row.second : build_row.second;
       evaluator.evaluate(output_dest, lrow_idx, rrow_idx, 0, thread_intermediate_storage);
@@ -125,12 +98,10 @@ class pair_expression_equality {
   }
 
  private:
-  table_device_view const build;
-  table_device_view const probe;
-  bool const swap_tables;
-  null_equality const nulls_are_equal;
   cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
   cudf::ast::detail::expression_evaluator<has_nulls> const evaluator;
+  bool const swap_tables;
+  row_equality const& equality_probe;
 };
 
 /**
@@ -169,7 +140,7 @@ __global__ void compute_mixed_join_output_size(
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  null_equality compare_nulls,
+  row_equality const equality_probe,
   join_kind join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -210,7 +181,7 @@ __global__ void compute_mixed_join_output_size(
     auto query_pair                      = pair_func(outer_row_index);
     // TODO: Address asymmetry in operator.
     auto count_equality = pair_expression_equality<has_nulls>{
-      build, probe, swap_tables, evaluator, thread_intermediate_storage, compare_nulls};
+      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
     // TODO: This entire kernel probably won't work for left anti joins since I
     // need to use a normal map (not a multimap), so this condition is probably
     // overspecified at the moment.
@@ -273,7 +244,7 @@ __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            table_device_view probe,
                            table_device_view build,
-                           null_equality compare_nulls,
+                           row_equality const equality_probe,
                            join_kind join_type,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,
                            OutputIt1 join_output_l,
@@ -315,7 +286,7 @@ __global__ void mixed_join(table_device_view left_table,
     // Figure out the number of elements for this key.
     auto query_pair = pair_func(outer_row_index);
     auto equality   = pair_expression_equality<has_nulls>{
-      build, probe, swap_tables, evaluator, thread_intermediate_storage, compare_nulls};
+      evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
     auto probe_key_begin       = thrust::make_discard_iterator();
     auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]

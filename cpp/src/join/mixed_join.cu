@@ -119,6 +119,8 @@ mixed_join(table_view const& left_equality,
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
+  row_equality equality_probe{
+    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
@@ -173,7 +175,7 @@ mixed_join(table_view const& left_equality,
           *right_conditional_view,
           *probe_view,
           *build_view,
-          compare_nulls,
+          equality_probe,
           kernel_join_type,
           hash_table_view,
           parser.device_expression_data,
@@ -187,7 +189,7 @@ mixed_join(table_view const& left_equality,
           *right_conditional_view,
           *probe_view,
           *build_view,
-          compare_nulls,
+          equality_probe,
           kernel_join_type,
           hash_table_view,
           parser.device_expression_data,
@@ -231,7 +233,7 @@ mixed_join(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
-        compare_nulls,
+        equality_probe,
         kernel_join_type,
         hash_table_view,
         join_output_l,
@@ -246,7 +248,7 @@ mixed_join(table_view const& left_equality,
         *right_conditional_view,
         *probe_view,
         *build_view,
-        compare_nulls,
+        equality_probe,
         kernel_join_type,
         hash_table_view,
         join_output_l,
@@ -372,6 +374,8 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
+  row_equality equality_probe{
+    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
@@ -408,7 +412,7 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
         *right_conditional_view,
         *probe_view,
         *build_view,
-        compare_nulls,
+        equality_probe,
         join_type,
         hash_table_view,
         parser.device_expression_data,
@@ -422,7 +426,7 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
         *right_conditional_view,
         *probe_view,
         *build_view,
-        compare_nulls,
+        equality_probe,
         join_type,
         hash_table_view,
         parser.device_expression_data,
