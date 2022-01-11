@@ -1324,9 +1324,9 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
  */
 #pragma nv_exec_check_disable
 template <typename F, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kind k,
-                                                                F&& f,
-                                                                Ts&&... args)
+CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind k,
+                                                              F&& f,
+                                                              Ts&&... args)
 {
   switch (k) {
     case aggregation::SUM:
@@ -1418,7 +1418,7 @@ template <typename Element>
 struct dispatch_aggregation {
 #pragma nv_exec_check_disable
   template <aggregation::Kind k, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
+  CUDF_HOST_DEVICE inline decltype(auto) operator()(F&& f, Ts&&... args) const
   {
     return f.template operator()<Element, k>(std::forward<Ts>(args)...);
   }
@@ -1427,9 +1427,7 @@ struct dispatch_aggregation {
 struct dispatch_source {
 #pragma nv_exec_check_disable
   template <typename Element, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(aggregation::Kind k,
-                                                      F&& f,
-                                                      Ts&&... args) const
+  CUDF_HOST_DEVICE inline decltype(auto) operator()(aggregation::Kind k, F&& f, Ts&&... args) const
   {
     return aggregation_dispatcher(
       k, dispatch_aggregation<Element>{}, std::forward<F>(f), std::forward<Ts>(args)...);
@@ -1453,8 +1451,10 @@ struct dispatch_source {
  */
 #pragma nv_exec_check_disable
 template <typename F, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_type_and_aggregation(
-  data_type type, aggregation::Kind k, F&& f, Ts&&... args)
+CUDF_HOST_DEVICE inline constexpr decltype(auto) dispatch_type_and_aggregation(data_type type,
+                                                                               aggregation::Kind k,
+                                                                               F&& f,
+                                                                               Ts&&... args)
 {
   return type_dispatcher(type, dispatch_source{}, k, std::forward<F>(f), std::forward<Ts>(args)...);
 }
