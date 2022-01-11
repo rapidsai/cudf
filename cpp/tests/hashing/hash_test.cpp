@@ -315,7 +315,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   // Row(Row(-100, "def", Row(-100f, -100L)), "jumps over the lazy dog.", -Double.NaN,
   //     DateTimeUtils.toJavaTimestamp(-100), BigDecimal("-0.00001"), -100.toLong, -Float.NaN,
   //     DateTimeUtils.toJavaDate(-100), BigDecimal("-0.1"), -100, -100.toShort, -100.toByte,
-  //     true, BigDecimal("-0.000000001")),
+  //     true, BigDecimal("-0.00000000001")),
   // Row(Row(0x12345678, "ghij", Row(Float.PositiveInfinity, 0x123456789abcdefL)),
   //     "All work and no play makes Jack a dull boy", Double.MinValue,
   //     DateTimeUtils.toJavaTimestamp(Long.MinValue/1000000), BigDecimal("-99999999999.9999999"),
@@ -401,11 +401,11 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
   fixed_point_column_wrapper<__int128_t> const decimal128_col(
-    {(__int128)0,
-     (__int128)100,
-     (__int128)-100,
-     ((__int128)0xFFFFFFFFFCC4D1C3u << 64 | 0x602F7FC318000001u),
-     ((__int128)0x00000000033B2E3Cu << 64 | 0x9FD0803CE7FFFFFFu)},
+    {static_cast<__int128>(0),
+     static_cast<__int128>(100),
+     static_cast<__int128>(-1),
+     (static_cast<__int128>(0xFFFFFFFFFCC4D1C3u) << 64 | 0x602F7FC318000001u),
+     (static_cast<__int128>(0x00000000033B2E3Cu) << 64 | 0x9FD0803CE7FFFFFFu)},
     numeric::scale_type{-11});
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;

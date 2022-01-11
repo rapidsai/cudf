@@ -21,7 +21,9 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+
 #include <thrust/iterator/reverse_iterator.h>
+
 using hash_value_type = uint32_t;
 
 namespace cudf {
@@ -343,11 +345,11 @@ struct SparkMurmurHash3_32 {
   result_type CUDA_DEVICE_CALLABLE compute_bytes(int8_t const* const data,
                                                  cudf::size_type const len) const
   {
-    int32_t const nblocks = len / 4;
-    uint32_t h1           = m_seed;
-    constexpr uint32_t c1 = 0xcc9e2d51;
-    constexpr uint32_t c2 = 0x1b873593;
-    constexpr uint32_t c3 = 0xe6546b64;
+    int32_t const nblocks     = len / 4;
+    uint32_t h1               = m_seed;
+    constexpr uint32_t c1     = 0xcc9e2d51;
+    constexpr uint32_t c2     = 0x1b873593;
+    constexpr uint32_t c3     = 0xe6546b64;
     constexpr uint32_t rot_c1 = 15;
     constexpr uint32_t rot_c2 = 13;
     //----------
@@ -437,51 +439,46 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
 {
-  // Generates the Spark MurmurHash3 hash value, mimicking the conversion
+  // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
   // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
   // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
-  __int128_t const val    = key.value();
-  int8_t const* data      = reinterpret_cast<int8_t const*>(&val);
-  int8_t const sign_bit   = data[15] & 0x80;
+  __int128_t const val     = key.value();
+  cudf::size_type key_size = sizeof(__int128_t);
+  int8_t const* data       = reinterpret_cast<int8_t const*>(&val);
+
+  // Extract the first bit of the key, which holds the sign.
+  int8_t const sign_bit = data[key_size - 1] & 0x80;
+
+  // Small negative values start with 0xff..., small positive values start with 0x00...
   int8_t const zero_value = sign_bit ? 0xff : 0x00;
-  int32_t length          = 15;
 
-  // Special case for 0 and -1 which do not shorten correctly
-  if (val == 0) { return this->compute<uint8_t>(0); }
-  if (val == -1) { return this->compute<int8_t>(-1); }
-  // Searching from the big end, find the first non-zero byte in the unscaled little endian value
-  // The zero bytes that precede that byte are not hashed
-  // for (; length >= 0 && data[length] == zero_value; --length) {}
+  // Special cases for 0 and -1 which do not shorten correctly.
+  if (val == 0) { return this->compute(static_cast<uint8_t>(0)); }
+  if (val == static_cast<__int128>(-1)) { return this->compute(static_cast<uint8_t>(0xFF)); }
 
+  // Searching from the big end, find the first non-zero byte in the unscaled little endian value.
+  // The zero bytes that precede that byte are not hashed.
+  auto const reverse_begin = thrust::reverse_iterator(data + key_size);
+  auto const reverse_end   = thrust::reverse_iterator(data);
+  auto const first_nonzero_byte =
+    thrust::find_if_not(thrust::device, reverse_begin, reverse_end, [zero_value](int8_t const& v) {
+      return v == zero_value;
+    }).base();
+  cudf::size_type length = thrust::distance(data, first_nonzero_byte);
 
-  // typedef thrust::device_vector<int8_t> Iterator;
-  // thrust::device_iterator<int8_t>::reverse_iterator
-  // auto itera = thrust::reverse_iterator<thrust::device_vector<int8_t>>(data + 16);
-  auto reverse = thrust::make_reverse_iterator(data + 16);
-  auto reverseend = thrust::make_reverse_iterator(data);
-
-  // thrust::find_if_no
-  auto first_nonzero_byte = thrust::find_if_not(thrust::device, reverse, reverseend, [zero_value](int8_t const& v){ return v == zero_value; });
-  // length = thrust::distance(data, first_nonzero_byte);
-  return length;
-  
   // Preserve the 2's complement sign bit by adding a byte back on if necessary
   // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign bit
   // 0x00007F would shorten to 0x7f -- no extra byte because the leftmost bit matches the sign bit
   // similarly for negative values 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80
-  if (length != 16 && sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) { ++length; }
+  if ((length < key_size) && (sign_bit ^ (data[length - 1] & static_cast<int8_t>(0x80)))) {
+    ++length;
+  }
 
-  return length;
-
-  // auto const length = std::distance(data, first_nonzero_byte);
-  // if (first_nonzero_byte != data && sign_bit ^ (*first_nonzero_byte & static_cast<int8_t>(0x80))) { ++first_nonzero_byte; }
-
-  // Convert resulting byte range to big endian
+  // Convert to big endian by reversing the range of nonzero bytes. Only those bytes are hashed.
   __int128_t big_endian_value = 0;
-  int8_t* big_endian_data   = reinterpret_cast<int8_t*>(&big_endian_value);
-  thrust::reverse_copy(thrust::device, data, data+length+1, big_endian_data);
-
-  return this->compute_bytes(big_endian_data, length + 1);
+  auto big_endian_data        = reinterpret_cast<int8_t*>(&big_endian_value);
+  thrust::reverse_copy(thrust::device, data, data + length, big_endian_data);
+  return this->compute_bytes(big_endian_data, length);
 }
 
 template <>
