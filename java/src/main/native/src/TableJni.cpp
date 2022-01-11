@@ -40,6 +40,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -903,12 +904,18 @@ jlongArray mixed_join_size(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
     auto const condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto const nulls_equal =
         j_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    std::pair<std::size_t, std::unique_ptr<cudf::column>> join_size_info =
+    std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size_info =
         join_size_func(*left_keys, *right_keys, *left_condition, *right_condition,
                        condition->get_top_expression(), nulls_equal);
+    if (join_size_info.second->size() > std::numeric_limits<cudf::size_type>::max()) {
+      throw std::runtime_error("Too many values in device buffer to convert into a column");
+    }
+    auto col = std::make_unique<cudf::column>(
+        cudf::data_type{cudf::type_id::INT32}, join_size_info.second->size(),
+        join_size_info.second->release(), rmm::device_buffer{}, 0);
     cudf::jni::native_jlongArray result(env, 2);
     result[0] = static_cast<jlong>(join_size_info.first);
-    result[1] = reinterpret_cast<jlong>(join_size_info.second.release());
+    result[1] = reinterpret_cast<jlong>(col.release());
     return result.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -939,11 +946,13 @@ jlongArray mixed_join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_
   CATCH_STD(env, NULL);
 }
 
-std::pair<std::size_t, cudf::column_view> get_mixed_size_info(JNIEnv *env, jlong j_output_row_count,
-                                                              jlong j_matches_view) {
+std::pair<std::size_t, cudf::device_span<cudf::size_type const>>
+get_mixed_size_info(JNIEnv *env, jlong j_output_row_count, jlong j_matches_view) {
   auto const row_count = static_cast<std::size_t>(j_output_row_count);
   auto const matches = reinterpret_cast<cudf::column_view const *>(j_matches_view);
-  return std::pair<std::size_t, cudf::column_view>(row_count, *matches);
+  return std::pair<std::size_t, cudf::device_span<cudf::size_type const>>(
+      row_count, cudf::device_span<cudf::size_type const>(matches->template data<cudf::size_type>(),
+                                                          matches->size()));
 }
 
 // Returns a table view containing only the columns at the specified indices
