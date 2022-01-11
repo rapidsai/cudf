@@ -136,7 +136,7 @@ inline cxxopts::UnicodeStringIterator end(const icu::UnicodeString& s)
 #else
 
 namespace cxxopts {
-using String = int;
+typedef std::string String;
 
 template <typename T>
 T toLocalString(T&& t)
@@ -183,21 +183,21 @@ class Value : public std::enable_shared_from_this<Value> {
  public:
   virtual ~Value() = default;
 
-  [[nodiscard]] virtual std::shared_ptr<Value> clone() const = 0;
+  virtual std::shared_ptr<Value> clone() const = 0;
 
   virtual void parse(const std::string& text) const = 0;
 
   virtual void parse() const = 0;
 
-  [[nodiscard]] virtual bool has_default() const = 0;
+  virtual bool has_default() const = 0;
 
-  [[nodiscard]] virtual bool is_container() const = 0;
+  virtual bool is_container() const = 0;
 
-  [[nodiscard]] virtual bool has_implicit() const = 0;
+  virtual bool has_implicit() const = 0;
 
-  [[nodiscard]] virtual std::string get_default_value() const = 0;
+  virtual std::string get_default_value() const = 0;
 
-  [[nodiscard]] virtual std::string get_implicit_value() const = 0;
+  virtual std::string get_implicit_value() const = 0;
 
   virtual std::shared_ptr<Value> default_value(const std::string& value) = 0;
 
@@ -205,14 +205,14 @@ class Value : public std::enable_shared_from_this<Value> {
 
   virtual std::shared_ptr<Value> no_implicit_value() = 0;
 
-  [[nodiscard]] virtual bool is_boolean() const = 0;
+  virtual bool is_boolean() const = 0;
 };
 
 class OptionException : public std::exception {
  public:
   OptionException(const std::string& message) : m_message(message) {}
 
-  [[nodiscard]] virtual const char* what() const noexcept { return m_message.c_str(); }
+  virtual const char* what() const noexcept { return m_message.c_str(); }
 
  private:
   std::string m_message;
@@ -533,7 +533,7 @@ class abstract_value : public Value {
 
   abstract_value(T* t) : m_store(t) {}
 
-  ~abstract_value() override = default;
+  virtual ~abstract_value() = default;
 
   abstract_value(const abstract_value& rhs)
   {
@@ -552,13 +552,13 @@ class abstract_value : public Value {
 
   void parse(const std::string& text) const { parse_value(text, *m_store); }
 
-  [[nodiscard]] bool is_container() const override { return type_is_container<T>::value; }
+  bool is_container() const { return type_is_container<T>::value; }
 
-  void parse() const override { parse_value(m_default_value, *m_store); }
+  void parse() const { parse_value(m_default_value, *m_store); }
 
-  [[nodiscard]] bool has_default() const override { return m_default; }
+  bool has_default() const { return m_default; }
 
-  [[nodiscard]] bool has_implicit() const override { return m_implicit; }
+  bool has_implicit() const { return m_implicit; }
 
   std::shared_ptr<Value> default_value(const std::string& value)
   {
@@ -580,11 +580,11 @@ class abstract_value : public Value {
     return shared_from_this();
   }
 
-  [[nodiscard]] std::string get_default_value() const { return m_default_value; }
+  std::string get_default_value() const { return m_default_value; }
 
-  [[nodiscard]] std::string get_implicit_value() const { return m_implicit_value; }
+  std::string get_implicit_value() const { return m_implicit_value; }
 
-  [[nodiscard]] bool is_boolean() const override { return std::is_same_v<T, bool>; }
+  bool is_boolean() const { return std::is_same_v<T, bool>; }
 
   const T& get() const
   {
@@ -611,10 +611,7 @@ class standard_value : public abstract_value<T> {
  public:
   using abstract_value<T>::abstract_value;
 
-  [[nodiscard]] std::shared_ptr<Value> clone() const
-  {
-    return std::make_shared<standard_value<T>>(*this);
-  }
+  std::shared_ptr<Value> clone() const { return std::make_shared<standard_value<T>>(*this); }
 };
 
 template <>
@@ -626,10 +623,7 @@ class standard_value<bool> : public abstract_value<bool> {
 
   standard_value(bool* b) : abstract_value(b) { set_default_and_implicit(); }
 
-  [[nodiscard]] std::shared_ptr<Value> clone() const
-  {
-    return std::make_shared<standard_value<bool>>(*this);
-  }
+  std::shared_ptr<Value> clone() const { return std::make_shared<standard_value<bool>>(*this); }
 
  private:
   void set_default_and_implicit()
@@ -673,15 +667,15 @@ class OptionDetails {
 
   OptionDetails(OptionDetails&& rhs) = default;
 
-  [[nodiscard]] const String& description() const { return m_desc; }
+  const String& description() const { return m_desc; }
 
-  [[nodiscard]] const Value& value() const { return *m_value; }
+  const Value& value() const { return *m_value; }
 
-  [[nodiscard]] std::shared_ptr<Value> make_storage() const { return m_value->clone(); }
+  std::shared_ptr<Value> make_storage() const { return m_value->clone(); }
 
-  [[nodiscard]] const std::string& short_name() const { return m_short; }
+  const std::string& short_name() const { return m_short; }
 
-  [[nodiscard]] const std::string& long_name() const { return m_long; }
+  const std::string& long_name() const { return m_long; }
 
  private:
   std::string m_short;
@@ -726,10 +720,10 @@ class OptionValue {
     m_value->parse();
   }
 
-  [[nodiscard]] size_t count() const noexcept { return m_count; }
+  size_t count() const noexcept { return m_count; }
 
   // TODO: maybe default options should count towards the number of arguments
-  [[nodiscard]] bool has_default() const noexcept { return m_default; }
+  bool has_default() const noexcept { return m_default; }
 
   template <typename T>
   const T& as() const
@@ -761,9 +755,9 @@ class KeyValue {
   {
   }
 
-  [[nodiscard]] const std::string& key() const { return m_key; }
+  const std::string& key() const { return m_key; }
 
-  [[nodiscard]] const std::string& value() const { return m_value; }
+  const std::string& value() const { return m_value; }
 
   template <typename T>
   T as() const
@@ -787,7 +781,7 @@ class ParseResult {
     int&,
     char**&);
 
-  [[nodiscard]] size_t count(const std::string& o) const
+  size_t count(const std::string& o) const
   {
     auto iter = m_options->find(o);
     if (iter == m_options->end()) { return 0; }
@@ -808,7 +802,7 @@ class ParseResult {
     return riter->second;
   }
 
-  [[nodiscard]] const std::vector<KeyValue>& arguments() const { return m_sequential; }
+  const std::vector<KeyValue>& arguments() const { return m_sequential; }
 
  private:
   void parse(int& argc, char**& argv);
@@ -923,16 +917,16 @@ class Options {
     parse_positional(std::vector<std::string>{begin, end});
   }
 
-  [[nodiscard]] std::string help(const std::vector<std::string>& groups = {}) const;
+  std::string help(const std::vector<std::string>& groups = {}) const;
 
-  [[nodiscard]] const std::vector<std::string> groups() const;
+  const std::vector<std::string> groups() const;
 
-  [[nodiscard]] const HelpGroupDetails& group_help(const std::string& group) const;
+  const HelpGroupDetails& group_help(const std::string& group) const;
 
  private:
   void add_one_option(const std::string& option, std::shared_ptr<OptionDetails> details);
 
-  [[nodiscard]] String help_one_group(const std::string& group) const;
+  String help_one_group(const std::string& group) const;
 
   void generate_group_help(String& result, const std::vector<std::string>& groups) const;
 
