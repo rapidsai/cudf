@@ -145,10 +145,14 @@ class reprog_device {
   /**
    * @brief Returns the number of regex groups found in the expression.
    */
+<<<<<<< HEAD
   [[nodiscard]] __host__ __device__ inline int32_t group_counts() const
   {
     return _num_capturing_groups;
   }
+=======
+  CUDF_HOST_DEVICE inline int32_t group_counts() const { return _num_capturing_groups; }
+>>>>>>> branch-22.02
 
   /**
    * @brief Returns the regex instruction object for a given index.

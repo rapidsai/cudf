@@ -80,7 +80,7 @@ static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
  *
  * @return An empty string
  */
-CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view(); }
+CUDF_HOST_DEVICE inline string_view string_view::min() { return string_view(); }
 
 /**
  * @brief Return maximum value associated with the string type
@@ -91,7 +91,7 @@ CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view();
  * @return A string value which represents the highest possible valid UTF-8 encoded
  * character.
  */
-CUDA_HOST_DEVICE_CALLABLE string_view string_view::max()
+CUDF_HOST_DEVICE inline string_view string_view::max()
 {
   const char* psentinel{nullptr};
 #if defined(__CUDA_ARCH__)

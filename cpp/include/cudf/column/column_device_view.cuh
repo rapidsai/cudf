@@ -1169,8 +1169,7 @@ struct optional_accessor {
     if (with_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::optional<T> operator()(cudf::size_type i) const
+  __device__ inline thrust::optional<T> operator()(cudf::size_type i) const
   {
     if (has_nulls) {
       return (col.is_valid_nocheck(i)) ? thrust::optional<T>{col.element<T>(i)}
@@ -1214,8 +1213,7 @@ struct pair_accessor {
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<T, bool> operator()(cudf::size_type i) const
+  __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
@@ -1255,21 +1253,20 @@ struct pair_rep_accessor {
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
   {
     return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
 
  private:
   template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
   template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
   }
