@@ -296,11 +296,11 @@ public:
   ~native_jArray() { commit(); }
 };
 
-typedef native_jArray<jdouble, jdoubleArray, native_jdoubleArray_accessor> native_jdoubleArray;
-typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
-typedef native_jArray<jint, jintArray, native_jintArray_accessor> native_jintArray;
-typedef native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor> native_jbyteArray;
-typedef native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> native_jbooleanArray;
+using native_jdoubleArray = native_jArray<jdouble, jdoubleArray, native_jdoubleArray_accessor>;
+using native_jlongArray = native_jArray<jlong, jlongArray, native_jlongArray_accessor>;
+using native_jintArray = native_jArray<jint, jintArray, native_jintArray_accessor>;
+using native_jbyteArray = native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor>;
+using native_jbooleanArray = native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor>;
 
 /**
  * @brief wrapper around native_jlongArray to make it take pointers instead.
@@ -356,7 +356,7 @@ public:
   jlongArray get_jArray() { return wrapped.get_jArray(); }
 
   void assert_no_nulls() const {
-    if (std::any_of(data(), data() + size(), [](T *const ptr) { return ptr == NULL; })) {
+    if (std::any_of(data(), data() + size(), [](T *const ptr) { return ptr == nullptr; })) {
       throw_java_exception(env, NPE_CLASS, "pointer is NULL");
     }
   }
