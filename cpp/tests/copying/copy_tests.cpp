@@ -70,30 +70,38 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
   // make sure we span at least 2 warps
   int num_els = 64;
 
-  bool mask[] = {true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, false,
-                 false, true, true, true, true, true, true, true, true, true, false, false, false, false, true, true, true, true, true, true, true, true,
-                 true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+  bool mask[] = {true, false, true, false, true, true, true,  true,  true,  true,  true, true, true,
+                 true, true,  true, true,  true, true, false, false, false, false, true, true, true,
+                 true, true,  true, true,  true, true, false, false, false, false, true, true, true,
+                 true, true,  true, true,  true, true, true,  true,  true,  true,  true, true, true,
+                 true, true,  true, true,  true, true, true,  true,  true,  true,  true, true};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
 
-  bool lhs_v[] = {true, true, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                  true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                  true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+  bool lhs_v[] = {true, true, true, true, false, false, true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true};
   wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
                              5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
                              5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
                             lhs_v);
 
-  bool rhs_v[] = {true, true, true, true, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                  true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                  true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+  bool rhs_v[] = {true, true, true, true, true, true, false, false, true, true, true, true, true,
+                  true, true, true, true, true, true, true,  true,  true, true, true, true, true,
+                  true, true, true, true, true, true, true,  true,  true, true, true, true, true,
+                  true, true, true, true, true, true, true,  true,  true, true, true, true, true,
+                  true, true, true, true, true, true, true,  true,  true, true, true, true};
   wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
                              6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
                              6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
                             rhs_v);
 
-  bool exp_v[] = {true, true, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                  true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                  true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+  bool exp_v[] = {true, true, true, true, false, false, true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true, true,
+                  true, true, true, true, true,  true,  true, true, true, true, true, true};
   wrapper<T, int32_t> expected_w({5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6,
                                   6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5,
                                   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5},

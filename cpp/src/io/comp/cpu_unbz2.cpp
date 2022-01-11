@@ -530,7 +530,8 @@ int32_t cpu_bz2_uncompress(
   int ret;
   size_t last_valid_block_in, last_valid_block_out;
 
-  if (dest == nullptr || destLen == nullptr || source == nullptr || sourceLen < 12) return BZ_PARAM_ERROR;
+  if (dest == nullptr || destLen == nullptr || source == nullptr || sourceLen < 12)
+    return BZ_PARAM_ERROR;
   s.currBlockNo = 0;
 
   s.cur  = source;

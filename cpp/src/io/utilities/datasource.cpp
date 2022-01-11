@@ -210,7 +210,10 @@ class user_datasource_wrapper : public datasource {
     return source->host_read(offset, size);
   }
 
-  [[nodiscard]] bool supports_device_read() const override { return source->supports_device_read(); }
+  [[nodiscard]] bool supports_device_read() const override
+  {
+    return source->supports_device_read();
+  }
 
   size_t device_read(size_t offset,
                      size_t size,

@@ -194,8 +194,8 @@ class string_view {
    * @return -1 if str is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type find(const string_view& str,
-                                   size_type pos   = 0,
-                                   size_type count = -1) const;
+                                                 size_type pos   = 0,
+                                                 size_type count = -1) const;
   /**
    * @brief Returns the character position of the first occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
@@ -222,8 +222,8 @@ class string_view {
    * @return -1 if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type find(char_utf8 character,
-                                   size_type pos   = 0,
-                                   size_type count = -1) const;
+                                                 size_type pos   = 0,
+                                                 size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where the
    * argument str is found in this string within the character range [pos,pos+n).
@@ -235,8 +235,8 @@ class string_view {
    * @return -1 if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type rfind(const string_view& str,
-                                    size_type pos   = 0,
-                                    size_type count = -1) const;
+                                                  size_type pos   = 0,
+                                                  size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
@@ -263,8 +263,8 @@ class string_view {
    * @return -1 if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type rfind(char_utf8 character,
-                                    size_type pos   = 0,
-                                    size_type count = -1) const;
+                                                  size_type pos   = 0,
+                                                  size_type count = -1) const;
 
   /**
    * @brief Return a sub-string of this string. The original string and device

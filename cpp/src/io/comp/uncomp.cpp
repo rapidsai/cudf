@@ -203,10 +203,9 @@ bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
           eocd->cdir_size >= sizeof(zip_cdfh_s) * eocd->num_entries && eocd->cdir_offset < len &&
           i + *reinterpret_cast<const uint16_t*>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
         const auto* cdfh = reinterpret_cast<const zip_cdfh_s*>(raw + eocd->cdir_offset);
-        dst->eocd              = eocd;
+        dst->eocd        = eocd;
         if (i >= static_cast<ptrdiff_t>(sizeof(zip64_eocdl))) {
-          const auto* eocdl =
-            reinterpret_cast<const zip64_eocdl*>(raw + i - sizeof(zip64_eocdl));
+          const auto* eocdl = reinterpret_cast<const zip64_eocdl*>(raw + i - sizeof(zip64_eocdl));
           if (eocdl->sig == 0x07064b50) { dst->eocdl = eocdl; }
         }
         // Start of central directory

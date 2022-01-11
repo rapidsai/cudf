@@ -109,7 +109,7 @@ class host_buffer_sink : public data_sink {
  */
 class void_sink : public data_sink {
  public:
-  explicit void_sink()  {}
+  explicit void_sink() {}
 
   virtual ~void_sink() {}
 
@@ -146,7 +146,10 @@ class user_sink_wrapper : public data_sink {
 
   void host_write(void const* data, size_t size) override { user_sink->host_write(data, size); }
 
-  [[nodiscard]] bool supports_device_write() const override { return user_sink->supports_device_write(); }
+  [[nodiscard]] bool supports_device_write() const override
+  {
+    return user_sink->supports_device_write();
+  }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {

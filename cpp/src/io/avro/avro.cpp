@@ -104,7 +104,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
     if (object_count > first_row) {
       auto block_row = static_cast<uint32_t>(total_object_count);
-      max_block_size     = std::max(max_block_size, block_size);
+      max_block_size = std::max(max_block_size, block_size);
       total_object_count += object_count;
       if (!md->block_list.size()) {
         md->skip_rows = static_cast<uint32_t>(first_row);

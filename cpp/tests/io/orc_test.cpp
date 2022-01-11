@@ -163,7 +163,7 @@ inline auto random_values(size_t size)
 
 struct SkipRowTest {
   int test_calls{0};
-  SkipRowTest()  {}
+  SkipRowTest() {}
 
   std::unique_ptr<table> get_expected_result(const std::string& filepath,
                                              int skip_rows,
@@ -885,8 +885,9 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
 
   int num_els = 31;
 
-  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                 true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
@@ -927,8 +928,9 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
 
   int num_els = 33;
 
-  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                 true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
