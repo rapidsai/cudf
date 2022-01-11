@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1427,8 +1427,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths);
-  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths);
+  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths, stream);
+  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, stream);
   auto chunk_offsets       = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
