@@ -518,9 +518,9 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
  * sequence of indices of the first bit in each segment (inclusive).
  * @param last_bit_indices_begin Random-access input iterator to the beginning
  * of a sequence of indices of the last bit in each segment (exclusive).
- * @param null_handling If `INCLUDE`, all elements in a segment must be valid
- * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+ * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+ * the reduction is valid if any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned buffer's device memory.
  * @return A pair containing the reduced null mask and number of nulls.
@@ -545,7 +545,8 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     });
 
   // Empty segments are always null in the output mask
-  auto const num_segments = std::distance(first_bit_indices_begin, first_bit_indices_end);
+  auto const num_segments =
+    static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
   auto [output_null_mask, output_null_count] = cudf::detail::valid_if(
     segment_length_iterator,
     segment_length_iterator + num_segments,
