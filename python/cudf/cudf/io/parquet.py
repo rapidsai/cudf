@@ -859,7 +859,7 @@ class ParquetWriter:
         # Collection of `libparquet.ParquetWriter`s, and the corresponding
         # partition_col values they're responsible for
         self._chunked_writers: List[
-            Tuple[libparquet.ParquetWriter, List[str], List[str]]
+            Tuple[libparquet.ParquetWriter, List[str], str]
         ] = []
         # Map of partition_col values to their libparquet.ParquetWriter's index
         # in self._chunked_writers for reverse lookup
@@ -867,11 +867,7 @@ class ParquetWriter:
         self.filename = None
         if partition_cols is None:
             self._chunked_writers.append(
-                (
-                    libparquet.ParquetWriter([path], **self.common_args),
-                    [],
-                    None,
-                )
+                (libparquet.ParquetWriter([path], **self.common_args), [], "")
             )
 
     def write_table(self, df):
