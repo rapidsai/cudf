@@ -1087,7 +1087,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     outfile_.write(static_cast<char const*>(data), size);
   }
 
-  bool supports_device_write() const override { return true; }
+  [[nodiscard]] bool supports_device_write() const override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -1414,13 +1414,13 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
+  bool mask1[] = {true, true, false, true, true, true, true};
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
   cols.push_back(strings1.release());
   cudf::table tbl1(std::move(cols));
 
-  bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
+  bool mask2[] = {false, true, true, true, true, true, true};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
   cols.push_back(strings2.release());
@@ -2053,8 +2053,8 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   int num_els = 31;
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                 true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
@@ -2100,8 +2100,8 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   int num_els = 33;
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                 true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
@@ -2150,7 +2150,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 
-  bool supports_device_write() const override { return supports_device_writes; }
+  [[nodiscard]] bool supports_device_write() const override { return supports_device_writes; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
