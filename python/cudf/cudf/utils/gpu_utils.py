@@ -15,7 +15,7 @@ def validate_setup():
 
     import warnings
 
-    from cuda.cudart import cudaDeviceAttr, cudaError_t
+    from cuda.cudart import cudaError_t
 
     from rmm._cuda.gpu import (
         CUDARuntimeError,
@@ -68,11 +68,7 @@ def validate_setup():
         # Cupy throws RunTimeException to get GPU count,
         # hence obtaining GPU count by in-house cpp api above
 
-        # 75 - Indicates to get "cudaDevAttrComputeCapabilityMajor" attribute
-        # 0 - Get GPU 0
-        major_version = getDeviceAttribute(
-            cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
-        )
+        major_version = getDeviceAttribute("ComputeCapabilityMajor", 0)
 
         if major_version >= 6:
             # You have a GPU with NVIDIA Pascal™ architecture or better
@@ -86,9 +82,7 @@ def validate_setup():
             pass
         else:
             device_name = deviceGetName(0)
-            minor_version = getDeviceAttribute(
-                cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
-            )
+            minor_version = getDeviceAttribute("ComputeCapabilityMinor", 0)
             warnings.warn(
                 f"You will need a GPU with NVIDIA Pascal™ or "
                 f"newer architecture"
