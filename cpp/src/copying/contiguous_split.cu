@@ -808,8 +808,8 @@ void copy_data(int num_bufs,
                dst_buf_info* _d_dst_buf_info,
                rmm::cuda_stream_view stream)
 {
-  // since we parallelize at one block per copy, we are vulnerable to situations where we
-  // have small numbers of copies to do (a combination of small numbers of splits and/or columns).
+  // Since we parallelize at one block per copy, we are vulnerable to situations where we
+  // have small numbers of copies to do (a combination of small numbers of splits and/or columns),
   // so we will take the actual set of outgoing source/destination buffers and further partition
   // them into much smaller chunks in order to drive up the number of blocks and overall occupancy.
   auto const desired_chunk_size = size_t{1 * 1024 * 1024};
@@ -820,17 +820,19 @@ void copy_data(int num_bufs,
     _d_dst_buf_info + num_bufs,
     chunks.begin(),
     [desired_chunk_size] __device__(dst_buf_info const& buf) -> thrust::pair<size_t, size_t> {
-      // how many chunks do we want to subdivide this buffer into
+      // Total bytes for this incoming partition
       size_t const bytes = buf.num_elements * buf.element_size;
 
-      // can happen for things like lists and strings (the root columns store no
-      // data)
+      // This clause handles nested data types (e.g. list or string) that store no data in the roow
+      // columns, only in their children.
       if (bytes == 0) { return {1, 0}; }
+
+      // The number of chunks we want to subdivide this buffer into
       size_t const num_chunks =
         max(size_t{1}, util::round_up_unsafe(bytes, desired_chunk_size) / desired_chunk_size);
 
       // NOTE: leaving chunk size as a separate parameter for future tuning
-      // possibilities, even though in the current implemenetation it will be a
+      // possibilities, even though in the current implementation it will be a
       // constant.
       return {num_chunks, desired_chunk_size};
     });
@@ -860,54 +862,56 @@ void copy_data(int num_bufs,
     thrust::reduce(rmm::exec_policy(stream), num_chunks, num_chunks + chunks.size());
   rmm::device_uvector<dst_buf_info> d_dst_buf_info(new_buf_count, stream);
   auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy(stream),
-                   iter,
-                   iter + new_buf_count,
-                   [_d_dst_buf_info,
-                    d_dst_buf_info = d_dst_buf_info.begin(),
-                    chunks         = chunks.begin(),
-                    chunk_offsets  = chunk_offsets.begin(),
-                    num_bufs,
-                    num_src_bufs,
-                    out_to_in_index] __device__(size_type i) {
-                     size_type const in_buf_index = out_to_in_index(i);
-                     size_type const chunk_index  = i - chunk_offsets[in_buf_index];
-                     auto const chunk_size        = thrust::get<1>(chunks[in_buf_index]);
-                     dst_buf_info const& in       = _d_dst_buf_info[in_buf_index];
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    iter,
+    iter + new_buf_count,
+    [_d_dst_buf_info,
+     d_dst_buf_info = d_dst_buf_info.begin(),
+     chunks         = chunks.begin(),
+     chunk_offsets  = chunk_offsets.begin(),
+     num_bufs,
+     num_src_bufs,
+     out_to_in_index] __device__(size_type i) {
+      size_type const in_buf_index = out_to_in_index(i);
+      size_type const chunk_index  = i - chunk_offsets[in_buf_index];
+      auto const chunk_size        = thrust::get<1>(chunks[in_buf_index]);
+      dst_buf_info const& in       = _d_dst_buf_info[in_buf_index];
 
-                     // adjust info
-                     dst_buf_info& out = d_dst_buf_info[i];
-                     out.element_size  = in.element_size;
-                     out.value_shift   = in.value_shift;
-                     out.bit_shift     = in.bit_shift;
-                     out.valid_count =
-                       in.valid_count;  // valid count will be set to 1 if this is a validity buffer
-                     out.src_buf_index = in.src_buf_index;
-                     out.dst_buf_index = in.dst_buf_index;
+      // adjust info
+      dst_buf_info& out = d_dst_buf_info[i];
+      out.element_size  = in.element_size;
+      out.value_shift   = in.value_shift;
+      out.bit_shift     = in.bit_shift;
+      out.valid_count =
+        in.valid_count;  // valid count will be set to 1 if this is a validity buffer
+      out.src_buf_index = in.src_buf_index;
+      out.dst_buf_index = in.dst_buf_index;
 
-                     size_type const elements_per_chunk =
-                       out.element_size == 0 ? 0 : chunk_size / out.element_size;
-                     out.num_elements = ((chunk_index + 1) * elements_per_chunk) > in.num_elements
-                                          ? in.num_elements - (chunk_index * elements_per_chunk)
-                                          : elements_per_chunk;
+      size_type const elements_per_chunk =
+        out.element_size == 0 ? 0 : chunk_size / out.element_size;
+      out.num_elements = ((chunk_index + 1) * elements_per_chunk) > in.num_elements
+                           ? in.num_elements - (chunk_index * elements_per_chunk)
+                           : elements_per_chunk;
 
-                     size_type const rows_per_chunk =
-                       // if this is a validity buffer, each element is a bitmask_type, which
-                       // corresponds to 32 rows.
-                       out.valid_count > 0 ? elements_per_chunk * 32 : elements_per_chunk;
-                     out.num_rows = ((chunk_index + 1) * rows_per_chunk) > in.num_rows
-                                      ? in.num_rows - (chunk_index * rows_per_chunk)
-                                      : rows_per_chunk;
+      size_type const rows_per_chunk =
+        // if this is a validity buffer, each element is a bitmask_type, which
+        // corresponds to 32 rows.
+        out.valid_count > 0
+          ? elements_per_chunk * static_cast<size_type>(detail::size_in_bits<bitmask_type>())
+          : elements_per_chunk;
+      out.num_rows = ((chunk_index + 1) * rows_per_chunk) > in.num_rows
+                       ? in.num_rows - (chunk_index * rows_per_chunk)
+                       : rows_per_chunk;
 
-                     out.src_element_index =
-                       in.src_element_index + (chunk_index * elements_per_chunk);
-                     out.dst_offset = in.dst_offset + (chunk_index * chunk_size);
+      out.src_element_index = in.src_element_index + (chunk_index * elements_per_chunk);
+      out.dst_offset        = in.dst_offset + (chunk_index * chunk_size);
 
-                     // out.bytes and out.buf_size are unneeded here because they are only used to
-                     // calculate real output buffer sizes. the data we are generating here is
-                     // purely intermediate for the purposes of doing more uniform copying of data
-                     // underneath the final structure of the output
-                   });
+      // out.bytes and out.buf_size are unneeded here because they are only used to
+      // calculate real output buffer sizes. the data we are generating here is
+      // purely intermediate for the purposes of doing more uniform copying of data
+      // underneath the final structure of the output
+    });
 
   // perform the copy
   constexpr size_type block_size = 256;
