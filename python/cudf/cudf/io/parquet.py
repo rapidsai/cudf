@@ -791,8 +791,7 @@ def _get_partitioned(
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
     fs.mkdirs(root_path, exist_ok=True)
-    data_cols = df.columns.drop(partition_cols)
-    if len(data_cols) == 0:
+    if not (set(df._data) - set(partition_cols)):
         raise ValueError("No data left to save outside partition columns")
 
     part_names, part_offsets, _, grouped_df = df.groupby(
