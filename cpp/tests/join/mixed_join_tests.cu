@@ -216,7 +216,10 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
 
     cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts_cw(
       expected_counts.begin(), expected_counts.end());
-    auto const actual_counts_view = actual_counts->view();
+    auto const actual_counts_view =
+      cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                        actual_counts->size(),
+                        actual_counts->data());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts_view);
 
     auto result = this->join(
@@ -320,7 +323,7 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * mixed join size computation API.
    */
-  virtual std::pair<std::size_t, std::unique_ptr<cudf::column>> join_size(
+  virtual std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
     cudf::table_view left_equality,
     cudf::table_view right_equality,
     cudf::table_view left_conditional,
@@ -345,7 +348,7 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
   }
 
-  std::pair<std::size_t, std::unique_ptr<cudf::column>> join_size(
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
     cudf::table_view left_equality,
     cudf::table_view right_equality,
     cudf::table_view left_conditional,
@@ -489,7 +492,7 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
   }
 
-  std::pair<std::size_t, std::unique_ptr<cudf::column>> join_size(
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
     cudf::table_view left_equality,
     cudf::table_view right_equality,
     cudf::table_view left_conditional,
@@ -556,7 +559,7 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
   }
 
-  std::pair<std::size_t, std::unique_ptr<cudf::column>> join_size(
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
     cudf::table_view left_equality,
     cudf::table_view right_equality,
     cudf::table_view left_conditional,

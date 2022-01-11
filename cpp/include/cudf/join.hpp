@@ -897,9 +897,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_inner_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -907,14 +907,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_inner_join(table_view const& left_equality,
-                 table_view const& right_equality,
-                 table_view const& left_conditional,
-                 table_view const& right_conditional,
-                 ast::expression const& binary_predicate,
-                 null_equality compare_nulls = null_equality::EQUAL,
-                 std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+mixed_inner_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs of
@@ -956,9 +957,9 @@ mixed_inner_join(table_view const& left_equality,
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_left_join_size API).
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_left_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -972,7 +973,7 @@ mixed_left_join(table_view const& left_equality,
                 table_view const& right_conditional,
                 ast::expression const& binary_predicate,
                 null_equality compare_nulls = null_equality::EQUAL,
-                std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
+                std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -1015,9 +1016,9 @@ mixed_left_join(table_view const& left_equality,
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_full_join_size API).
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_full_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -1031,7 +1032,7 @@ mixed_full_join(table_view const& left_equality,
                 table_view const& right_conditional,
                 ast::expression const& binary_predicate,
                 null_equality compare_nulls = null_equality::EQUAL,
-                std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
+                std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -1068,7 +1069,7 @@ mixed_full_join(table_view const& left_equality,
  * be relied upon, simply passed to the corresponding `mixed_inner_join` API as
  * is.
  */
-std::pair<std::size_t, std::unique_ptr<column>> mixed_inner_join_size(
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -1111,7 +1112,7 @@ std::pair<std::size_t, std::unique_ptr<column>> mixed_inner_join_size(
  * be relied upon, simply passed to the corresponding `mixed_left_join` API as
  * is.
  */
-std::pair<std::size_t, std::unique_ptr<column>> mixed_left_join_size(
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,

@@ -47,7 +47,7 @@ mixed_join(table_view const& left_equality,
            ast::expression const& binary_predicate,
            null_equality compare_nulls,
            join_kind join_type,
-           std::optional<std::pair<std::size_t, column_view>> const& output_size_data,
+           std::optional<std::pair<std::size_t, device_span<size_type>>> const& output_size_data,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
 {
@@ -148,26 +148,25 @@ mixed_join(table_view const& left_equality,
 
   // If the join size data was not provided as an input, compute it here.
   std::size_t join_size;
-  std::unique_ptr<column> matches_per_row{};
-  column_view matches_view{};
+  // Using an optional because we only need to allocate a new vector if one was
+  // not passed as input, and rmm::device_uvector is not default constructible
+  std::optional<rmm::device_uvector<size_type>> matches_per_row{};
+  device_span<size_type> matches_per_row_span{};
 
   if (output_size_data.has_value()) {
-    join_size    = output_size_data->first;
-    matches_view = output_size_data->second;
+    join_size            = output_size_data->first;
+    matches_per_row_span = output_size_data->second;
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
     CHECK_CUDA(stream.value());
 
-    matches_per_row = make_numeric_column(
-      data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
+    matches_per_row =
+      rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
     // Note that the view goes out of scope after this else statement, but the
     // data owned by matches_per_row stays alive so the data pointer is valid.
-    matches_view                     = matches_per_row->view();
-    auto matches_mutable_view        = matches_per_row->mutable_view();
-    auto matches_per_row_mutable_ptr = matches_mutable_view.begin<size_type>();
-    auto matches_per_row_span        = cudf::device_span<size_type>{
-      matches_per_row_mutable_ptr, static_cast<std::size_t>(outer_num_rows)};
+    matches_per_row_span = cudf::device_span<size_type>{matches_per_row->begin(),
+                                                        static_cast<std::size_t>(outer_num_rows)};
     if (has_nulls) {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -214,11 +213,11 @@ mixed_join(table_view const& left_equality,
 
   // Given the number of matches per row, we need to compute the offsets for insertion.
   auto join_result_offsets =
-    std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr);
+    rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
   thrust::exclusive_scan(rmm::exec_policy{stream},
-                         matches_view.begin<size_type>(),
-                         matches_view.end<size_type>(),
-                         join_result_offsets->begin());
+                         matches_per_row_span.begin(),
+                         matches_per_row_span.end(),
+                         join_result_offsets.begin());
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
@@ -239,7 +238,7 @@ mixed_join(table_view const& left_equality,
         join_output_l,
         join_output_r,
         parser.device_expression_data,
-        join_result_offsets->data(),
+        join_result_offsets.data(),
         swap_tables);
   } else {
     mixed_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
@@ -254,7 +253,7 @@ mixed_join(table_view const& left_equality,
         join_output_l,
         join_output_r,
         parser.device_expression_data,
-        join_result_offsets->data(),
+        join_result_offsets.data(),
         swap_tables);
   }
 
@@ -272,16 +271,16 @@ mixed_join(table_view const& left_equality,
   return join_indices;
 }
 
-std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
-  table_view const& left_equality,
-  table_view const& right_equality,
-  table_view const& left_conditional,
-  table_view const& right_conditional,
-  ast::expression const& binary_predicate,
-  null_equality compare_nulls,
-  join_kind join_type,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+compute_mixed_join_output_size(table_view const& left_equality,
+                               table_view const& right_equality,
+                               table_view const& left_conditional,
+                               table_view const& right_conditional,
+                               ast::expression const& binary_predicate,
+                               null_equality compare_nulls,
+                               join_kind join_type,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   // Until we add logic to handle the number of non-matches in the right table,
   // full joins are not supported in this function. Note that this does not
@@ -304,12 +303,10 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
   // it is the probe table for the hash
   auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
-  auto matches_per_row = make_numeric_column(
-    data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
-  auto matches_mutable_view = matches_per_row->mutable_view();
-  auto matches_device_view  = mutable_column_device_view::create(matches_mutable_view, stream);
+  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+    static_cast<std::size_t>(outer_num_rows), stream, mr);
   auto matches_per_row_span = cudf::device_span<size_type>{
-    matches_mutable_view.begin<size_type>(), static_cast<std::size_t>(outer_num_rows)};
+    matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
 
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
@@ -321,15 +318,13 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::FULL_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
+        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 1);
         return {left_num_rows, std::move(matches_per_row)};
       }
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
+        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 0);
         return {0, std::move(matches_per_row)};
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -341,14 +336,12 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
+        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 0);
         return {0, std::move(matches_per_row)};
       }
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
+        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 1);
         return {right_num_rows, std::move(matches_per_row)};
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -443,14 +436,15 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_inner_join(table_view const& left_equality,
-                 table_view const& right_equality,
-                 table_view const& left_conditional,
-                 table_view const& right_conditional,
-                 ast::expression const& binary_predicate,
-                 null_equality compare_nulls,
-                 std::optional<std::pair<std::size_t, column_view>> const output_size_data,
-                 rmm::mr::device_memory_resource* mr)
+mixed_inner_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,
@@ -465,7 +459,7 @@ mixed_inner_join(table_view const& left_equality,
                             mr);
 }
 
-std::pair<std::size_t, std::unique_ptr<column>> mixed_inner_join_size(
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -488,14 +482,15 @@ std::pair<std::size_t, std::unique_ptr<column>> mixed_inner_join_size(
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_left_join(table_view const& left_equality,
-                table_view const& right_equality,
-                table_view const& left_conditional,
-                table_view const& right_conditional,
-                ast::expression const& binary_predicate,
-                null_equality compare_nulls,
-                std::optional<std::pair<std::size_t, column_view>> const output_size_data,
-                rmm::mr::device_memory_resource* mr)
+mixed_left_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,
@@ -510,7 +505,7 @@ mixed_left_join(table_view const& left_equality,
                             mr);
 }
 
-std::pair<std::size_t, std::unique_ptr<column>> mixed_left_join_size(
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -533,14 +528,15 @@ std::pair<std::size_t, std::unique_ptr<column>> mixed_left_join_size(
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_full_join(table_view const& left_equality,
-                table_view const& right_equality,
-                table_view const& left_conditional,
-                table_view const& right_conditional,
-                ast::expression const& binary_predicate,
-                null_equality compare_nulls,
-                std::optional<std::pair<std::size_t, column_view>> const output_size_data,
-                rmm::mr::device_memory_resource* mr)
+mixed_full_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join(left_equality,
