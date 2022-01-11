@@ -177,7 +177,7 @@ inline bool is_equality_comparable(data_type type)
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return cuda::std::is_integral<T>() or std::is_floating_point<T>::value;
+  return cuda::std::is_arithmetic<T>();
 }
 
 struct is_numeric_impl {
