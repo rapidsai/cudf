@@ -284,17 +284,24 @@ class writer::impl {
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
+  struct encoded_statistics {
+    std::optional<std::vector<ColStatsBlob>> rowgroup_level;
+    std::optional<std::vector<ColStatsBlob>> stripe_level;
+    std::optional<std::vector<ColStatsBlob>> file_level;
+  };
+
   /**
-   * @brief Returns per-stripe and per-file column statistics encoded
-   * in ORC protobuf format.
+   * @brief Returns column statistics encoded in ORC protobuf format.
    *
+   * @param are_statistics_enabled True if statistics are to be included in the output file
    * @param orc_table Table information to be written
    * @param columns List of columns
    * @param segmentation stripe and rowgroup ranges
    * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,
-                                                           file_segmentation const& segmentation);
+  encoded_statistics gather_statistic_blobs(bool are_statistics_enabled,
+                                            orc_table_view const& orc_table,
+                                            file_segmentation const& segmentation);
 
   /**
    * @brief Writes the specified column's row index stream.

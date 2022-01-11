@@ -1062,10 +1062,15 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
-std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
-  orc_table_view const& orc_table, file_segmentation const& segmentation)
+writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
+  bool are_statistics_enabled,
+  orc_table_view const& orc_table,
+  file_segmentation const& segmentation)
 {
-  auto const num_stat_blobs = (1 + segmentation.num_stripes()) * orc_table.num_columns();
+  auto const num_stripe_blobs = segmentation.num_stripes() * orc_table.num_columns();
+  auto const num_file_blobs   = orc_table.num_columns();
+  auto const num_stat_blobs   = num_stripe_blobs + num_file_blobs;
+  if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs, stream);
@@ -1107,9 +1112,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
         static_cast<uint32_t>(column.index() * segmentation.num_rowgroups() + stripe.first);
       grp->num_chunks = stripe.size;
     }
-    statistics_merge_group* col_stats =
-      &stat_merge[segmentation.num_stripes() * orc_table.num_columns() + column.index()];
-    col_stats->col         = stat_desc.device_ptr(column.index());
+    statistics_merge_group* col_stats = &stat_merge[num_stripe_blobs + column.index()];
+    col_stats->col                    = stat_desc.device_ptr(column.index());
     col_stats->start_chunk = static_cast<uint32_t>(column.index() * segmentation.num_stripes());
     col_stats->num_chunks  = static_cast<uint32_t>(segmentation.num_stripes());
   }
@@ -1125,17 +1129,16 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
 
   detail::calculate_group_statistics<detail::io_file_format::ORC>(
     stat_chunks.data(), stat_groups.data(), num_chunks, stream);
-  detail::merge_group_statistics<detail::io_file_format::ORC>(
-    stat_chunks.data() + num_chunks,
-    stat_chunks.data(),
-    stat_merge.device_ptr(),
-    segmentation.num_stripes() * orc_table.num_columns(),
-    stream);
+  detail::merge_group_statistics<detail::io_file_format::ORC>(stat_chunks.data() + num_chunks,
+                                                              stat_chunks.data(),
+                                                              stat_merge.device_ptr(),
+                                                              num_stripe_blobs,
+                                                              stream);
 
   detail::merge_group_statistics<detail::io_file_format::ORC>(
-    stat_chunks.data() + num_chunks + segmentation.num_stripes() * orc_table.num_columns(),
+    stat_chunks.data() + num_chunks + num_stripe_blobs,
     stat_chunks.data() + num_chunks,
-    stat_merge.device_ptr(segmentation.num_stripes() * orc_table.num_columns()),
+    stat_merge.device_ptr(num_stripe_blobs),
     orc_table.num_columns(),
     stream);
   gpu::orc_init_statistics_buffersize(
@@ -1152,14 +1155,21 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
 
-  std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
-  for (size_t i = 0; i < num_stat_blobs; i++) {
+  std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
+  for (size_t i = 0; i < num_stripe_blobs; i++) {
     const uint8_t* stat_begin = blobs.host_ptr(stat_merge[i].start_chunk);
     const uint8_t* stat_end   = stat_begin + stat_merge[i].num_chunks;
-    stat_blobs[i].assign(stat_begin, stat_end);
+    stripe_blobs[i].assign(stat_begin, stat_end);
   }
 
-  return stat_blobs;
+  std::vector<ColStatsBlob> file_blobs(num_file_blobs);
+  for (size_t i = 0; i < num_file_blobs; i++) {
+    const uint8_t* stat_begin = blobs.host_ptr(stat_merge[num_stripe_blobs + i].start_chunk);
+    const uint8_t* stat_end   = stat_begin + stat_merge[num_stripe_blobs + i].num_chunks;
+    file_blobs[i].assign(stat_begin, stat_end);
+  }
+
+  return {{}, stripe_blobs, file_blobs};
 }
 
 void writer::impl::write_index_stream(int32_t stripe_id,
@@ -1852,11 +1862,6 @@ void writer::impl::write(table_view const& table)
   auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data.streams, &strm_descs);
 
   if (num_rows > 0) {
-    // Gather column statistics
-    auto const column_stats = enable_statistics_ && table.num_columns() > 0
-                                ? gather_statistic_blobs(orc_table, segmentation)
-                                : std::vector<ColStatsBlob>{};
-
     // Allocate intermediate output stream buffer
     size_t compressed_bfr_size       = 0;
     size_t num_compressed_blocks     = 0;
@@ -1919,6 +1924,8 @@ void writer::impl::write(table_view const& table)
 
     ProtobufWriter pbw_(&buffer_);
 
+    auto const statistics = gather_statistic_blobs(enable_statistics_, orc_table, segmentation);
+
     // Write stripes
     std::vector<std::future<void>> write_tasks;
     for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
@@ -1980,23 +1987,22 @@ void writer::impl::write(table_view const& table)
       task.wait();
     }
 
-    if (not column_stats.empty()) {
-      // File-level statistics
-      // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
-      if (single_write_mode) {
-        // First entry contains total number of rows
-        buffer_.resize(0);
-        pbw_.putb(1 * 8 + PB_TYPE_VARINT);
-        pbw_.put_uint(num_rows);
-        ff.statistics.reserve(1 + orc_table.num_columns());
-        ff.statistics.emplace_back(std::move(buffer_));
-        // Add file stats, stored after stripe stats in `column_stats`
-        ff.statistics.insert(
-          ff.statistics.end(),
-          std::make_move_iterator(column_stats.begin()) + stripes.size() * orc_table.num_columns(),
-          std::make_move_iterator(column_stats.end()));
-      }
-      // Stripe-level statistics
+    // File-level statistics
+    // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
+    if (single_write_mode and statistics.file_level.has_value()) {
+      // First entry contains total number of rows
+      buffer_.resize(0);
+      pbw_.putb(1 * 8 + PB_TYPE_VARINT);
+      pbw_.put_uint(num_rows);
+      ff.statistics.reserve(1 + orc_table.num_columns());
+      ff.statistics.emplace_back(std::move(buffer_));
+      // Add file stats, stored after stripe stats in `column_stats`
+      ff.statistics.insert(ff.statistics.end(),
+                           std::make_move_iterator(statistics.file_level->begin()),
+                           std::make_move_iterator(statistics.file_level->end()));
+    }
+    // Stripe-level statistics
+    if (statistics.stripe_level.has_value()) {
       size_t first_stripe = md.stripeStats.size();
       md.stripeStats.resize(first_stripe + stripes.size());
       for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
@@ -2007,10 +2013,8 @@ void writer::impl::write(table_view const& table)
         md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
         for (size_t col_idx = 0; col_idx < orc_table.num_columns(); col_idx++) {
           size_t idx = stripes.size() * col_idx + stripe_id;
-          if (idx < column_stats.size()) {
-            md.stripeStats[first_stripe + stripe_id].colStats[1 + col_idx] =
-              std::move(column_stats[idx]);
-          }
+          md.stripeStats[first_stripe + stripe_id].colStats[1 + col_idx] =
+            std::move(statistics.stripe_level.value()[idx]);
         }
       }
     }
