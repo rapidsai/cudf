@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,12 +79,20 @@ template <typename T> jlong to_jlong(T *ptr) {
   return reinterpret_cast<jlong>(ptr);
 }
 
-template <typename T> jlong to_jlong(std::unique_ptr<T> &&ptr) {
+/**
+ * @brief Helper to release the data held by a unique_ptr, and return
+ * the pointer as a jlong.
+ */
+template <typename T> jlong release_as_jlong(std::unique_ptr<T> &&ptr) {
   return to_jlong(ptr.release());
 }
 
-template <typename T> jlong to_jlong(std::unique_ptr<T> &ptr) {
-  return to_jlong(std::move(ptr));
+/**
+ * @brief Helper to release the data held by a unique_ptr, and return
+ * the pointer as a jlong.
+ */
+template <typename T> jlong release_as_jlong(std::unique_ptr<T> &ptr) {
+  return release_as_jlong(std::move(ptr));
 }
 
 class native_jdoubleArray_accessor {

@@ -37,6 +37,7 @@
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
 
+using cudf::jni::release_as_jlong;
 using cudf::jni::to_jlong;
 
 extern "C" {
@@ -49,8 +50,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
     cudf::jni::auto_set_device(env);
     auto initial_val = reinterpret_cast<cudf::scalar const *>(j_initial_val);
     auto step = reinterpret_cast<cudf::scalar const *>(j_step);
-    return to_jlong(step ? cudf::sequence(row_count, *initial_val, *step) :
-                           cudf::sequence(row_count, *initial_val));
+    return release_as_jlong(step ? cudf::sequence(row_count, *initial_val, *step) :
+                                   cudf::sequence(row_count, *initial_val));
   }
   CATCH_STD(env, 0);
 }
@@ -68,7 +69,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequences(JNIEnv *env, 
     auto step = reinterpret_cast<cudf::column_view const *>(j_step_handle);
     auto ret =
         step ? cudf::lists::sequences(*start, *step, *size) : cudf::lists::sequences(*start, *size);
-    return cudf::jni::to_jlong(ret);
+    return release_as_jlong(ret);
   }
   CATCH_STD(env, 0);
 }
@@ -143,7 +144,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(
     if (retCols.size() != 1) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Must result in one column", 0);
     }
-    return cudf::jni::to_jlong(retCols[0]);
+    return release_as_jlong(retCols[0]);
   }
   CATCH_STD(env, 0);
 }
@@ -163,8 +164,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(
 
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
     auto column_views = n_cudf_columns.get_dereferenced();
-    return to_jlong(cudf::strings::concatenate(cudf::table_view(column_views), separator_scalar,
-                                               narep_scalar, null_policy));
+    return release_as_jlong(cudf::strings::concatenate(
+        cudf::table_view(column_views), separator_scalar, narep_scalar, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -187,9 +188,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationSepC
     auto column_views = n_cudf_columns.get_dereferenced();
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(sep_handle);
     cudf::strings_column_view strings_column(*column);
-    return to_jlong(cudf::strings::concatenate(cudf::table_view(column_views), strings_column,
-                                               separator_narep_scalar, col_narep_scalar,
-                                               null_policy));
+    return release_as_jlong(cudf::strings::concatenate(cudf::table_view(column_views),
+                                                       strings_column, separator_narep_scalar,
+                                                       col_narep_scalar, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -205,7 +206,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatListByRow(JNIEnv 
 
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
     auto column_views = n_cudf_columns.get_dereferenced();
-    return to_jlong(cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy));
+    return release_as_jlong(
+        cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -228,8 +230,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
       auto offsets = cudf::make_column_from_scalar(*zero, row_count + 1);
       cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
       auto empty_col = cudf::make_empty_column(n_data_type);
-      return to_jlong(cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col),
-                                              0, rmm::device_buffer()));
+      return release_as_jlong(cudf::make_lists_column(
+          row_count, std::move(offsets), std::move(empty_col), 0, rmm::device_buffer()));
     } else {
       auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
       count->set_valid_async(true);
@@ -237,8 +239,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
 
       std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *count);
       auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
-      return to_jlong(cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col), 0,
-                                              rmm::device_buffer()));
+      return release_as_jlong(cudf::make_lists_column(
+          row_count, std::move(offsets), std::move(data_col), 0, rmm::device_buffer()));
     }
   }
   CATCH_STD(env, 0);
@@ -255,9 +257,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeListFromOffsets(
     CUDF_EXPECTS(offsets_cv->type().id() == cudf::type_id::INT32,
                  "Input offsets does not have type INT32.");
 
-    return to_jlong(cudf::make_lists_column(static_cast<cudf::size_type>(row_count),
-                                            std::make_unique<cudf::column>(*offsets_cv),
-                                            std::make_unique<cudf::column>(*child_cv), 0, {}));
+    return release_as_jlong(cudf::make_lists_column(
+        static_cast<cudf::size_type>(row_count), std::make_unique<cudf::column>(*offsets_cv),
+        std::make_unique<cudf::column>(*child_cv), 0, {}));
   }
   CATCH_STD(env, 0);
 }
@@ -280,15 +282,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0,
                                                std::move(mask_buffer));
 
-      return to_jlong(cudf::fill(str_col->view(), 0, row_count, *scalar_val));
+      return release_as_jlong(cudf::fill(str_col->view(), 0, row_count, *scalar_val));
     } else if (scalar_val->type().id() == cudf::type_id::STRUCT && row_count == 0) {
       // Specialize the creation of empty struct column, since libcudf doesn't support it.
       auto struct_scalar = reinterpret_cast<cudf::struct_scalar const *>(j_scalar);
       auto children = cudf::empty_like(struct_scalar->view())->release();
       auto mask_buffer = cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
-      return to_jlong(cudf::make_structs_column(0, std::move(children), 0, std::move(mask_buffer)));
+      return release_as_jlong(
+          cudf::make_structs_column(0, std::move(children), 0, std::move(mask_buffer)));
     } else {
-      return to_jlong(cudf::make_column_from_scalar(*scalar_val, row_count));
+      return release_as_jlong(cudf::make_column_from_scalar(*scalar_val, row_count));
     }
   }
   CATCH_STD(env, 0);
@@ -304,8 +307,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
     auto columns =
         cudf::jni::native_jpointerArray<column_view>{env, column_handles}.get_dereferenced();
     auto const is_lists_column = columns[0].type().id() == cudf::type_id::LIST;
-    return to_jlong(is_lists_column ? cudf::lists::detail::concatenate(columns) :
-                                      cudf::concatenate(columns));
+    return release_as_jlong(is_lists_column ? cudf::lists::detail::concatenate(columns) :
+                                              cudf::concatenate(columns));
   }
   CATCH_STD(env, 0);
 }
@@ -318,8 +321,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jobje
   try {
     auto column_views =
         cudf::jni::native_jpointerArray<cudf::column_view>{env, column_handles}.get_dereferenced();
-    return to_jlong(cudf::hash(cudf::table_view{column_views},
-                               static_cast<cudf::hash_id>(hash_function_id), seed));
+    return release_as_jlong(cudf::hash(cudf::table_view{column_views},
+                                       static_cast<cudf::hash_id>(hash_function_id), seed));
   }
   CATCH_STD(env, 0);
 }
@@ -373,7 +376,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNI
   try {
     cudf::jni::auto_set_device(env);
     cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
-    return to_jlong(cudf::make_empty_column(n_data_type));
+    return release_as_jlong(cudf::make_empty_column(n_data_type));
   }
   CATCH_STD(env, 0);
 }
