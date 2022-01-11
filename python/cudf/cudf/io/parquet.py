@@ -5,6 +5,7 @@ import json
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
+from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import fsspec
@@ -857,18 +858,20 @@ class ParquetWriter:
         self.partition_cols = partition_cols
         # Collection of `libparquet.ParquetWriter`s, and the corresponding
         # partition_col values they're responsible for
-        self._chunked_writers = []
+        self._chunked_writers: List[
+            Tuple[libparquet.ParquetWriter, List[str], List[str]]
+        ] = []
         # Map of partition_col values to their libparquet.ParquetWriter's index
         # in self._chunked_writers for reverse lookup
-        self.path_cw_map = {}
+        self.path_cw_map: Dict[str, int] = {}
         self.filename = None
         if partition_cols is None:
             self._chunked_writers.append(
-                [
+                (
                     libparquet.ParquetWriter([path], **self.common_args),
                     [],
                     None,
-                ]
+                )
             )
 
     def write_table(self, df):
@@ -928,11 +931,11 @@ class ParquetWriter:
         new_paths = [path for path, _, _ in new_cw_paths]
         meta_paths = [path for _, _, path in new_cw_paths]
         self._chunked_writers.append(
-            [
+            (
                 libparquet.ParquetWriter(new_paths, **self.common_args),
                 new_paths,
                 meta_paths,
-            ]
+            )
         )
         new_cw_idx = len(self._chunked_writers) - 1
         self.path_cw_map.update({k: new_cw_idx for k in new_paths})
@@ -954,7 +957,8 @@ class ParquetWriter:
                 )
         else:
             if return_metadata:
-                self._chunked_writers[0][2] = metadata_file_path
+                cw, paths, _ = self._chunked_writers.pop()
+                self._chunked_writers.append((cw, paths, metadata_file_path))
 
         metadata = []
         for cw, _, meta_path in self._chunked_writers:
