@@ -75,24 +75,22 @@ def drop_nulls(columns: list, how="any", keys=None, thresh=None):
     return columns_from_unique_ptr(move(c_result))
 
 
-def apply_boolean_mask(source_table, Column boolean_mask):
+def apply_boolean_mask(columns: list, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
 
     Parameters
     ----------
-    source_table : source table whose rows are dropped as per boolean_mask
+    columns : list of columns whose rows are dropped as per boolean_mask
     boolean_mask : a boolean column of same size as source_table
 
     Returns
     -------
-    Frame obtained from applying mask
+    columns obtained from applying mask
     """
 
-    assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
-
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_table(source_table)
+    cdef table_view source_table_view = table_view_from_columns(columns)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     with nogil:
@@ -103,13 +101,7 @@ def apply_boolean_mask(source_table, Column boolean_mask):
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def drop_duplicates(columns: list,

@@ -1461,19 +1461,6 @@ class Frame:
 
         return self[out_cols]
 
-    def _apply_boolean_mask(self, boolean_mask):
-        """
-        Applies boolean mask to each row of `self`,
-        rows corresponding to `False` is dropped
-        """
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.apply_boolean_mask(
-                self, as_column(boolean_mask)
-            )
-        )
-        result._copy_type_metadata(self)
-        return result
-
     def interpolate(
         self,
         method="linear",
