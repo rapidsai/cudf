@@ -417,7 +417,7 @@ struct NullMin {
 
 struct NullLogicalAnd {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(
+  __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x && y)
   {
     if (lhs_valid && !x) {
@@ -437,12 +437,12 @@ struct NullLogicalAnd {
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y);
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y);
 };
 
 struct NullLogicalOr {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(
+  __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x || y)
   {
     if (lhs_valid && x) {
@@ -462,7 +462,7 @@ struct NullLogicalOr {
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y);
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y);
 };
 
 }  // namespace ops
