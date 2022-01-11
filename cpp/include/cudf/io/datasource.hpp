@@ -269,7 +269,7 @@ class datasource {
     [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data{0};
+    uint8_t* const _data{nullptr};
     size_t const _size{0};
   };
 

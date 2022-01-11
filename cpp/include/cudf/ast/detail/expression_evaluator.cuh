@@ -76,7 +76,7 @@ struct expression_result {
     subclass().template set_value<Element>(index, result);
   }
 
-  __device__ inline bool is_valid() const { return subclass().is_valid(); }
+  [[nodiscard]] __device__ inline bool is_valid() const { return subclass().is_valid(); }
 
   __device__ inline T value() const { return subclass().value(); }
 };
@@ -110,7 +110,7 @@ struct value_expression_result
   /**
    * @brief Returns true if the underlying data is valid and false otherwise.
    */
-  __device__ inline bool is_valid() const
+  [[nodiscard]] __device__ inline bool is_valid() const
   {
     if constexpr (has_nulls) { return _obj.has_value(); }
     return true;
@@ -174,7 +174,7 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  __device__ inline bool is_valid() const
+  [[nodiscard]] __device__ inline bool is_valid() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
@@ -186,7 +186,7 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  __device__ inline mutable_column_device_view value() const
+  [[nodiscard]] __device__ inline mutable_column_device_view value() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.

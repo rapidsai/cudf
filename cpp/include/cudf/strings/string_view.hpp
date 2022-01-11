@@ -96,8 +96,8 @@ class string_view {
     __device__ inline bool operator>(const const_iterator&) const;
     __device__ inline bool operator>=(const const_iterator&) const;
     __device__ inline char_utf8 operator*() const;
-    __device__ inline size_type position() const;
-    __device__ inline size_type byte_offset() const;
+    [[nodiscard]] __device__ [[nodiscard]] inline size_type position() const;
+    [[nodiscard]] __device__ [[nodiscard]] inline size_type byte_offset() const;
 
    private:
     const char* p{};
@@ -300,7 +300,7 @@ class string_view {
   /**
    * @brief Default constructor represents an empty string.
    */
-  CUDF_HOST_DEVICE inline string_view() : _data(""), _bytes(0), _length(0) {}
+  CUDF_HOST_DEVICE inline string_view() : _data("") {}
 
   /**
    * @brief Create instance from existing device char array.

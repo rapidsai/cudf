@@ -66,9 +66,9 @@ struct MilliSeconds {
 struct MicroSeconds {
 };
 using TimeUnit_isset = struct TimeUnit_isset {
-  TimeUnit_isset() : MILLIS(false), MICROS(false) {}
-  bool MILLIS;
-  bool MICROS;
+  TimeUnit_isset()  {}
+  bool MILLIS{false};
+  bool MICROS{false};
 };
 
 struct TimeUnit {
@@ -99,32 +99,22 @@ struct BsonType {
 // thrift generated code simplified.
 using LogicalType_isset = struct LogicalType_isset {
   LogicalType_isset()
-    : STRING(false),
-      MAP(false),
-      LIST(false),
-      ENUM(false),
-      DECIMAL(false),
-      DATE(false),
-      TIME(false),
-      TIMESTAMP(false),
-      INTEGER(false),
-      UNKNOWN(false),
-      JSON(false),
-      BSON(false)
+    
+      
   {
   }
-  bool STRING;
-  bool MAP;
-  bool LIST;
-  bool ENUM;
-  bool DECIMAL;
-  bool DATE;
-  bool TIME;
-  bool TIMESTAMP;
-  bool INTEGER;
-  bool UNKNOWN;
-  bool JSON;
-  bool BSON;
+  bool STRING{false};
+  bool MAP{false};
+  bool LIST{false};
+  bool ENUM{false};
+  bool DECIMAL{false};
+  bool DATE{false};
+  bool TIME{false};
+  bool TIMESTAMP{false};
+  bool INTEGER{false};
+  bool UNKNOWN{false};
+  bool JSON{false};
+  bool BSON{false};
 };
 
 struct LogicalType {

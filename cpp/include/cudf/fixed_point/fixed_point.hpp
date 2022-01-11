@@ -256,7 +256,7 @@ class fixed_point {
    * @brief Default constructor that constructs `fixed_point` number with a
    * value and scale of zero
    */
-  CUDF_HOST_DEVICE inline fixed_point() : _value{0}, _scale{scale_type{0}} {}
+  CUDF_HOST_DEVICE inline fixed_point() :  _scale{scale_type{0}} {}
 
   /**
    * @brief Explicit conversion operator for casting to floating point types

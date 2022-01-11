@@ -86,12 +86,12 @@ struct MurmurHash3_32 {
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
   {
     return (x << r) | (x >> (32 - r));
   }
 
-  __device__ inline uint32_t fmix32(uint32_t h) const
+  [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
     h *= 0x85ebca6b;
