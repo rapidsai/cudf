@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ struct metadata : public FileMetaData {
   }
 };
 
-class aggregate_metadata {
+class aggregate_reader_metadata {
   std::vector<metadata> const per_file_metadata;
   std::map<std::string, std::string> const agg_keyval_map;
   size_type const num_rows;
@@ -357,7 +357,7 @@ class aggregate_metadata {
   }
 
  public:
-  aggregate_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
+  aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       agg_keyval_map(merge_keyval_metadata()),
       num_rows(calc_num_rows()),
@@ -822,7 +822,7 @@ class aggregate_metadata {
  */
 void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>>& remap,
                                int src_col_schema,
-                               aggregate_metadata const& md)
+                               aggregate_reader_metadata const& md)
 {
   // already generated for this level
   if (remap.find(src_col_schema) != remap.end()) { return; }
@@ -1427,8 +1427,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths);
-  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths);
+  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths, stream);
+  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, stream);
   auto chunk_offsets       = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
@@ -1587,7 +1587,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   : _mr(mr), _sources(std::move(sources))
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_metadata>(_sources);
+  _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {

@@ -89,7 +89,7 @@ gpuci_mamba_retry install -y \
                   "ucx-py=${UCX_PY_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
@@ -181,12 +181,10 @@ else
     done
 
     # Copy libcudf build time results
-    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
-    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
         gpuci_logger "Copying build time results"
         cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
-        mkdir -p "$WORKSPACE/build-metrics"
-        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
     fi
 
     ################################################################################
@@ -219,7 +217,7 @@ else
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 

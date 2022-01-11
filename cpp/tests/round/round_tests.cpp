@@ -51,9 +51,11 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1140, 1150, 1160, 1240, 1250, 1260}, scale_type{-2}};
-  auto const expected = fp_wrapper{{11, 12, 12, 12, 13, 13}, scale_type{0}};
-  auto const result   = cudf::round(input);
+  auto const input = fp_wrapper{
+    {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260}, scale_type{-2}};
+  auto const expected =
+    fp_wrapper{{11, 12, 12, 12, 13, 13, -11, -12, -12, -12, -13, -13}, scale_type{0}};
+  auto const result = cudf::round(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -65,7 +67,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZeroNoOp)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input  = fp_wrapper{{1125, 1150, 1160, 1240, 1250, 1260}, scale_type{0}};
+  auto const input = fp_wrapper{
+    {1125, 1150, 1160, 1240, 1250, 1260, -1125, -1150, -1160, -1240, -1250, -1260}, scale_type{0}};
   auto const result = cudf::round(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, result->view());
@@ -93,9 +96,11 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEvenZero)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1140, 1150, 1160, 1240, 1250, 1260}, scale_type{-2}};
-  auto const expected = fp_wrapper{{11, 12, 12, 12, 12, 13}, scale_type{0}};
-  auto const result   = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
+  auto const input = fp_wrapper{
+    {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260}, scale_type{-2}};
+  auto const expected =
+    fp_wrapper{{11, 12, 12, 12, 12, 13, -11, -12, -12, -12, -12, -13}, scale_type{0}};
+  auto const result = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -107,8 +112,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1140, 1150, 1160}, scale_type{-3}};
-  auto const expected = fp_wrapper{{11, 12, 12}, scale_type{-1}};
+  auto const input    = fp_wrapper{{1140, 1150, 1160, -1140, -1150, -1160}, scale_type{-3}};
+  auto const expected = fp_wrapper{{11, 12, 12, -11, -12, -12}, scale_type{-1}};
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -121,8 +126,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp2)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{114, 115, 116}, scale_type{-2}};
-  auto const expected = fp_wrapper{{11, 12, 12}, scale_type{-1}};
+  auto const input    = fp_wrapper{{114, 115, 116, -114, -115, -116}, scale_type{-2}};
+  auto const expected = fp_wrapper{{11, 12, 12, -11, -12, -12}, scale_type{-1}};
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -135,8 +140,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp3)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1, 2, 3}, scale_type{1}};
-  auto const expected = fp_wrapper{{100, 200, 300}, scale_type{-1}};
+  auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{1}};
+  auto const expected = fp_wrapper{{100, 200, 300, -100, -200, -300}, scale_type{-1}};
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -149,9 +154,11 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEven)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1140, 1150, 1160, 1240, 1250, 1260}, scale_type{-3}};
-  auto const expected = fp_wrapper{{11, 12, 12, 12, 12, 13}, scale_type{-1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
+  auto const input = fp_wrapper{
+    {1140, 1150, 1160, 1240, 1250, 1260, -1140, -1150, -1160, -1240, -1250, -1260}, scale_type{-3}};
+  auto const expected =
+    fp_wrapper{{11, 12, 12, 12, 12, 13, -11, -12, -12, -12, -12, -13}, scale_type{-1}};
+  auto const result = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -163,9 +170,11 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEven2)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{114, 115, 116, 124, 125, 126}, scale_type{-2}};
-  auto const expected = fp_wrapper{{11, 12, 12, 12, 12, 13}, scale_type{-1}};
-  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
+  auto const input =
+    fp_wrapper{{114, 115, 116, 124, 125, 126, -114, -115, -116, -124, -125, -126}, scale_type{-2}};
+  auto const expected =
+    fp_wrapper{{11, 12, 12, 12, 12, 13, -11, -12, -12, -12, -12, -13}, scale_type{-1}};
+  auto const result = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -177,8 +186,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEven3)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1, 2, 3}, scale_type{1}};
-  auto const expected = fp_wrapper{{100, 200, 300}, scale_type{-1}};
+  auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{1}};
+  auto const expected = fp_wrapper{{100, 200, 300, -100, -200, -300}, scale_type{-1}};
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -207,8 +216,9 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfUp)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{14, 15, 16, 24, 25, 26}, scale_type{2}};
-  auto const expected = fp_wrapper{{1, 2, 2, 2, 3, 3}, scale_type{3}};
+  auto const input =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{2}};
+  auto const expected = fp_wrapper{{1, 2, 2, 2, 3, 3, -1, -2, -2, -2, -3, -3}, scale_type{3}};
   auto const result   = cudf::round(input, -3, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -221,8 +231,9 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfUp2)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{14, 15, 16, 24, 25, 26}, scale_type{3}};
-  auto const expected = fp_wrapper{{1, 2, 2, 2, 3, 3}, scale_type{4}};
+  auto const input =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{3}};
+  auto const expected = fp_wrapper{{1, 2, 2, 2, 3, 3, -1, -2, -2, -2, -3, -3}, scale_type{4}};
   auto const result   = cudf::round(input, -4, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -235,8 +246,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfNegUp3)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1, 2, 3}, scale_type{2}};
-  auto const expected = fp_wrapper{{10, 20, 30}, scale_type{1}};
+  auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{2}};
+  auto const expected = fp_wrapper{{10, 20, 30, -10, -20, -30}, scale_type{1}};
   auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -249,8 +260,9 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfEven)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{14, 15, 16, 24, 25, 26}, scale_type{2}};
-  auto const expected = fp_wrapper{{1, 2, 2, 2, 2, 3}, scale_type{3}};
+  auto const input =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{2}};
+  auto const expected = fp_wrapper{{1, 2, 2, 2, 2, 3, -1, -2, -2, -2, -2, -3}, scale_type{3}};
   auto const result   = cudf::round(input, -3, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -263,8 +275,9 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestNegHalfEven2)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{14, 15, 16, 24, 25, 26}, scale_type{3}};
-  auto const expected = fp_wrapper{{1, 2, 2, 2, 2, 3}, scale_type{4}};
+  auto const input =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{3}};
+  auto const expected = fp_wrapper{{1, 2, 2, 2, 2, 3, -1, -2, -2, -2, -2, -3}, scale_type{4}};
   auto const result   = cudf::round(input, -4, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -277,8 +290,8 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfNegEven3)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{1, 2, 3}, scale_type{2}};
-  auto const expected = fp_wrapper{{10, 20, 30}, scale_type{1}};
+  auto const input    = fp_wrapper{{1, 2, 3, -1, -2, -3}, scale_type{2}};
+  auto const expected = fp_wrapper{{10, 20, 30, -10, -20, -30}, scale_type{1}};
   auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -296,6 +309,38 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestForBlog)
   auto const result   = cudf::round(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, TestScaleMovementExceedingMaxPrecision)
+{
+  using namespace numeric;
+  using dec32_wrapper  = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using dec64_wrapper  = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using dec128_wrapper = cudf::test::fixed_point_column_wrapper<__int128_t>;
+
+  // max precision of int32 = 9
+  // scale movement = -(-11) -1 = 10 > 9
+  auto const input_32 =
+    dec32_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
+  auto const expected_32 = dec32_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{11}};
+  auto const result_32   = cudf::round(input_32, -11, cudf::rounding_method::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_32, result_32->view());
+
+  // max precision of int64 = 18
+  // scale movement = -(-20) -1 = 19 > 18
+  auto const input_64 =
+    dec64_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
+  auto const expected_64 = dec64_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{20}};
+  auto const result_64   = cudf::round(input_64, -20, cudf::rounding_method::HALF_EVEN);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_64, result_64->view());
+
+  // max precision of int128 = 38
+  // scale movement = -(-40) -1 = 39 > 18
+  auto const input_128 =
+    dec128_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
+  auto const expected_128 = dec128_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{40}};
+  auto const result_128   = cudf::round(input_128, -40, cudf::rounding_method::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_128, result_128->view());
 }
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp0)
