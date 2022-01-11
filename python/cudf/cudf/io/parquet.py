@@ -154,7 +154,7 @@ def write_to_dataset(
         )
 
     else:
-        filename = filename or uuid4().hex + ".parquet"
+        filename = filename or (uuid4().hex + ".parquet")
         full_path = fs.sep.join([root_path, filename])
         if return_metadata:
             kwargs["metadata_file_path"] = filename
@@ -812,7 +812,7 @@ def _get_partitioned(
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
-        filename = filename or uuid4().hex + ".parquet"
+        filename = filename or (uuid4().hex + ".parquet")
         full_path = fs.sep.join([prefix, filename])
         full_paths.append(full_path)
         metadata_file_paths.append(fs.sep.join([subdir, filename]))
@@ -820,14 +820,17 @@ def _get_partitioned(
     return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
 
 
-class ParquetWriter:
+ParquetWriter = libparquet.ParquetWriter
+
+
+class ParquetDatasetWriter:
     def __init__(
         self,
         path,
+        partition_cols,
         index=None,
         compression=None,
         statistics="ROWGROUP",
-        partition_cols=None,
     ) -> None:
         """
         Write a parquet file or dataset incrementally
@@ -837,6 +840,9 @@ class ParquetWriter:
         path : str
             File path or Root Directory path. Will be used as Root Directory
             path while writing a partitioned dataset.
+        partition_cols : list
+            Column names by which to partition the dataset
+            Columns are partitioned in the order they are given
         index : bool, default None
             If ``True``, include the dataframe’s index(es) in the file output.
             If ``False``, they will not be written to the file. If ``None``,
@@ -845,9 +851,6 @@ class ParquetWriter:
             Name of the compression to use. Use ``None`` for no compression.
         statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
             Level at which column statistics should be included in file.
-        partition_cols : list, optional, default None
-            Column names by which to partition the dataset
-            Columns are partitioned in the order they are given
         """
         self.path = path
         self.common_args = {
@@ -856,28 +859,18 @@ class ParquetWriter:
             "statistics": statistics,
         }
         self.partition_cols = partition_cols
-        # Collection of `libparquet.ParquetWriter`s, and the corresponding
+        # Collection of `ParquetWriter`s, and the corresponding
         # partition_col values they're responsible for
-        self._chunked_writers: List[
-            Tuple[libparquet.ParquetWriter, List[str], str]
-        ] = []
-        # Map of partition_col values to their libparquet.ParquetWriter's index
+        self._chunked_writers: List[Tuple[ParquetWriter, List[str], str]] = []
+        # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
         self.filename = None
-        if partition_cols is None:
-            self._chunked_writers.append(
-                (libparquet.ParquetWriter([path], **self.common_args), [], "")
-            )
 
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
         """
-        if self.partition_cols is None:
-            self._chunked_writers[0][0].write_table(df)
-            return
-
         (
             paths,
             metadata_file_paths,
@@ -896,6 +889,9 @@ class ParquetWriter:
         new_cw_paths = []
 
         def pairwise(iterable):
+            """
+            Generates a pair of `(it[i], it[i + 1] - it[i])` from iterable `it`
+            """
             it = iter(iterable)
             a = next(it, None)
             for b in it:
@@ -912,57 +908,39 @@ class ParquetWriter:
                 new_cw_paths.append((path, part_info, meta_path))
 
         # Write out the parts of grouped_df currently handled by existing cw's
-        for batch_cw_path_list in existing_cw_batch.items():
-            cw_idx = batch_cw_path_list[0]
+        for cw_idx, path_to_part_info_map in existing_cw_batch.items():
             cw = self._chunked_writers[cw_idx][0]
             # match found paths with this cw's paths and nullify partition info
             # for partition_col values not in this batch
             this_cw_part_info = [
-                batch_cw_path_list[1].get(path, (0, 0))
+                path_to_part_info_map.get(path, (0, 0))
                 for path in self._chunked_writers[cw_idx][1]
             ]
             cw.write_table(grouped_df, this_cw_part_info)
 
         # Create new cw for unhandled paths encountered in this write_table
-        new_paths = [path for path, _, _ in new_cw_paths]
-        meta_paths = [path for _, _, path in new_cw_paths]
+        new_paths, part_info, meta_paths = zip(*new_cw_paths)
         self._chunked_writers.append(
             (
-                libparquet.ParquetWriter(new_paths, **self.common_args),
+                ParquetWriter(new_paths, **self.common_args),
                 new_paths,
                 meta_paths,
             )
         )
         new_cw_idx = len(self._chunked_writers) - 1
         self.path_cw_map.update({k: new_cw_idx for k in new_paths})
-        part_info = [info for _, info, _ in new_cw_paths]
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
-    def close(self, metadata_file_path=None):
+    def close(self, return_metadata=False):
         """
         Close all open files and optionally return footer metadata as a binary
         blob
         """
-        return_metadata = bool(metadata_file_path)
-        if self.partition_cols is not None:
-            if isinstance(metadata_file_path, str):
-                warnings.warn(
-                    "metadata_file_path is automatically determined for "
-                    "partitioned writing. The passed metadata_file_path will "
-                    "be ignored"
-                )
-        else:
-            if return_metadata:
-                cw, paths, _ = self._chunked_writers.pop()
-                self._chunked_writers.append((cw, paths, metadata_file_path))
 
-        metadata = []
-        for cw, _, meta_path in self._chunked_writers:
-            metadata.append(
-                cw.close(
-                    metadata_file_path=meta_path if return_metadata else None
-                )
-            )
+        metadata = [
+            cw.close(metadata_file_path=meta_path if return_metadata else None)
+            for cw, _, meta_path in self._chunked_writers
+        ]
 
         if return_metadata:
             return (

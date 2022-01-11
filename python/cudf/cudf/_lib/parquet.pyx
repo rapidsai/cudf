@@ -418,6 +418,11 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object filepaths_or_buffers, object index=None,
                   object compression=None, str statistics="ROWGROUP"):
+        filepaths_or_buffers = (
+            list(filepaths_or_buffers)
+            if is_list_like(filepaths_or_buffers)
+            else [filepaths_or_buffers]
+        )
         self.sink = make_sinks_info(filepaths_or_buffers, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)

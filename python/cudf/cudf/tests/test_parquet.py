@@ -18,7 +18,11 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
+from cudf.io.parquet import (
+    ParquetWriter,
+    ParquetDatasetWriter,
+    merge_parquet_filemetadata,
+)
 from cudf.testing import dataset_generator as dg
 from cudf.testing._utils import (
     TIMEDELTA_TYPES,
@@ -1634,10 +1638,10 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory):
     df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
     df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
 
-    cw = ParquetWriter(gdf_dir, partition_cols=["a"], index=False)
+    cw = ParquetDatasetWriter(gdf_dir, partition_cols=["a"], index=False)
     cw.write_table(df1)
     cw.write_table(df2)
-    cw.close(metadata_file_path=True)
+    cw.close()
 
     pdf = cudf.concat([df1, df2]).to_pandas()
     pdf.to_parquet(pdf_dir, index=False, partition_cols=["a"])
