@@ -780,22 +780,19 @@ __device__ void process_symbols(inflate_state_s* s, int t)
 
   do {
     volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
-    int batch_len, pos;
-    int32_t symt;
-    uint32_t lit_mask;
-
+    int batch_len        = 0;
     if (t == 0) {
       while ((batch_len = s->x.batch_len[batch]) == 0) {}
-    } else {
-      batch_len = 0;
     }
     batch_len = shuffle(batch_len);
     if (batch_len < 0) { break; }
 
-    symt     = (t < batch_len) ? b[t] : 256;
-    lit_mask = ballot(symt >= 256);
-    pos      = min((__ffs(lit_mask) - 1) & 0xff, 32);
+    auto const symt     = (t < batch_len) ? b[t] : 256;
+    auto const lit_mask = ballot(symt >= 256);
+    auto pos            = min((__ffs(lit_mask) - 1) & 0xff, 32);
+
     if (t == 0) { s->x.batch_len[batch] = 0; }
+
     if (t < pos && out + t < outend) { out[t] = symt; }
     out += pos;
     batch_len -= pos;
@@ -825,7 +822,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       }
     }
     batch = (batch + 1) & (batch_count - 1);
-  } while (1);
+  } while (true);
 
   if (t == 0) { s->out = out; }
 }

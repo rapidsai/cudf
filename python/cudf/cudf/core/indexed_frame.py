@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections import abc
+from collections import Counter, abc
 from typing import Callable, Type, TypeVar
 from uuid import uuid4
 
@@ -23,12 +23,39 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
+
 from cudf.core.column import arange, as_column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
-from cudf.core.index import Index
+from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import supported_cols_from_frame
 from cudf.utils.utils import _gather_map_is_valid, cached_property
+
+doc_reset_index_template = """
+        Reset the index of the {klass}, or a level of it.
+
+        Parameters
+        ----------
+        level : int, str, tuple, or list, default None
+            Only remove the given levels from the index. Removes all levels by
+            default.
+        drop : bool, default False
+            Do not try to insert index into dataframe columns. This resets
+            the index to the default integer index.
+{argument}
+        inplace : bool, default False
+            Modify the DataFrame in place (do not create a new object).
+
+        Returns
+        -------
+        {return_type}
+            {klass} with the new index or None if ``inplace=True``.{return_doc}
+
+        Examples
+        --------
+        {example}
+"""
 
 
 def _indices_from_labels(obj, labels):
@@ -445,6 +472,70 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in this column.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            A Series with hash values.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series
+        0     10
+        1    120
+        2     30
+        dtype: int64
+        >>> series.hash_values(method="murmur3")
+        0   -1930516747
+        1     422619251
+        2    -941520876
+        dtype: int32
+        >>> series.hash_values(method="md5")
+        0    7be4bbacbfdb05fb3044e36c22b41e8b
+        1    947ca8d2c5f0f27437f156cfbfab0969
+        2    d0580ef52d27c043c8e341fd5039b166
+        dtype: object
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
+        >>> df
+             a     b
+        0   10  0.00
+        1  120  0.25
+        2   30  0.50
+        >>> df.hash_values(method="murmur3")
+        0    -330519225
+        1    -397962448
+        2   -1345834934
+        dtype: int32
+        >>> df.hash_values(method="md5")
+        0    57ce879751b5169c525907d5c563fae1
+        1    948d6221a7c4963d4be411bcead7e32b
+        2    fe061786ea286a515b772d91b0dfcd70
+        dtype: object
+        """
+        # Note that both Series and DataFrame return Series objects from this
+        # calculation, necessitating the unfortunate circular reference to the
+        # child class here.
+        return cudf.Series._from_data(
+            {None: libcudf.hash.hash(self, method)}, index=self.index
+        )
 
     def _gather(
         self, gather_map, keep_index=True, nullify=False, check_bounds=True
@@ -1140,6 +1231,53 @@ class IndexedFrame(Frame):
             else cudf.core.resample.DataFrameResampler(self, by=by)
         )
 
+    def _reset_index(self, level, drop, col_level=0, col_fill=""):
+        """Shared path for DataFrame.reset_index and Series.reset_index."""
+        if level is not None and not isinstance(level, (tuple, list)):
+            level = (level,)
+        _check_duplicate_level_names(level, self._index.names)
+
+        # Split the columns in the index into data and index columns
+        (
+            data_columns,
+            index_columns,
+            data_names,
+            index_names,
+        ) = self._index._split_columns_by_levels(level)
+        if index_columns:
+            index = _index_from_columns(index_columns, name=self._index.name,)
+            if isinstance(index, MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+        else:
+            index = RangeIndex(len(self))
+
+        if drop:
+            return self._data, index
+
+        new_column_data = {}
+        for name, col in zip(data_names, data_columns):
+            if name == "index" and "index" in self._data:
+                name = "level_0"
+            name = (
+                tuple(
+                    name if i == col_level else col_fill
+                    for i in range(self._data.nlevels)
+                )
+                if self._data.multiindex
+                else name
+            )
+            new_column_data[name] = col
+        # This is to match pandas where the new data columns are always
+        # inserted to the left of existing data columns.
+        return (
+            ColumnAccessor(
+                {**new_column_data, **self._data}, self._data.multiindex
+            ),
+            index,
+        )
+
     def _first_or_last(
         self, offset, idx: int, op: Callable, side: str, slice_func: Callable
     ) -> "IndexedFrame":
@@ -1260,4 +1398,21 @@ class IndexedFrame(Frame):
             op=operator.__sub__,
             side="right",
             slice_func=lambda i: self.iloc[i:],
+        )
+
+
+def _check_duplicate_level_names(specified, level_names):
+    """Raise if any of `specified` has duplicates in `level_names`."""
+    if specified is None:
+        return
+    if len(set(level_names)) == len(level_names):
+        return
+    duplicates = {key for key, val in Counter(level_names).items() if val > 1}
+
+    duplicates_specified = [spec for spec in specified if spec in duplicates]
+    if not len(duplicates_specified) == 0:
+        # Note: pandas raises first encountered duplicates, cuDF raises all.
+        raise ValueError(
+            f"The names {duplicates_specified} occurs multiple times, use a"
+            " level number"
         )

@@ -28,6 +28,22 @@ namespace cudf {
 namespace detail {
 
 /**
+ * @brief Device functor to determine if a row is valid.
+ */
+class row_is_valid {
+ public:
+  row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+
+  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  {
+    return cudf::bit_is_set(_row_bitmask, i);
+  }
+
+ private:
+  bitmask_type const* _row_bitmask;
+};
+
+/**
  * @brief Device functor to determine if two pairs are identical.
  */
 class pair_equality {

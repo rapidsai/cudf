@@ -416,6 +416,11 @@ class table_input_metadata {
 struct partition_info {
   size_type start_row;
   size_type num_rows;
+
+  partition_info() = default;
+  partition_info(size_type start_row, size_type num_rows) : start_row(start_row), num_rows(num_rows)
+  {
+  }
 };
 
 }  // namespace io
