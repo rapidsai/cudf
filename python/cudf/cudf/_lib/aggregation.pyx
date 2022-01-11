@@ -994,7 +994,3 @@ cdef GroupbyScanAggregation make_groupby_scan_aggregation(op, kwargs=None):
     else:
         raise TypeError(f"Unknown aggregation {op}")
     return agg
-
-def test_enum():
-    cdef libcudf_aggregation.ewm_history hist = libcudf_aggregation.ewm_history.INFINITE
-    print('hello world!')
