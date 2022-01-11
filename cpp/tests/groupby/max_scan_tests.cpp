@@ -59,6 +59,24 @@ TYPED_TEST(groupby_max_scan_test, basic)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TYPED_TEST(groupby_max_scan_test, pre_sorted)
+{
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
+
+  // clang-format off
+  key_wrapper keys   {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  value_wrapper vals({5, 8, 1, 6, 9, 0, 4, 7, 2, 3});
+
+  key_wrapper expect_keys    {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  result_wrapper expect_vals({5, 8, 8, 6, 9, 9, 9, 7, 7, 7});
+  // clang-format on
+
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
+  test_single_scan(
+    keys, vals, expect_keys, expect_vals, std::move(agg), null_policy::EXCLUDE, sorted::YES);
+}
+
 TYPED_TEST(groupby_max_scan_test, empty_cols)
 {
   using value_wrapper  = typename TestFixture::value_wrapper;
