@@ -207,15 +207,16 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
   auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
   auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
 
-  auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  auto const comp     = row_equality_comparator(
+  auto const start_iter = thrust::make_counting_iterator<size_type>(0);
+  auto const end_iter   = start_iter + col.size();
+  auto const comp       = row_equality_comparator(
     nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
   auto const found_iter = thrust::find_if(
-    rmm::exec_policy(stream), count_it, count_it + col.size(), [comp] __device__(auto idx) {
+    rmm::exec_policy(stream), start_iter, end_iter, [comp] __device__(auto const idx) {
       return comp(idx, 0);  // compare col[idx] == val[0].
     });
 
-  return found_iter != count_it + col.size();
+  return found_iter != end_iter;
 }
 
 template <>
