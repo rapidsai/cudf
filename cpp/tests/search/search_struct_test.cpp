@@ -37,7 +37,6 @@ constexpr int32_t null{0};  // Mark for null child elements
 constexpr int32_t XXX{0};   // Mark for null struct elements
 
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-
                                      cudf::test::FloatingPointTypes,
                                      cudf::test::DurationTypes,
                                      cudf::test::TimestampTypes>;
@@ -480,7 +479,7 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
     auto const val1 = [] {
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
-      auto child3 = strings_col{{"x"}, null_at(0)};
+      auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
       return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
     }();
     auto const val2 = [] {
