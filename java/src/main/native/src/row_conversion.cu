@@ -152,18 +152,15 @@ struct tile_info {
   int end_row;
   int batch_number;
 
-  CUDA_DEVICE_CALLABLE
-  size_type get_shared_row_size(size_type const *const col_offsets,
-                                size_type const *const col_sizes) const {
+  __device__ inline size_type get_shared_row_size(size_type const *const col_offsets,
+                                                  size_type const *const col_sizes) const {
     return util::round_up_unsafe(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col],
                                  JCUDF_ROW_ALIGNMENT);
   }
 
-  CUDA_DEVICE_CALLABLE
-  size_type num_cols() const { return end_col - start_col + 1; }
+  __device__ inline size_type num_cols() const { return end_col - start_col + 1; }
 
-  CUDA_DEVICE_CALLABLE
-  size_type num_rows() const { return end_row - start_row + 1; }
+  __device__ inline size_type num_rows() const { return end_row - start_row + 1; }
 };
 
 /**
@@ -194,8 +191,7 @@ struct row_offset_functor {
   row_offset_functor(size_type fixed_width_only_row_size)
       : _fixed_width_only_row_size(fixed_width_only_row_size){};
 
-  CUDA_DEVICE_CALLABLE
-  size_type operator()(int row_number, int tile_row_start) const {
+  __device__ inline size_type operator()(int row_number, int tile_row_start) const {
     return (row_number - tile_row_start) * _fixed_width_only_row_size;
   }
 
@@ -1270,8 +1266,9 @@ template <typename RowSize> struct row_size_functor {
   row_size_functor(size_type row_end, RowSize row_sizes, size_type last_row_end)
       : _row_end(row_end), _row_sizes(row_sizes), _last_row_end(last_row_end) {}
 
-  CUDA_DEVICE_CALLABLE
-  uint64_t operator()(int i) const { return i >= _row_end ? 0 : _row_sizes[i + _last_row_end]; }
+  __device__ inline uint64_t operator()(int i) const {
+    return i >= _row_end ? 0 : _row_sizes[i + _last_row_end];
+  }
 
   size_type _row_end;
   RowSize _row_sizes;
