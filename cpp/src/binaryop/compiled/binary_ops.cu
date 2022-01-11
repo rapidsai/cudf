@@ -119,9 +119,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                                   !std::is_same_v<RhsViewT, column_device_view>,
-                                                 OutT>
+  __device__ inline typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+                                                !std::is_same_v<RhsViewT, column_device_view>,
+                                              OutT>
   operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
@@ -133,9 +133,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE typename std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
-                                                   std::is_same_v<RhsViewT, column_device_view>,
-                                                 OutT>
+  __device__ inline typename std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
+                                                std::is_same_v<RhsViewT, column_device_view>,
+                                              OutT>
   operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(),
@@ -147,9 +147,9 @@ struct compare_functor {
 
   // This is used to compare 2 column values
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                                   std::is_same_v<RhsViewT, column_device_view>,
-                                                 OutT>
+  __device__ inline typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+                                                std::is_same_v<RhsViewT, column_device_view>,
+                                              OutT>
   operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(i),

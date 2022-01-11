@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,16 +26,13 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <memory>
-
 class Groupby : public cudf::benchmark {
 };
 
-void BM_pre_sorted_nth(benchmark::State& state)
+void BM_basic_sum_scan(benchmark::State& state)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-  // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
   auto data_it = cudf::detail::make_counting_transform_iterator(
@@ -44,6 +41,43 @@ void BM_pre_sorted_nth(benchmark::State& state)
   wrapper keys(data_it, data_it + column_size);
   wrapper vals(data_it, data_it + column_size);
 
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys, keys, keys}));
+
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>());
+
+  for (auto _ : state) {
+    cuda_event_timer timer(state, true);
+
+    auto result = gb_obj.scan(requests);
+  }
+}
+
+BENCHMARK_DEFINE_F(Groupby, BasicSumScan)(::benchmark::State& state) { BM_basic_sum_scan(state); }
+
+BENCHMARK_REGISTER_F(Groupby, BasicSumScan)
+  ->UseManualTime()
+  ->Unit(benchmark::kMillisecond)
+  ->Arg(1000000)
+  ->Arg(10000000)
+  ->Arg(100000000);
+
+void BM_pre_sorted_sum_scan(benchmark::State& state)
+{
+  using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+
+  auto data_it = cudf::detail::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return random_int(0, 100); });
+  auto valid_it = cudf::detail::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return random_int(0, 100) < 90; });
+
+  wrapper keys(data_it, data_it + column_size);
+  wrapper vals(data_it, data_it + column_size, valid_it);
+
   auto keys_table  = cudf::table_view({keys});
   auto sort_order  = cudf::sorted_order(keys_table);
   auto sorted_keys = cudf::gather(keys_table, *sort_order);
@@ -51,23 +85,26 @@ void BM_pre_sorted_nth(benchmark::State& state)
 
   cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
 
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back(cudf::groupby::scan_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(
-    cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(-1));
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = gb_obj.aggregate(requests);
+
+    auto result = gb_obj.scan(requests);
   }
 }
 
-BENCHMARK_DEFINE_F(Groupby, PreSortedNth)(::benchmark::State& state) { BM_pre_sorted_nth(state); }
+BENCHMARK_DEFINE_F(Groupby, PreSortedSumScan)(::benchmark::State& state)
+{
+  BM_pre_sorted_sum_scan(state);
+}
 
-BENCHMARK_REGISTER_F(Groupby, PreSortedNth)
+BENCHMARK_REGISTER_F(Groupby, PreSortedSumScan)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
-  ->Arg(1000000)    /*   1M */
-  ->Arg(10000000)   /*  10M */
-  ->Arg(100000000); /* 100M */
+  ->Arg(1000000)
+  ->Arg(10000000)
+  ->Arg(100000000);
