@@ -59,9 +59,9 @@ template <bool has_nulls>
 class pair_expression_equality {
  public:
   __device__ pair_expression_equality(
-    cudf::ast::detail::expression_evaluator<has_nulls> evaluator,
+    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
     cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    bool swap_tables,
+    bool const swap_tables,
     row_equality const& equality_probe)
     : evaluator{evaluator},
       thread_intermediate_storage{thread_intermediate_storage},
@@ -99,7 +99,7 @@ class pair_expression_equality {
 
  private:
   cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
-  cudf::ast::detail::expression_evaluator<has_nulls> const evaluator;
+  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
   bool const swap_tables;
   row_equality const& equality_probe;
 };
@@ -119,7 +119,7 @@ class pair_expression_equality {
  * @param[in] right_table The right table
  * @param[in] probe The table with which to probe the hash table for matches.
  * @param[in] build The table with which the hash table was built.
- * @param[in] compare_nulls Controls whether null join-key values should match or not.
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] join_type The type of join to be performed
  * @param[in] hash_table_view The hash table built from `build`.
  * @param[in] device_expression_data Container of device data required to evaluate the desired
@@ -141,7 +141,7 @@ __global__ void compute_mixed_join_output_size(
   table_device_view probe,
   table_device_view build,
   row_equality const equality_probe,
-  join_kind join_type,
+  join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
@@ -222,7 +222,7 @@ __global__ void compute_mixed_join_output_size(
  * @param[in] right_table The right table
  * @param[in] probe The table with which to probe the hash table for matches.
  * @param[in] build The table with which the hash table was built.
- * @param[in] compare_nulls Controls whether null join-key values should match or not.
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] join_type The type of join to be performed
  * @param[in] hash_table_view The hash table built from `build`.
  * @param[out] join_output_l The left result of the join operation
@@ -245,7 +245,7 @@ __global__ void mixed_join(table_device_view left_table,
                            table_device_view probe,
                            table_device_view build,
                            row_equality const equality_probe,
-                           join_kind join_type,
+                           join_kind const join_type,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,
                            OutputIt1 join_output_l,
                            OutputIt2 join_output_r,
@@ -268,8 +268,6 @@ __global__ void mixed_join(table_device_view left_table,
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
   cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
-
-  unsigned int const activemask = __ballot_sync(0xffffffff, outer_row_index < outer_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
