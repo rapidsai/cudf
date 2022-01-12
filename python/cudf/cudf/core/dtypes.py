@@ -462,6 +462,18 @@ class Decimal32Dtype(_BaseDtype):
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
 
+    def __eq__(self, other: Dtype) -> bool:
+        if other is self:
+            return True
+        elif not isinstance(other, self.__class__):
+            return False
+        elif self.precision != other.precision:
+            return False
+        elif self.scale != other.scale:
+            return False
+        else:
+            return True
+
 
 class Decimal64Dtype(_BaseDtype):
     """
@@ -570,6 +582,18 @@ class Decimal64Dtype(_BaseDtype):
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
 
+    def __eq__(self, other: Dtype) -> bool:
+        if other is self:
+            return True
+        elif not isinstance(other, self.__class__):
+            return False
+        elif self.precision != other.precision:
+            return False
+        elif self.scale != other.scale:
+            return False
+        else:
+            return True
+
 
 class Decimal128Dtype(_BaseDtype):
     """
@@ -677,6 +701,18 @@ class Decimal128Dtype(_BaseDtype):
     @classmethod
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
+
+    def __eq__(self, other: Dtype) -> bool:
+        if other is self:
+            return True
+        elif not isinstance(other, self.__class__):
+            return False
+        elif self.precision != other.precision:
+            return False
+        elif self.scale != other.scale:
+            return False
+        else:
+            return True
 
 
 class IntervalDtype(StructDtype):

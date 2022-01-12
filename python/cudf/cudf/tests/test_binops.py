@@ -2609,6 +2609,10 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
         ),
     ],
 )
+@pytest.mark.xfail(
+    reason="binop operations not supported for different "
+    "bit-width decimal types"
+)
 def test_binops_decimal_scalar(args):
     op, lhs, l_dtype, rhs, expect, expect_dtype, reflect = args
 
@@ -2779,6 +2783,10 @@ def test_binops_decimal_scalar(args):
     ],
 )
 @pytest.mark.parametrize("reflected", [True, False])
+@pytest.mark.xfail(
+    reason="binop operations not supported for different bit-width "
+    "decimal types"
+)
 def test_binops_decimal_scalar_compare(args, reflected):
     """
     Tested compare operations:

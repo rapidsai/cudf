@@ -59,36 +59,46 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if reflect:
             self, other = other, self
 
+        if not isinstance(
+            other,
+            (
+                DecimalBaseColumn,
+                cudf.core.column.NumericalColumn,
+                cudf.Scalar,
+            ),
+        ):
+            raise TypeError(
+                f"Operator {op} not supported between"
+                f"{str(type(self))} and {str(type(other))}"
+            )
+        elif isinstance(
+            other, cudf.core.column.NumericalColumn
+        ) and not is_integer_dtype(other.dtype):
+            raise TypeError(
+                f"Only decimal and integer column is supported for {op}."
+            )
+        if isinstance(other, cudf.core.column.NumericalColumn):
+            other = other.as_decimal_column(
+                self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
+            )
+        if not isinstance(self.dtype, other.dtype.__class__):
+            if (
+                self.dtype.precision == other.dtype.precision
+                and self.dtype.scale == other.dtype.scale
+            ):
+                other = other.astype(self.dtype)
+            else:
+                raise NotImplementedError(
+                    f"{op} not supported for types with different bit-widths"
+                )
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
+
         if op in ("add", "sub", "mul", "div"):
-            # scale = _binop_scale(self.dtype, other.dtype, op)
             output_type = _get_decimal_type(self.dtype, other.dtype, op)
             result = libcudf.binaryop.binaryop(self, other, op, output_type)
             result.dtype.precision = output_type.precision
         elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
-            if not isinstance(
-                other,
-                (
-                    DecimalBaseColumn,
-                    cudf.core.column.NumericalColumn,
-                    cudf.Scalar,
-                ),
-            ):
-                raise TypeError(
-                    f"Operator {op} not supported between"
-                    f"{str(type(self))} and {str(type(other))}"
-                )
-            if isinstance(
-                other, cudf.core.column.NumericalColumn
-            ) and not is_integer_dtype(other.dtype):
-                raise TypeError(
-                    f"Only decimal and integer column is supported for {op}."
-                )
-            if isinstance(other, cudf.core.column.NumericalColumn):
-                other = other.as_decimal_column(
-                    self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
-                )
             result = libcudf.binaryop.binaryop(self, other, op, bool)
         return result
 
