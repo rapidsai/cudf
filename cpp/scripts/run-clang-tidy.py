@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 
-from __future__ import print_function
 import re
 import os
 import subprocess
@@ -24,7 +23,7 @@ import shutil
 
 
 EXPECTED_VERSION = "11.1.0"
-VERSION_REGEX = re.compile(r"  LLVM version ([0-9.]+)")
+VERSION_REGEX = re.compile(r"  LLVM version ([\d\.]+)")
 GPU_ARCH_REGEX = re.compile(r"sm_(\d+)")
 SPACES = re.compile(r"\s+")
 SEPARATOR = "-" * 16
@@ -41,7 +40,7 @@ def parse_args():
                            "been run once before running this script!")
     argparser.add_argument("-exe", type=str, default="clang-tidy",
                            help="Path to clang-tidy exe")
-    argparser.add_argument("-ignore", type=str, default="[.]cu$|examples/kmeans/",
+    argparser.add_argument("-ignore", type=str, default="_deps",
                            help="Regex used to ignore files from checking")
     argparser.add_argument("-select", type=str, default=None,
                            help="Regex used to select files for checking")
@@ -86,7 +85,7 @@ def get_gpu_archs(command):
 def get_index(arr, item):
     try:
         return arr.index(item)
-    except:
+    except Exception:
         return -1
 
 
@@ -148,18 +147,14 @@ def run_clang_tidy_command(tidy_cmd):
     result = subprocess.run(cmd, check=False, shell=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     status = result.returncode == 0
-    if status:
-        out = ""
-    else:
-        out = "CMD: " + cmd
-    out += result.stdout.decode("utf-8").rstrip()
+    out = ("" if status else "CMD: " + cmd) + result.stdout.decode("utf-8").rstrip()
     return status, out
 
 
 def run_clang_tidy(cmd, args):
     command, is_cuda = get_tidy_args(cmd, args.exe)
     tidy_cmd = [args.exe,
-                "-header-filter='.*cudf/cpp/(src|include|bench|comms).*'",
+                "-header-filter='.*cudf/cpp/(src|include|bench|tests).*(?!cxxopts).*'",
                 cmd["file"], "--", ]
     tidy_cmd.extend(command)
     status = True
