@@ -18,15 +18,21 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/io/text/detail/tile_state.hpp>
 #include <cudf/io/text/detail/trie.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <limits>
 #include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
@@ -128,8 +134,7 @@ __global__ void multibyte_split_kernel(
   cudf::io::text::detail::trie_device_view trie,
   int32_t chunk_input_offset,
   cudf::device_span<char const> chunk_input_chars,
-  cudf::device_span<int32_t> abs_output_delimiter_offsets,
-  cudf::device_span<char> abs_output_chars)
+  cudf::device_span<int32_t> abs_output_delimiter_offsets)
 {
   using InputLoad =
     cub::BlockLoad<char, THREADS_PER_TILE, ITEMS_PER_THREAD, cub::BLOCK_LOAD_VECTORIZE>;
@@ -181,12 +186,6 @@ __global__ void multibyte_split_kernel(
     .ExclusiveSum(thread_offsets, thread_offsets, prefix_callback);
 
   // Step 5: Assign outputs from each thread using match offsets.
-
-  if (abs_output_chars.size() > 0) {
-    for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
-      abs_output_chars[chunk_input_offset + thread_input_offset + i] = thread_chars[i];
-    }
-  }
 
   if (abs_output_delimiter_offsets.size() > 0) {
     for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
@@ -241,7 +240,6 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
                                                  scan_tile_state<multistate>& tile_multistates,
                                                  scan_tile_state<uint32_t>& tile_offsets,
                                                  device_span<cudf::size_type> output_buffer,
-                                                 device_span<char> output_char_buffer,
                                                  rmm::cuda_stream_view stream,
                                                  std::vector<rmm::cuda_stream_view> const& streams)
 {
@@ -300,8 +298,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
       trie.view(),
       chunk_offset,
       *chunk,
-      output_buffer,
-      output_char_buffer);
+      output_buffer);
 
     cudaEventRecord(last_launch_event, chunk_stream);
 
@@ -317,6 +314,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
+                                              byte_range_info byte_range,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr,
                                               rmm::cuda_stream_pool& stream_pool)
@@ -346,7 +344,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                      tile_multistates,
                                      tile_offsets,
                                      cudf::device_span<int32_t>(static_cast<int32_t*>(nullptr), 0),
-                                     cudf::device_span<char>(static_cast<char*>(nullptr), 0),
                                      stream,
                                      streams);
 
@@ -354,13 +351,11 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto num_tiles      = cudf::util::div_rounding_up_safe(bytes_total, ITEMS_PER_TILE);
   auto num_results    = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
   auto string_offsets = rmm::device_uvector<int32_t>(num_results + 2, stream, mr);
-  auto string_chars   = rmm::device_uvector<char>(bytes_total, stream, mr);
 
   // first and last element are set manually to zero and size of input, respectively.
   // kernel is only responsible for determining delimiter offsets
-  auto string_count = static_cast<cudf::size_type>(string_offsets.size() - 1);
   string_offsets.set_element_to_zero_async(0, stream);
-  string_offsets.set_element_async(string_count, bytes_total, stream);
+  string_offsets.set_element_async(string_offsets.size() - 1, bytes_total, stream);
 
   multibyte_split_scan_full_source(
     source,
@@ -368,23 +363,90 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     tile_multistates,
     tile_offsets,
     cudf::device_span<int32_t>(string_offsets).subspan(1, num_results),
-    string_chars,
     stream,
     streams);
 
+  stream.synchronize();
+
+  auto string_offsets_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    string_offsets.begin(),
+                    string_offsets.end(),
+                    thrust::make_counting_iterator(0),
+                    string_offsets.begin(),
+                    [offsets     = string_offsets.begin(),
+                     range_begin = static_cast<int32_t>(byte_range.offset),
+                     range_end   = byte_range.offset + byte_range.size] __device__(auto i) {
+                      return offsets[i] >= range_begin and (i == 0 or offsets[i - 1] < range_end);
+                    });
+
+  stream.synchronize();
+
+  auto new_string_offsets_size = string_offsets_end - string_offsets.begin();
+  auto a                       = string_offsets.element(0, stream);
+  auto b                       = string_offsets.element(new_string_offsets_size - 1, stream);
+  auto string_chars_size       = b - a;
+
+  string_offsets.resize(new_string_offsets_size, stream);
+
+  // // make offsets zero-based.
+  // thrust::transform(rmm::exec_policy(stream),
+  //                   string_offsets.begin(),  //
+  //                   string_offsets.end(),
+  //                   string_offsets.begin(),
+  //                   [a](auto idx) { return idx - a; });
+
+  // std::cout << "a: " << a   //
+  //           << " b: " << b  //
+  //           << std::endl;
+  // std::cout << "string_offsets: " << new_string_offsets_size  //
+  //           << " chars: " << string_chars_size                //
+  //           << std::endl;
+
+  // std::cout << "::1::" << std::endl;
+
+  auto string_chars = rmm::device_uvector<char>(string_chars_size, stream, mr);
+
+  // std::cout << "::2::" << std::endl;
+
+  auto reader = source.create_reader();
+
+  // std::cout << "::3::" << std::endl;
+
+  // replace this with a "reader->read_to(string_chars, stream)" call, instead of creating a buffer
+  reader->skip_bytes(a);
+  auto relevant_bytes = reader->get_next_chunk(string_chars_size, stream);
+
+  // std::cout << "::4::" << std::endl;
+
+  thrust::copy(rmm::exec_policy(stream),
+               relevant_bytes->data(),  //
+               relevant_bytes->data() + relevant_bytes->size(),
+               string_chars.begin());
+
+  // std::cout << "string_offsets.size(): " << string_offsets.size()  //
+  //           << " string_chars.size(): " << string_chars.size();
+
   return cudf::make_strings_column(
-    string_count, std::move(string_offsets), std::move(string_chars));
+    string_offsets.size() - 1, std::move(string_offsets), std::move(string_chars));
 }
 
 }  // namespace detail
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
+                                              std::optional<byte_range_info> byte_range,
                                               rmm::mr::device_memory_resource* mr)
 {
   auto stream      = rmm::cuda_stream_default;
   auto stream_pool = rmm::cuda_stream_pool(2);
-  auto result      = detail::multibyte_split(source, delimiter, stream, mr, stream_pool);
+
+  auto result = detail::multibyte_split(source,
+                                        delimiter,
+                                        byte_range.value_or(byte_range_info::whole_source()),
+                                        stream,
+                                        mr,
+                                        stream_pool);
 
   stream.synchronize();
 

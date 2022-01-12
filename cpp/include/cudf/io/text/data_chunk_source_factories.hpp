@@ -89,6 +89,10 @@ class istream_data_chunk_reader : public data_chunk_reader {
     }
   }
 
+  void skip_bytes(std::size_t size) override {
+    _datastream->ignore(size);
+  };
+
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
   {
@@ -142,6 +146,11 @@ class istream_data_chunk_reader : public data_chunk_reader {
 class device_span_data_chunk_reader : public data_chunk_reader {
  public:
   device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
+
+  void skip_bytes(std::size_t read_size) override {
+    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
+    _position += read_size;
+  };
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override

@@ -52,6 +52,8 @@ class device_data_chunk {
  */
 class data_chunk_reader {
  public:
+  virtual void skip_bytes(std::size_t size) = 0;
+
   /**
    * @brief Get the next chunk of bytes from the data source
    *

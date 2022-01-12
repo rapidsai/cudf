@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -30,7 +31,8 @@ namespace text {
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::optional<byte_range_info> byte_range = std::nullopt,
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 }  // namespace text
 }  // namespace io
