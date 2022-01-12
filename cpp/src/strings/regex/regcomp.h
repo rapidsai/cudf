@@ -116,6 +116,7 @@ class reprog {
 
   void optimize1();
   void optimize2();
+  void check_for_errors();
   void print(regex_flags const flags);
 
  private:
@@ -123,7 +124,9 @@ class reprog {
   std::vector<reclass> _classes;
   int32_t _startinst_id;
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
-  int32_t _num_capturing_groups;
+  int32_t _num_capturing_groups{};
+
+  void check_for_errors(int32_t id, int32_t next_id);
 };
 
 }  // namespace detail
