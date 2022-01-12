@@ -397,7 +397,9 @@ def read_parquet(
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
-    open_file_options = _default_open_file_options(open_file_options, columns, row_groups)
+    open_file_options = _default_open_file_options(
+        open_file_options, columns, row_groups
+    )
     for i, source in enumerate(filepath_or_buffer):
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
@@ -697,7 +699,9 @@ def _check_decimal128_type(arrow_type):
 def _default_open_file_options(open_file_options, columns, row_groups):
     # Copy and update `open_file_options` to include
     # column and row-group information under the
-    # "precache_options" key
+    # "precache_options" key. By default, we set
+    # "method" to "parquet", but precaching will
+    # be disabled if the user chooses `method=None`
     open_file_options = (open_file_options or {}).copy()
     precache_options = open_file_options.pop("precache_options", {}).copy()
     if precache_options.get("method", "parquet") == "parquet":
