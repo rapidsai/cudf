@@ -54,7 +54,7 @@ struct detokenizer_fn {
   int32_t const* d_offsets{};                // offsets to output buffer d_chars
   char* d_chars{};                           // output buffer for characters
 
-  __device__ cudf::size_type operator()(cudf::size_type idx)
+  __device__ auto operator()(cudf::size_type idx) -> cudf::size_type
   {
     auto const offset      = d_token_offsets[idx];
     auto d_tokens          = d_row_map + offset;
@@ -85,7 +85,7 @@ template <typename IndexType>
 struct index_changed_fn {
   IndexType const* d_rows;
   int32_t const* d_row_map;
-  __device__ bool operator()(cudf::size_type idx)
+  __device__ auto operator()(cudf::size_type idx) -> bool
   {
     return (idx == 0) || (d_rows[d_row_map[idx]] != d_rows[d_row_map[idx - 1]]);
   }

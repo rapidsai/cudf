@@ -36,7 +36,7 @@
 namespace {
 using string_pair = thrust::pair<char const*, cudf::size_type>;
 struct string_view_to_pair {
-  __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
+  __device__ auto operator()(thrust::pair<cudf::string_view, bool> const& p) -> string_pair
   {
     return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr, 0};
   }

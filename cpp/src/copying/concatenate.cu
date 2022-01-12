@@ -46,7 +46,7 @@ namespace detail {
 // From benchmark data, the fused kernel optimization appears to perform better
 // when there are more than a trivial number of columns, or when the null mask
 // can also be computed at the same time
-constexpr bool use_fused_kernel_heuristic(bool const has_nulls, size_t const num_columns)
+constexpr auto use_fused_kernel_heuristic(bool const has_nulls, size_t const num_columns) -> bool
 {
   return has_nulls || num_columns > 4;
 }
@@ -519,8 +519,8 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
 
 }  // namespace detail
 
-rmm::device_buffer concatenate_masks(host_span<column_view const> views,
-                                     rmm::mr::device_memory_resource* mr)
+auto concatenate_masks(host_span<column_view const> views,
+                                     rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
 {
   bool const has_nulls =
     std::any_of(views.begin(), views.end(), [](const column_view col) { return col.has_nulls(); });

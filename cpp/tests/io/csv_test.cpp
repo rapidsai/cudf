@@ -1894,14 +1894,14 @@ class TestSource : public cudf::io::datasource {
     return std::make_unique<non_owning_buffer>((uint8_t*)str.data() + offset, size);
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
   {
     auto const read_size = std::min(size, str.size() - offset);
     memcpy(dst, str.data() + offset, size);
     return read_size;
   }
 
-  [[nodiscard]] size_t size() const override { return str.size(); }
+  [[nodiscard]] auto size() const -> size_t override { return str.size(); }
 };
 
 TEST_F(CsvReaderTest, UserImplementedSource)

@@ -37,7 +37,7 @@ struct tabulator {
   cudf::numeric_scalar_device_view<T> const n_init;
   cudf::numeric_scalar_device_view<T> const n_step;
 
-  T __device__ operator()(cudf::size_type i)
+  auto __device__ operator()(cudf::size_type i) -> T
   {
     return n_init.value() + (static_cast<T>(i) * n_step.value());
   }
@@ -47,7 +47,7 @@ template <typename T>
 struct const_tabulator {
   cudf::numeric_scalar_device_view<T> const n_init;
 
-  T __device__ operator()(cudf::size_type i) { return n_init.value() + static_cast<T>(i); }
+  auto __device__ operator()(cudf::size_type i) -> T { return n_init.value() + static_cast<T>(i); }
 };
 
 /**

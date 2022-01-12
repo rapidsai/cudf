@@ -41,9 +41,9 @@ namespace detail {
 // number of chars/col is beyond a certain threshold memcpy performs better.
 // This heuristic estimates which strategy will give better performance by
 // comparing the mean chars/col with values from the above table.
-constexpr bool use_fused_kernel_heuristic(bool const has_nulls,
+constexpr auto use_fused_kernel_heuristic(bool const has_nulls,
                                           size_t const total_bytes,
-                                          size_t const num_columns)
+                                          size_t const num_columns) -> bool
 {
   return has_nulls ? total_bytes < num_columns * 1572864  // midpoint of 1048576 and 2097152
                    : total_bytes < num_columns * 393216;  // midpoint of 262144 and 524288
@@ -53,7 +53,7 @@ constexpr bool use_fused_kernel_heuristic(bool const has_nulls,
 // error: The enclosing parent function ("create_strings_device_views") for an
 // extended __device__ lambda must not have deduced return type
 struct chars_size_transform {
-  __device__ size_t operator()(column_device_view const& col) const
+  __device__ auto operator()(column_device_view const& col) const -> size_t
   {
     if (col.size() > 0) {
       constexpr auto offsets_index = strings_column_view::offsets_column_index;

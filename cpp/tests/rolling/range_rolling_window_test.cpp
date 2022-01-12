@@ -68,7 +68,7 @@ struct window_exec {
   {
   }
 
-  size_type num_rows() { return gby_column.size(); }
+  auto num_rows() -> size_type { return gby_column.size(); }
 
   std::unique_ptr<column> operator()(std::unique_ptr<rolling_aggregation> const& agg) const
   {

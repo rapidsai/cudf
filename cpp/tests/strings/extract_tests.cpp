@@ -74,7 +74,7 @@ TEST_F(StringsExtractTests, ExtractTest)
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(expected1.release());
   columns.push_back(expected2.release());
-  cudf::table expected(std::move(columns));
+  auto expected = cudf::table(std::move(columns));
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 
@@ -168,7 +168,7 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(expected.release());
-  cudf::table table_expected(std::move(columns));
+  auto table_expected = cudf::table(std::move(columns));
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, table_expected);
 }
 

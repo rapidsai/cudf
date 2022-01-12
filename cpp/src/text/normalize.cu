@@ -112,7 +112,7 @@ struct codepoint_to_utf8_fn {
    * @param count number of code-points in `str_cps`
    * @return Number of bytes required for the output
    */
-  __device__ int32_t compute_output_size(uint32_t const* str_cps, uint32_t count)
+  __device__ auto compute_output_size(uint32_t const* str_cps, uint32_t count) -> int32_t
   {
     return thrust::transform_reduce(
       thrust::seq,

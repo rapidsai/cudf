@@ -32,8 +32,8 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
 
  public:
-  cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  auto size() -> cudf::size_type { return _size; }
+  auto stream() -> rmm::cuda_stream_view { return rmm::cuda_stream_default; }
 };
 
 template <typename T>
@@ -604,10 +604,10 @@ class ListsStructsLeafTest : public ColumnFactoryTest {
    * @brief Create a structs column that contains 3 fields: int, string, List<int>
    */
   template <typename MaskIterator>
-  SCW make_test_structs_column(cudf::test::fixed_width_column_wrapper<T> field1,
+  auto make_test_structs_column(cudf::test::fixed_width_column_wrapper<T> field1,
                                cudf::test::strings_column_wrapper field2,
                                cudf::test::lists_column_wrapper<T, int32_t> field3,
-                               MaskIterator mask)
+                               MaskIterator mask) -> SCW
   {
     return SCW{{field1, field2, field3}, mask};
   }
@@ -691,9 +691,9 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
 class ListsZeroLengthColumnTest : public ColumnFactoryTest {
  protected:
   using StructsCW = cudf::test::structs_column_wrapper;
-  StructsCW make_test_structs_column(cudf::test::fixed_width_column_wrapper<int32_t> field1,
+  auto make_test_structs_column(cudf::test::fixed_width_column_wrapper<int32_t> field1,
                                      cudf::test::strings_column_wrapper field2,
-                                     cudf::test::lists_column_wrapper<int32_t> field3)
+                                     cudf::test::lists_column_wrapper<int32_t> field3) -> StructsCW
   {
     return StructsCW{field1, field2, field3};
   }

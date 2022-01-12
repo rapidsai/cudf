@@ -79,7 +79,7 @@ struct permuted_row_equality_comparator {
    * @param rhs The index of the second row
    * @returns true if the two specified rows in the permuted order are equivalent
    */
-  __device__ inline bool operator()(cudf::size_type lhs, cudf::size_type rhs)
+  __device__ inline auto operator()(cudf::size_type lhs, cudf::size_type rhs) -> bool
   {
     return _comparator(_map[lhs], _map[rhs]);
   }
@@ -117,7 +117,7 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
   }
 };
 
-size_type sort_groupby_helper::num_keys(rmm::cuda_stream_view stream)
+auto sort_groupby_helper::num_keys(rmm::cuda_stream_view stream) -> size_type
 {
   if (_num_keys > -1) return _num_keys;
 
@@ -133,7 +133,7 @@ size_type sort_groupby_helper::num_keys(rmm::cuda_stream_view stream)
   return _num_keys;
 }
 
-column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
+auto sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream) -> column_view
 {
   auto sliced_key_sorted_order = [stream, this]() {
     return cudf::detail::slice(this->_key_sorted_order->view(), 0, this->num_keys(stream));
@@ -185,8 +185,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   return sliced_key_sorted_order();
 }
 
-sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
-  rmm::cuda_stream_view stream)
+auto sort_groupby_helper::group_offsets(
+  rmm::cuda_stream_view stream) -> sort_groupby_helper::index_vector const&
 {
   if (_group_offsets) return *_group_offsets;
 
@@ -210,8 +210,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   return *_group_offsets;
 }
 
-sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
-  rmm::cuda_stream_view stream)
+auto sort_groupby_helper::group_labels(
+  rmm::cuda_stream_view stream) -> sort_groupby_helper::index_vector const&
 {
   if (_group_labels) return *_group_labels;
 
@@ -238,7 +238,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
   return group_labels;
 }
 
-column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stream)
+auto sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stream) -> column_view
 {
   if (_unsorted_keys_labels) return _unsorted_keys_labels->view();
 
@@ -263,7 +263,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
   return _unsorted_keys_labels->view();
 }
 
-column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view stream)
+auto sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view stream) -> column_view
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 

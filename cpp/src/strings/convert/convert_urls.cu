@@ -71,7 +71,7 @@ struct url_encoder_fn {
     hex[1] = byte < 10 ? '0' + byte : 'A' + (byte - 10);
   }
 
-  __device__ bool should_not_url_encode(char ch)
+  __device__ auto should_not_url_encode(char ch) -> bool
   {
     return (
       (ch >= '0' && ch <= '9') ||  // these are the characters
@@ -83,7 +83,7 @@ struct url_encoder_fn {
   }
 
   // main part of the functor the performs the url-encoding
-  __device__ size_type operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> size_type
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
@@ -176,7 +176,7 @@ namespace detail {
 namespace {
 
 // utility to convert a hex char into a single byte
-constexpr uint8_t hex_char_to_byte(char ch)
+constexpr auto hex_char_to_byte(char ch) -> uint8_t
 {
   if (ch >= '0' && ch <= '9') return (ch - '0');
   if (ch >= 'A' && ch <= 'F') return (ch - 'A' + 10);  // in hex A=10,B=11,...,F=15
@@ -184,7 +184,7 @@ constexpr uint8_t hex_char_to_byte(char ch)
   return 0;
 }
 
-constexpr bool is_hex_digit(char ch)
+constexpr auto is_hex_digit(char ch) -> bool
 {
   return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
 }

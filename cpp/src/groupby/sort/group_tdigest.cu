@@ -226,7 +226,7 @@ struct centroid_group_info {
 };
 
 struct tdigest_min {
-  __device__ double operator()(thrust::tuple<double, size_type> const& t)
+  __device__ auto operator()(thrust::tuple<double, size_type> const& t) -> double
   {
     auto const min  = thrust::get<0>(t);
     auto const size = thrust::get<1>(t);
@@ -235,7 +235,7 @@ struct tdigest_min {
 };
 
 struct tdigest_max {
-  __device__ double operator()(thrust::tuple<double, size_type> const& t)
+  __device__ auto operator()(thrust::tuple<double, size_type> const& t) -> double
   {
     auto const max  = thrust::get<0>(t);
     auto const size = thrust::get<1>(t);
@@ -246,7 +246,7 @@ struct tdigest_max {
 // a monotonically increasing scale function which produces a distribution
 // of centroids that is more densely packed in the middle of the input
 // than at the ends.
-__device__ double scale_func_k1(double quantile, double delta_norm)
+__device__ auto scale_func_k1(double quantile, double delta_norm) -> double
 {
   double k = delta_norm * asin(2.0 * quantile - 1.0);
   k += 1.0;

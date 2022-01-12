@@ -40,8 +40,8 @@ namespace detail {
 /**
  * @copydoc create_string_vector_from_column
  */
-rmm::device_uvector<string_view> create_string_vector_from_column(cudf::strings_column_view strings,
-                                                                  rmm::cuda_stream_view stream)
+auto create_string_vector_from_column(cudf::strings_column_view strings,
+                                                                  rmm::cuda_stream_view stream) -> rmm::device_uvector<string_view>
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -138,7 +138,7 @@ const character_flags_table_type* get_character_flags_table()
 /**
  * @copydoc cudf::strings::detail::get_character_cases_table
  */
-const character_cases_table_type* get_character_cases_table()
+auto get_character_cases_table() -> const character_cases_table_type*
 {
   return d_character_cases_table.find_or_initialize([&](void) {
     character_cases_table_type* table = nullptr;
@@ -152,7 +152,7 @@ const character_cases_table_type* get_character_cases_table()
 /**
  * @copydoc cudf::strings::detail::get_special_case_mapping_table
  */
-const special_case_mapping* get_special_case_mapping_table()
+auto get_special_case_mapping_table() -> const special_case_mapping*
 {
   return d_special_case_mappings.find_or_initialize([&](void) {
     special_case_mapping* table = nullptr;

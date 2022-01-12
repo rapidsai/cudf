@@ -385,7 +385,7 @@ TEST_F(ExplodeTest, ListOfStructsWithEmpties)
   cudf::test::fixed_width_column_wrapper<int32_t> i0{1};
   std::vector<std::unique_ptr<cudf::column>> s0_cols;
   s0_cols.push_back(i0.release());
-  cudf::test::structs_column_wrapper s0(std::move(s0_cols));
+  auto s0 = cudf::test::structs_column_wrapper(std::move(s0_cols));
   cudf::test::fixed_width_column_wrapper<int32_t> off0{0, 1};
   auto row0 = cudf::make_lists_column(1, off0.release(), s0.release(), 0, rmm::device_buffer{});
 
@@ -393,7 +393,7 @@ TEST_F(ExplodeTest, ListOfStructsWithEmpties)
   cudf::test::fixed_width_column_wrapper<int32_t> i1{{1}, {false}};
   std::vector<std::unique_ptr<cudf::column>> s1_cols;
   s1_cols.push_back(i1.release());
-  cudf::test::structs_column_wrapper s1(std::move(s1_cols));
+  auto s1 = cudf::test::structs_column_wrapper(std::move(s1_cols));
   cudf::test::fixed_width_column_wrapper<int32_t> off1{0, 1};
   auto row1 = cudf::make_lists_column(1, off1.release(), s1.release(), 0, rmm::device_buffer{});
 
@@ -1030,7 +1030,7 @@ TEST_F(ExplodeOuterTest, ListOfStructsWithEmpties)
   cudf::test::fixed_width_column_wrapper<int32_t> i0{1};
   std::vector<std::unique_ptr<cudf::column>> s0_cols;
   s0_cols.push_back(i0.release());
-  cudf::test::structs_column_wrapper s0(std::move(s0_cols));
+  auto s0 = cudf::test::structs_column_wrapper(std::move(s0_cols));
   cudf::test::fixed_width_column_wrapper<int32_t> off0{0, 1};
   auto row0 = cudf::make_lists_column(1, off0.release(), s0.release(), 0, rmm::device_buffer{});
 
@@ -1038,7 +1038,7 @@ TEST_F(ExplodeOuterTest, ListOfStructsWithEmpties)
   cudf::test::fixed_width_column_wrapper<int32_t> i1{{1}, {false}};
   std::vector<std::unique_ptr<cudf::column>> s1_cols;
   s1_cols.push_back(i1.release());
-  cudf::test::structs_column_wrapper s1(std::move(s1_cols));
+  auto s1 = cudf::test::structs_column_wrapper(std::move(s1_cols));
   cudf::test::fixed_width_column_wrapper<int32_t> off1{0, 1};
   auto row1 = cudf::make_lists_column(1, off1.release(), s1.release(), 0, rmm::device_buffer{});
 

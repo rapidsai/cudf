@@ -307,10 +307,10 @@ TYPED_TEST(GroupbyReplaceNullsListsTest, FollowingFillNested)
 struct GroupbyReplaceNullsStructsTest : public BaseFixture {
   using SCW = structs_column_wrapper;
 
-  SCW data(fixed_width_column_wrapper<int32_t> field0,
+  auto data(fixed_width_column_wrapper<int32_t> field0,
            strings_column_wrapper field1,
            lists_column_wrapper<int32_t> field2,
-           std::initializer_list<valid_type> mask)
+           std::initializer_list<valid_type> mask) -> SCW
   {
     return SCW({field0, field1, field2}, mask.begin());
   }

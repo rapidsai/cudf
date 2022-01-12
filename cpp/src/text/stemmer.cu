@@ -51,7 +51,7 @@ namespace {
  * @param string_iterator Iterator positioned to the character to check.
  * @return True if the character at the iterator is a consonant.
  */
-__device__ bool is_consonant(cudf::string_view::const_iterator string_iterator)
+__device__ auto is_consonant(cudf::string_view::const_iterator string_iterator) -> bool
 {
   auto ch = *string_iterator;
   cudf::string_view const d_vowels("aeiou", 5);
@@ -72,7 +72,7 @@ struct is_letter_fn {
   letter_type ltype;
   PositionIterator position_itr;
 
-  __device__ bool operator()(cudf::size_type idx)
+  __device__ auto operator()(cudf::size_type idx) -> bool
   {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<cudf::string_view>(idx);
@@ -179,7 +179,7 @@ struct dispatch_is_letter_fn {
 struct porter_stemmer_measure_fn {
   cudf::column_device_view const d_strings;  // strings to measure
 
-  __device__ int32_t operator()(cudf::size_type idx) const
+  __device__ auto operator()(cudf::size_type idx) const -> int32_t
   {
     if (d_strings.is_null(idx)) return 0;
     cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);

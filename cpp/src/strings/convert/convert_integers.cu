@@ -46,7 +46,7 @@ namespace {
  */
 template <typename IntegerType>
 struct string_to_integer_check_fn {
-  __device__ bool operator()(thrust::pair<string_view, bool> const& p) const
+  __device__ auto operator()(thrust::pair<string_view, bool> const& p) const -> bool
   {
     if (!p.second || p.first.empty()) { return false; }
 
@@ -202,7 +202,7 @@ template <typename IntegerType>
 struct string_to_integer_fn {
   const column_device_view strings_column;  // strings to convert
 
-  __device__ IntegerType operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> IntegerType
   {
     if (strings_column.is_null(idx)) return static_cast<IntegerType>(0);
     // the cast to IntegerType will create predictable results
@@ -294,7 +294,7 @@ template <typename IntegerType>
 struct integer_to_string_size_fn {
   column_device_view d_column;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> size_type
   {
     if (d_column.is_null(idx)) return 0;
     IntegerType value = d_column.element<IntegerType>(idx);

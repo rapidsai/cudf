@@ -35,7 +35,7 @@
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+  auto type() -> cudf::data_type { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type()), rmm::cuda_stream_default},
@@ -47,7 +47,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
     thrust::sequence(thrust::device, typed_mask, typed_mask + mask.size());
   }
 
-  cudf::size_type num_elements() { return _num_elements; }
+  auto num_elements() -> cudf::size_type { return _num_elements; }
 
   std::random_device r;
   std::default_random_engine generator{r()};

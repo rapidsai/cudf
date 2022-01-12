@@ -289,7 +289,7 @@ template <typename T>
 struct replace_nulls_functor {
   T const* value_it;
   replace_nulls_functor(T const* _value_it) : value_it(_value_it) {}
-  __device__ T operator()(T input, bool is_valid) { return is_valid ? input : *value_it; }
+  __device__ auto operator()(T input, bool is_valid) -> T { return is_valid ? input : *value_it; }
 };
 
 /**

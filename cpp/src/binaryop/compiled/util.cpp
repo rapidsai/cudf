@@ -64,7 +64,7 @@ template <typename BinaryOperator>
 struct is_binary_operation_supported {
   // For types where Out type is fixed. (eg. comparison types)
   template <typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()()
+  inline constexpr auto operator()() -> bool
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
@@ -79,7 +79,7 @@ struct is_binary_operation_supported {
   }
 
   template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()()
+  inline constexpr auto operator()() -> bool
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>() and
@@ -107,13 +107,13 @@ struct is_supported_operation_functor {
   template <typename TypeLhs, typename TypeRhs>
   struct nested_support_functor {
     template <typename BinaryOperator, typename TypeOut>
-    inline constexpr bool call()
+    inline constexpr auto call() -> bool
     {
       return is_binary_operation_supported<BinaryOperator>{}
         .template operator()<TypeOut, TypeLhs, TypeRhs>();
     }
     template <typename TypeOut>
-    inline constexpr bool operator()(binary_operator op)
+    inline constexpr auto operator()(binary_operator op) -> bool
     {
       switch (op) {
         // clang-format off
@@ -147,13 +147,13 @@ struct is_supported_operation_functor {
   };
 
   template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool bool_op(data_type out)
+  inline constexpr auto bool_op(data_type out) -> bool
   {
     return out.id() == type_id::BOOL8 and
            is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>();
   }
   template <typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()(data_type out, binary_operator op)
+  inline constexpr auto operator()(data_type out, binary_operator op) -> bool
   {
     switch (op) {
       // output type should be bool type.
@@ -179,7 +179,7 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
   return double_type_dispatcher(lhs, rhs, common_type_functor{}, out);
 }
 
-bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
+auto is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op) -> bool
 {
   return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op);
 }

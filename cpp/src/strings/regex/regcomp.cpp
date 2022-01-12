@@ -60,7 +60,7 @@ const std::array<char, 33> escapable_chars{
 
 }  // namespace
 
-int32_t reprog::add_inst(int32_t t)
+auto reprog::add_inst(int32_t t) -> int32_t
 {
   reinst inst;
   inst.type        = t;
@@ -69,39 +69,39 @@ int32_t reprog::add_inst(int32_t t)
   return add_inst(inst);
 }
 
-int32_t reprog::add_inst(reinst inst)
+auto reprog::add_inst(reinst inst) -> int32_t
 {
   _insts.push_back(inst);
   return static_cast<int>(_insts.size() - 1);
 }
 
-int32_t reprog::add_class(reclass cls)
+auto reprog::add_class(reclass cls) -> int32_t
 {
   _classes.push_back(cls);
   return static_cast<int>(_classes.size() - 1);
 }
 
-reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
+auto reprog::inst_at(int32_t id) -> reinst& { return _insts[id]; }
 
-reclass& reprog::class_at(int32_t id) { return _classes[id]; }
+auto reprog::class_at(int32_t id) -> reclass& { return _classes[id]; }
 
 void reprog::set_start_inst(int32_t id) { _startinst_id = id; }
 
-int32_t reprog::get_start_inst() const { return _startinst_id; }
+auto reprog::get_start_inst() const -> int32_t { return _startinst_id; }
 
-int32_t reprog::insts_count() const { return static_cast<int>(_insts.size()); }
+auto reprog::insts_count() const -> int32_t { return static_cast<int>(_insts.size()); }
 
-int32_t reprog::classes_count() const { return static_cast<int>(_classes.size()); }
+auto reprog::classes_count() const -> int32_t { return static_cast<int>(_classes.size()); }
 
 void reprog::set_groups_count(int32_t groups) { _num_capturing_groups = groups; }
 
-int32_t reprog::groups_count() const { return _num_capturing_groups; }
+auto reprog::groups_count() const -> int32_t { return _num_capturing_groups; }
 
-const reinst* reprog::insts_data() const { return _insts.data(); }
+auto reprog::insts_data() const -> const reinst* { return _insts.data(); }
 
-const int32_t* reprog::starts_data() const { return _startinst_ids.data(); }
+auto reprog::starts_data() const -> const int32_t* { return _startinst_ids.data(); }
 
-int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
+auto reprog::starts_count() const -> int32_t { return static_cast<int>(_startinst_ids.size()); }
 
 /**
  * @brief Converts pattern into regex classes
@@ -123,7 +123,7 @@ class regex_parser {
   short yy_min_count;
   short yy_max_count;
 
-  bool nextc(char32_t& c)  // return "quoted" == backslash-escape prefix
+  auto nextc(char32_t& c) -> bool  // return "quoted" == backslash-escape prefix
   {
     if (lexdone) {
       c = 0;
@@ -138,7 +138,7 @@ class regex_parser {
     return false;
   }
 
-  int bldcclass()
+  auto bldcclass() -> int
   {
     int type = CCLASS;
     std::vector<char32_t> cls;
@@ -251,7 +251,7 @@ class regex_parser {
     return type;
   }
 
-  int lex(int dot_type)
+  auto lex(int dot_type) -> int
   {
     int quoted = nextc(yy);
     if (quoted) {
@@ -528,7 +528,7 @@ class regex_compiler {
 
   inline void pushand(int f, int l) { andstack.push_back({f, l}); }
 
-  inline Node popand(int op)
+  inline auto popand(int op) -> Node
   {
     if (andstack.size() < 1) {
       // missing operand for op
@@ -548,7 +548,7 @@ class regex_compiler {
     atorstack.push_back(ator);
   }
 
-  inline Ator popator()
+  inline auto popator() -> Ator
   {
     Ator ator = atorstack[atorstack.size() - 1];
     atorstack.pop_back();
@@ -835,7 +835,7 @@ class regex_compiler {
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
+auto reprog::create_from(const char32_t* pattern, regex_flags const flags) -> reprog
 {
   reprog rtn;
   regex_compiler compiler(pattern, flags, rtn);

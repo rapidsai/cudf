@@ -51,14 +51,14 @@ class modulo_partitioner {
  public:
   modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
 
-  __device__ size_type operator()(hash_value_t hash_value) const { return hash_value % divisor; }
+  __device__ auto operator()(hash_value_t hash_value) const -> size_type { return hash_value % divisor; }
 
  private:
   const size_type divisor;
 };
 
 template <typename T>
-bool is_power_two(T number)
+auto is_power_two(T number) -> bool
 {
   return (0 == (number & (number - 1)));
 }
@@ -78,7 +78,7 @@ class bitwise_partitioner {
     assert(is_power_two(num_partitions));
   }
 
-  __device__ size_type operator()(hash_value_t hash_value) const
+  __device__ auto operator()(hash_value_t hash_value) const -> size_type
   {
     return hash_value & mask;  // hash_value & (num_partitions - 1)
   }
@@ -356,14 +356,14 @@ void copy_block_partitions_impl(InputIter const input,
     scanned_block_partition_sizes);
 }
 
-rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
+auto compute_gather_map(size_type num_rows,
                                                   size_type num_partitions,
                                                   size_type const* row_partition_numbers,
                                                   size_type const* row_partition_offset,
                                                   size_type const* block_partition_sizes,
                                                   size_type const* scanned_block_partition_sizes,
                                                   size_type grid_size,
-                                                  rmm::cuda_stream_view stream)
+                                                  rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
 {
   auto sequence = thrust::make_counting_iterator(0);
   rmm::device_uvector<size_type> gather_map(num_rows, stream);

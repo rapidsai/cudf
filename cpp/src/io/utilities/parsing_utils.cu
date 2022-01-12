@@ -21,7 +21,7 @@ constexpr int bytes_per_find_thread = 64;
 using pos_key_pair = thrust::pair<uint64_t, char>;
 
 template <typename T>
-constexpr T divCeil(T dividend, T divisor) noexcept
+constexpr auto divCeil(T dividend, T divisor) noexcept -> T
 {
   return (dividend + divisor - 1) / divisor;
 }
@@ -98,11 +98,11 @@ __global__ void count_and_set_positions(const char* data,
 }  // namespace
 
 template <class T>
-cudf::size_type find_all_from_set(device_span<char const> data,
+auto find_all_from_set(device_span<char const> data,
                                   std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
-                                  rmm::cuda_stream_view stream)
+                                  rmm::cuda_stream_view stream) -> cudf::size_type
 {
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
@@ -120,11 +120,11 @@ cudf::size_type find_all_from_set(device_span<char const> data,
 }
 
 template <class T>
-cudf::size_type find_all_from_set(host_span<char const> data,
+auto find_all_from_set(host_span<char const> data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
                                   T* positions,
-                                  rmm::cuda_stream_view stream)
+                                  rmm::cuda_stream_view stream) -> cudf::size_type
 {
   rmm::device_buffer d_chunk(std::min(max_chunk_bytes, data.size()), stream);
   auto d_count = cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(1, stream);
@@ -184,16 +184,16 @@ template cudf::size_type find_all_from_set<pos_key_pair>(host_span<char const> d
                                                          pos_key_pair* positions,
                                                          rmm::cuda_stream_view stream);
 
-cudf::size_type count_all_from_set(device_span<char const> data,
+auto count_all_from_set(device_span<char const> data,
                                    std::vector<char> const& keys,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view stream) -> cudf::size_type
 {
   return find_all_from_set<void>(data, keys, 0, nullptr, stream);
 }
 
-cudf::size_type count_all_from_set(host_span<char const> data,
+auto count_all_from_set(host_span<char const> data,
                                    const std::vector<char>& keys,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view stream) -> cudf::size_type
 {
   return find_all_from_set<void>(data, keys, 0, nullptr, stream);
 }

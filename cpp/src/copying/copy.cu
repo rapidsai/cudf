@@ -124,7 +124,7 @@ template <typename Predicate>
 class logical_not {
  public:
   explicit logical_not(Predicate predicate) : _pred{predicate} {}
-  bool __device__ operator()(size_type i) const { return not _pred(i); }
+  auto __device__ operator()(size_type i) const -> bool { return not _pred(i); }
 
  private:
   Predicate _pred;

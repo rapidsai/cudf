@@ -45,7 +45,7 @@ struct var_transform {
   size_type const* d_group_labels;
   size_type ddof;
 
-  __device__ ResultType operator()(size_type i)
+  __device__ auto operator()(size_type i) -> ResultType
   {
     if (d_values.is_null(i)) return 0.0;
 

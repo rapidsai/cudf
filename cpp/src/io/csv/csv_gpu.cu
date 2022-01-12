@@ -64,7 +64,7 @@ constexpr uint32_t csvparse_block_dim = 128;
  *
  * @return `true` if it is digit-like, `false` otherwise
  */
-__device__ __inline__ bool is_digit(char c, bool is_hex = false)
+__device__ __inline__ auto is_digit(char c, bool is_hex = false) -> bool
 {
   if (c >= '0' && c <= '9') return true;
 
@@ -97,8 +97,8 @@ __device__ __inline__ bool is_digit(char c, bool is_hex = false)
  *
  * @return `true` if it is date-like, `false` otherwise
  */
-__device__ __inline__ bool is_datetime(
-  long len, long decimal_count, long colon_count, long dash_count, long slash_count)
+__device__ __inline__ auto is_datetime(
+  long len, long decimal_count, long colon_count, long dash_count, long slash_count) -> bool
 {
   // Must not exceed count of longest month (September) plus `T` time indicator
   if (len > 10) { return false; }
@@ -127,12 +127,12 @@ __device__ __inline__ bool is_datetime(
  *
  * @return `true` if it is floating point-like, `false` otherwise
  */
-__device__ __inline__ bool is_floatingpoint(long len,
+__device__ __inline__ auto is_floatingpoint(long len,
                                             long digit_count,
                                             long decimal_count,
                                             long thousands_count,
                                             long dash_count,
-                                            long exponent_count)
+                                            long exponent_count) -> bool
 {
   // Can't have more than one exponent and one decimal point
   if (decimal_count > 1) return false;
@@ -292,34 +292,34 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 }
 
 template <typename T, int base>
-__inline__ __device__ T decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                      char const* end,
-                                     parse_options_view const& opts)
+                                     parse_options_view const& opts) -> T
 {
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
 template <typename T,
           std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                      char const* end,
-                                     parse_options_view const& opts)
+                                     parse_options_view const& opts) -> T
 {
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                      char const* end,
-                                     parse_options_view const& opts)
+                                     parse_options_view const& opts) -> T
 {
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                      char const* end,
-                                     parse_options_view const& opts)
+                                     parse_options_view const& opts) -> T
 {
   return to_duration<T>(begin, end);
 }
@@ -327,18 +327,18 @@ __inline__ __device__ T decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ cudf::string_view decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                                      char const* end,
-                                                     parse_options_view const& opts)
+                                                     parse_options_view const& opts) -> cudf::string_view
 {
   return cudf::string_view{};
 }
 
 // The purpose of this is merely to allow compilation ONLY
 template <>
-__inline__ __device__ cudf::dictionary32 decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                                       char const* end,
-                                                      parse_options_view const& opts)
+                                                      parse_options_view const& opts) -> cudf::dictionary32
 {
   return cudf::dictionary32{};
 }
@@ -346,9 +346,9 @@ __inline__ __device__ cudf::dictionary32 decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ cudf::list_view decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                                    char const* end,
-                                                   parse_options_view const& opts)
+                                                   parse_options_view const& opts) -> cudf::list_view
 {
   return cudf::list_view{};
 }
@@ -356,9 +356,9 @@ __inline__ __device__ cudf::list_view decode_value(char const* begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ cudf::struct_view decode_value(char const* begin,
+__inline__ __device__ auto decode_value(char const* begin,
                                                      char const* end,
-                                                     parse_options_view const& opts)
+                                                     parse_options_view const& opts) -> cudf::struct_view
 {
   return cudf::struct_view{};
 }
@@ -581,8 +581,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
  * @brief Merge two packed row contexts (each corresponding to a block of characters)
  * and return the packed row context corresponding to the merged character block
  */
-inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
-                                                     packed_rowctx_t second_ctx)
+inline __device__ auto merge_row_contexts(packed_rowctx_t first_ctx,
+                                                     packed_rowctx_t second_ctx) -> packed_rowctx_t
 {
   uint32_t id0 = get_row_context(first_ctx, ROW_CTX_NONE) & 3;
   uint32_t id1 = get_row_context(first_ctx, ROW_CTX_QUOTE) & 3;
@@ -598,12 +598,12 @@ inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
  * 1-bit count (0 or 1) per context in the lower 4 bits
  * 2-bit output context id per input context in bits 8..15
  */
-constexpr __device__ uint32_t make_char_context(uint32_t id0,
+constexpr __device__ auto make_char_context(uint32_t id0,
                                                 uint32_t id1,
                                                 uint32_t id2 = ROW_CTX_COMMENT,
                                                 uint32_t c0  = 0,
                                                 uint32_t c1  = 0,
-                                                uint32_t c2  = 0)
+                                                uint32_t c2  = 0) -> uint32_t
 {
   return (id0 << 8) | (id1 << 10) | (id2 << 12) | (ROW_CTX_EOF << 14) | (c0) | (c1 << 1) |
          (c2 << 2);
@@ -639,7 +639,7 @@ inline __device__ void merge_char_context(uint4& ctx, uint32_t char_ctx, uint32_
 /*
  * Convert the context-with-row-bitmaps version to a packed row context
  */
-inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
+inline __device__ auto pack_rowmaps(uint4 ctx_map) -> packed_rowctx_t
 {
   return pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
                            make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
@@ -649,7 +649,7 @@ inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
 /*
  * Selects the row bitmap corresponding to the given parser state
  */
-inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
+inline __device__ auto select_rowmap(uint4 ctx_map, uint32_t ctxid) -> uint32_t
 {
   return (ctxid == ROW_CTX_NONE)      ? ctx_map.x
          : (ctxid == ROW_CTX_QUOTE)   ? ctx_map.y
@@ -763,8 +763,8 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
  *
  * @return Final row context and count (row_position*4 + context_id format)
  */
-static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024],
-                                                                   uint32_t t)
+static inline __device__ auto rowctx_inverse_merge_transform(uint64_t ctxtree[1024],
+                                                                   uint32_t t) -> rowctx32_t
 {
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
   rowctx32_t brow4 = 0;               // output row in block *4
@@ -936,10 +936,10 @@ __global__ void __launch_bounds__(rowofs_block_dim)
   }
 }
 
-size_t __host__ count_blank_rows(const cudf::io::parse_options_view& opts,
+auto __host__ count_blank_rows(const cudf::io::parse_options_view& opts,
                                  device_span<char const> data,
                                  device_span<uint64_t const> row_offsets,
-                                 rmm::cuda_stream_view stream)
+                                 rmm::cuda_stream_view stream) -> size_t
 {
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
@@ -1013,7 +1013,7 @@ void __host__ decode_row_column_data(cudf::io::parse_options_view const& options
     options, data, column_flags, row_offsets, dtypes, columns, valids);
 }
 
-uint32_t __host__ gather_row_offsets(const parse_options_view& options,
+auto __host__ gather_row_offsets(const parse_options_view& options,
                                      uint64_t* row_ctx,
                                      device_span<uint64_t> const offsets_out,
                                      device_span<char const> const data,
@@ -1024,7 +1024,7 @@ uint32_t __host__ gather_row_offsets(const parse_options_view& options,
                                      size_t byte_range_start,
                                      size_t byte_range_end,
                                      size_t skip_rows,
-                                     rmm::cuda_stream_view stream)
+                                     rmm::cuda_stream_view stream) -> uint32_t
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
 

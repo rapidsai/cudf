@@ -40,9 +40,9 @@ class file_source : public datasource {
 
   virtual ~file_source() = default;
 
-  [[nodiscard]] bool supports_device_read() const override { return _cufile_in != nullptr; }
+  [[nodiscard]] auto supports_device_read() const -> bool override { return _cufile_in != nullptr; }
 
-  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  [[nodiscard]] auto is_device_read_preferred(size_t size) const -> bool override
   {
     return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
   }
@@ -57,10 +57,10 @@ class file_source : public datasource {
     return _cufile_in->read(offset, read_size, stream);
   }
 
-  size_t device_read(size_t offset,
+  auto device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
-                     rmm::cuda_stream_view stream) override
+                     rmm::cuda_stream_view stream) -> size_t override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
@@ -79,7 +79,7 @@ class file_source : public datasource {
     return _cufile_in->read_async(offset, read_size, dst, stream);
   }
 
-  [[nodiscard]] size_t size() const override { return _file.size(); }
+  [[nodiscard]] auto size() const -> size_t override { return _file.size(); }
 
  protected:
   detail::file_wrapper _file;
@@ -118,7 +118,7 @@ class memory_mapped_source : public file_source {
       static_cast<uint8_t*>(_map_addr) + (offset - _map_offset), read_size);
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
   {
     CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
 
@@ -176,7 +176,7 @@ class direct_read_source : public file_source {
     return buffer::create(std::move(v));
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
   {
     lseek(_file.desc(), offset, SEEK_SET);
 
@@ -200,7 +200,7 @@ class user_datasource_wrapper : public datasource {
  public:
   explicit user_datasource_wrapper(datasource* const source) : source(source) {}
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
   {
     return source->host_read(offset, size, dst);
   }
@@ -210,15 +210,15 @@ class user_datasource_wrapper : public datasource {
     return source->host_read(offset, size);
   }
 
-  [[nodiscard]] bool supports_device_read() const override
+  [[nodiscard]] auto supports_device_read() const -> bool override
   {
     return source->supports_device_read();
   }
 
-  size_t device_read(size_t offset,
+  auto device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
-                     rmm::cuda_stream_view stream) override
+                     rmm::cuda_stream_view stream) -> size_t override
   {
     return source->device_read(offset, size, dst, stream);
   }
@@ -230,7 +230,7 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
-  [[nodiscard]] size_t size() const override { return source->size(); }
+  [[nodiscard]] auto size() const -> size_t override { return source->size(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource

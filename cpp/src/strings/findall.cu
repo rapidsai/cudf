@@ -59,7 +59,7 @@ struct findall_fn {
   }
 
   // this will count columns as well as locate a specific string for a column
-  __device__ findall_result findall(size_type idx)
+  __device__ auto findall(size_type idx) -> findall_result
   {
     string_index_pair result{nullptr, 0};
     if (d_strings.is_null(idx) || (d_counts && (column_index >= d_counts[idx])))
@@ -85,7 +85,7 @@ struct findall_fn {
     return findall_result{column_count, result};
   }
 
-  __device__ string_index_pair operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> string_index_pair
   {
     // this one only cares about the string
     return findall(idx).second;
@@ -99,7 +99,7 @@ struct findall_count_fn : public findall_fn<stack_size> {
   {
   }
 
-  __device__ size_type operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> size_type
   {
     // this one only cares about the column count
     return findall_fn<stack_size>::findall(idx).first;

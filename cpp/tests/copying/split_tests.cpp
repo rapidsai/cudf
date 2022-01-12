@@ -636,7 +636,7 @@ void split_string_with_invalids(SplitFunc Split, CompareFunc Compare)
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  cudf::table src_table(std::move(scols));
+  auto src_table = cudf::table(std::move(scols));
 
   std::vector<cudf::size_type> splits{2, 5, 9};
 
@@ -667,7 +667,7 @@ void split_empty_output_strings_column_value(SplitFunc Split, CompareFunc Compar
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  cudf::table src_table(std::move(scols));
+  auto src_table = cudf::table(std::move(scols));
 
   cudf::size_type num_cols = 2;
 
@@ -697,7 +697,7 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
       strings[0].begin(), strings[0].end(), no_valids};
     std::vector<std::unique_ptr<cudf::column>> scols;
     scols.push_back(empty_str_col.release());
-    cudf::table empty_table(std::move(scols));
+    auto empty_table = cudf::table(std::move(scols));
     EXPECT_NO_THROW(Split(empty_table, splits));
   }
 
@@ -706,8 +706,8 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  cudf::table src_table(std::move(scols));
-  auto result = Split(src_table, splits);
+  auto src_table = cudf::table(std::move(scols));
+  auto result    = Split(src_table, splits);
 
   std::vector<bool> validity_masks[2] = {std::vector<bool>(strings[0].size()),
                                          std::vector<bool>(strings[0].size())};
@@ -1706,7 +1706,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
     std::vector<std::unique_ptr<cudf::column>> struct_children;
     struct_children.push_back(std::move(list));
     struct_children.push_back(strings.release());
-    cudf::test::structs_column_wrapper col(std::move(struct_children));
+    auto col = cudf::test::structs_column_wrapper(std::move(struct_children));
 
     auto pre_split = cudf::split(col, {2});
 

@@ -61,7 +61,7 @@ table::table(table_view view, rmm::cuda_stream_view stream, rmm::mr::device_memo
 }
 
 // Create immutable view
-table_view table::view() const
+auto table::view() const -> table_view
 {
   std::vector<column_view> views;
   views.reserve(_columns.size());
@@ -72,7 +72,7 @@ table_view table::view() const
 }
 
 // Create mutable view
-mutable_table_view table::mutable_view()
+auto table::mutable_view() -> mutable_table_view
 {
   std::vector<mutable_column_view> views;
   views.reserve(_columns.size());

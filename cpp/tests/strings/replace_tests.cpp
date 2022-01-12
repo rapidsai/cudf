@@ -29,7 +29,7 @@
 using algorithm = cudf::strings::detail::replace_algorithm;
 
 struct StringsReplaceTest : public cudf::test::BaseFixture {
-  cudf::test::strings_column_wrapper build_corpus()
+  auto build_corpus() -> cudf::test::strings_column_wrapper
   {
     std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                        "the fat cat lays next to the other accénted cat",

@@ -53,7 +53,7 @@ struct scan_result_functor final : store_result_functor {
   }
 
  private:
-  column_view get_grouped_values()
+  auto get_grouped_values() -> column_view
   {
     // early exit if presorted
     if (is_presorted()) { return values; }

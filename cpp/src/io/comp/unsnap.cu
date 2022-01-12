@@ -74,7 +74,7 @@ struct unsnap_state_s {
   gpu_inflate_input_s in;      ///< input parameters for current block
 };
 
-inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
+inline __device__ auto byte_access(unsnap_state_s* s, uint32_t pos) -> volatile uint8_t&
 {
   return s->q.buf[pos & (prefetch_size - 1)];
 }
@@ -209,7 +209,7 @@ static const uint8_t __device__ __constant__ k_len3lut[1 << 10] = {
  *
  * Implemented by doing 8 consecutive lookups, building the result 4-bit at a time
  */
-inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2)
+inline __device__ auto get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2) -> uint32_t
 {
   uint32_t m, v, m4, n;
   v  = v0;
@@ -253,7 +253,7 @@ inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2)
  * minus 2, given two input masks each containing bit0 or bit1 of the corresponding
  * code length minus 2 for up to 32 bytes
  */
-inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
+inline __device__ auto get_len5_mask(uint32_t v0, uint32_t v1) -> uint32_t
 {
   uint32_t m;
   m = (v1 & 1) * 2 + (v0 & 1);
@@ -707,10 +707,10 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
-cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
+auto __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
                                 gpu_inflate_status_s* outputs,
                                 int count,
-                                rmm::cuda_stream_view stream)
+                                rmm::cuda_stream_view stream) -> cudaError_t
 {
   uint32_t count32 = (count > 0) ? count : 0;
   dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block

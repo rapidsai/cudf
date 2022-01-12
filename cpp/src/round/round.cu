@@ -38,14 +38,14 @@ namespace cudf {
 namespace detail {
 namespace {  // anonymous
 
-inline float __device__ generic_round(float f) { return roundf(f); }
-inline double __device__ generic_round(double d) { return ::round(d); }
+inline auto __device__ generic_round(float f) -> float { return roundf(f); }
+inline auto __device__ generic_round(double d) -> double { return ::round(d); }
 
-inline float __device__ generic_round_half_even(float f) { return rintf(f); }
-inline double __device__ generic_round_half_even(double d) { return rint(d); }
+inline auto __device__ generic_round_half_even(float f) -> float { return rintf(f); }
+inline auto __device__ generic_round_half_even(double d) -> double { return rint(d); }
 
-inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
-inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
+inline auto __device__ generic_modf(float a, float* b) -> float { return modff(a, b); }
+inline auto __device__ generic_modf(double a, double* b) -> double { return modf(a, b); }
 
 template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)
@@ -191,13 +191,13 @@ struct half_even_negative {
 template <typename T>
 struct half_up_fixed_point {
   T n;
-  __device__ T operator()(T e) { return half_up_negative<T>{n}(e) / n; }
+  __device__ auto operator()(T e) -> T { return half_up_negative<T>{n}(e) / n; }
 };
 
 template <typename T>
 struct half_even_fixed_point {
   T n;
-  __device__ T operator()(T e) { return half_even_negative<T>{n}(e) / n; }
+  __device__ auto operator()(T e) -> T { return half_even_negative<T>{n}(e) / n; }
 };
 
 template <typename T,

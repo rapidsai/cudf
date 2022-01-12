@@ -38,7 +38,7 @@ namespace {
 template <typename Expected>
 struct type_tester {
   template <typename Dispatched>
-  bool operator()()
+  auto operator()() -> bool
   {
     return std::is_same_v<Expected, Dispatched>;
   }
@@ -54,7 +54,7 @@ TYPED_TEST(TypedDispatcherTest, TypeToId)
 namespace {
 struct verify_dispatched_type {
   template <typename T>
-  __host__ __device__ bool operator()(cudf::type_id id)
+  __host__ __device__ auto operator()(cudf::type_id id) -> bool
   {
     return id == cudf::type_to_id<T>();
   }
@@ -96,7 +96,7 @@ namespace {
 template <typename Expected1, typename Expected2>
 struct two_type_tester {
   template <typename Dispatched1, typename Dispatched2>
-  bool operator()()
+  auto operator()() -> bool
   {
     return std::is_same_v<Expected1, Dispatched1> && std::is_same_v<Expected2, Dispatched2>;
   }
@@ -113,7 +113,7 @@ TYPED_TEST(TypedDoubleDispatcherTest, TypeToId)
 namespace {
 struct verify_double_dispatched_type {
   template <typename T1, typename T2>
-  __host__ __device__ bool operator()(cudf::type_id id1, cudf::type_id id2)
+  __host__ __device__ auto operator()(cudf::type_id id1, cudf::type_id id2) -> bool
   {
     return id1 == cudf::type_to_id<T1>() && id2 == cudf::type_to_id<T2>();
   }

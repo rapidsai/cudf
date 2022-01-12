@@ -47,7 +47,7 @@ void size_range(benchmark::internal::Benchmark* b)
 }
 
 template <typename T>
-T random_int(T min, T max)
+auto random_int(T min, T max) -> T
 {
   static unsigned const seed = 13377331;
   static std::mt19937 engine{seed};

@@ -84,10 +84,10 @@ class parser {
   {
   }
 
-  CUDF_HOST_DEVICE inline bool eof(const char* p) { return p - input >= input_len; }
-  CUDF_HOST_DEVICE inline bool eof() { return eof(pos); }
+  CUDF_HOST_DEVICE inline auto eof(const char* p) -> bool { return p - input >= input_len; }
+  CUDF_HOST_DEVICE inline auto eof() -> bool { return eof(pos); }
 
-  CUDF_HOST_DEVICE inline bool parse_whitespace()
+  CUDF_HOST_DEVICE inline auto parse_whitespace() -> bool
   {
     while (!eof()) {
       if (is_whitespace(*pos)) {
@@ -99,12 +99,12 @@ class parser {
     return false;
   }
 
-  CUDF_HOST_DEVICE inline bool is_hex_digit(char c)
+  CUDF_HOST_DEVICE inline auto is_hex_digit(char c) -> bool
   {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
   }
 
-  CUDF_HOST_DEVICE inline int64_t chars_left() { return input_len - ((pos - input) + 1); }
+  CUDF_HOST_DEVICE inline auto chars_left() -> int64_t { return input_len - ((pos - input) + 1); }
 
   /**
    * @brief Parse an escape sequence.
@@ -114,7 +114,7 @@ class parser {
    *
    * @returns True on success or false on fail.
    */
-  CUDF_HOST_DEVICE inline bool parse_escape_seq()
+  CUDF_HOST_DEVICE inline auto parse_escape_seq() -> bool
   {
     if (*pos != '\\') { return false; }
     char c = *++pos;
@@ -147,7 +147,7 @@ class parser {
    * indicates allowing either single or double quotes (but not a mixture of both).
    * @returns A result code indicating success, failure or other result.
    */
-  CUDF_HOST_DEVICE inline parse_result parse_string(string_view& str, bool can_be_empty, char quote)
+  CUDF_HOST_DEVICE inline auto parse_string(string_view& str, bool can_be_empty, char quote) -> parse_result
   {
     str = string_view(nullptr, 0);
 
@@ -181,7 +181,7 @@ class parser {
   int64_t input_len{0};
   char const* pos{nullptr};
 
-  CUDF_HOST_DEVICE inline bool is_whitespace(char c) { return c <= ' '; }
+  CUDF_HOST_DEVICE inline auto is_whitespace(char c) -> bool { return c <= ' '; }
 };
 
 /**
@@ -238,7 +238,7 @@ class json_state : private parser {
   }
 
   // retrieve the entire current element into the output
-  __device__ parse_result extract_element(json_output* output, bool list_element)
+  __device__ auto extract_element(json_output* output, bool list_element) -> parse_result
   {
     char const* start = cur_el_start;
     char const* end   = start;
@@ -295,13 +295,13 @@ class json_state : private parser {
   }
 
   // skip the next element
-  __device__ parse_result skip_element() { return extract_element(nullptr, false); }
+  __device__ auto skip_element() -> parse_result { return extract_element(nullptr, false); }
 
   // advance to the next element
-  __device__ parse_result next_element() { return next_element_internal(false); }
+  __device__ auto next_element() -> parse_result { return next_element_internal(false); }
 
   // advance inside the current element
-  __device__ parse_result child_element(json_element_type expected_type)
+  __device__ auto child_element(json_element_type expected_type) -> parse_result
   {
     if (expected_type != NONE && cur_el_type != expected_type) { return parse_result::ERROR; }
 
@@ -313,7 +313,7 @@ class json_state : private parser {
   }
 
   // return the next element that matches the specified name.
-  __device__ parse_result next_matching_element(string_view const& name, bool inclusive)
+  __device__ auto next_matching_element(string_view const& name, bool inclusive) -> parse_result
   {
     // if we're not including the current element, skip it
     if (!inclusive) {
@@ -360,7 +360,7 @@ class json_state : private parser {
    * to not be present.
    * @returns A result code indicating success, failure or other result.
    */
-  CUDF_HOST_DEVICE inline parse_result parse_name(string_view& name, bool can_be_empty)
+  CUDF_HOST_DEVICE inline auto parse_name(string_view& name, bool can_be_empty) -> parse_result
   {
     char const quote = options.get_allow_single_quotes() ? 0 : '\"';
 
@@ -389,7 +389,7 @@ class json_state : private parser {
    * @param val (Output) The string containing the parsed value
    * @returns A result code indicating success, failure or other result.
    */
-  CUDF_HOST_DEVICE inline parse_result parse_non_string_value(string_view& val)
+  CUDF_HOST_DEVICE inline auto parse_non_string_value(string_view& val) -> parse_result
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
 
@@ -412,7 +412,7 @@ class json_state : private parser {
   }
 
   // parse a value - either a string or a number/null/bool
-  __device__ parse_result parse_value()
+  __device__ auto parse_value() -> parse_result
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
 
@@ -421,7 +421,7 @@ class json_state : private parser {
     return is_quote(*pos) ? parse_string(unused, false, *pos) : parse_non_string_value(unused);
   }
 
-  __device__ parse_result next_element_internal(bool child)
+  __device__ auto next_element_internal(bool child) -> parse_result
   {
     // if we're not getting a child element, skip the current element.
     // this will leave pos as the first character -after- the close of
@@ -473,7 +473,7 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
-  CUDF_HOST_DEVICE inline bool is_quote(char c)
+  CUDF_HOST_DEVICE inline auto is_quote(char c) -> bool
   {
     return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
   }
@@ -522,7 +522,7 @@ class path_state : private parser {
   path_state(const char* _path, size_t _path_len) : parser(_path, _path_len) {}
 
   // get the next operator in the JSONPath string
-  path_operator get_next_operator()
+  auto get_next_operator() -> path_operator
   {
     if (eof()) { return {path_operator_type::END}; }
 
@@ -590,7 +590,7 @@ class path_state : private parser {
  private:
   cudf::io::parse_options_view json_opts{',', '\n', '\"', '.'};
 
-  bool parse_path_name(string_view& name, string_view const& terminators)
+  auto parse_path_name(string_view& name, string_view const& terminators) -> bool
   {
     switch (*pos) {
       case '*':
@@ -689,9 +689,9 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
  * @returns A result code indicating success/fail/empty.
  */
 template <int max_command_stack_depth>
-__device__ parse_result parse_json_path(json_state& j_state,
+__device__ auto parse_json_path(json_state& j_state,
                                         path_operator const* commands,
-                                        json_output& output)
+                                        json_output& output) -> parse_result
 {
   // manually maintained context stack in lieu of calling parse_json_path recursively.
   struct context {
@@ -855,13 +855,13 @@ constexpr int max_command_stack_depth = 8;
  * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
-__device__ thrust::pair<parse_result, json_output> get_json_object_single(
+__device__ auto get_json_object_single(
   char const* input,
   size_t input_len,
   path_operator const* const commands,
   char* out_buf,
   size_t out_buf_size,
-  get_json_object_options options)
+  get_json_object_options options) -> thrust::pair<parse_result, json_output>
 {
   json_state j_state(input, input_len, options);
   json_output output{out_buf_size, out_buf};

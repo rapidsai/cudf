@@ -24,9 +24,9 @@
 namespace cudf {
 namespace detail {
 
-bool is_element_valid_sync(column_view const& col_view,
+auto is_element_valid_sync(column_view const& col_view,
                            size_type element_index,
-                           rmm::cuda_stream_view stream)
+                           rmm::cuda_stream_view stream) -> bool
 {
   CUDF_EXPECTS(element_index >= 0 and element_index < col_view.size(), "invalid index.");
   if (!col_view.nullable()) { return true; }

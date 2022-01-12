@@ -218,7 +218,7 @@ namespace {
  * cannot be defined in a TEST_F().
  */
 struct times_2 {
-  int32_t __device__ operator()(int32_t i) const { return i * 2; }
+  auto __device__ operator()(int32_t i) const -> int32_t { return i * 2; }
 };
 
 }  // namespace

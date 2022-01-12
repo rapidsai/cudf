@@ -44,7 +44,7 @@ namespace {
 struct ipv4_to_integers_fn {
   column_device_view const d_strings;
 
-  __device__ int64_t operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> int64_t
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
@@ -123,7 +123,7 @@ struct integers_to_ipv4_fn {
   int32_t const* d_offsets;
   char* d_chars;
 
-  __device__ int convert(int value, char* digits)
+  __device__ auto convert(int value, char* digits) -> int
   {
     int digits_idx = 0;
     while ((value > 0) && (digits_idx < 3)) {

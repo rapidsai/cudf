@@ -67,10 +67,10 @@ struct minmax_pair {
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type>
-rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
+auto reduce_device(InputIterator d_in,
                                              cudf::size_type num_items,
                                              Op binary_op,
-                                             rmm::cuda_stream_view stream)
+                                             rmm::cuda_stream_view stream) -> rmm::device_scalar<OutputType>
 {
   OutputType identity{};
   rmm::device_scalar<OutputType> result{identity, stream};
@@ -102,7 +102,7 @@ rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
 template <typename T>
 struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
-  __device__ minmax_pair<T> operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
+  __device__ auto operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const -> minmax_pair<T>
   {
     return minmax_pair<T>{thrust::min(lhs.min_val, rhs.min_val),
                           thrust::max(lhs.max_val, rhs.max_val)};
@@ -114,7 +114,7 @@ struct minmax_binary_op
  */
 template <typename T>
 struct create_minmax {
-  __device__ minmax_pair<T> operator()(T e) { return minmax_pair<T>{e}; }
+  __device__ auto operator()(T e) -> minmax_pair<T> { return minmax_pair<T>{e}; }
 };
 
 /**
@@ -124,7 +124,7 @@ struct create_minmax {
  */
 template <typename T>
 struct create_minmax_with_nulls {
-  __device__ minmax_pair<T> operator()(thrust::pair<T, bool> i)
+  __device__ auto operator()(thrust::pair<T, bool> i) -> minmax_pair<T>
   {
     return i.second ? minmax_pair<T>{i.first} : minmax_pair<T>{};
   }
@@ -140,7 +140,7 @@ struct create_minmax_with_nulls {
  */
 struct minmax_functor {
   template <typename T>
-  static constexpr bool is_supported()
+  static constexpr auto is_supported() -> bool
   {
     return !(std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>);
   }

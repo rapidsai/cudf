@@ -143,7 +143,7 @@ void materialize_bitmask(column_view const& left_col,
 struct side_index_generator {
   side _side;
 
-  __device__ index_type operator()(size_type i) const noexcept { return index_type{_side, i}; }
+  __device__ auto operator()(size_type i) const noexcept -> index_type { return index_type{_side, i}; }
 };
 
 /**
@@ -163,12 +163,12 @@ struct side_index_generator {
  *
  * @return A device_uvector of merged indices
  */
-index_vector generate_merged_indices(table_view const& left_table,
+auto generate_merged_indices(table_view const& left_table,
                                      table_view const& right_table,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      bool nullable                = true,
-                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default) -> index_vector
 {
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();
@@ -440,7 +440,7 @@ struct merge_queue_item {
   {
   }
 
-  bool operator<(merge_queue_item const& other) const { return priority < other.priority; }
+  auto operator<(merge_queue_item const& other) const -> bool { return priority < other.priority; }
 };
 
 // Helper function to ensure that moving out of the priority_queue is "atomic"

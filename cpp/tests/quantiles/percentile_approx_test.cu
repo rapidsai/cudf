@@ -220,7 +220,7 @@ void simple_test(data_type input_type, std::vector<std::pair<int, int>> params)
 }
 
 struct group_index {
-  __device__ int operator()(int i) { return i / 150000; }
+  __device__ auto operator()(int i) -> int { return i / 150000; }
 };
 
 void grouped_test(data_type input_type, std::vector<std::pair<int, int>> params)
@@ -294,7 +294,7 @@ void grouped_with_nulls_test(data_type input_type, std::vector<std::pair<int, in
 }
 
 template <typename T>
-data_type get_appropriate_type()
+auto get_appropriate_type() -> data_type
 {
   if constexpr (cudf::is_fixed_point<T>()) { return data_type{cudf::type_to_id<T>(), -7}; }
   return data_type{cudf::type_to_id<T>()};

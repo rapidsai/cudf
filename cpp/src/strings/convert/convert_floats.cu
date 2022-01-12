@@ -50,7 +50,7 @@ namespace {
  *
  * This function will also handle scientific notation format.
  */
-__device__ inline double stod(string_view const& d_str)
+__device__ inline auto stod(string_view const& d_str) -> double
 {
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
@@ -143,7 +143,7 @@ template <typename FloatType>
 struct string_to_float_fn {
   const column_device_view strings_column;  // strings to convert
 
-  __device__ FloatType operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> FloatType
   {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
     // The cast to FloatType will create predictable results for floats that are larger than the
@@ -243,7 +243,7 @@ struct ftos_converter {
   const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
 
   // utility for quickly converting known integer range to character array
-  __device__ char* int2str(int value, char* output)
+  __device__ auto int2str(int value, char* output) -> char*
   {
     if (value == 0) {
       *output++ = '0';
@@ -265,10 +265,10 @@ struct ftos_converter {
    *
    * @return The number of decimal places.
    */
-  __device__ int dissect_value(double value,
+  __device__ auto dissect_value(double value,
                                unsigned int& integer,
                                unsigned int& decimal,
-                               int& exp10)
+                               int& exp10) -> int
   {
     int decimal_places = significant_digits - 1;
     // normalize step puts value between lower-limit and upper-limit
@@ -330,7 +330,7 @@ struct ftos_converter {
    * @param output Memory to write output characters.
    * @return Number of bytes written.
    */
-  __device__ int float_to_string(double value, char* output)
+  __device__ auto float_to_string(double value, char* output) -> int
   {
     // check for valid value
     if (std::isnan(value)) {
@@ -397,7 +397,7 @@ struct ftos_converter {
    * @param value Float value to convert.
    * @return Number of bytes required.
    */
-  __device__ int compute_ftos_size(double value)
+  __device__ auto compute_ftos_size(double value) -> int
   {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
@@ -444,7 +444,7 @@ template <typename FloatType>
 struct float_to_string_size_fn {
   column_device_view d_column;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> size_type
   {
     if (d_column.is_null(idx)) return 0;
     FloatType value = d_column.element<FloatType>(idx);

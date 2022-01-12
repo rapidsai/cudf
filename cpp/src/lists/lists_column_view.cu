@@ -29,21 +29,21 @@ lists_column_view::lists_column_view(column_view const& lists_column) : column_v
   CUDF_EXPECTS(type().id() == type_id::LIST, "lists_column_view only supports lists");
 }
 
-column_view lists_column_view::parent() const { return static_cast<column_view>(*this); }
+auto lists_column_view::parent() const -> column_view { return static_cast<column_view>(*this); }
 
-column_view lists_column_view::offsets() const
+auto lists_column_view::offsets() const -> column_view
 {
   CUDF_EXPECTS(num_children() == 2, "lists column has an incorrect number of children");
   return column_view::child(offsets_column_index);
 }
 
-column_view lists_column_view::child() const
+auto lists_column_view::child() const -> column_view
 {
   CUDF_EXPECTS(num_children() == 2, "lists column has an incorrect number of children");
   return column_view::child(child_column_index);
 }
 
-column_view lists_column_view::get_sliced_child(rmm::cuda_stream_view stream) const
+auto lists_column_view::get_sliced_child(rmm::cuda_stream_view stream) const -> column_view
 {
   // if I have a positive offset, I need to slice my child
   if (offset() > 0) {

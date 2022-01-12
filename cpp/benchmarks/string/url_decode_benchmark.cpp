@@ -55,9 +55,9 @@ struct url_string_generator {
   }
 };
 
-cudf::test::strings_column_wrapper generate_column(cudf::size_type num_rows,
+auto generate_column(cudf::size_type num_rows,
                                                    cudf::size_type chars_per_row,
-                                                   double esc_seq_chance)
+                                                   double esc_seq_chance) -> cudf::test::strings_column_wrapper
 {
   std::mt19937 engine(1);
   url_string_generator url_gen(chars_per_row, esc_seq_chance);

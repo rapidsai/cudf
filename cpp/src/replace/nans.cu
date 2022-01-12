@@ -129,7 +129,7 @@ namespace {  // anonymous
 template <typename T>
 struct normalize_nans_and_zeros_lambda {
   cudf::column_device_view in;
-  T __device__ operator()(cudf::size_type i)
+  auto __device__ operator()(cudf::size_type i) -> T
   {
     auto e = in.element<T>(i);
     if (isnan(e)) { return std::numeric_limits<T>::quiet_NaN(); }

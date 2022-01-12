@@ -65,7 +65,7 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 /**
  * @brief Function that translates GDF compression to parquet compression
  */
-parquet::Compression to_parquet_compression(compression_type compression)
+auto to_parquet_compression(compression_type compression) -> parquet::Compression
 {
   switch (compression) {
     case compression_type::AUTO:
@@ -112,7 +112,7 @@ struct aggregate_writer_metadata {
     }
   }
 
-  FileMetaData get_metadata(size_t part)
+  auto get_metadata(size_t part) -> FileMetaData
   {
     CUDF_EXPECTS(part < files.size(), "Invalid part index queried");
     FileMetaData meta{};
@@ -139,7 +139,7 @@ struct aggregate_writer_metadata {
     }
   }
 
-  FileMetaData get_merged_metadata()
+  auto get_merged_metadata() -> FileMetaData
   {
     FileMetaData merged_md;
     for (size_t p = 0; p < this->files.size(); ++p) {
@@ -166,12 +166,12 @@ struct aggregate_writer_metadata {
     return global_rowgroup_base;
   }
 
-  [[nodiscard]] bool schema_matches(std::vector<SchemaElement> const& schema) const
+  [[nodiscard]] auto schema_matches(std::vector<SchemaElement> const& schema) const -> bool
   {
     return this->schema == schema;
   }
-  auto& file(size_t p) { return files[p]; }
-  [[nodiscard]] size_t num_files() const { return files.size(); }
+  auto file(size_t p) -> auto& { return files[p]; }
+  [[nodiscard]] auto num_files() const -> size_t { return files.size(); }
 
  private:
   int32_t version = 0;
@@ -484,9 +484,9 @@ struct leaf_schema_fn {
   }
 };
 
-inline bool is_col_nullable(LinkedColPtr const& col,
+inline auto is_col_nullable(LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
-                            bool single_write_mode)
+                            bool single_write_mode) -> bool
 {
   if (single_write_mode) {
     return col->nullable();
@@ -678,18 +678,19 @@ struct parquet_column_view {
                       std::vector<schema_tree_node> const& schema_tree,
                       rmm::cuda_stream_view stream);
 
-  [[nodiscard]] column_view leaf_column_view() const;
-  [[nodiscard]] gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream) const;
+  [[nodiscard]] auto leaf_column_view() const -> column_view;
+  [[nodiscard]] auto get_device_view(rmm::cuda_stream_view stream) const
+    -> gpu::parquet_column_device_view;
 
-  [[nodiscard]] column_view cudf_column_view() const { return cudf_col; }
-  [[nodiscard]] parquet::Type physical_type() const { return schema_node.type; }
+  [[nodiscard]] auto cudf_column_view() const -> column_view { return cudf_col; }
+  [[nodiscard]] auto physical_type() const -> parquet::Type { return schema_node.type; }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
   // LIST related member functions
-  [[nodiscard]] uint8_t max_def_level() const noexcept { return _max_def_level; }
-  [[nodiscard]] uint8_t max_rep_level() const noexcept { return _max_rep_level; }
-  [[nodiscard]] bool is_list() const noexcept { return _is_list; }
+  [[nodiscard]] auto max_def_level() const noexcept -> uint8_t { return _max_def_level; }
+  [[nodiscard]] auto max_rep_level() const noexcept -> uint8_t { return _max_rep_level; }
+  [[nodiscard]] auto is_list() const noexcept -> bool { return _is_list; }
 
  private:
   // Schema related members
@@ -812,7 +813,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   }
 }
 
-column_view parquet_column_view::leaf_column_view() const
+auto parquet_column_view::leaf_column_view() const -> column_view
 {
   auto col = cudf_col;
   while (cudf::is_nested(col.type())) {
@@ -825,8 +826,8 @@ column_view parquet_column_view::leaf_column_view() const
   return col;
 }
 
-gpu::parquet_column_device_view parquet_column_view::get_device_view(
-  rmm::cuda_stream_view stream) const
+auto parquet_column_view::get_device_view(rmm::cuda_stream_view stream) const
+  -> gpu::parquet_column_device_view
 {
   column_view col  = leaf_column_view();
   auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
@@ -1223,8 +1224,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   for (auto const& parq_col : parquet_columns) {
     cudf_cols.push_back(parq_col.cudf_column_view());
   }
-  table_view single_streams_table(cudf_cols);
-  size_type num_columns = single_streams_table.num_columns();
+  auto single_streams_table = table_view(cudf_cols);
+  size_type num_columns     = single_streams_table.num_columns();
 
   std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
 

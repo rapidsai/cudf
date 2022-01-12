@@ -60,11 +60,11 @@ struct alignas(4) format_item {
   char value;                  // specifier or literal value
   int8_t length;               // item length in bytes
 
-  static format_item new_specifier(char format_char, int8_t length)
+  static auto new_specifier(char format_char, int8_t length) -> format_item
   {
     return format_item{format_char_type::specifier, format_char, length};
   }
-  static format_item new_delimiter(char literal)
+  static auto new_delimiter(char literal) -> format_item
   {
     return format_item{format_char_type::literal, literal, 1};
   }
@@ -154,9 +154,9 @@ struct format_compiler {
                              stream.value()));
   }
 
-  format_item const* compiled_format_items() { return d_items.data(); }
+  auto compiled_format_items() -> format_item const* { return d_items.data(); }
 
-  [[nodiscard]] size_type items_count() const { return static_cast<size_type>(d_items.size()); }
+  [[nodiscard]] auto items_count() const -> size_type { return static_cast<size_type>(d_items.size()); }
 };
 
 template <typename T>
@@ -185,7 +185,7 @@ struct duration_to_string_size_fn {
   const format_item* d_format_items;
   size_type items_count;
 
-  __device__ int8_t format_length(char format_char, duration_component const* const timeparts) const
+  __device__ auto format_length(char format_char, duration_component const* const timeparts) const -> int8_t
   {
     switch (format_char) {
       case '-': return timeparts->is_negative; break;
@@ -202,7 +202,7 @@ struct duration_to_string_size_fn {
     }
   }
 
-  __device__ size_type operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> size_type
   {
     if (d_durations.is_null(idx)) return 0;
     auto duration                = d_durations.element<T>(idx);
@@ -246,7 +246,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
   // utility to create (optionally) 0-padded integers (up to 10 chars) without negative sign.
   // min_digits==-1 indicates no 0-padding.
-  __device__ char* int2str(char* str, int min_digits, int32_t value)
+  __device__ auto int2str(char* str, int min_digits, int32_t value) -> char*
   {
     constexpr int MAX_DIGITS = 10;  // largest 32-bit integer is 10 digits
     assert(min_digits <= MAX_DIGITS);
@@ -272,7 +272,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str;
   }
 
-  __device__ char* int_to_2digitstr(char* str, int8_t value)
+  __device__ auto int_to_2digitstr(char* str, int8_t value) -> char*
   {
     assert(value >= -99 && value <= 99);
     value  = std::abs(value);
@@ -281,35 +281,35 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str + 2;
   }
 
-  inline __device__ char* day(char* ptr, duration_component const* timeparts)
+  inline __device__ auto day(char* ptr, duration_component const* timeparts) -> char*
   {
     return int2str(ptr, -1, timeparts->day);
   }
 
-  inline __device__ char* hour_12(char* ptr, duration_component const* timeparts)
+  inline __device__ auto hour_12(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(ptr, timeparts->hour % 12);
   }
-  inline __device__ char* hour_24(char* ptr, duration_component const* timeparts)
+  inline __device__ auto hour_24(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(ptr, timeparts->hour);
   }
-  inline __device__ char* am_or_pm(char* ptr, duration_component const* timeparts)
+  inline __device__ auto am_or_pm(char* ptr, duration_component const* timeparts) -> char*
   {
     *ptr++ = (timeparts->hour / 12 == 0 ? 'A' : 'P');
     *ptr++ = 'M';
     return ptr;
   }
-  inline __device__ char* minute(char* ptr, duration_component const* timeparts)
+  inline __device__ auto minute(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(ptr, timeparts->minute);
   }
-  inline __device__ char* second(char* ptr, duration_component const* timeparts)
+  inline __device__ auto second(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(ptr, timeparts->second);
   }
 
-  inline __device__ char* subsecond(char* ptr, duration_component const* timeparts)
+  inline __device__ auto subsecond(char* ptr, duration_component const* timeparts) -> char*
   {
     if (timeparts->subsecond == 0) return ptr;
     const int digits = duration_to_string_size_fn<T>::format_length('S', timeparts) - 3;
@@ -322,7 +322,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return ptr + digits + 1;
   }
 
-  __device__ char* format_from_parts(duration_component const* timeparts, char* ptr)
+  __device__ auto format_from_parts(duration_component const* timeparts, char* ptr) -> char*
   {
     for (size_t idx = 0; idx < items_count; ++idx) {
       auto item = d_format_items[idx];
@@ -463,7 +463,7 @@ struct parse_duration {
   size_type items_count;
 
   // function to parse string (maximum 10 digits) to integer.
-  __device__ int32_t str2int(const char* str, int8_t max_bytes, int8_t& actual_length)
+  __device__ auto str2int(const char* str, int8_t max_bytes, int8_t& actual_length) -> int32_t
   {
     const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
     int32_t value   = 0;
@@ -480,10 +480,10 @@ struct parse_duration {
   }
 
   // function to parse fraction of decimal value with trailing zeros removed.
-  __device__ int32_t str2int_fixed(const char* str,
+  __device__ auto str2int_fixed(const char* str,
                                    int8_t fixed_width,
                                    size_type string_length,
-                                   int8_t& actual_length)
+                                   int8_t& actual_length) -> int32_t
   {
     const char* ptr = (*str == '.') ? str + 1 : str;
     int32_t value   = 0;
@@ -504,7 +504,7 @@ struct parse_duration {
   }
 
   // parse 2 digit string to integer
-  __device__ int8_t parse_2digit_int(const char* str, int8_t& actual_length)
+  __device__ auto parse_2digit_int(const char* str, int8_t& actual_length) -> int8_t
   {
     const char* ptr = (*str == '-' || *str == '+') ? str + 1 : str;
     int8_t value    = 0;
@@ -513,22 +513,22 @@ struct parse_duration {
     actual_length += (ptr - str);
     return (*str == '-') ? -value : value;
   }
-  inline __device__ int8_t parse_hour(const char* str, int8_t& actual_length)
+  inline __device__ auto parse_hour(const char* str, int8_t& actual_length) -> int8_t
   {
     return parse_2digit_int(str, actual_length);
   }
-  inline __device__ int8_t parse_minute(const char* str, int8_t& actual_length)
+  inline __device__ auto parse_minute(const char* str, int8_t& actual_length) -> int8_t
   {
     return parse_2digit_int(str, actual_length);
   }
-  inline __device__ int8_t parse_second(const char* str, int8_t& actual_length)
+  inline __device__ auto parse_second(const char* str, int8_t& actual_length) -> int8_t
   {
     return parse_2digit_int(str, actual_length);
   }
 
   // Walk the format_items to read the datetime string.
   // Returns 0 if all ok.
-  __device__ int parse_into_parts(string_view const& d_string, duration_component* timeparts)
+  __device__ auto parse_into_parts(string_view const& d_string, duration_component* timeparts) -> int
   {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
@@ -625,7 +625,7 @@ struct parse_duration {
     return 0;
   }
 
-  inline __device__ int64_t duration_from_parts(duration_component const* timeparts)
+  inline __device__ auto duration_from_parts(duration_component const* timeparts) -> int64_t
   {
     int32_t days  = timeparts->day;
     auto hour     = timeparts->hour;
@@ -648,7 +648,7 @@ struct parse_duration {
     return cuda::std::chrono::duration_cast<duration_ns>(duration + subsecond).count();
   }
 
-  __device__ T operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> T
   {
     if (d_strings.is_null(idx)) return T{0};
     string_view d_str = d_strings.element<string_view>(idx);

@@ -59,7 +59,7 @@ namespace {
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
  */
-type_id to_type_id(avro::schema_entry const* col)
+auto to_type_id(avro::schema_entry const* col) -> type_id
 {
   switch (col->kind) {
     case avro::type_boolean: return type_id::BOOL8;
@@ -151,10 +151,10 @@ class metadata : public file_metadata {
   datasource* const source;
 };
 
-rmm::device_buffer decompress_data(datasource& source,
+auto decompress_data(datasource& source,
                                    metadata& meta,
                                    rmm::device_buffer const& comp_block_data,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view stream) -> rmm::device_buffer
 {
   if (meta.codec == "deflate") {
     size_t uncompressed_data_size = 0;

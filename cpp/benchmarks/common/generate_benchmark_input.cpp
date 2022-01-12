@@ -44,7 +44,7 @@ auto deterministic_engine(unsigned seed) { return std::mt19937{seed}; }
  *  Computes the mean value for a distribution of given type and value bounds.
  */
 template <typename T>
-T get_distribution_mean(distribution_params<T> const& dist)
+auto get_distribution_mean(distribution_params<T> const& dist) -> T
 {
   switch (dist.id) {
     case distribution_id::NORMAL:
@@ -77,14 +77,14 @@ std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profi
 }
 
 template <>
-size_t avg_element_size<cudf::string_view>(data_profile const& profile)
+auto avg_element_size<cudf::string_view>(data_profile const& profile) -> size_t
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
   return get_distribution_mean(dist);
 }
 
 template <>
-size_t avg_element_size<cudf::list_view>(data_profile const& profile)
+auto avg_element_size<cudf::list_view>(data_profile const& profile) -> size_t
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
@@ -94,13 +94,13 @@ size_t avg_element_size<cudf::list_view>(data_profile const& profile)
 
 struct avg_element_size_fn {
   template <typename T>
-  size_t operator()(data_profile const& profile)
+  auto operator()(data_profile const& profile) -> size_t
   {
     return avg_element_size<T>(profile);
   }
 };
 
-size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
+auto avg_element_bytes(data_profile const& profile, cudf::type_id tid) -> size_t
 {
   return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{}, profile);
 }
@@ -222,7 +222,7 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   bool operator()(std::mt19937& engine) { return b_dist(engine); }
 };
 
-size_t null_mask_size(cudf::size_type num_rows)
+auto null_mask_size(cudf::size_type num_rows) -> size_t
 {
   constexpr size_t bitmask_bits = cudf::detail::size_in_bits<cudf::bitmask_type>();
   return (num_rows + bitmask_bits - 1) / bitmask_bits;
@@ -428,7 +428,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   auto const avg_run_len = profile.get_avg_run_length();
   auto run_len_dist      = create_run_length_dist(avg_run_len);
 
-  string_column_data out_col(num_rows, num_rows * avg_string_len);
+  auto out_col = string_column_data(num_rows, num_rows * avg_string_len);
   std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     if (cardinality == 0) {

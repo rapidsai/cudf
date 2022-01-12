@@ -67,7 +67,7 @@ struct list_gatherer {
   {
   }
 
-  __device__ result_type operator()(argument_type index)
+  __device__ auto operator()(argument_type index) -> result_type
   {
     // the "upper bound" of the span for a given offset is always offsets+1;
     size_type const* upper_bound_start = offsets + 1;

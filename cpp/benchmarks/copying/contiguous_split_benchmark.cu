@@ -48,7 +48,7 @@ void BM_contiguous_split_common(benchmark::State& state,
     [[maybe_unused]] auto const nulls = ret->null_count();
     return ret;
   });
-  cudf::table src_table(std::move(columns));
+  auto src_table = cudf::table(std::move(columns));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
@@ -96,7 +96,7 @@ void BM_contiguous_split(benchmark::State& state)
 class ContiguousSplitStrings : public cudf::benchmark {
 };
 
-int rand_range(int r)
+auto rand_range(int r) -> int
 {
   return static_cast<int>((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) *
                           (float)(r - 1));

@@ -137,7 +137,7 @@ struct stats_state_s {
  * https://developers.google.com/protocol-buffers/docs/encoding
  */
 // Protobuf varint encoding for unsigned int
-__device__ inline uint8_t* pb_encode_uint(uint8_t* p, uint64_t v)
+__device__ inline auto pb_encode_uint(uint8_t* p, uint64_t v) -> uint8_t*
 {
   while (v > 0x7f) {
     *p++ = ((uint32_t)v | 0x80);
@@ -148,21 +148,21 @@ __device__ inline uint8_t* pb_encode_uint(uint8_t* p, uint64_t v)
 }
 
 // Protobuf field encoding for unsigned int
-__device__ inline uint8_t* pb_put_uint(uint8_t* p, uint32_t id, uint64_t v)
+__device__ inline auto pb_put_uint(uint8_t* p, uint32_t id, uint64_t v) -> uint8_t*
 {
   p[0] = id * 8 + PB_TYPE_VARINT;  // NOTE: Assumes id < 16
   return pb_encode_uint(p + 1, v);
 }
 
 // Protobuf field encoding for signed int
-__device__ inline uint8_t* pb_put_int(uint8_t* p, uint32_t id, int64_t v)
+__device__ inline auto pb_put_int(uint8_t* p, uint32_t id, int64_t v) -> uint8_t*
 {
   int64_t s = (v < 0);
   return pb_put_uint(p, id, (v ^ -s) * 2 + s);
 }
 
 // Protobuf field encoding for 'packed' unsigned int (single value)
-__device__ inline uint8_t* pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t v)
+__device__ inline auto pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t v) -> uint8_t*
 {
   uint8_t* p2 = pb_encode_uint(p + 2, v);
   p[0]        = id * 8 + PB_TYPE_FIXEDLEN;
@@ -171,7 +171,7 @@ __device__ inline uint8_t* pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t 
 }
 
 // Protobuf field encoding for binary/string
-__device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len)
+__device__ inline auto pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len) -> uint8_t*
 {
   p[0] = id * 8 + PB_TYPE_FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
@@ -180,7 +180,7 @@ __device__ inline uint8_t* pb_put_binary(uint8_t* p, uint32_t id, const void* by
 }
 
 // Protobuf field encoding for 64-bit raw encoding (double)
-__device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, const void* raw64)
+__device__ inline auto pb_put_fixed64(uint8_t* p, uint32_t id, const void* raw64) -> uint8_t*
 {
   p[0] = id * 8 + PB_TYPE_FIXED64;
   memcpy(p + 1, raw64, 8);

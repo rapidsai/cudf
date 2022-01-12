@@ -99,7 +99,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
  * @return true `t` is valid for a hash based groupby
  * @return false `t` is invalid for a hash based groupby
  */
-bool constexpr is_hash_aggregation(aggregation::Kind t)
+auto constexpr is_hash_aggregation(aggregation::Kind t) -> bool
 {
   return array_contains(hash_aggregations, t);
 }
@@ -474,7 +474,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
         cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
     });
 
-  table sparse_table(std::move(sparse_columns));
+  auto sparse_table             = table(std::move(sparse_columns));
   mutable_table_view table_view = sparse_table.mutable_view();
   cudf::detail::initialize_with_identity(table_view, aggs, stream);
   return sparse_table;
@@ -532,9 +532,8 @@ void compute_single_pass_aggs(table_view const& keys,
  * `map`.
  */
 template <typename Map>
-rmm::device_uvector<size_type> extract_populated_keys(Map map,
-                                                      size_type num_keys,
-                                                      rmm::cuda_stream_view stream)
+auto extract_populated_keys(Map map, size_type num_keys, rmm::cuda_stream_view stream)
+  -> rmm::device_uvector<size_type>
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
@@ -634,7 +633,8 @@ std::unique_ptr<table> groupby(table_view const& keys,
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
+auto can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
+  -> bool
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
     // Currently, structs are not supported in any of hash-based aggregations.

@@ -39,14 +39,14 @@ namespace detail {
 namespace {
 
 template <typename T>
-constexpr bool is_double_convertible()
+constexpr auto is_double_convertible() -> bool
 {
   return std::is_convertible_v<T, double> || std::is_constructible_v<double, T>;
 }
 
 struct is_double_convertible_impl {
   template <typename T>
-  bool operator()()
+  auto operator()() -> bool
   {
     return is_double_convertible<T>();
   }
@@ -58,7 +58,7 @@ struct is_double_convertible_impl {
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
-  __device__ inline CastType operator()(cudf::size_type i, column_device_view const& col) const
+  __device__ inline auto operator()(cudf::size_type i, column_device_view const& col) const -> CastType
   {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)
@@ -77,7 +77,7 @@ struct covariance_transform {
   size_type const* d_group_labels;
   size_type ddof{1};  // TODO update based on bias.
 
-  __device__ static ResultType value(column_device_view const& view, size_type i)
+  __device__ static auto value(column_device_view const& view, size_type i) -> ResultType
   {
     bool const is_dict = view.type().id() == type_id::DICTIONARY32;
     i                  = is_dict ? static_cast<size_type>(view.element<dictionary32>(i)) : i;
@@ -85,7 +85,7 @@ struct covariance_transform {
     return type_dispatcher(values_col.type(), type_casted_accessor<ResultType>{}, i, values_col);
   }
 
-  __device__ ResultType operator()(size_type i)
+  __device__ auto operator()(size_type i) -> ResultType
   {
     if (d_values_0.is_null(i) or d_values_1.is_null(i)) return 0.0;
 

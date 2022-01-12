@@ -73,7 +73,7 @@ template <typename T>
 struct duration_to_string_size_fn {
   const column_device_view d_durations;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> size_type
   {
     if (d_durations.is_null(idx)) return 0;
     auto duration                = d_durations.element<T>(idx);
@@ -97,7 +97,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   {
   }
 
-  __device__ char* int_to_2digitstr(int8_t value, char* str)
+  __device__ auto int_to_2digitstr(int8_t value, char* str) -> char*
   {
     assert(value >= -99 && value <= 99);
     value  = std::abs(value);
@@ -106,27 +106,27 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str + 2;
   }
 
-  inline __device__ char* day(char* ptr, duration_component const* timeparts)
+  inline __device__ auto day(char* ptr, duration_component const* timeparts) -> char*
   {
     cudf::strings::detail::integer_to_string(timeparts->day, ptr);
     return (ptr + cudf::strings::detail::count_digits(timeparts->day));
   }
 
-  inline __device__ char* hour_24(char* ptr, duration_component const* timeparts)
+  inline __device__ auto hour_24(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(timeparts->hour, ptr);
   }
 
-  inline __device__ char* minute(char* ptr, duration_component const* timeparts)
+  inline __device__ auto minute(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(timeparts->minute, ptr);
   }
-  inline __device__ char* second(char* ptr, duration_component const* timeparts)
+  inline __device__ auto second(char* ptr, duration_component const* timeparts) -> char*
   {
     return int_to_2digitstr(timeparts->second, ptr);
   }
 
-  inline __device__ char* nanosecond(char* ptr, duration_component const* timeparts)
+  inline __device__ auto nanosecond(char* ptr, duration_component const* timeparts) -> char*
   {
     auto value = timeparts->nanosecond;
     *ptr       = '.';
@@ -137,7 +137,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return ptr + 10;
   }
 
-  inline __device__ char* pandas_format(duration_component const* timeparts, char* ptr)
+  inline __device__ auto pandas_format(duration_component const* timeparts, char* ptr) -> char*
   {
     // if (timeparts->is_negative) *ptr++ = '-';
     ptr = day(ptr, timeparts);

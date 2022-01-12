@@ -51,17 +51,17 @@ namespace {
  * These are common methods used by both split and rsplit tokenizer functors.
  */
 struct base_split_tokenizer {
-  __device__ const char* get_base_ptr() const
+  __device__ auto get_base_ptr() const -> const char*
   {
     return d_strings.child(strings_column_view::chars_column_index).data<char>();
   }
 
-  __device__ string_view const get_string(size_type idx) const
+  __device__ auto get_string(size_type idx) const -> string_view const
   {
     return d_strings.element<string_view>(idx);
   }
 
-  __device__ bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
+  __device__ auto is_valid(size_type idx) const -> bool { return d_strings.is_valid(idx); }
 
   /**
    * @brief Initialize token elements for all strings.
@@ -174,9 +174,9 @@ struct split_tokenizer_fn : base_split_tokenizer {
    * @param chars_bytes Total number of characters to process.
    * @return true if delimiter is found starting at position `idx`
    */
-  __device__ bool is_delimiter(size_type idx,  // chars index
+  __device__ auto is_delimiter(size_type idx,  // chars index
                                int32_t const* d_offsets,
-                               size_type chars_bytes) const
+                               size_type chars_bytes) const -> bool
   {
     auto d_chars = get_base_ptr() + d_offsets[0];
     if (idx + d_delimiter.size_bytes() > chars_bytes) return false;
@@ -299,7 +299,7 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    * @param d_offsets Offsets values to locate the chars ranges.
    * @return true if delimiter is found ending at position `idx`
    */
-  __device__ bool is_delimiter(size_type idx, int32_t const* d_offsets, size_type) const
+  __device__ auto is_delimiter(size_type idx, int32_t const* d_offsets, size_type) const -> bool
   {
     auto delim_length = d_delimiter.size_bytes();
     if (idx < delim_length - 1) return false;
@@ -547,7 +547,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
  */
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
-  [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
+  [[nodiscard]] __device__ auto count_tokens(size_type idx) const -> size_type
   {
     if (d_strings.is_null(idx)) return 0;
     const string_view d_str = d_strings.element<string_view>(idx);

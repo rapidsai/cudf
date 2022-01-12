@@ -216,7 +216,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
   return sort_scan(requests, rmm::cuda_stream_default, mr);
 }
 
-groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
+auto groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr) -> groupby::groups
 {
   CUDF_FUNC_RANGE();
   auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
@@ -276,7 +276,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
 }
 
 // Get the sort helper object
-detail::sort::sort_groupby_helper& groupby::helper()
+auto groupby::helper() -> detail::sort::sort_groupby_helper&
 {
   if (_helper) return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(

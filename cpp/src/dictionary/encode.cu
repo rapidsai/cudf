@@ -75,7 +75,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
 /**
  * @copydoc cudf::dictionary::detail::get_indices_type_for_size
  */
-data_type get_indices_type_for_size(size_type keys_size)
+auto get_indices_type_for_size(size_type keys_size) -> data_type
 {
   if (keys_size <= std::numeric_limits<uint8_t>::max()) return data_type{type_id::UINT8};
   if (keys_size <= std::numeric_limits<uint16_t>::max()) return data_type{type_id::UINT16};

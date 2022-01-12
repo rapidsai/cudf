@@ -80,9 +80,9 @@ struct partition_fn {
     }
   }
 
-  __device__ size_type check_delimiter(size_type idx,
+  __device__ auto check_delimiter(size_type idx,
                                        string_view const& d_str,
-                                       string_view::const_iterator& itr)
+                                       string_view::const_iterator& itr) -> size_type
   {
     size_type offset = itr.byte_offset();
     size_type pos    = -1;

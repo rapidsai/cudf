@@ -263,7 +263,7 @@ TEST_F(SerialMurmurHash3Test, MultiValueWithSeeds)
   struct_field_cols.emplace_back(std::make_unique<cudf::column>(strings_col));
   struct_field_cols.emplace_back(std::make_unique<cudf::column>(ints_col));
   struct_field_cols.emplace_back(std::make_unique<cudf::column>(bools_col1));
-  structs_column_wrapper structs_col(std::move(struct_field_cols));
+  auto structs_col = structs_column_wrapper(std::move(struct_field_cols));
 
   auto const combo1 = cudf::table_view({strings_col, ints_col, bools_col1});
   auto const combo2 = cudf::table_view({strings_col, ints_col, bools_col2});

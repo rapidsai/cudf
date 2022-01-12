@@ -31,30 +31,30 @@ namespace cudf {
 namespace {
 struct get_column_data_impl {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  void const* operator()(column_view const& col)
+  auto operator()(column_view const& col) -> void const*
   {
     CUDF_FAIL("Unsupported type to convert to dlpack.");
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  void const* operator()(column_view const& col)
+  auto operator()(column_view const& col) -> void const*
   {
     return col.data<T>();
   }
 };
 
 template <>
-void const* get_column_data_impl::operator()<string_view>(column_view const& col)
+auto get_column_data_impl::operator()<string_view>(column_view const& col) -> void const*
 {
   return nullptr;
 }
 
-void const* get_column_data(column_view const& col)
+auto get_column_data(column_view const& col) -> void const*
 {
   return type_dispatcher(col.type(), get_column_data_impl{}, col);
 }
 
-data_type DLDataType_to_data_type(DLDataType type)
+auto DLDataType_to_data_type(DLDataType type) -> data_type
 {
   CUDF_EXPECTS(type.lanes == 1, "Unsupported DLPack vector type");
 
@@ -87,7 +87,7 @@ data_type DLDataType_to_data_type(DLDataType type)
 
 struct data_type_to_DLDataType_impl {
   template <typename T, std::enable_if_t<is_numeric<T>()>* = nullptr>
-  DLDataType operator()()
+  auto operator()() -> DLDataType
   {
     uint8_t const bits{sizeof(T) * 8};
     uint16_t const lanes{1};
@@ -101,13 +101,13 @@ struct data_type_to_DLDataType_impl {
   }
 
   template <typename T, std::enable_if_t<not is_numeric<T>()>* = nullptr>
-  DLDataType operator()()
+  auto operator()() -> DLDataType
   {
     CUDF_FAIL("Conversion of non-numeric types to DLPack is unsupported");
   }
 };
 
-DLDataType data_type_to_DLDataType(data_type type)
+auto data_type_to_DLDataType(data_type type) -> DLDataType
 {
   return type_dispatcher(type, data_type_to_DLDataType_impl{});
 }
@@ -196,9 +196,9 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   return std::make_unique<table>(std::move(columns));
 }
 
-DLManagedTensor* to_dlpack(table_view const& input,
+auto to_dlpack(table_view const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+                           rmm::mr::device_memory_resource* mr) -> DLManagedTensor*
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
@@ -282,7 +282,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   return detail::from_dlpack(managed_tensor, rmm::cuda_stream_default, mr);
 }
 
-DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
+auto to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr) -> DLManagedTensor*
 {
   return detail::to_dlpack(input, rmm::cuda_stream_default, mr);
 }

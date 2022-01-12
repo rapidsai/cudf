@@ -36,71 +36,71 @@
 namespace cudf {
 namespace io {
 // Returns builder for csv_reader_options
-csv_reader_options_builder csv_reader_options::builder(source_info const& src)
+auto csv_reader_options::builder(source_info const& src) -> csv_reader_options_builder
 {
   return csv_reader_options_builder{src};
 }
 
 // Returns builder for csv_writer_options
-csv_writer_options_builder csv_writer_options::builder(sink_info const& sink,
-                                                       table_view const& table)
+auto csv_writer_options::builder(sink_info const& sink,
+                                                       table_view const& table) -> csv_writer_options_builder
 {
   return csv_writer_options_builder{sink, table};
 }
 
 // Returns builder for orc_reader_options
-orc_reader_options_builder orc_reader_options::builder(source_info const& src)
+auto orc_reader_options::builder(source_info const& src) -> orc_reader_options_builder
 {
   return orc_reader_options_builder{src};
 }
 
 // Returns builder for orc_writer_options
-orc_writer_options_builder orc_writer_options::builder(sink_info const& sink,
-                                                       table_view const& table)
+auto orc_writer_options::builder(sink_info const& sink,
+                                                       table_view const& table) -> orc_writer_options_builder
 {
   return orc_writer_options_builder{sink, table};
 }
 
 // Returns builder for chunked_orc_writer_options
-chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink)
+auto chunked_orc_writer_options::builder(sink_info const& sink) -> chunked_orc_writer_options_builder
 {
   return chunked_orc_writer_options_builder{sink};
 }
 
 // Returns builder for avro_reader_options
-avro_reader_options_builder avro_reader_options::builder(source_info const& src)
+auto avro_reader_options::builder(source_info const& src) -> avro_reader_options_builder
 {
   return avro_reader_options_builder(src);
 }
 
 // Returns builder for json_reader_options
-json_reader_options_builder json_reader_options::builder(source_info const& src)
+auto json_reader_options::builder(source_info const& src) -> json_reader_options_builder
 {
   return json_reader_options_builder(src);
 }
 
 // Returns builder for parquet_reader_options
-parquet_reader_options_builder parquet_reader_options::builder(source_info const& src)
+auto parquet_reader_options::builder(source_info const& src) -> parquet_reader_options_builder
 {
   return parquet_reader_options_builder{src};
 }
 
 // Returns builder for parquet_writer_options
-parquet_writer_options_builder parquet_writer_options::builder(sink_info const& sink,
-                                                               table_view const& table)
+auto parquet_writer_options::builder(sink_info const& sink,
+                                                               table_view const& table) -> parquet_writer_options_builder
 {
   return parquet_writer_options_builder{sink, table};
 }
 
 // Returns builder for parquet_writer_options
-parquet_writer_options_builder parquet_writer_options::builder()
+auto parquet_writer_options::builder() -> parquet_writer_options_builder
 {
   return parquet_writer_options_builder();
 }
 
 // Returns builder for chunked_parquet_writer_options
-chunked_parquet_writer_options_builder chunked_parquet_writer_options::builder(
-  sink_info const& sink)
+auto chunked_parquet_writer_options::builder(
+  sink_info const& sink) -> chunked_parquet_writer_options_builder
 {
   return chunked_parquet_writer_options_builder(sink);
 }
@@ -144,8 +144,8 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 
 }  // namespace
 
-table_with_metadata read_avro(avro_reader_options const& options,
-                              rmm::mr::device_memory_resource* mr)
+auto read_avro(avro_reader_options const& options,
+                              rmm::mr::device_memory_resource* mr) -> table_with_metadata
 {
   namespace avro = cudf::io::detail::avro;
 
@@ -158,7 +158,7 @@ table_with_metadata read_avro(avro_reader_options const& options,
   return avro::read_avro(std::move(datasources[0]), options, rmm::cuda_stream_default, mr);
 }
 
-compression_type infer_compression_type(compression_type compression, source_info const& info)
+auto infer_compression_type(compression_type compression, source_info const& info) -> compression_type
 {
   if (compression != compression_type::AUTO) { return compression; }
 
@@ -187,7 +187,7 @@ compression_type infer_compression_type(compression_type compression, source_inf
   return compression_type::NONE;
 }
 
-table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
+auto read_json(json_reader_options options, rmm::mr::device_memory_resource* mr) -> table_with_metadata
 {
   CUDF_FUNC_RANGE();
 
@@ -200,7 +200,7 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
   return detail::json::read_json(datasources, options, rmm::cuda_stream_default, mr);
 }
 
-table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
+auto read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr) -> table_with_metadata
 {
   CUDF_FUNC_RANGE();
 
@@ -238,7 +238,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 
 namespace detail_orc = cudf::io::detail::orc;
 
-raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
+auto read_raw_orc_statistics(source_info const& src_info) -> raw_orc_statistics
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -304,7 +304,7 @@ column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
   }
 }
 
-parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
+auto read_parsed_orc_statistics(source_info const& src_info) -> parsed_orc_statistics
 {
   auto const raw_stats = read_raw_orc_statistics(src_info);
 
@@ -338,7 +338,7 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 /**
  * @copydoc cudf::io::read_orc
  */
-table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
+auto read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr) -> table_with_metadata
 {
   CUDF_FUNC_RANGE();
 
@@ -385,7 +385,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
 /**
  * @copydoc cudf::io::orc_chunked_writer::write
  */
-orc_chunked_writer& orc_chunked_writer::write(table_view const& table)
+auto orc_chunked_writer::write(table_view const& table) -> orc_chunked_writer&
 {
   CUDF_FUNC_RANGE();
 
@@ -407,8 +407,8 @@ void orc_chunked_writer::close()
 using namespace cudf::io::detail::parquet;
 namespace detail_parquet = cudf::io::detail::parquet;
 
-table_with_metadata read_parquet(parquet_reader_options const& options,
-                                 rmm::mr::device_memory_resource* mr)
+auto read_parquet(parquet_reader_options const& options,
+                                 rmm::mr::device_memory_resource* mr) -> table_with_metadata
 {
   CUDF_FUNC_RANGE();
 
@@ -478,8 +478,8 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write
  */
-parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
-                                                      std::vector<partition_info> const& partitions)
+auto parquet_chunked_writer::write(table_view const& table,
+                                                      std::vector<partition_info> const& partitions) -> parquet_chunked_writer&
 {
   CUDF_FUNC_RANGE();
 

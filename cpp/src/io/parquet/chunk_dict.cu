@@ -45,7 +45,7 @@ __global__ void __launch_bounds__(block_size, 1)
 template <typename T>
 struct equality_functor {
   column_device_view const& col;
-  __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
+  __device__ auto operator()(size_type lhs_idx, size_type rhs_idx) -> bool
   {
     // We don't call this for nulls so this is fine
     return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
@@ -62,7 +62,7 @@ struct map_insert_fn {
   map_type::device_mutable_view& map;
 
   template <typename T>
-  __device__ bool operator()(column_device_view const& col, size_type i)
+  __device__ auto operator()(column_device_view const& col, size_type i) -> bool
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto hash_fn     = hash_functor<T>{col};

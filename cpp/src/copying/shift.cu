@@ -40,7 +40,7 @@
 
 namespace cudf {
 namespace {
-inline bool __device__ out_of_bounds(size_type size, size_type idx)
+inline auto __device__ out_of_bounds(size_type size, size_type idx) -> bool
 {
   return idx < 0 || idx >= size;
 }

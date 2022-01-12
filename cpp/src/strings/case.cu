@@ -52,15 +52,15 @@ struct upper_lower_fn {
   int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ special_case_mapping get_special_case_mapping(uint32_t code_point)
+  __device__ auto get_special_case_mapping(uint32_t code_point) -> special_case_mapping
   {
     return d_special_case_mapping[get_special_case_hash_index(code_point)];
   }
 
   // compute-size / copy the bytes representing the special case mapping for this codepoint
-  __device__ int32_t handle_special_case_bytes(uint32_t code_point,
+  __device__ auto handle_special_case_bytes(uint32_t code_point,
                                                char* d_buffer,
-                                               detail::character_flags_table_type flag)
+                                               detail::character_flags_table_type flag) -> int32_t
   {
     special_case_mapping m = get_special_case_mapping(code_point);
     size_type bytes        = 0;

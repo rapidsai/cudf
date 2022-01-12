@@ -50,7 +50,7 @@ auto concatenate_column_views(std::vector<ViewType> const& views)
 }
 
 template <typename ColumnView>
-ColumnView const& table_view_base<ColumnView>::column(size_type column_index) const
+auto table_view_base<ColumnView>::column(size_type column_index) const -> ColumnView const&
 {
   return _columns.at(column_index);
 }
@@ -85,9 +85,9 @@ mutable_table_view::mutable_table_view(std::vector<mutable_table_view> const& vi
 {
 }
 
-table_view scatter_columns(table_view const& source,
+auto scatter_columns(table_view const& source,
                            std::vector<size_type> const& map,
-                           table_view const& target)
+                           table_view const& target) -> table_view
 {
   std::vector<cudf::column_view> updated_columns(target.begin(), target.end());
   // scatter(updated_table.begin(),updated_table.end(),indices.begin(),updated_columns.begin());

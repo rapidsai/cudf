@@ -69,7 +69,7 @@ auto __device__ find_end(list_device_view const& list)
 }
 
 template <duplicate_find_option find_option, typename Iterator>
-size_type __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Iterator find_iter)
+auto __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Iterator find_iter) -> size_type
 {
   if (find_iter == end) {
     return absent_index;  // Not found.
@@ -88,7 +88,7 @@ size_type __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Ite
 template <duplicate_find_option find_option>
 struct finder {
   template <typename ElementType>
-  __device__ size_type operator()(list_device_view const& list, ElementType const& search_key) const
+  __device__ auto operator()(list_device_view const& list, ElementType const& search_key) const -> size_type
   {
     auto const list_begin = find_begin<ElementType, find_option>(list);
     auto const list_end   = find_end<ElementType, find_option>(list);

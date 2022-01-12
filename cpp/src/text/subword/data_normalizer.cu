@@ -45,7 +45,7 @@ constexpr uint32_t FILTER_BIT = 22;
  * @param metadata Value from the codepoint_metadata table.
  * @return The replacement character if appropriate.
  */
-__device__ uint32_t get_first_cp(uint32_t metadata) { return metadata & NEW_CP_MASK; }
+__device__ auto get_first_cp(uint32_t metadata) -> uint32_t { return metadata & NEW_CP_MASK; }
 
 /**
  * @brief Retrieve token category from the metadata value.
@@ -61,7 +61,7 @@ __device__ uint32_t get_first_cp(uint32_t metadata) { return metadata & NEW_CP_M
  * @param metadata Value from the codepoint_metadata table.
  * @return Category value.
  */
-__device__ uint32_t extract_token_cat(uint32_t metadata)
+__device__ auto extract_token_cat(uint32_t metadata) -> uint32_t
 {
   return (metadata >> TOKEN_CAT_SHIFT) & TOKEN_CAT_MASK;
 }
@@ -69,7 +69,7 @@ __device__ uint32_t extract_token_cat(uint32_t metadata)
 /**
  * @brief Return true if category of metadata value specifies the character should be replaced.
  */
-__device__ bool should_remove_cp(uint32_t metadata, bool lower_case)
+__device__ auto should_remove_cp(uint32_t metadata, bool lower_case) -> bool
 {
   auto const cat = extract_token_cat(metadata);
   return (cat == TOKEN_CAT_REMOVE_CHAR) || (lower_case && (cat == TOKEN_CAT_REMOVE_CHAR_IF_LOWER));
@@ -78,7 +78,7 @@ __device__ bool should_remove_cp(uint32_t metadata, bool lower_case)
 /**
  * @brief Return true if category of metadata value specifies the character should be padded.
  */
-__device__ bool should_add_spaces(uint32_t metadata, bool lower_case)
+__device__ auto should_add_spaces(uint32_t metadata, bool lower_case) -> bool
 {
   auto const cat = extract_token_cat(metadata);
   return (cat == TOKEN_CAT_ADD_SPACE) || (lower_case && (cat == TOKEN_CAT_ADD_SPACE_IF_LOWER));
@@ -87,7 +87,7 @@ __device__ bool should_add_spaces(uint32_t metadata, bool lower_case)
 /**
  * @brief Return true if category of metadata value specifies the character should be replaced.
  */
-__device__ bool always_replace(uint32_t metadata)
+__device__ auto always_replace(uint32_t metadata) -> bool
 {
   return extract_token_cat(metadata) == TOKEN_CAT_ALWAYS_REPLACE;
 }
@@ -95,7 +95,7 @@ __device__ bool always_replace(uint32_t metadata)
 /**
  * @brief Returns true if metadata value includes a multi-character transform bit equal to 1.
  */
-__device__ bool is_multi_char_transform(uint32_t metadata)
+__device__ auto is_multi_char_transform(uint32_t metadata) -> bool
 {
   return (metadata >> MULTICHAR_SHIFT) & MULTICHAR_MASK;
 }
@@ -104,7 +104,7 @@ __device__ bool is_multi_char_transform(uint32_t metadata)
  * @brief Returns true if the byte passed in could be a valid head byte for
  * a utf8 character. That is, not binary `10xxxxxx`
  */
-__device__ bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) != 2; }
+__device__ auto is_head_byte(unsigned char utf8_byte) -> bool { return (utf8_byte >> 6) != 2; }
 
 /**
  * @brief Converts a UTF-8 character into a unicode code point value.
@@ -120,9 +120,9 @@ __device__ bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) 
  * @param start_byte_for_thread Which byte to start analyzing
  * @return New code point value for this byte.
  */
-__device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
+__device__ auto extract_code_points_from_utf8(unsigned char const* strings,
                                                   size_t const total_bytes,
-                                                  uint32_t const start_byte_for_thread)
+                                                  uint32_t const start_byte_for_thread) -> uint32_t
 {
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};

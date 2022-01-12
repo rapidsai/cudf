@@ -38,9 +38,9 @@ constexpr int num_warps  = 32;
 constexpr int block_size = 32 * num_warps;
 // Add some margin to look ahead to future rows in case there are many zeroes
 constexpr int row_decoder_buffer_size = block_size + 128;
-inline __device__ uint8_t is_rlev1(uint8_t encoding_mode) { return encoding_mode < DIRECT_V2; }
+inline __device__ auto is_rlev1(uint8_t encoding_mode) -> uint8_t { return encoding_mode < DIRECT_V2; }
 
-inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding_mode & 1; }
+inline __device__ auto is_dictionary(uint8_t encoding_mode) -> uint8_t { return encoding_mode & 1; }
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
@@ -199,7 +199,7 @@ static __device__ void bytestream_fill(orc_bytestream_s* bs, int t)
  * @param[in] pos Position in byte stream
  * @return byte
  */
-inline __device__ uint8_t bytestream_readbyte(volatile orc_bytestream_s* bs, int pos)
+inline __device__ auto bytestream_readbyte(volatile orc_bytestream_s* bs, int pos) -> uint8_t
 {
   return bs->buf.u8[pos & (bytestream_buffer_size - 1)];
 }
@@ -211,7 +211,7 @@ inline __device__ uint8_t bytestream_readbyte(volatile orc_bytestream_s* bs, int
  * @param[in] pos Position in byte stream
  * @result bits
  */
-inline __device__ uint32_t bytestream_readu32(volatile orc_bytestream_s* bs, int pos)
+inline __device__ auto bytestream_readu32(volatile orc_bytestream_s* bs, int pos) -> uint32_t
 {
   uint32_t a = bs->buf.u32[(pos & (bytestream_buffer_size - 1)) >> 2];
   uint32_t b = bs->buf.u32[((pos + 4) & (bytestream_buffer_size - 1)) >> 2];
@@ -226,7 +226,7 @@ inline __device__ uint32_t bytestream_readu32(volatile orc_bytestream_s* bs, int
  * @param[in] numbits number of bits
  * @return bits
  */
-inline __device__ uint64_t bytestream_readu64(volatile orc_bytestream_s* bs, int pos)
+inline __device__ auto bytestream_readu64(volatile orc_bytestream_s* bs, int pos) -> uint64_t
 {
   uint32_t a    = bs->buf.u32[(pos & (bytestream_buffer_size - 1)) >> 2];
   uint32_t b    = bs->buf.u32[((pos + 4) & (bytestream_buffer_size - 1)) >> 2];
@@ -247,9 +247,9 @@ inline __device__ uint64_t bytestream_readu64(volatile orc_bytestream_s* bs, int
  * @param[in] numbits number of bits
  * @return decoded value
  */
-inline __device__ uint32_t bytestream_readbits(volatile orc_bytestream_s* bs,
+inline __device__ auto bytestream_readbits(volatile orc_bytestream_s* bs,
                                                int bitpos,
-                                               uint32_t numbits)
+                                               uint32_t numbits) -> uint32_t
 {
   int idx    = bitpos >> 5;
   uint32_t a = __byte_perm(bs->buf.u32[(idx + 0) & bytestream_buffer_mask], 0, 0x0123);
@@ -265,9 +265,9 @@ inline __device__ uint32_t bytestream_readbits(volatile orc_bytestream_s* bs,
  * @param[in] numbits number of bits
  * @return decoded value
  */
-inline __device__ uint64_t bytestream_readbits64(volatile orc_bytestream_s* bs,
+inline __device__ auto bytestream_readbits64(volatile orc_bytestream_s* bs,
                                                  int bitpos,
-                                                 uint32_t numbits)
+                                                 uint32_t numbits) -> uint64_t
 {
   int idx       = bitpos >> 5;
   uint32_t a    = __byte_perm(bs->buf.u32[(idx + 0) & bytestream_buffer_mask], 0, 0x0123);
@@ -356,7 +356,7 @@ inline __device__ void bytestream_readbe(volatile orc_bytestream_s* bs,
  * @return length of varint in bytes
  */
 template <class T>
-inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
+inline __device__ auto varint_length(volatile orc_bytestream_s* bs, int pos) -> uint32_t
 {
   if (bytestream_readbyte(bs, pos) > 0x7f) {
     uint32_t next32 = bytestream_readu32(bs, pos + 1);
@@ -394,7 +394,7 @@ inline __device__ uint32_t varint_length(volatile orc_bytestream_s* bs, int pos)
  * @return new position in byte stream buffer
  */
 template <class T>
-inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int pos, T& result)
+inline __device__ auto decode_base128_varint(volatile orc_bytestream_s* bs, int pos, T& result) -> int
 {
   uint32_t v = bytestream_readbyte(bs, pos++);
   if (v > 0x7f) {
@@ -448,7 +448,7 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
 /**
  * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
  */
-inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
+inline __device__ auto decode_varint128(volatile orc_bytestream_s* bs, int pos) -> __int128_t
 {
   auto byte                  = bytestream_readbyte(bs, pos++);
   __int128_t const sign_mask = -(int32_t)(byte & 1);
@@ -465,7 +465,7 @@ inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int
 /**
  * @brief Decodes an unsigned 32-bit varint
  */
-inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, uint32_t& result)
+inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uint32_t& result) -> int
 {
   uint32_t u;
   pos    = decode_base128_varint<uint32_t>(bs, pos, u);
@@ -476,7 +476,7 @@ inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, uint
 /**
  * @brief Decodes an unsigned 64-bit varint
  */
-inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, uint64_t& result)
+inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uint64_t& result) -> int
 {
   uint64_t u;
   pos    = decode_base128_varint<uint64_t>(bs, pos, u);
@@ -487,7 +487,7 @@ inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, uint
 /**
  * @brief Signed version of 32-bit decode_varint
  */
-inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, int32_t& result)
+inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, int32_t& result) -> int
 {
   uint32_t u;
   pos    = decode_base128_varint<uint32_t>(bs, pos, u);
@@ -498,7 +498,7 @@ inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, int3
 /**
  * @brief Signed version of 64-bit decode_varint
  */
-inline __device__ int decode_varint(volatile orc_bytestream_s* bs, int pos, int64_t& result)
+inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, int64_t& result) -> int
 {
   uint64_t u;
   pos    = decode_base128_varint<uint64_t>(bs, pos, u);
@@ -536,8 +536,8 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
  * @return number of values decoded
  */
 template <class T>
-static __device__ uint32_t Integer_RLEv1(
-  orc_bytestream_s* bs, volatile orc_rlev1_state_s* rle, volatile T* vals, uint32_t maxvals, int t)
+static __device__ auto Integer_RLEv1(
+  orc_bytestream_s* bs, volatile orc_rlev1_state_s* rle, volatile T* vals, uint32_t maxvals, int t) -> uint32_t
 {
   uint32_t numvals, numruns;
   if (t == 0) {
@@ -643,12 +643,12 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  * @return number of values decoded
  */
 template <class T>
-static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
+static __device__ auto Integer_RLEv2(orc_bytestream_s* bs,
                                          volatile orc_rlev2_state_s* rle,
                                          volatile T* vals,
                                          uint32_t maxvals,
                                          int t,
-                                         bool has_buffered_values = false)
+                                         bool has_buffered_values = false) -> uint32_t
 {
   if (t == 0) {
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
@@ -881,7 +881,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
  *
  * @return 32-bit value
  */
-inline __device__ uint32_t rle8_read_bool32(volatile uint32_t* vals, uint32_t bitpos)
+inline __device__ auto rle8_read_bool32(volatile uint32_t* vals, uint32_t bitpos) -> uint32_t
 {
   uint32_t a = vals[(bitpos >> 5) + 0];
   uint32_t b = vals[(bitpos >> 5) + 1];
@@ -901,11 +901,11 @@ inline __device__ uint32_t rle8_read_bool32(volatile uint32_t* vals, uint32_t bi
  *
  * @return number of values decoded
  */
-static __device__ uint32_t Byte_RLE(orc_bytestream_s* bs,
+static __device__ auto Byte_RLE(orc_bytestream_s* bs,
                                     volatile orc_byterle_state_s* rle,
                                     volatile uint8_t* vals,
                                     uint32_t maxvals,
-                                    int t)
+                                    int t) -> uint32_t
 {
   uint32_t numvals, numruns;
   int r, tr;
@@ -1012,14 +1012,14 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  *
  * @return number of values decoded
  */
-static __device__ int Decode_Decimals(orc_bytestream_s* bs,
+static __device__ auto Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orc_byterle_state_s* scratch,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
                                       type_id dtype_id,
                                       int col_scale,
-                                      int t)
+                                      int t) -> int
 {
   uint32_t num_vals_read = 0;
   // Iterates till `numvals` are read or there is nothing to read once the

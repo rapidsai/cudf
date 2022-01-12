@@ -54,10 +54,10 @@ namespace {
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
  */
-constexpr type_id to_type_id(const orc::SchemaType& schema,
+constexpr auto to_type_id(const orc::SchemaType& schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
-                             type_id decimal_type_id)
+                             type_id decimal_type_id) -> type_id
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -158,7 +158,7 @@ struct orc_stream_info {
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-size_t gather_stream_info(const size_t stripe_index,
+auto gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation* stripeinfo,
                           const orc::StripeFooter* stripefooter,
                           const std::vector<int>& orc2gdf,
@@ -167,7 +167,7 @@ size_t gather_stream_info(const size_t stripe_index,
                           size_t* num_dictionary_entries,
                           cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                           std::vector<orc_stream_info>& stream_info,
-                          bool apply_struct_map)
+                          bool apply_struct_map) -> size_t
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -325,7 +325,7 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
     });
 }
 
-rmm::device_buffer reader::impl::decompress_stripe_data(
+auto reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   const std::vector<rmm::device_buffer>& stripe_data,
   const OrcDecompressor* decompressor,
@@ -334,7 +334,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
   size_t row_index_stride,
   bool use_base_stride,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream) -> rmm::device_buffer
 {
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
@@ -1310,7 +1310,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(orc_reader_options const& options, rmm::cuda_stream_view stream)
+auto reader::read(orc_reader_options const& options, rmm::cuda_stream_view stream) -> table_with_metadata
 {
   return _impl->read(
     options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);

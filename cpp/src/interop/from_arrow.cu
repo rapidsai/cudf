@@ -38,7 +38,7 @@
 namespace cudf {
 
 namespace detail {
-data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
+auto arrow_to_cudf_type(arrow::DataType const& arrow_type) -> data_type
 {
   switch (arrow_type.id()) {
     case arrow::Type::NA: return data_type(type_id::EMPTY);

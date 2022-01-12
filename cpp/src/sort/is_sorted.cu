@@ -63,9 +63,9 @@ auto is_sorted(cudf::table_view const& in,
 
 }  // namespace detail
 
-bool is_sorted(cudf::table_view const& in,
+auto is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               std::vector<null_order> const& null_precedence)
+               std::vector<null_order> const& null_precedence) -> bool
 {
   CUDF_FUNC_RANGE();
   if (in.num_columns() == 0 || in.num_rows() == 0) { return true; }

@@ -25,7 +25,7 @@ structs_column_view::structs_column_view(column_view const& rhs) : column_view{r
   CUDF_EXPECTS(type().id() == type_id::STRUCT, "structs_column_view only supports struct columns");
 }
 
-column_view structs_column_view::get_sliced_child(int index) const
+auto structs_column_view::get_sliced_child(int index) const -> column_view
 {
   std::vector<column_view> children;
   children.reserve(child(index).num_children());

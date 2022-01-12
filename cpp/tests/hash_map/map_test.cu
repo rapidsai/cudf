@@ -79,7 +79,7 @@ template <typename map_type, typename pair_type>
 struct insert_pair {
   insert_pair(map_type _map) : map{_map} {}
 
-  __device__ bool operator()(pair_type const& pair)
+  __device__ auto operator()(pair_type const& pair) -> bool
   {
     auto result = map.insert(pair);
     if (result.first == map.end()) { return false; }
@@ -93,7 +93,7 @@ template <typename map_type, typename pair_type>
 struct find_pair {
   find_pair(map_type _map) : map{_map} {}
 
-  __device__ bool operator()(pair_type const& pair)
+  __device__ auto operator()(pair_type const& pair) -> bool
   {
     auto result = map.find(pair.first);
     if (result == map.end()) { return false; }
@@ -106,7 +106,7 @@ template <typename pair_type,
           typename key_type   = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
 struct unique_pair_generator {
-  __device__ pair_type operator()(cudf::size_type i)
+  __device__ auto operator()(cudf::size_type i) -> pair_type
   {
     return thrust::make_pair(key_type(i), value_type(i));
   }
@@ -117,7 +117,7 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 struct identical_pair_generator {
   identical_pair_generator(key_type k = 42, value_type v = 42) : key{k}, value{v} {}
-  __device__ pair_type operator()(cudf::size_type i) { return thrust::make_pair(key, value); }
+  __device__ auto operator()(cudf::size_type i) -> pair_type { return thrust::make_pair(key, value); }
   key_type key;
   value_type value;
 };
@@ -127,7 +127,7 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 struct identical_key_generator {
   identical_key_generator(key_type k = 42) : key{k} {}
-  __device__ pair_type operator()(cudf::size_type i)
+  __device__ auto operator()(cudf::size_type i) -> pair_type
   {
     return thrust::make_pair(key, value_type(i));
   }

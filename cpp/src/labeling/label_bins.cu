@@ -72,7 +72,7 @@ struct bin_finder {
   {
   }
 
-  __device__ size_type operator()(thrust::pair<T, bool> input_value) const
+  __device__ auto operator()(thrust::pair<T, bool> input_value) const -> size_type
   {
     // Immediately return sentinel for null inputs.
     if (!input_value.second) return NULL_VALUE;
@@ -99,7 +99,7 @@ struct bin_finder {
 // Functor to identify rows that should be filtered out based on the sentinel set by
 // bin_finder::operator().
 struct filter_null_sentinel {
-  __device__ bool operator()(size_type i) { return i != NULL_VALUE; }
+  __device__ auto operator()(size_type i) -> bool { return i != NULL_VALUE; }
 };
 
 // Bin the input by the edges in left_edges and right_edges.

@@ -47,10 +47,10 @@ enum data_chunk_source_type {
   host,
 };
 
-static cudf::string_scalar create_random_input(int32_t num_chars,
+static auto create_random_input(int32_t num_chars,
                                                double delim_factor,
                                                double deviation,
-                                               std::string delim)
+                                               std::string delim) -> cudf::string_scalar
 {
   auto const num_delims      = static_cast<int32_t>((num_chars * delim_factor) / delim.size());
   auto const num_delim_chars = num_delims * delim.size();

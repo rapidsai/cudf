@@ -28,7 +28,7 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-size_t get_file_size(int file_descriptor)
+auto get_file_size(int file_descriptor) -> size_t
 {
   struct stat st;
   CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
@@ -69,9 +69,9 @@ class cufile_shim {
 
  public:
   cufile_shim(cufile_shim const&) = delete;
-  cufile_shim& operator=(cufile_shim const&) = delete;
+  auto operator=(cufile_shim const&) -> cufile_shim& = delete;
 
-  static cufile_shim const* instance();
+  static auto instance() -> cufile_shim const*;
 
   ~cufile_shim()
   {
@@ -147,7 +147,7 @@ cufile_shim::cufile_shim()
   }
 }
 
-cufile_shim const* cufile_shim::instance()
+auto cufile_shim::instance() -> cufile_shim const*
 {
   static cufile_shim _instance;
   // Defer throwing to avoid repeated attempts to load the library
@@ -238,10 +238,10 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
-size_t cufile_input_impl::read(size_t offset,
+auto cufile_input_impl::read(size_t offset,
                                size_t size,
                                uint8_t* dst,
-                               rmm::cuda_stream_view stream)
+                               rmm::cuda_stream_view stream) -> size_t
 {
   auto result = read_async(offset, size, dst, stream);
   return result.get();

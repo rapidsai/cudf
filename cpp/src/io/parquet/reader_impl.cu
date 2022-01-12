@@ -56,7 +56,7 @@ constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 
 namespace {
 
-parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const& logical)
+auto logical_type_to_converted_type(parquet::LogicalType const& logical) -> parquet::ConvertedType
 {
   if (logical.isset.STRING) {
     return parquet::UTF8;
@@ -101,9 +101,9 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
-type_id to_type_id(SchemaElement const& schema,
+auto to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id)
+                   type_id timestamp_type_id) -> type_id
 {
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
@@ -188,7 +188,7 @@ type_id to_type_id(SchemaElement const& schema,
 /**
  * @brief Converts cuDF type enum to column logical type
  */
-data_type to_data_type(type_id t_id, SchemaElement const& schema)
+auto to_data_type(type_id t_id, SchemaElement const& schema) -> data_type
 {
   return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
            ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
@@ -199,7 +199,7 @@ data_type to_data_type(type_id t_id, SchemaElement const& schema)
  * @brief Function that returns the required the number of bits to store a value
  */
 template <typename T = uint8_t>
-T required_bits(uint32_t max_level)
+auto required_bits(uint32_t max_level) -> T
 {
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
@@ -337,7 +337,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] size_type calc_num_rows() const
+  [[nodiscard]] auto calc_num_rows() const -> size_type
   {
     return std::accumulate(
       per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
@@ -348,7 +348,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Sums up the number of row groups of each source
    */
-  [[nodiscard]] size_type calc_num_row_groups() const
+  [[nodiscard]] auto calc_num_row_groups() const -> size_type
   {
     return std::accumulate(
       per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
@@ -381,16 +381,16 @@ class aggregate_reader_metadata {
     }
   }
 
-  [[nodiscard]] auto const& get_row_group(size_type row_group_index, size_type src_idx) const
+  [[nodiscard]] auto get_row_group(size_type row_group_index, size_type src_idx) const -> auto const&
   {
     CUDF_EXPECTS(src_idx >= 0 && src_idx < static_cast<size_type>(per_file_metadata.size()),
                  "invalid source index");
     return per_file_metadata[src_idx].row_groups[row_group_index];
   }
 
-  [[nodiscard]] auto const& get_column_metadata(size_type row_group_index,
+  [[nodiscard]] auto get_column_metadata(size_type row_group_index,
                                                 size_type src_idx,
-                                                int schema_idx) const
+                                                int schema_idx) const -> auto const&
   {
     auto col = std::find_if(
       per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
@@ -405,12 +405,12 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const
+  [[nodiscard]] auto get_schema(int schema_idx) const -> auto const&
   {
     return per_file_metadata[0].schema[schema_idx];
   }
 
-  [[nodiscard]] auto const& get_key_value_metadata() const { return agg_keyval_map; }
+  [[nodiscard]] auto get_key_value_metadata() const -> auto const& { return agg_keyval_map; }
 
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
@@ -419,7 +419,7 @@ class aggregate_reader_metadata {
    *
    * @return comma-separated index column names in quotes
    */
-  [[nodiscard]] inline int get_output_nesting_depth(int schema_index) const
+  [[nodiscard]] inline auto get_output_nesting_depth(int schema_index) const -> int
   {
     auto& pfm = per_file_metadata[0];
     int depth = 0;
@@ -1816,8 +1816,8 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(parquet_reader_options const& options,
-                                 rmm::cuda_stream_view stream)
+auto reader::read(parquet_reader_options const& options,
+                                 rmm::cuda_stream_view stream) -> table_with_metadata
 {
   return _impl->read(
     options.get_skip_rows(), options.get_num_rows(), options.get_row_groups(), stream);

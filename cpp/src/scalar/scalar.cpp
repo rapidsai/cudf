@@ -43,18 +43,18 @@ scalar::scalar(scalar const& other,
 {
 }
 
-data_type scalar::type() const noexcept { return _type; }
+auto scalar::type() const noexcept -> data_type { return _type; }
 
 void scalar::set_valid_async(bool is_valid, rmm::cuda_stream_view stream)
 {
   _is_valid.set_value_async(is_valid, stream);
 }
 
-bool scalar::is_valid(rmm::cuda_stream_view stream) const { return _is_valid.value(stream); }
+auto scalar::is_valid(rmm::cuda_stream_view stream) const -> bool { return _is_valid.value(stream); }
 
-bool* scalar::validity_data() { return _is_valid.data(); }
+auto scalar::validity_data() -> bool* { return _is_valid.data(); }
 
-bool const* scalar::validity_data() const { return _is_valid.data(); }
+auto scalar::validity_data() const -> bool const* { return _is_valid.data(); }
 
 string_scalar::string_scalar(std::string const& string,
                              bool is_valid,
@@ -97,14 +97,14 @@ string_scalar::string_scalar(rmm::device_buffer&& data,
 {
 }
 
-string_scalar::value_type string_scalar::value(rmm::cuda_stream_view stream) const
+auto string_scalar::value(rmm::cuda_stream_view stream) const -> string_scalar::value_type
 {
   return value_type{data(), size()};
 }
 
 size_type string_scalar::size() const { return _data.size(); }
 
-const char* string_scalar::data() const { return static_cast<const char*>(_data.data()); }
+auto string_scalar::data() const -> const char* { return static_cast<const char*>(_data.data()); }
 
 string_scalar::operator std::string() const { return this->to_string(rmm::cuda_stream_default); }
 
@@ -167,14 +167,14 @@ fixed_point_scalar<T>::fixed_point_scalar(fixed_point_scalar<T> const& other,
 }
 
 template <typename T>
-typename fixed_point_scalar<T>::rep_type fixed_point_scalar<T>::value(
-  rmm::cuda_stream_view stream) const
+auto fixed_point_scalar<T>::value(
+  rmm::cuda_stream_view stream) const -> typename fixed_point_scalar<T>::rep_type
 {
   return _data.value(stream);
 }
 
 template <typename T>
-T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
+auto fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const -> T
 {
   return value_type{
     numeric::scaled_integer<rep_type>{_data.value(stream), numeric::scale_type{type().scale()}}};
@@ -187,13 +187,13 @@ fixed_point_scalar<T>::operator value_type() const
 }
 
 template <typename T>
-typename fixed_point_scalar<T>::rep_type* fixed_point_scalar<T>::data()
+auto fixed_point_scalar<T>::data() -> typename fixed_point_scalar<T>::rep_type*
 {
   return _data.data();
 }
 
 template <typename T>
-typename fixed_point_scalar<T>::rep_type const* fixed_point_scalar<T>::data() const
+auto fixed_point_scalar<T>::data() const -> typename fixed_point_scalar<T>::rep_type const*
 {
   return _data.data();
 }
@@ -246,19 +246,19 @@ void fixed_width_scalar<T>::set_value(T value, rmm::cuda_stream_view stream)
 }
 
 template <typename T>
-T fixed_width_scalar<T>::value(rmm::cuda_stream_view stream) const
+auto fixed_width_scalar<T>::value(rmm::cuda_stream_view stream) const -> T
 {
   return _data.value(stream);
 }
 
 template <typename T>
-T* fixed_width_scalar<T>::data()
+auto fixed_width_scalar<T>::data() -> T*
 {
   return _data.data();
 }
 
 template <typename T>
-T const* fixed_width_scalar<T>::data() const
+auto fixed_width_scalar<T>::data() const -> T const*
 {
   return _data.data();
 }
@@ -412,7 +412,7 @@ duration_scalar<T>::duration_scalar(duration_scalar<T> const& other,
 }
 
 template <typename T>
-typename duration_scalar<T>::rep_type duration_scalar<T>::count()
+auto duration_scalar<T>::count() -> typename duration_scalar<T>::rep_type
 {
   return this->value().count();
 }
@@ -432,7 +432,7 @@ template class duration_scalar<duration_us>;
 template class duration_scalar<duration_ns>;
 
 template <typename T>
-typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch()
+auto timestamp_scalar<T>::ticks_since_epoch() -> typename timestamp_scalar<T>::rep_type
 {
   return this->value().time_since_epoch().count();
 }
@@ -520,7 +520,7 @@ list_scalar::list_scalar(list_scalar const& other,
 {
 }
 
-column_view list_scalar::view() const { return _data.view(); }
+auto list_scalar::view() const -> column_view { return _data.view(); }
 
 struct_scalar::struct_scalar(struct_scalar const& other,
                              rmm::cuda_stream_view stream,
@@ -557,7 +557,7 @@ struct_scalar::struct_scalar(table&& data,
   init(is_valid, stream, mr);
 }
 
-table_view struct_scalar::view() const { return _data.view(); }
+auto struct_scalar::view() const -> table_view { return _data.view(); }
 
 void struct_scalar::init(bool is_valid,
                          rmm::cuda_stream_view stream,

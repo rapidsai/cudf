@@ -72,7 +72,7 @@ struct compute_children_offsets_fn {
   /**
    * @brief Return the first keys().type of the dictionary columns.
    */
-  data_type get_keys_type()
+  auto get_keys_type() -> data_type
   {
     auto const view(*std::find_if(
       columns_ptrs.begin(), columns_ptrs.end(), [](auto pcv) { return pcv->size() > 0; }));
@@ -89,7 +89,7 @@ struct compute_children_offsets_fn {
    * @param stream Stream used for allocating the output rmm::device_uvector.
    * @return Vector of offsets_pair objects for keys and indices.
    */
-  rmm::device_uvector<offsets_pair> create_children_offsets(rmm::cuda_stream_view stream)
+  auto create_children_offsets(rmm::cuda_stream_view stream) -> rmm::device_uvector<offsets_pair>
   {
     std::vector<offsets_pair> offsets(columns_ptrs.size());
     thrust::transform_exclusive_scan(

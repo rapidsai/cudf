@@ -757,7 +757,7 @@ namespace {
 struct target_type_functor {
   data_type type;
   template <typename Source, aggregation::Kind k>
-  constexpr data_type operator()() const noexcept
+  constexpr auto operator()() const noexcept -> data_type
   {
     using Type    = target_type_t<Source, k>;
     auto const id = type_to_id<Type>();
@@ -767,7 +767,7 @@ struct target_type_functor {
 
 struct is_valid_aggregation_impl {
   template <typename Source, aggregation::Kind k>
-  constexpr bool operator()() const noexcept
+  constexpr auto operator()() const noexcept -> bool
   {
     return is_valid_aggregation<Source, k>();
   }
@@ -775,13 +775,13 @@ struct is_valid_aggregation_impl {
 }  // namespace
 
 // Return target data_type for the given source_type and aggregation
-data_type target_type(data_type source, aggregation::Kind k)
+auto target_type(data_type source, aggregation::Kind k) -> data_type
 {
   return dispatch_type_and_aggregation(source, k, target_type_functor{source});
 }
 
 // Verifies the aggregation `k` is valid on the type `source`
-bool is_valid_aggregation(data_type source, aggregation::Kind k)
+auto is_valid_aggregation(data_type source, aggregation::Kind k) -> bool
 {
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }

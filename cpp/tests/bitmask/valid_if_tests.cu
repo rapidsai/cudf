@@ -27,13 +27,13 @@ struct ValidIfTest : public cudf::test::BaseFixture {
 };
 
 struct odds_valid {
-  __host__ __device__ bool operator()(cudf::size_type i) { return i % 2; }
+  __host__ __device__ auto operator()(cudf::size_type i) -> bool { return i % 2; }
 };
 struct all_valid {
-  __host__ __device__ bool operator()(cudf::size_type i) { return true; }
+  __host__ __device__ auto operator()(cudf::size_type i) -> bool { return true; }
 };
 struct all_null {
-  __host__ __device__ bool operator()(cudf::size_type i) { return false; }
+  __host__ __device__ auto operator()(cudf::size_type i) -> bool { return false; }
 };
 
 TEST_F(ValidIfTest, EmptyRange)

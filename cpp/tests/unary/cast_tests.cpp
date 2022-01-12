@@ -77,7 +77,7 @@ inline auto make_column(std::vector<R> data, std::vector<bool> mask)
   return cudf::test::fixed_width_column_wrapper<T, R>(data.begin(), data.end(), mask.begin());
 }
 
-inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
+inline auto make_exp_chrono_column(cudf::type_id type_id) -> cudf::column
 {
   switch (type_id) {
     case cudf::type_id::TIMESTAMP_DAYS:

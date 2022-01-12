@@ -29,7 +29,7 @@ namespace cudf {
 namespace jit {
 constexpr char percent_escape[] = "_";
 
-inline bool is_white(const char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+inline auto is_white(const char c) -> bool { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
 
 std::string ptx_parser::escape_percent(const std::string& src)
 {

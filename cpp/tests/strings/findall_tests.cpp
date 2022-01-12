@@ -71,7 +71,7 @@ TEST_F(StringsFindallTests, FindallTest)
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.push_back(expected1.release());
   columns.push_back(expected2.release());
-  cudf::table expected(std::move(columns));
+  auto expected = cudf::table(std::move(columns));
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 

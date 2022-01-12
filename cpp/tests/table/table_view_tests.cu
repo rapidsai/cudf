@@ -60,8 +60,8 @@ TEST_F(TableViewTest, EmptyColumnedTable)
 {
   std::vector<cudf::column_view> cols{};
 
-  cudf::table_view input(cols);
-  cudf::size_type expected = 0;
+  auto input    = cudf::table_view(cols);
+  auto expected = cudf::size_type{0};
 
   EXPECT_EQ(input.num_columns(), expected);
 }

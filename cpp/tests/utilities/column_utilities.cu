@@ -190,12 +190,12 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
 
 template <bool check_exact_equality>
 struct column_property_comparator {
-  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
+  auto types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs) -> bool
   {
     return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
   }
 
-  size_type count_nulls(cudf::column_view const& c, cudf::column_view const& row_indices)
+  auto count_nulls(cudf::column_view const& c, cudf::column_view const& row_indices) -> size_type
   {
     auto validity_iter = cudf::detail::make_counting_transform_iterator(
       0,
@@ -210,11 +210,11 @@ struct column_property_comparator {
     return thrust::reduce(rmm::exec_policy(), validity_iter, validity_iter + row_indices.size());
   }
 
-  bool compare_common(cudf::column_view const& lhs,
+  auto compare_common(cudf::column_view const& lhs,
                       cudf::column_view const& rhs,
                       cudf::column_view const& lhs_row_indices,
                       cudf::column_view const& rhs_row_indices,
-                      debug_output_level verbosity)
+                      debug_output_level verbosity) -> bool
   {
     bool result = true;
 
@@ -335,7 +335,7 @@ class corresponding_rows_unequal {
 
   cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
-  __device__ bool operator()(size_type index)
+  __device__ auto operator()(size_type index) -> bool
   {
     return !comp(lhs_row_indices.element<size_type>(index),
                  rhs_row_indices.element<size_type>(index));
@@ -410,7 +410,7 @@ class corresponding_rows_not_equivalent {
 
   cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
-  __device__ bool operator()(size_type index)
+  __device__ auto operator()(size_type index) -> bool
   {
     auto const lhs_index = lhs_row_indices.element<size_type>(index);
     auto const rhs_index = rhs_row_indices.element<size_type>(index);
@@ -477,13 +477,13 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
 // non-nested column types
 template <typename T, bool check_exact_equality>
 struct column_comparator_impl {
-  bool operator()(column_view const& lhs,
+  auto operator()(column_view const& lhs,
                   column_view const& rhs,
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  int depth)
+                  int depth) -> bool
   {
     auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
     auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
@@ -529,13 +529,13 @@ struct column_comparator;
 // specialization for list columns
 template <bool check_exact_equality>
 struct column_comparator_impl<list_view, check_exact_equality> {
-  bool operator()(column_view const& lhs,
+  auto operator()(column_view const& lhs,
                   column_view const& rhs,
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  int depth)
+                  int depth) -> bool
   {
     lists_column_view lhs_l(lhs);
     lists_column_view rhs_l(rhs);
@@ -664,13 +664,13 @@ struct column_comparator_impl<list_view, check_exact_equality> {
 
 template <bool check_exact_equality>
 struct column_comparator_impl<struct_view, check_exact_equality> {
-  bool operator()(column_view const& lhs,
+  auto operator()(column_view const& lhs,
                   column_view const& rhs,
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  int depth)
+                  int depth) -> bool
   {
     structs_column_view l_scv(lhs);
     structs_column_view r_scv(rhs);
@@ -697,13 +697,13 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
 template <bool check_exact_equality>
 struct column_comparator {
   template <typename T>
-  bool operator()(column_view const& lhs,
+  auto operator()(column_view const& lhs,
                   column_view const& rhs,
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  int depth = 0)
+                  int depth = 0) -> bool
   {
     CUDF_EXPECTS(lhs_row_indices.size() == rhs_row_indices.size(),
                  "Mismatch in row counts to compare");
@@ -741,9 +741,9 @@ std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 /**
  * @copydoc cudf::test::expect_column_properties_equal
  */
-bool expect_column_properties_equal(column_view const& lhs,
+auto expect_column_properties_equal(column_view const& lhs,
                                     column_view const& rhs,
-                                    debug_output_level verbosity)
+                                    debug_output_level verbosity) -> bool
 {
   auto indices = generate_all_row_indices(lhs.size());
   return cudf::type_dispatcher(
@@ -753,9 +753,9 @@ bool expect_column_properties_equal(column_view const& lhs,
 /**
  * @copydoc cudf::test::expect_column_properties_equivalent
  */
-bool expect_column_properties_equivalent(column_view const& lhs,
+auto expect_column_properties_equivalent(column_view const& lhs,
                                          column_view const& rhs,
-                                         debug_output_level verbosity)
+                                         debug_output_level verbosity) -> bool
 {
   auto indices = generate_all_row_indices(lhs.size());
   return cudf::type_dispatcher(
@@ -765,9 +765,9 @@ bool expect_column_properties_equivalent(column_view const& lhs,
 /**
  * @copydoc cudf::test::expect_columns_equal
  */
-bool expect_columns_equal(cudf::column_view const& lhs,
+auto expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
-                          debug_output_level verbosity)
+                          debug_output_level verbosity) -> bool
 {
   auto indices = generate_all_row_indices(lhs.size());
   return cudf::type_dispatcher(lhs.type(),
@@ -783,10 +783,10 @@ bool expect_columns_equal(cudf::column_view const& lhs,
 /**
  * @copydoc cudf::test::expect_columns_equivalent
  */
-bool expect_columns_equivalent(cudf::column_view const& lhs,
+auto expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
                                debug_output_level verbosity,
-                               size_type fp_ulps)
+                               size_type fp_ulps) -> bool
 {
   auto indices = generate_all_row_indices(lhs.size());
   return cudf::type_dispatcher(

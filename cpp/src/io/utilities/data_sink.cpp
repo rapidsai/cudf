@@ -47,11 +47,11 @@ class file_sink : public data_sink {
 
   void flush() override { _output_stream.flush(); }
 
-  size_t bytes_written() override { return _bytes_written; }
+  auto bytes_written() -> size_t override { return _bytes_written; }
 
-  [[nodiscard]] bool supports_device_write() const override { return _cufile_out != nullptr; }
+  [[nodiscard]] auto supports_device_write() const -> bool override { return _cufile_out != nullptr; }
 
-  [[nodiscard]] bool is_device_write_preferred(size_t size) const override
+  [[nodiscard]] auto is_device_write_preferred(size_t size) const -> bool override
   {
     return _cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size);
   }
@@ -98,7 +98,7 @@ class host_buffer_sink : public data_sink {
 
   void flush() override {}
 
-  size_t bytes_written() override { return buffer_->size(); }
+  auto bytes_written() -> size_t override { return buffer_->size(); }
 
  private:
   std::vector<char>* buffer_;
@@ -115,7 +115,7 @@ class void_sink : public data_sink {
 
   void host_write(void const* data, size_t size) override { _bytes_written += size; }
 
-  [[nodiscard]] bool supports_device_write() const override { return true; }
+  [[nodiscard]] auto supports_device_write() const -> bool override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -132,7 +132,7 @@ class void_sink : public data_sink {
 
   void flush() override {}
 
-  size_t bytes_written() override { return _bytes_written; }
+  auto bytes_written() -> size_t override { return _bytes_written; }
 
  private:
   size_t _bytes_written{0};
@@ -146,7 +146,7 @@ class user_sink_wrapper : public data_sink {
 
   void host_write(void const* data, size_t size) override { user_sink->host_write(data, size); }
 
-  [[nodiscard]] bool supports_device_write() const override
+  [[nodiscard]] auto supports_device_write() const -> bool override
   {
     return user_sink->supports_device_write();
   }
@@ -169,7 +169,7 @@ class user_sink_wrapper : public data_sink {
 
   void flush() override { user_sink->flush(); }
 
-  size_t bytes_written() override { return user_sink->bytes_written(); }
+  auto bytes_written() -> size_t override { return user_sink->bytes_written(); }
 
  private:
   cudf::io::data_sink* const user_sink;

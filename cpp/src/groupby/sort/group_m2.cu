@@ -42,7 +42,7 @@ struct m2_transform {
   ResultType const* d_means;
   size_type const* d_group_labels;
 
-  __device__ ResultType operator()(size_type const idx) const noexcept
+  __device__ auto operator()(size_type const idx) const noexcept -> ResultType
   {
     if (d_values.is_null(idx)) { return 0.0; }
 

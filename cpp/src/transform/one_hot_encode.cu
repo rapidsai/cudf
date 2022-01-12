@@ -45,7 +45,7 @@ struct one_hot_encode_functor {
   {
   }
 
-  bool __device__ operator()(size_type i)
+  auto __device__ operator()(size_type i) -> bool
   {
     size_type const element_index  = i % _input_size;
     size_type const category_index = i / _input_size;

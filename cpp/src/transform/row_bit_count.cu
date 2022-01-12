@@ -315,7 +315,7 @@ struct row_size_functor {
    *                 1 bit per row for validity if applicable.
    */
   template <typename T>
-  __device__ size_type operator()(column_device_view const& col, row_span const& span)
+  __device__ auto operator()(column_device_view const& col, row_span const& span) -> size_type
   {
     auto const num_rows{span.row_end - span.row_start};
     auto const element_size  = sizeof(device_storage_type_t<T>) * CHAR_BIT;
@@ -332,8 +332,8 @@ struct row_size_functor {
  *                 1 bit per row for validity if applicable.
  */
 template <>
-__device__ size_type row_size_functor::operator()<string_view>(column_device_view const& col,
-                                                               row_span const& span)
+__device__ auto row_size_functor::operator()<string_view>(column_device_view const& col,
+                                                               row_span const& span) -> size_type
 {
   auto const num_rows{span.row_end - span.row_start};
   if (num_rows == 0) {
@@ -366,8 +366,8 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
  *                 1 bit per row for validity if applicable.
  */
 template <>
-__device__ size_type row_size_functor::operator()<list_view>(column_device_view const& col,
-                                                             row_span const& span)
+__device__ auto row_size_functor::operator()<list_view>(column_device_view const& col,
+                                                             row_span const& span) -> size_type
 {
   auto const num_rows{span.row_end - span.row_start};
 
@@ -382,8 +382,8 @@ __device__ size_type row_size_functor::operator()<list_view>(column_device_view 
  * Computed as :   1 bit per row for validity if applicable.
  */
 template <>
-__device__ size_type row_size_functor::operator()<struct_view>(column_device_view const& col,
-                                                               row_span const& span)
+__device__ auto row_size_functor::operator()<struct_view>(column_device_view const& col,
+                                                               row_span const& span) -> size_type
 {
   auto const num_rows{span.row_end - span.row_start};
   return (col.nullable() ? 1 : 0) * num_rows;  // cost of validity

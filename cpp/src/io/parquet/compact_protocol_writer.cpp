@@ -240,7 +240,7 @@ inline void CompactProtocolFieldWriter::field_string_list(int field,
   current_field_value = field;
 }
 
-inline int CompactProtocolFieldWriter::current_field() { return current_field_value; }
+inline auto CompactProtocolFieldWriter::current_field() -> int { return current_field_value; }
 
 inline void CompactProtocolFieldWriter::set_current_field(const int& field)
 {

@@ -42,7 +42,7 @@ class RepeatTypedTestFixture : public cudf::test::BaseFixture,
  public:
   RepeatTypedTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
-  cudf::size_type repeat_count() { return this->generate(); }
+  auto repeat_count() -> cudf::size_type { return this->generate(); }
 };
 
 TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
@@ -179,7 +179,7 @@ class RepeatStringTestFixture : public cudf::test::BaseFixture,
  public:
   RepeatStringTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
-  cudf::size_type repeat_count() { return this->generate(); }
+  auto repeat_count() -> cudf::size_type { return this->generate(); }
 };
 
 TEST_F(RepeatStringTestFixture, RepeatNullable)

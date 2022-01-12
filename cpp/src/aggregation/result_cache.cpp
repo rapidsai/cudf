@@ -19,7 +19,7 @@
 namespace cudf {
 namespace detail {
 
-bool result_cache::has_result(column_view const& input, aggregation const& agg) const
+auto result_cache::has_result(column_view const& input, aggregation const& agg) const -> bool
 {
   return _cache.count({input, agg});
 }
@@ -36,7 +36,7 @@ void result_cache::add_result(column_view const& input,
   _cache.try_emplace({input, key}, std::move(owned_agg), std::move(col));
 }
 
-column_view result_cache::get_result(column_view const& input, aggregation const& agg) const
+auto result_cache::get_result(column_view const& input, aggregation const& agg) const -> column_view
 {
   auto result_it = _cache.find({input, agg});
   CUDF_EXPECTS(result_it != _cache.end(), "Result does not exist in cache");

@@ -74,10 +74,10 @@ namespace {
 /**
  * @brief Check whether the specified column is of type `STRUCT`.
  */
-bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
+auto is_struct(cudf::column_view const& col) -> bool { return col.type().id() == type_id::STRUCT; }
 }  // namespace
 
-bool is_or_has_nested_lists(cudf::column_view const& col)
+auto is_or_has_nested_lists(cudf::column_view const& col) -> bool
 {
   auto is_list = [](cudf::column_view const& col) { return col.type().id() == type_id::LIST; };
 
@@ -197,10 +197,10 @@ struct table_flattener {
   }
 };
 
-flattened_table flatten_nested_columns(table_view const& input,
+auto flatten_nested_columns(table_view const& input,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
-                                       column_nullability nullability)
+                                       column_nullability nullability) -> flattened_table
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }

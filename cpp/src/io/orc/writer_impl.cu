@@ -69,7 +69,7 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 /**
  * @brief Function that translates GDF compression to ORC compression
  */
-orc::CompressionKind to_orc_compression(compression_type compression)
+auto to_orc_compression(compression_type compression) -> orc::CompressionKind
 {
   switch (compression) {
     case compression_type::AUTO:
@@ -82,7 +82,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 /**
  * @brief Function that translates GDF dtype to ORC datatype
  */
-constexpr orc::TypeKind to_orc_type(cudf::type_id id, bool list_column_as_map)
+constexpr auto to_orc_type(cudf::type_id id, bool list_column_as_map) -> orc::TypeKind
 {
   switch (id) {
     case cudf::type_id::INT8: return TypeKind::BYTE;
@@ -110,7 +110,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id, bool list_column_as_map)
 /**
  * @brief Translates time unit to nanoscale multiple.
  */
-constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
+constexpr auto to_clockscale(cudf::type_id timestamp_id) -> int32_t
 {
   switch (timestamp_id) {
     case cudf::type_id::TIMESTAMP_SECONDS: return 9;
@@ -199,7 +199,7 @@ class orc_column_view {
   }
   [[nodiscard]] auto device_dict_chunk() const { return d_dict; }
 
-  [[nodiscard]] auto const& decimal_offsets() const { return d_decimal_offsets; }
+  [[nodiscard]] auto decimal_offsets() const -> auto const& { return d_decimal_offsets; }
   void attach_decimal_offsets(uint32_t* sizes_ptr) { d_decimal_offsets = sizes_ptr; }
 
   /**
@@ -219,7 +219,7 @@ class orc_column_view {
   [[nodiscard]] auto device_stripe_dict() const noexcept { return d_stripe_dict; }
 
   // Index in the table
-  [[nodiscard]] uint32_t index() const noexcept { return _index; }
+  [[nodiscard]] auto index() const noexcept -> uint32_t { return _index; }
   // Id in the ORC file
   [[nodiscard]] auto id() const noexcept { return _index + 1; }
 
@@ -234,7 +234,7 @@ class orc_column_view {
 
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }
-  [[nodiscard]] bool nullable() const noexcept { return null_mask() != nullptr; }
+  [[nodiscard]] auto nullable() const noexcept -> bool { return null_mask() != nullptr; }
   auto user_defined_nullable() const noexcept { return nullable_from_metadata; }
 
   [[nodiscard]] auto scale() const noexcept { return _scale; }
@@ -279,7 +279,7 @@ class orc_column_view {
   std::optional<uint32_t> _parent_index;
 };
 
-size_type orc_table_view::num_rows() const noexcept
+auto orc_table_view::num_rows() const noexcept -> size_type
 {
   return columns.empty() ? 0 : columns.front().size();
 }
@@ -292,9 +292,9 @@ size_type orc_table_view::num_rows() const noexcept
  * @param max_stripe_size Maximum size of each stripe, both in bytes and in rows
  * @return List of stripe descriptors
  */
-file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
+auto calculate_segmentation(host_span<orc_column_view const> columns,
                                          hostdevice_2dvector<rowgroup_rows>&& rowgroup_bounds,
-                                         stripe_size_limits max_stripe_size)
+                                         stripe_size_limits max_stripe_size) -> file_segmentation
 {
   std::vector<stripe_rowgroups> infos;
   auto const num_rowgroups = rowgroup_bounds.size().first;
@@ -455,13 +455,13 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
  * @brief Returns the maximum size of RLE encoded values of an integer type.
  **/
 template <typename T>
-size_t max_varint_size()
+auto max_varint_size() -> size_t
 {
   // varint encodes 7 bits in each byte
   return cudf::util::div_rounding_up_unsafe(sizeof(T) * 8, 7);
 }
 
-constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
+constexpr auto RLE_stream_size(TypeKind kind, size_t count) -> size_t
 {
   using cudf::util::div_rounding_up_unsafe;
   constexpr auto byte_rle_max_len = 128;
@@ -486,9 +486,9 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
   }
 }
 
-orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
+auto writer::impl::create_streams(host_span<orc_column_view> columns,
                                          file_segmentation const& segmentation,
-                                         std::map<uint32_t, size_t> const& decimal_column_sizes)
+                                         std::map<uint32_t, size_t> const& decimal_column_sizes) -> orc_streams
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -639,8 +639,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
   return {std::move(streams), std::move(ids), std::move(types)};
 }
 
-orc_streams::orc_stream_offsets orc_streams::compute_offsets(
-  host_span<orc_column_view const> columns, size_t num_rowgroups) const
+auto orc_streams::compute_offsets(
+  host_span<orc_column_view const> columns, size_t num_rowgroups) const -> orc_streams::orc_stream_offsets
 {
   std::vector<size_t> strm_offsets(streams.size());
   size_t non_rle_data_size = 0;
@@ -829,12 +829,12 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-encoded_data encode_columns(orc_table_view const& orc_table,
+auto encode_columns(orc_table_view const& orc_table,
                             string_dictionaries&& dictionaries,
                             encoder_decimal_info&& dec_chunk_sizes,
                             file_segmentation const& segmentation,
                             orc_streams const& streams,
-                            rmm::cuda_stream_view stream)
+                            rmm::cuda_stream_view stream) -> encoded_data
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
@@ -1469,12 +1469,12 @@ struct device_stack {
     cudf_assert(size < capacity and "Stack overflow");
     stack[size++] = val;
   }
-  __device__ T pop()
+  __device__ auto pop() -> T
   {
     cudf_assert(size > 0 and "Stack underflow");
     return stack[--size];
   }
-  __device__ bool empty() { return size == 0; }
+  __device__ auto empty() -> bool { return size == 0; }
 
  private:
   T* stack;
@@ -1482,10 +1482,10 @@ struct device_stack {
   int size;
 };
 
-orc_table_view make_orc_table_view(table_view const& table,
+auto make_orc_table_view(table_view const& table,
                                    table_device_view const& d_table,
                                    table_input_metadata const& table_meta,
-                                   rmm::cuda_stream_view stream)
+                                   rmm::cuda_stream_view stream) -> orc_table_view
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
@@ -1588,9 +1588,9 @@ orc_table_view make_orc_table_view(table_view const& table,
           cudf::detail::make_device_uvector_sync(str_col_indexes, stream)};
 }
 
-hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view const& orc_table,
+auto calculate_rowgroup_bounds(orc_table_view const& orc_table,
                                                              size_type rowgroup_size,
-                                                             rmm::cuda_stream_view stream)
+                                                             rmm::cuda_stream_view stream) -> hostdevice_2dvector<rowgroup_rows>
 {
   auto const num_rowgroups =
     cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
@@ -1637,9 +1637,9 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
 }
 
 // returns host vector of per-rowgroup sizes
-encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
+auto decimal_chunk_sizes(orc_table_view& orc_table,
                                          file_segmentation const& segmentation,
-                                         rmm::cuda_stream_view stream)
+                                         rmm::cuda_stream_view stream) -> encoder_decimal_info
 {
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
   // Compute per-element offsets (within each row group) on the device

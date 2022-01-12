@@ -77,11 +77,11 @@ struct alignas(4) format_item {
   char value;                  // specifier or literal value
   int8_t length;               // item length in bytes
 
-  static format_item new_specifier(char format_char, int8_t length)
+  static auto new_specifier(char format_char, int8_t length) -> format_item
   {
     return format_item{format_char_type::specifier, format_char, length};
   }
-  static format_item new_literal(char literal)
+  static auto new_literal(char literal) -> format_item
   {
     return format_item{format_char_type::literal, literal, 1};
   }
@@ -156,7 +156,7 @@ struct format_compiler {
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
 
-  [[nodiscard]] int8_t subsecond_precision() const { return specifiers.at('f'); }
+  [[nodiscard]] auto subsecond_precision() const -> int8_t { return specifiers.at('f'); }
 };
 
 /**
@@ -167,7 +167,7 @@ struct format_compiler {
  * @param bytes Number of bytes in str to read.
  * @return Integer value of valid characters read and how many bytes were not read.
  */
-__device__ thrust::pair<int32_t, size_type> parse_int(char const* str, size_type bytes)
+__device__ auto parse_int(char const* str, size_type bytes) -> thrust::pair<int32_t, size_type>
 {
   int32_t value = 0;
   while (bytes-- > 0) {
@@ -194,7 +194,7 @@ struct parse_datetime {
    *
    * @return `1x10^exponent` for `0 <= exponent <= 9`
    */
-  [[nodiscard]] __device__ constexpr int64_t power_of_ten(int32_t const exponent) const
+  [[nodiscard]] __device__ constexpr auto power_of_ten(int32_t const exponent) const -> int64_t
   {
     constexpr int64_t powers_of_ten[] = {
       1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
@@ -202,7 +202,7 @@ struct parse_datetime {
   }
 
   // Walk the format_items to parse the string into date/time components
-  [[nodiscard]] __device__ timestamp_components parse_into_parts(string_view const& d_string) const
+  [[nodiscard]] __device__ auto parse_into_parts(string_view const& d_string) const -> timestamp_components
   {
     timestamp_components timeparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -310,7 +310,7 @@ struct parse_datetime {
     return timeparts;
   }
 
-  [[nodiscard]] __device__ int64_t timestamp_from_parts(timestamp_components const& timeparts) const
+  [[nodiscard]] __device__ auto timestamp_from_parts(timestamp_components const& timeparts) const -> int64_t
   {
     auto const ymd =  // convenient chrono class handles the leap year calculations for us
       cuda::std::chrono::year_month_day(
@@ -336,7 +336,7 @@ struct parse_datetime {
     return timestamp;
   }
 
-  __device__ T operator()(size_type idx) const
+  __device__ auto operator()(size_type idx) const -> T
   {
     T epoch_time{typename T::duration{0}};
     if (d_strings.is_null(idx)) return epoch_time;
@@ -424,7 +424,7 @@ struct check_datetime_format {
    * @param bytes Number of bytes to check.
    * @return true if all digits are 0-9
    */
-  __device__ bool check_digits(const char* str, size_type bytes)
+  __device__ auto check_digits(const char* str, size_type bytes) -> bool
   {
     return thrust::all_of(thrust::seq, str, str + bytes, [] __device__(char chr) {
       return (chr >= '0' && chr <= '9');
@@ -441,10 +441,10 @@ struct check_datetime_format {
    * @param max_value Inclusive maximum value
    * @return If value is valid and number of bytes not successfully processed
    */
-  __device__ thrust::pair<bool, size_type> check_value(char const* str,
+  __device__ auto check_value(char const* str,
                                                        size_type const bytes,
                                                        int const min_value,
-                                                       int const max_value)
+                                                       int const max_value) -> thrust::pair<bool, size_type>
   {
     if (*str < '0' || *str > '9') { return thrust::make_pair(false, bytes); }
     int32_t value   = 0;
@@ -466,7 +466,7 @@ struct check_datetime_format {
    * The checking here is a little more strict than the actual
    * parser used for conversion.
    */
-  __device__ thrust::optional<timestamp_components> check_string(string_view const& d_string)
+  __device__ auto check_string(string_view const& d_string) -> thrust::optional<timestamp_components>
   {
     timestamp_components dateparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -582,7 +582,7 @@ struct check_datetime_format {
     return dateparts;
   }
 
-  __device__ bool operator()(size_type idx)
+  __device__ auto operator()(size_type idx) -> bool
   {
     if (d_strings.is_null(idx)) return false;
 
@@ -689,7 +689,7 @@ struct from_timestamp_base {
    *     modulo(-1,60) -> 59
    * @endcode
    */
-  [[nodiscard]] __device__ int32_t modulo_time(int64_t time, int64_t base) const
+  [[nodiscard]] __device__ auto modulo_time(int64_t time, int64_t base) const -> int32_t
   {
     return static_cast<int32_t>(((time % base) + base) % base);
   };
@@ -707,12 +707,12 @@ struct from_timestamp_base {
    *     scale( 61,60) ->  1
    * @endcode
    */
-  [[nodiscard]] __device__ int64_t scale_time(int64_t time, int64_t base) const
+  [[nodiscard]] __device__ auto scale_time(int64_t time, int64_t base) const -> int64_t
   {
     return (time - ((time < 0) * (base - 1L))) / base;
   };
 
-  [[nodiscard]] __device__ time_components get_time_components(int64_t tstamp) const
+  [[nodiscard]] __device__ auto get_time_components(int64_t tstamp) const -> time_components
   {
     time_components result = {0};
     if constexpr (std::is_same_v<T, cudf::timestamp_D>) { return result; }
@@ -751,7 +751,7 @@ struct from_timestamps_size_fn : public from_timestamp_base<T> {
   {
   }
 
-  __device__ size_type operator()(size_type idx) const
+  __device__ auto operator()(size_type idx) const -> size_type
   {
     if (d_timestamps.is_null(idx)) { return 0; }
 
@@ -839,7 +839,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
   }
 
   // utility to create 0-padded integers (up to 9 chars)
-  __device__ char* int2str(char* str, int bytes, int val)
+  __device__ auto int2str(char* str, int bytes, int val) -> char*
   {
     char tmpl[9] = {'0', '0', '0', '0', '0', '0', '0', '0', '0'};
     char* ptr    = tmpl;
@@ -855,8 +855,8 @@ struct datetime_formatter : public from_timestamp_base<T> {
   }
 
   // from https://howardhinnant.github.io/date/date.html
-  [[nodiscard]] __device__ thrust::pair<int32_t, int32_t> get_iso_week_year(
-    cuda::std::chrono::year_month_day const& ymd) const
+  [[nodiscard]] __device__ auto get_iso_week_year(
+    cuda::std::chrono::year_month_day const& ymd) const -> thrust::pair<int32_t, int32_t>
   {
     auto const days = cuda::std::chrono::sys_days(ymd);
     auto year       = ymd.year();
@@ -885,8 +885,8 @@ struct datetime_formatter : public from_timestamp_base<T> {
       static_cast<int32_t>(year));
   }
 
-  [[nodiscard]] __device__ int8_t get_week_of_year(cuda::std::chrono::sys_days const days,
-                                                   cuda::std::chrono::sys_days const start) const
+  [[nodiscard]] __device__ auto get_week_of_year(cuda::std::chrono::sys_days const days,
+                                                   cuda::std::chrono::sys_days const start) const -> int8_t
   {
     return days < start
              ? 0
@@ -895,7 +895,7 @@ struct datetime_formatter : public from_timestamp_base<T> {
                  .count();
   }
 
-  __device__ int32_t get_day_of_year(cuda::std::chrono::year_month_day const& ymd)
+  __device__ auto get_day_of_year(cuda::std::chrono::year_month_day const& ymd) -> int32_t
   {
     auto const month               = static_cast<uint32_t>(ymd.month());
     auto const day                 = static_cast<uint32_t>(ymd.day());

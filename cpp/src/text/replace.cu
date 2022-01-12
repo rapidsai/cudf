@@ -130,7 +130,7 @@ struct replace_tokens_fn : base_token_replacer_fn {
    * @param token Token candidate to be replaced.
    * @return result pair specifies replacement condition and new string
    */
-  __device__ replace_result token_replacement(cudf::string_view const& token)
+  __device__ auto token_replacement(cudf::string_view const& token) -> replace_result
   {
     // check if the token matches any of the targets
     auto const found_itr = thrust::find(thrust::seq, d_targets_begin, d_targets_end, token);

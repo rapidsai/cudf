@@ -66,7 +66,7 @@ struct format_lists_fn {
   size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ column_device_view get_nested_child(size_type idx)
+  __device__ auto get_nested_child(size_type idx) -> column_device_view
   {
     auto current = d_input;
     while (idx > 0) {
@@ -76,7 +76,7 @@ struct format_lists_fn {
     return current;
   }
 
-  __device__ size_type write_separator(char*& d_output, size_type sep_idx = separator_index)
+  __device__ auto write_separator(char*& d_output, size_type sep_idx = separator_index) -> size_type
   {
     auto d_str = [&] {
       if (d_separators.size() > sep_idx) return d_separators.element<string_view>(sep_idx);
@@ -88,16 +88,16 @@ struct format_lists_fn {
     return d_str.size_bytes();
   }
 
-  __device__ size_type write_na_rep(char*& d_output)
+  __device__ auto write_na_rep(char*& d_output) -> size_type
   {
     if (d_output) d_output = copy_string(d_output, d_na_rep);
     return d_na_rep.size_bytes();
   }
 
-  __device__ size_type write_strings(column_device_view const& col,
+  __device__ auto write_strings(column_device_view const& col,
                                      size_type left_idx,
                                      size_type right_idx,
-                                     char* d_output)
+                                     char* d_output) -> size_type
   {
     size_type bytes = 0;
     for (size_type idx = left_idx; idx < right_idx; ++idx) {

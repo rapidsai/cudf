@@ -198,21 +198,21 @@ class posix_parser {
    *
    * @return Parsed number
    */
-  int64_t parse_number();
+  auto parse_number() -> int64_t;
 
   /**
    * @brief Parses a UTC offset from the posix TZ string.
    *
    * @return Parsed offset
    */
-  int32_t parse_offset();
+  auto parse_offset() -> int32_t;
 
   /**
    * @brief Parses a DST transition time from the posix TZ string.
    *
    * @return Parsed transition time
    */
-  dst_transition_s parse_transition();
+  auto parse_transition() -> dst_transition_s;
 
   /**
    * @brief Returns the remaining number of characters in the input.
@@ -222,7 +222,7 @@ class posix_parser {
   /**
    * @brief Returns the next character in the input.
    */
-  [[nodiscard]] char next_character() const { return *cur; }
+  [[nodiscard]] auto next_character() const -> char { return *cur; }
 
  private:
   typename Container::const_iterator cur;
@@ -246,7 +246,7 @@ void posix_parser<Container>::skip_name()
 }
 
 template <class Container>
-int64_t posix_parser<Container>::parse_number()
+auto posix_parser<Container>::parse_number() -> int64_t
 {
   int64_t v = 0;
   while (cur < end) {
@@ -259,7 +259,7 @@ int64_t posix_parser<Container>::parse_number()
 }
 
 template <class Container>
-int32_t posix_parser<Container>::parse_offset()
+auto posix_parser<Container>::parse_offset() -> int32_t
 {
   CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
 
@@ -283,7 +283,7 @@ int32_t posix_parser<Container>::parse_offset()
 }
 
 template <class Container>
-dst_transition_s posix_parser<Container>::parse_transition()
+auto posix_parser<Container>::parse_transition() -> dst_transition_s
 {
   CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
 
@@ -320,7 +320,7 @@ dst_transition_s posix_parser<Container>::parse_transition()
 /**
  * @brief Returns the number of days in a month.
  */
-static int days_in_month(int month, bool is_leap_year)
+static auto days_in_month(int month, bool is_leap_year) -> int
 {
   CUDF_EXPECTS(month > 0 && month <= 12, "Invalid month");
 
@@ -336,7 +336,7 @@ static int days_in_month(int month, bool is_leap_year)
  *
  * @return transition time in seconds from the beginning of the year
  */
-static int64_t get_transition_time(dst_transition_s const& trans, int year)
+static auto get_transition_time(dst_transition_s const& trans, int year) -> int64_t
 {
   auto day = trans.day;
 
@@ -373,8 +373,8 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-timezone_table build_timezone_transition_table(std::string const& timezone_name,
-                                               rmm::cuda_stream_view stream)
+auto build_timezone_transition_table(std::string const& timezone_name,
+                                               rmm::cuda_stream_view stream) -> timezone_table
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC

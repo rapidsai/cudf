@@ -70,7 +70,7 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
   cudf::test::fixed_width_column_wrapper<T> input_col2(input2.begin(), input2.end());
 
   std::vector<cudf::column_view> cols{input_col1, input_col2};
-  cudf::table_view input_table(cols);
+  auto input_table = cudf::table_view(cols);
 
   cudf::size_type expected = std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
   EXPECT_EQ(expected, cudf::distinct_count(input_table, null_equality::EQUAL));
@@ -223,7 +223,7 @@ TEST_F(DistinctCount, EmptyColumnedTable)
 {
   std::vector<cudf::column_view> cols{};
 
-  cudf::table_view input(cols);
+  auto input = cudf::table_view(cols);
 
   EXPECT_EQ(0, cudf::distinct_count(input, null_equality::EQUAL));
   EXPECT_EQ(0, cudf::distinct_count(input, null_equality::UNEQUAL));
