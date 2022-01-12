@@ -20,9 +20,9 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import _default_format_options
+from cudf.io.parquet import _default_open_file_options
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
-from cudf.utils.ioutils import _is_local_filesystem, open_remote_files
+from cudf.utils.ioutils import _is_local_filesystem, _open_remote_files
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -66,7 +66,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
-        open_options=None,
+        open_file_options=None,
         **kwargs,
     ):
 
@@ -79,12 +79,12 @@ class CudfEngine(ArrowDatasetEngine):
             # Non-local filesystem handling
             paths_or_fobs = paths
             if not _is_local_filesystem(fs):
-                paths_or_fobs = open_remote_files(
+                paths_or_fobs = _open_remote_files(
                     paths_or_fobs,
                     fs,
                     context_stack=stack,
-                    **_default_format_options(
-                        open_options, columns, row_groups
+                    **_default_open_file_options(
+                        open_file_options, columns, row_groups
                     ),
                 )
 
@@ -153,7 +153,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=(),
         partitioning=None,
         schema=None,
-        open_options=None,
+        open_file_options=None,
         **kwargs,
     ):
 
@@ -175,7 +175,7 @@ class CudfEngine(ArrowDatasetEngine):
         # Extract supported kwargs from `kwargs`
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         read_kwargs = kwargs.get("read", {})
-        read_kwargs.update(open_options or {})
+        read_kwargs.update(open_file_options or {})
 
         # Assume multi-piece read
         paths = []

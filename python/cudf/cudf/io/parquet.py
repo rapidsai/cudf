@@ -329,7 +329,7 @@ def read_parquet(
     strings_to_categorical=False,
     use_pandas_metadata=True,
     categorical_partitions=True,
-    open_options=None,
+    open_file_options=None,
     *args,
     **kwargs,
 ):
@@ -397,14 +397,14 @@ def read_parquet(
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
-    format_options = _default_format_options(open_options, columns, row_groups)
+    open_file_options = _default_open_file_options(open_file_options, columns, row_groups)
     for i, source in enumerate(filepath_or_buffer):
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
             use_python_file_object=True,
-            format_options=format_options,
+            open_file_options=open_file_options,
             **kwargs,
         )
 
@@ -694,19 +694,20 @@ def _check_decimal128_type(arrow_type):
             )
 
 
-def _default_format_options(open_options, columns, row_groups):
-    # Convert `open_options` to `format_options`, which
-    # is a parameter of `ioutils.get_filepath_or_buffer`.
-    # The `format_options` dictionary also correponds to
-    # key-word  arguments of `ioutils.open_remote_files`.
-    format_options = (open_options or {}).copy()
-    if format_options.get("file_format", "parquet") == "parquet":
-        format_options.update(
+def _default_open_file_options(open_file_options, columns, row_groups):
+    # Copy and update `open_file_options` to include
+    # column and row-group information under the
+    # "precache_options" key
+    open_file_options = (open_file_options or {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
+    if precache_options.get("method", "parquet") == "parquet":
+        precache_options.update(
             {
-                "file_format": "parquet",
-                "engine": format_options.get("engine", "pyarrow"),
+                "method": "parquet",
+                "engine": precache_options.get("engine", "pyarrow"),
                 "columns": columns,
                 "row_groups": row_groups,
             }
         )
-    return format_options
+    open_file_options["precache_options"] = precache_options
+    return open_file_options

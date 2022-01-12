@@ -226,9 +226,9 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
-@pytest.mark.parametrize("fsspec_format", [None, "parquet"])
+@pytest.mark.parametrize("precache", [None, "parquet"])
 def test_read_parquet(
-    s3_base, s3so, pdf, bytes_per_thread, columns, fsspec_format,
+    s3_base, s3so, pdf, bytes_per_thread, columns, precache,
 ):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
@@ -240,7 +240,7 @@ def test_read_parquet(
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got1 = cudf.read_parquet(
             "s3://{}/{}".format(bname, fname),
-            open_options={"file_format": fsspec_format},
+            open_file_options={"precache_options": {"method": precache}},
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             columns=columns,
@@ -316,8 +316,8 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("fsspec_format", [None, "parquet"])
-def test_read_parquet_filters(s3_base, s3so, pdf_ext, fsspec_format):
+@pytest.mark.parametrize("precache", [None, "parquet"])
+def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
     fname = "test_parquet_reader_filters.parquet"
     bname = "parquet"
     buffer = BytesIO()
@@ -329,7 +329,7 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, fsspec_format):
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             filters=filters,
-            open_options={"file_format": fsspec_format},
+            open_file_options={"precache_options": {"method": precache}},
         )
 
     # All row-groups should be filtered out

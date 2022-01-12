@@ -117,14 +117,14 @@ def test_read_csv(s3_base, s3so):
 
 
 @pytest.mark.parametrize(
-    "open_options",
+    "open_file_options",
     [
-        {"file_format": None},
-        {"file_format": "parquet"},
-        {"open_file_cb": None},
+        {"precache_options": {"method": None}},
+        {"precache_options": {"method": "parquet"}},
+        {"open_file_func": None},
     ],
 )
-def test_read_parquet(s3_base, s3so, open_options):
+def test_read_parquet(s3_base, s3so, open_file_options):
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
@@ -132,15 +132,15 @@ def test_read_parquet(s3_base, s3so, open_options):
     with s3_context(
         s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
     ):
-        if "open_file_cb" in open_options:
+        if "open_file_func" in open_file_options:
             fs = pa_fs.S3FileSystem(
                 endpoint_override=s3so["client_kwargs"]["endpoint_url"],
             )
-            open_options["open_file_cb"] = fs.open_input_file
+            open_file_options["open_file_func"] = fs.open_input_file
         df = dask_cudf.read_parquet(
             "s3://daskparquet/*.parq",
             storage_options=s3so,
-            open_options=open_options,
+            open_file_options=open_file_options,
         )
         assert df.a.sum().compute() == 10
         assert df.b.sum().compute() == 9

@@ -162,12 +162,12 @@ categorical_partitions : boolean, default True
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
-open_options : dict, optional
+open_file_options : dict, optional
     Dictionary of key-value pairs to pass to the function used to open remote
-    files. By default, this will be `fsspec.parquet.open_parquet_file`. If
-    `file_format=None` is included in `open_options`, the fsspec filesystem's
-    `open` method will be use instead. Note that the `open_file_cb` key can
-    also be used to specify a custom file-open function.
+    files. By default, this will be `fsspec.parquet.open_parquet_file`. To
+    deactivate optimized precaching, set the "method" to `None` under the
+    "precache_options" key. Note that the `open_file_func` key can also be
+    used to specify a custom file-open function.
 
 Returns
 -------
@@ -1231,16 +1231,19 @@ def _set_context(obj, stack):
     return stack.enter_context(obj)
 
 
-def open_remote_files(
+def _open_remote_files(
     paths,
     fs,
     context_stack=None,
-    open_file_cb=None,
-    file_format=None,
+    open_file_func=None,
+    precache_options=None,
     **kwargs,
 ):
     """Return a list of open file-like objects given
     a list of remote file paths.
+
+    WARNING: This utility is currently experimental,
+    and is meant for internal cudf use only.
 
     Parameters
     ----------
@@ -1250,34 +1253,38 @@ def open_remote_files(
         Fsspec file-system object.
     context_stack : contextlib.ExitStack, Optional
         Context manager to use for open files.
-    open_file_cb : Callable, Optional
+    open_file_func : Callable, Optional
         Call-back function to use for opening. If this argument
         is specified, all other arguments will be ignored.
-    file_format : str, optional
-        Lable for format-specific file-opening function to
-        use. Supported options are currently 'parquet' and `None`.
-        If 'parquet' is specified, `fsspec.parquet.openn_parquet_file`
-        will be envoked. Otherwise, `fs.open` will be used.
+    precache_options : dict, optional
+        Dictionary of key-word arguments to pass to use for
+        precaching. Unless the input contains ``{"method": None}``,
+        ``fsspec.parquet.open_parquet_file`` will be used for remote
+        storage.
     **kwargs :
         Key-word arguments to be passed to format-specific
         open functions.
     """
 
     # Just use call-back function if one was specified
-    if open_file_cb is not None:
+    if open_file_func is not None:
         return [
-            _set_context(open_file_cb(path), context_stack) for path in paths
+            _set_context(open_file_func(path, **kwargs), context_stack) for path in paths
         ]
 
-    # Check if file_format is supported
-    if file_format not in ("parquet", None):
+    # Check if the "precache" option is supported.
+    # In the future, fsspec will do this check for us,
+    # but that feature
+    precache_options = (precache_options or {}).copy()
+    precache =  precache_options.pop("method", None)
+    if precache not in ("parquet", None):
         raise ValueError(
-            f"{file_format} not a supported `file_format` option."
+            f"{precache} not a supported `precache` option."
         )
 
     # Check that "parts" caching (used for all format-aware file handling)
     # is supported by the installed fsspec/s3fs version
-    if file_format:
+    if precache == "parquet":
         supported = parse_version(fsspec.__version__) > parse_version(
             "2021.11.0"
         )
@@ -1291,27 +1298,31 @@ def open_remote_files(
             except ImportError:
                 pass
             if not supported:
-                file_format = None
+                precache = None
                 warnings.warn(
                     f"This version of s3fs ({s3fs.__version__}) does not "
                     f"support the 'parts' cache in fsspec. Please update "
                     f"to the latest s3fs version for better performance."
                 )
         elif not supported:
-            file_format = None
+            precache = None
 
-    if file_format == "parquet":
+    if precache == "parquet":
         import fsspec.parquet as fsspec_parquet
 
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.
-        row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
+        row_groups = precache_options.pop("row_groups", None) or ([None] * len(paths))
         return [
             ArrowPythonFile(
                 _set_context(
                     fsspec_parquet.open_parquet_file(
-                        path, fs=fs, row_groups=rgs, **kwargs,
+                        path,
+                        fs=fs,
+                        row_groups=rgs,
+                        **precache_options,
+                        **kwargs,
                     ),
                     context_stack,
                 )
@@ -1335,7 +1346,7 @@ def get_filepath_or_buffer(
     iotypes=(BytesIO, NativeFile),
     byte_ranges=None,
     use_python_file_object=False,
-    format_options=None,
+    open_file_options=None,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1357,9 +1368,9 @@ def get_filepath_or_buffer(
     use_python_file_object : boolean, default False
         If True, Arrow-backed PythonFile objects will be used in place
         of fsspec AbstractBufferedFile objects.
-    format_options : dict, optional
+    open_file_options : dict, optional
         Optional dictionary of key-word arguments to pass to
-        `open_remote_files` (used for remote storage only).
+        `_open_remote_files` (used for remote storage only).
 
     Returns
     -------
@@ -1393,8 +1404,8 @@ def get_filepath_or_buffer(
 
         else:
             if use_python_file_object:
-                path_or_data = open_remote_files(
-                    paths, fs, **(format_options or {}),
+                path_or_data = _open_remote_files(
+                    paths, fs, **(open_file_options or {}),
                 )
             else:
                 path_or_data = [
