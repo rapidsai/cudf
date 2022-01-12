@@ -73,7 +73,7 @@ enum class binary_operator : int32_t {
   GENERIC_BINARY,        ///< generic binary operator to be generated with input
                          ///< ptx code
   NULL_LOGICAL_AND,  ///< operator && with Spark rules: (null, null) is null, (null, true) is null,
-                     ///< (null, false)is false, and (valid, valid) == LOGICAL_AND(valid, valid)
+                     ///< (null, false) is false, and (valid, valid) == LOGICAL_AND(valid, valid)
   NULL_LOGICAL_OR,   ///< operator || with Spark rules: (null, null) is null, (null, true) is true,
                      ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
   INVALID_BINARY     ///< invalid operation
