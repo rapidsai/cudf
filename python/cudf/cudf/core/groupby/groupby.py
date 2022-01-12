@@ -661,8 +661,9 @@ class GroupBy(Serializable):
         Parameters
         ----------
         function: str or callable
-            Aggregation to apply to each group. Note that currently,
-            only aggregations are supported by `transform`.
+            Aggregation to apply to each group. Note that the set of
+            operations currently supported by `transform` is identical
+            to that supported by the `agg` method.
 
         Returns
         -------
