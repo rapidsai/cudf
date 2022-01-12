@@ -284,6 +284,19 @@ public:
   J_ARRAY_TYPE get_jArray() { return orig; }
 
   /**
+   * @brief Conversion to std::vector
+   *
+   * @tparam target_t Target data type
+   * @return std::vector<target_t> Vector with the copied contents
+   */
+  template <typename target_t = N_TYPE> std::vector<target_t> to_vector() const {
+    std::vector<target_t> ret;
+    ret.reserve(size());
+    std::copy(begin(), end(), std::back_inserter(ret));
+    return ret;
+  }
+
+  /**
    * @brief if data has been written back into this array, don't commit
    * it.
    */
@@ -308,7 +321,30 @@ using native_jdoubleArray = native_jArray<jdouble, jdoubleArray, native_jdoubleA
 using native_jlongArray = native_jArray<jlong, jlongArray, native_jlongArray_accessor>;
 using native_jintArray = native_jArray<jint, jintArray, native_jintArray_accessor>;
 using native_jbyteArray = native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor>;
-using native_jbooleanArray = native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor>;
+
+/**
+ * @brief Specialization of native_jArray for jboolean
+ *
+ * This class adds special support for conversion to std::vector<X>, where the element
+ * value is chosen depending on the jboolean value.
+ */
+struct native_jbooleanArray
+    : native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> {
+  native_jbooleanArray(JNIEnv *const env, jbooleanArray orig)
+      : native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor>(env, orig) {}
+
+  native_jbooleanArray(native_jbooleanArray const &) = delete;
+  native_jbooleanArray &operator=(native_jbooleanArray const &) = delete;
+
+  template <typename target_t>
+  std::vector<target_t> transform_if_else(target_t const &if_true, target_t const &if_false) const {
+    std::vector<target_t> ret;
+    ret.reserve(size());
+    std::transform(begin(), end(), std::back_inserter(ret),
+                   [&](jboolean const &b) { return b ? if_true : if_false; });
+    return ret;
+  }
+};
 
 /**
  * @brief wrapper around native_jlongArray to make it take pointers instead.

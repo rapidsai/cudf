@@ -943,21 +943,19 @@ cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
       return cudf::column_view(column_view);
     }
   } else {
-    std::unique_ptr<cudf::column_view> ret;
     std::vector<cudf::column_view> children;
     children.reserve(column_view.num_children());
     for (auto it = column_view.child_begin(); it != column_view.child_end(); it++) {
       children.push_back(remove_validity_from_col(*it));
     }
     if (!column_view.nullable() || column_view.null_count() != 0) {
-      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr,
-                                      column_view.null_mask(), column_view.null_count(),
-                                      column_view.offset(), children));
+      return cudf::column_view(column_view.type(), column_view.size(), nullptr,
+                               column_view.null_mask(), column_view.null_count(),
+                               column_view.offset(), children);
     } else {
-      ret.reset(new cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
-                                      column_view.offset(), children));
+      return cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
+                               column_view.offset(), children);
     }
-    return *ret.release();
   }
 }
 
@@ -975,6 +973,9 @@ cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
 
 } // namespace jni
 } // namespace cudf
+
+using cudf::jni::release_as_jlong;
+using cudf::jni::to_jlong;
 
 extern "C" {
 
@@ -1005,12 +1006,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *en
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, j_cudf_columns);
 
-    std::vector<cudf::column_view> column_views(n_cudf_columns.size());
-    for (int i = 0; i < n_cudf_columns.size(); i++) {
-      column_views[i] = *n_cudf_columns[i];
-    }
-    cudf::table_view *tv = new cudf::table_view(column_views);
-    return reinterpret_cast<jlong>(tv);
+    std::vector<cudf::column_view> column_views = n_cudf_columns.get_dereferenced();
+    return to_jlong(new cudf::table_view(column_views));
   }
   CATCH_STD(env, 0);
 }
@@ -1047,8 +1044,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_columnViewsFromPacked(JNI
       // In the ideal case we would keep the view where it is at, and pass in a pointer to it
       // That pointer would then be copied when Java takes ownership of it, but that adds an
       // extra JNI call that I would like to avoid for performance reasons.
-      cudf::column_view *cv = new cudf::column_view(table.column(i));
-      views[i] = reinterpret_cast<jlong>(cv);
+      views[i] = to_jlong(new cudf::column_view(table.column(i)));
     }
     views.commit();
 
@@ -1086,23 +1082,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv *env, jclass,
     JNI_ARG_CHECK(env, num_columns_null_smallest == num_columns,
                   "columns and is_descending lengths don't match", 0);
 
-    std::vector<cudf::order> order(n_is_descending.size());
-    for (int i = 0; i < n_is_descending.size(); i++) {
-      order[i] = n_is_descending[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
-    }
-    std::vector<cudf::null_order> null_order(n_are_nulls_smallest.size());
-    for (int i = 0; i < n_are_nulls_smallest.size(); i++) {
-      null_order[i] = n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
-    }
+    std::vector<cudf::order> order =
+        n_is_descending.transform_if_else(cudf::order::DESCENDING, cudf::order::ASCENDING);
+    std::vector<cudf::null_order> null_order =
+        n_are_nulls_smallest.transform_if_else(cudf::null_order::BEFORE, cudf::null_order::AFTER);
 
-    std::vector<cudf::column_view> columns(num_columns);
-    for (int i = 0; i < num_columns; i++) {
-      columns[i] = *n_sort_keys_columns[i];
-    }
-    cudf::table_view keys(columns);
-
-    auto sorted_col = cudf::sorted_order(keys, order, null_order);
-    return reinterpret_cast<jlong>(sorted_col.release());
+    std::vector<cudf::column_view> sort_keys = n_sort_keys_columns.get_dereferenced();
+    return release_as_jlong(cudf::sorted_order(cudf::table_view{sort_keys}, order, null_order));
   }
   CATCH_STD(env, 0);
 }
@@ -1137,21 +1123,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv *env, jcla
                   "columns and areNullsSmallest lengths don't match", 0);
 
     std::vector<cudf::order> order(n_is_descending.size());
-    for (int i = 0; i < n_is_descending.size(); i++) {
-      order[i] = n_is_descending[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
-    }
+    std::transform(n_is_descending.begin(), n_is_descending.end(), order.begin(),
+                   [](jboolean is_desc) {
+                     return is_desc ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+                   });
+
     std::vector<cudf::null_order> null_order(n_are_nulls_smallest.size());
-    for (int i = 0; i < n_are_nulls_smallest.size(); i++) {
-      null_order[i] = n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
-    }
+    std::transform(n_are_nulls_smallest.begin(), n_are_nulls_smallest.end(), null_order.begin(),
+                   [](jboolean is_smallest) {
+                     return is_smallest ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+                   });
 
-    std::vector<cudf::column_view> columns(num_columns);
-    for (int i = 0; i < num_columns; i++) {
-      columns[i] = *n_sort_keys_columns[i];
-    }
-    cudf::table_view keys(columns);
+    std::vector<cudf::column_view> keys = n_sort_keys_columns.get_dereferenced();
 
-    auto sorted_col = cudf::sorted_order(keys, order, null_order);
+    auto sorted_col = cudf::sorted_order(cudf::table_view{keys}, order, null_order);
 
     cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(j_input_table);
     std::unique_ptr<cudf::table> result = cudf::gather(*input_table, sorted_col->view());
