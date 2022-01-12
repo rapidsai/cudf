@@ -14,14 +14,18 @@
  * limitations under the License.
  */
 
+#include <stream_compaction/stream_compaction_common.cuh>
+#include <stream_compaction/stream_compaction_common.hpp>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -39,26 +43,24 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
                                          null_equality nulls_equal,
                                          rmm::cuda_stream_view stream)
 {
-  // sort only indices
-  auto sorted_indices = sorted_order(keys,
-                                     std::vector<order>{},
-                                     std::vector<null_order>{},
-                                     stream,
-                                     rmm::mr::get_current_device_resource());
+  auto table_ptr = cudf::table_device_view::create(keys, stream);
+  auto const num_rows{table_ptr->num_rows()};
 
-  // count unique elements
-  auto sorted_row_index   = sorted_indices->view().data<cudf::size_type>();
-  auto device_input_table = cudf::table_device_view::create(keys, stream);
+  hash_map_type key_map{compute_hash_table_size(num_rows),
+                        COMPACTION_EMPTY_KEY_SENTINEL,
+                        COMPACTION_EMPTY_VALUE_SENTINEL,
+                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value()};
 
-  row_equality_comparator comp(
-    nullate::DYNAMIC{cudf::has_nulls(keys)}, *device_input_table, *device_input_table, nulls_equal);
-  return thrust::count_if(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
-    [sorted_row_index, comp] __device__(cudf::size_type i) {
-      return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i - 1]));
-    });
+  compaction_hash hash_key{nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr};
+  row_equality_comparator row_equal(
+    nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr, *table_ptr, nulls_equal);
+
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
+  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+
+  return key_map.get_size();
 }
 
 /**
