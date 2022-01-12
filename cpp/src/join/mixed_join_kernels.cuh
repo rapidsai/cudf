@@ -205,6 +205,62 @@ __global__ void compute_mixed_join_output_size(
 }
 
 /**
+  TODO
+ */
+template <int block_size, bool has_nulls>
+__global__ void compute_mixed_join_output_size_semi(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  row_equality const equality_probe,
+  join_kind const join_type,
+  cudf::detail::semi_map_type::device_view hash_table_view,
+  ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  std::size_t* output_size)
+{
+  // The (required) extern storage of the shared memory array leads to
+  // conflicting declarations between different templates. The easiest
+  // workaround is to declare an arbitrary (here char) array type then cast it
+  // after the fact to the appropriate type.
+  extern __shared__ char raw_intermediate_storage[];
+  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
+  auto thread_intermediate_storage =
+    intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
+
+  std::size_t thread_counter{0};
+  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * block_size;
+  cudf::size_type const stride         = block_size * gridDim.x;
+  cudf::size_type const left_num_rows  = left_table.num_rows();
+  cudf::size_type const right_num_rows = right_table.num_rows();
+  auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
+
+  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
+    left_table, right_table, device_expression_data);
+
+  // TODO: The hash join code assumes that nulls exist here, so I'm doing the
+  // same but at some point we may want to benchmark that.
+  row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
+  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+
+  for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+       outer_row_index += stride) {
+    thread_counter += ((join_type == join_kind::LEFT_ANTI_JOIN) !=
+                       (hash_table_view.contains(outer_row_index, hash_probe, equality_probe)));
+  }
+
+  using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
+
+  // Add block counter to global counter
+  if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
+}
+
+/**
  * @brief Performs a join using the combination of a hash lookup to identify
  * equal rows between one pair of tables and the evaluation of an expression
  * containing an arbitrary expression.

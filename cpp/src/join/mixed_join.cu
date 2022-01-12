@@ -33,8 +33,6 @@
 #include <optional>
 #include <utility>
 
-#include <cstdio>
-
 namespace cudf {
 namespace detail {
 
@@ -479,13 +477,6 @@ std::size_t compute_mixed_join_output_size_semi(table_view const& left_equality,
   // it is the probe table for the hash
   auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
-  auto matches_per_row = make_numeric_column(
-    data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
-  auto matches_mutable_view = matches_per_row->mutable_view();
-  auto matches_device_view  = mutable_column_device_view::create(matches_mutable_view, stream);
-  auto matches_per_row_span = cudf::device_span<size_type>{
-    matches_mutable_view.begin<size_type>(), static_cast<std::size_t>(outer_num_rows)};
-
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
@@ -493,28 +484,16 @@ std::size_t compute_mixed_join_output_size_semi(table_view const& left_equality,
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
       // with a corresponding NULL from the right.
-      case join_kind::LEFT_ANTI_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
-        return {left_num_rows, std::move(matches_per_row)};
-      }
+      case join_kind::LEFT_ANTI_JOIN: return left_num_rows;
       // Inner and left semi joins return empty output because no matches can exist.
-      case join_kind::LEFT_SEMI_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
-        return {0, std::move(matches_per_row)};
-      }
+      case join_kind::LEFT_SEMI_JOIN: return 0;
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   } else if (left_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, left semi, and inner joins all return empty sets.
       case join_kind::LEFT_ANTI_JOIN:
-      case join_kind::LEFT_SEMI_JOIN: {
-        thrust::fill(
-          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
-        return {0, std::move(matches_per_row)};
-      }
+      case join_kind::LEFT_SEMI_JOIN: return 0;
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
@@ -538,14 +517,14 @@ std::size_t compute_mixed_join_output_size_semi(table_view const& left_equality,
   auto& build     = swap_tables ? left_equality : right_equality;
   auto probe_view = table_device_view::create(probe, stream);
   auto build_view = table_device_view::create(build, stream);
+  row_equality equality_probe{
+    cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
-  auto hash_table = cuco::
-    static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>{
-      compute_hash_table_size(build.num_rows()),
-      std::numeric_limits<hash_value_type>::max(),
-      cudf::detail::JoinNoneValue,
-      detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-      stream.value()};
+  semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
+                           std::numeric_limits<hash_value_type>::max(),
+                           cudf::detail::JoinNoneValue,
+                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                           stream.value()};
 
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many
@@ -560,10 +539,10 @@ std::size_t compute_mixed_join_output_size_semi(table_view const& left_equality,
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
   // skip rows that are null here.
-  if ((compare_nulls == null_equality::EQUAL) or (not nullable(right_keys))) {
+  if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
-    thrust::counting_iterator<size_type> stencil(0);
+    thrust::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] = cudf::detail::bitmask_and(build, stream);
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
@@ -589,33 +568,31 @@ std::size_t compute_mixed_join_output_size_semi(table_view const& left_equality,
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   if (has_nulls) {
-    compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
+    compute_mixed_join_output_size_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_conditional_view,
         *right_conditional_view,
         *probe_view,
         *build_view,
-        compare_nulls,
+        equality_probe,
         join_type,
         hash_table_view,
         parser.device_expression_data,
         swap_tables,
-        size.data(),
-        matches_per_row_span);
+        size.data());
   } else {
-    compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
+    compute_mixed_join_output_size_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_conditional_view,
         *right_conditional_view,
         *probe_view,
         *build_view,
-        compare_nulls,
+        equality_probe,
         join_type,
         hash_table_view,
         parser.device_expression_data,
         swap_tables,
-        size.data(),
-        matches_per_row_span);
+        size.data());
   }
   CHECK_CUDA(stream.value());
 
