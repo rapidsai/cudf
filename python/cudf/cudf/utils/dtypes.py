@@ -164,9 +164,29 @@ def _find_common_type_decimal(dtypes):
     lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
     # Combine to get the necessary precision and clip at the maximum
     # precision
-    # TODO : PREM
-    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-    return cudf.Decimal64Dtype(p, s)
+    p = s + lhs
+
+    if (
+        cudf.Decimal64Dtype.MAX_PRECISION
+        < p
+        <= cudf.Decimal128Dtype.MAX_PRECISION
+        or p > cudf.Decimal128Dtype.MAX_PRECISION
+    ):
+        return cudf.Decimal128Dtype(
+            min(cudf.Decimal128Dtype.MAX_PRECISION, p), s
+        )
+    elif (
+        cudf.Decimal32Dtype.MAX_PRECISION
+        < p
+        <= cudf.Decimal64Dtype.MAX_PRECISION
+    ):
+        return cudf.Decimal64Dtype(
+            min(cudf.Decimal64Dtype.MAX_PRECISION, p), s
+        )
+    else:
+        return cudf.Decimal32Dtype(
+            min(cudf.Decimal32Dtype.MAX_PRECISION, p), s
+        )
 
 
 def cudf_dtype_from_pydata_dtype(dtype):
@@ -589,9 +609,15 @@ def _can_cast(from_dtype, to_dtype):
 
     # TODO : Add precision & scale checking for
     # decimal types in future
-    # TODO: PREM
-    if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
-        if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+
+    if isinstance(
+        from_dtype,
+        (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
+    ):
+        if isinstance(
+            to_dtype,
+            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
+        ):
             return True
         elif isinstance(to_dtype, np.dtype):
             if to_dtype.kind in {"i", "f", "u", "U", "O"}:
@@ -601,7 +627,10 @@ def _can_cast(from_dtype, to_dtype):
     elif isinstance(from_dtype, np.dtype):
         if isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype, to_dtype)
-        elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+        elif isinstance(
+            to_dtype,
+            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
+        ):
             if from_dtype.kind in {"i", "f", "u", "U", "O"}:
                 return True
             else:

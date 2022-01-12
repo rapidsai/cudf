@@ -1550,7 +1550,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
-            if isinstance(col, cudf.core.column.Decimal64Column):
+            if isinstance(col, cudf.core.column.DecimalBaseColumn):
                 col = col._with_type_metadata(tables[0]._data[name].dtype)
 
         # Reassign index and column names

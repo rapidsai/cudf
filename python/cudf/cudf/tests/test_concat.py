@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# TODO: PREM
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -1358,7 +1357,10 @@ def test_concat_single_object(ignore_index, typ):
     )
 
 
-@pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
+@pytest.mark.parametrize(
+    "ltype",
+    [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2), Decimal64Dtype(8, 4)],
+)
 @pytest.mark.parametrize(
     "rtype",
     [
@@ -1390,7 +1392,13 @@ def test_concat_decimal_dataframe(ltype, rtype):
 
 @pytest.mark.parametrize("ltype", [Decimal64Dtype(4, 1), Decimal64Dtype(8, 2)])
 @pytest.mark.parametrize(
-    "rtype", [Decimal64Dtype(4, 3), Decimal64Dtype(10, 4)]
+    "rtype",
+    [
+        Decimal64Dtype(4, 3),
+        Decimal64Dtype(10, 4),
+        Decimal32Dtype(8, 3),
+        Decimal128Dtype(18, 3),
+    ],
 )
 def test_concat_decimal_series(ltype, rtype):
     gs1 = gd.Series(["228.3", "559.5", "281.1"]).astype(ltype)
@@ -1429,7 +1437,7 @@ def test_concat_decimal_series(ltype, rtype):
                         Decimal("-5"),
                     ]
                 },
-                dtype=Decimal64Dtype(7, 4),
+                dtype=Decimal32Dtype(7, 4),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
@@ -1451,7 +1459,7 @@ def test_concat_decimal_series(ltype, rtype):
                         Decimal("-48"),
                     ]
                 },
-                dtype=Decimal64Dtype(5, 2),
+                dtype=Decimal32Dtype(5, 2),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
@@ -1473,7 +1481,7 @@ def test_concat_decimal_series(ltype, rtype):
                         Decimal("-49.25"),
                     ]
                 },
-                dtype=Decimal64Dtype(9, 4),
+                dtype=Decimal32Dtype(9, 4),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
@@ -1495,7 +1503,29 @@ def test_concat_decimal_series(ltype, rtype):
                         Decimal("-31.945"),
                     ]
                 },
-                dtype=Decimal64Dtype(9, 4),
+                dtype=Decimal32Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("95633.24"), Decimal("236.633")]},
+                dtype=Decimal128Dtype(19, 4),
+            ),
+            gd.DataFrame({"val": [5393, -95832]}, dtype="int64"),
+            gd.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("95633.24"),
+                        Decimal("236.633"),
+                        Decimal("5393"),
+                        Decimal("-95832"),
+                        Decimal("-29.234"),
+                        Decimal("-31.945"),
+                    ]
+                },
+                dtype=Decimal128Dtype(19, 4),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
@@ -1547,7 +1577,7 @@ def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
                     Decimal("593"),
                     Decimal("-702"),
                 ],
-                dtype=Decimal64Dtype(5, 2),
+                dtype=Decimal32Dtype(5, 2),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
@@ -1567,7 +1597,7 @@ def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
                     Decimal("5299.262"),
                     Decimal("-2049.25"),
                 ],
-                dtype=Decimal64Dtype(9, 4),
+                dtype=Decimal32Dtype(9, 4),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
@@ -1587,7 +1617,33 @@ def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
                     Decimal("-40.292"),
                     Decimal("49202.953"),
                 ],
-                dtype=Decimal64Dtype(9, 4),
+                dtype=Decimal32Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("492.204"), Decimal("-72824.455")],
+                dtype=Decimal64Dtype(10, 4),
+            ),
+            gd.Series(
+                [Decimal("8438"), Decimal("-27462")],
+                dtype=Decimal32Dtype(9, 4),
+            ),
+            gd.Series(
+                [Decimal("-40.292"), Decimal("49202.953")],
+                dtype=Decimal128Dtype(19, 4),
+            ),
+            gd.Series(
+                [
+                    Decimal("492.204"),
+                    Decimal("-72824.455"),
+                    Decimal("8438"),
+                    Decimal("-27462"),
+                    Decimal("-40.292"),
+                    Decimal("49202.953"),
+                ],
+                dtype=Decimal128Dtype(19, 4),
                 index=[0, 1, 0, 1, 0, 1],
             ),
         ),
