@@ -2020,7 +2020,6 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testMixedInnerJoinGatherMapsNulls() {
-    final int inv = Integer.MIN_VALUE;
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(1, TableReference.LEFT),
         new ColumnReference(1, TableReference.RIGHT));
@@ -2088,7 +2087,6 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testMixedInnerJoinGatherMapsNullsWithSize() {
-    final int inv = Integer.MIN_VALUE;
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(1, TableReference.LEFT),
         new ColumnReference(1, TableReference.RIGHT));
