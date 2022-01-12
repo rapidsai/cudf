@@ -346,13 +346,12 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
             std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_size);
       }
     } else if (use_arena_alloc) {
-      auto const dump_log_on_failure = log_to != 0;
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, dump_log_on_failure);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, dump_log_on_failure);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size);
       }
     } else if (use_cuda_async_alloc) {
       // Use `limiting_resource_adaptor` to set a hard limit on the max pool size since
