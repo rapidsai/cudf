@@ -48,7 +48,7 @@ class get_json_object_options {
    * @brief Returns true/false depending on whether single-quotes for representing strings
    * are allowed.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool get_allow_single_quotes() const { return allow_single_quotes; }
+  CUDF_HOST_DEVICE inline bool get_allow_single_quotes() const { return allow_single_quotes; }
 
   /**
    * @brief Returns true/false depending on whether individually returned string values have
@@ -72,7 +72,7 @@ class get_json_object_options {
    *
    * @endcode
    */
-  CUDA_HOST_DEVICE_CALLABLE bool get_strip_quotes_from_single_strings() const
+  CUDF_HOST_DEVICE inline bool get_strip_quotes_from_single_strings() const
   {
     return strip_quotes_from_single_strings;
   }
