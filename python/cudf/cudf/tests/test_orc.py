@@ -15,7 +15,6 @@ import pyorc as po
 import pytest
 
 import cudf
-from cudf.core.dtypes import Decimal64Dtype
 from cudf.io.orc import ORCWriter
 from cudf.testing._utils import (
     assert_eq,
@@ -24,7 +23,6 @@ from cudf.testing._utils import (
 )
 
 
-# TODO: PREM
 @pytest.fixture(scope="module")
 def datadir(datadir):
     return datadir / "orc"
@@ -785,12 +783,16 @@ def test_empty_string_columns(data):
 
 
 @pytest.mark.parametrize("scale", [-3, 0, 3])
-def test_orc_writer_decimal(tmpdir, scale):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_orc_writer_decimal(tmpdir, scale, decimal_type):
     np.random.seed(0)
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
-    expected["dec_val"] = expected["dec_val"].astype(Decimal64Dtype(7, scale))
+    expected["dec_val"] = expected["dec_val"].astype(decimal_type(7, scale))
 
     expected.to_orc(fname)
 

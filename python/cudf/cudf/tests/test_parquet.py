@@ -8,7 +8,6 @@ import random
 from io import BytesIO
 from string import ascii_letters
 
-# TODO: PREM
 import cupy
 import numpy as np
 import pandas as pd
@@ -2174,12 +2173,15 @@ def test_parquet_writer_nested(tmpdir, data):
     assert_eq(expect, got)
 
 
-def test_parquet_writer_decimal(tmpdir):
-    from cudf.core.dtypes import Decimal64Dtype
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_parquet_writer_decimal(tmpdir, decimal_type):
 
     gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
 
-    gdf["dec_val"] = gdf["val"].astype(Decimal64Dtype(7, 2))
+    gdf["dec_val"] = gdf["val"].astype(decimal_type(7, 2))
 
     fname = tmpdir.join("test_parquet_writer_decimal.parquet")
     gdf.to_parquet(fname)
@@ -2223,10 +2225,12 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
-def test_parquet_decimal_precision(tmpdir):
-    df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(
-        cudf.Decimal64Dtype(5, 2)
-    )
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_parquet_decimal_precision(tmpdir, decimal_type):
+    df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(decimal_type(5, 2))
     assert df.val.dtype.precision == 5
 
     fname = tmpdir.join("decimal_test.parquet")

@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
@@ -343,7 +343,6 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     assert_eq(expected, actual, check_dtype=False)
 
 
-# TODO: PREM
 @pytest.mark.parametrize(
     "gsr_data",
     [
@@ -351,7 +350,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
             Decimal64Dtype(7, 2)
         ),
         cudf.Series(["-74.56", None, "-23.73", "34.55", "2.89", None]).astype(
-            Decimal64Dtype(7, 2)
+            Decimal32Dtype(7, 2)
         ),
         cudf.Series(
             ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]
@@ -362,6 +361,9 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
         cudf.Series(
             [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]
         ).astype(Decimal64Dtype(10, 4)),
+        cudf.Series(
+            ["2.964", None, "54347.432", "-989.330", None, "56.444"]
+        ).astype(Decimal128Dtype(20, 7)),
     ],
 )
 @pytest.mark.parametrize(

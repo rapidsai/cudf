@@ -18,11 +18,12 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
 )
 
-# TODO: PREM
 TEST_DECIMAL_TYPES = [
     cudf.Decimal64Dtype(1, 1),
     cudf.Decimal64Dtype(4, 2),
     cudf.Decimal64Dtype(4, -2),
+    cudf.Decimal32Dtype(3, 1),
+    cudf.Decimal128Dtype(28, 3),
 ]
 
 SCALAR_VALUES = [
@@ -145,10 +146,13 @@ def test_scalar_device_initialization(value):
     assert s._is_host_value_current
 
 
-# TODO: PREM
 @pytest.mark.parametrize("value", DECIMAL_VALUES)
-def test_scalar_device_initialization_decimal(value):
-    dtype = cudf.Decimal64Dtype._from_decimal(value)
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_scalar_device_initialization_decimal(value, decimal_type):
+    dtype = decimal_type._from_decimal(value)
     column = cudf.Series([str(value)]).astype(dtype)._column
     dev_slr = get_element(column, 0)
 
@@ -188,7 +192,6 @@ def test_scalar_roundtrip(value):
     assert s.value == value or np.isnan(s.value) and np.isnan(value)
 
 
-# TODO: PREM
 @pytest.mark.parametrize(
     "dtype",
     NUMERIC_TYPES
@@ -202,7 +205,10 @@ def test_null_scalar(dtype):
     assert s.value is cudf.NA
     assert s.dtype == (
         cudf.dtype(dtype)
-        if not isinstance(dtype, cudf.Decimal64Dtype)
+        if not isinstance(
+            dtype,
+            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
+        )
         else dtype
     )
     assert s.is_valid() is False
@@ -246,7 +252,6 @@ def test_scalar_dtype_and_validity(dtype):
     assert s.is_valid() is True
 
 
-# TODO: PREM
 @pytest.mark.parametrize(
     "slr,dtype,expect",
     [
@@ -254,6 +259,12 @@ def test_scalar_dtype_and_validity(dtype):
         (Decimal(1), cudf.Decimal64Dtype(1, 0), Decimal("1")),
         (Decimal("1.1"), cudf.Decimal64Dtype(2, 1), Decimal("1.1")),
         (Decimal("1.1"), cudf.Decimal64Dtype(4, 3), Decimal("1.100")),
+        (Decimal("41.123"), cudf.Decimal32Dtype(5, 3), Decimal("41.123")),
+        (
+            Decimal("41345435344353535344373628492731234.123"),
+            cudf.Decimal128Dtype(38, 3),
+            Decimal("41345435344353535344373628492731234.123"),
+        ),
         (Decimal("1.11"), cudf.Decimal64Dtype(2, 2), pa.lib.ArrowInvalid),
     ],
 )
@@ -339,13 +350,17 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
 
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
-def test_device_scalar_direct_construction(value):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_device_scalar_direct_construction(value, decimal_type):
     value = cudf.utils.utils.to_cudf_compatible_scalar(value)
-    # TODO: PREM
+
     dtype = (
         value.dtype
         if not isinstance(value, Decimal)
-        else cudf.Decimal64Dtype._from_decimal(value)
+        else decimal_type._from_decimal(value)
     )
 
     s = cudf._lib.scalar.DeviceScalar(value, dtype)
