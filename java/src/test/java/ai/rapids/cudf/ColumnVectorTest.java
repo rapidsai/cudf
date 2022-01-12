@@ -3559,7 +3559,6 @@ public class ColumnVectorTest extends CudfTestBase {
     for (int scale : new int[]{-5, -2, -1, 0, 1, 2, 5}) {
       for (int i = 0; i < strDecimalValues.length; i++) {
         strDecimalValues[i] = dumpDecimal(unScaledValues[i], scale);
-        System.out.println(strDecimalValues[i]);
       }
 
       testCastFixedWidthToStringsAndBack(DType.create(DType.DTypeEnum.DECIMAL64, scale),
