@@ -1631,7 +1631,8 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
                 assert fn == filename
 
 
-def test_parquet_writer_chunked_partitioned(tmpdir_factory):
+@pytest.mark.parametrize("return_meta", [True, False])
+def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
 
@@ -1641,10 +1642,25 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory):
     cw = ParquetDatasetWriter(gdf_dir, partition_cols=["a"], index=False)
     cw.write_table(df1)
     cw.write_table(df2)
-    cw.close()
-
+    meta_byte_array = cw.close(return_metadata=return_meta)
     pdf = cudf.concat([df1, df2]).to_pandas()
     pdf.to_parquet(pdf_dir, index=False, partition_cols=["a"])
+
+    if return_meta:
+        fmd = pq.ParquetFile(BytesIO(meta_byte_array)).metadata
+        assert fmd.num_rows == len(pdf)
+        assert fmd.num_row_groups == 4
+        files = {
+            os.path.join(directory, files[0])
+            for directory, _, files in os.walk(gdf_dir)
+            if files
+        }
+        meta_files = {
+            os.path.join(gdf_dir, fmd.row_group(i).column(c).file_path)
+            for i in range(fmd.num_row_groups)
+            for c in range(fmd.row_group(i).num_columns)
+        }
+        assert files == meta_files
 
     # Read back with pandas to compare
     expect_pd = pd.read_parquet(pdf_dir)
