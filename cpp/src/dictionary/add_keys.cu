@@ -58,15 +58,16 @@ std::unique_ptr<column> add_keys(
   auto combined_keys =
     cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
   // sort and remove any duplicates from the combined keys
-  // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{combined_keys->view()}},
-                                                  std::vector<size_type>{0},  // only one key column
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  null_order::BEFORE,
-                                                  stream,
-                                                  mr)
-                      ->release();
+  // unordered_drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
+  auto table_keys =
+    cudf::detail::unordered_drop_duplicates(table_view{{combined_keys->view()}},
+                                            std::vector<size_type>{0},  // only one key column
+                                            duplicate_keep_option::KEEP_FIRST,
+                                            null_equality::EQUAL,
+                                            null_order::BEFORE,
+                                            stream,
+                                            mr)
+      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
   // create a map for the indices
   // lower_bound([a,b,c,d,e,f],[a,b,c,d,f]) = [0,1,2,3,5]

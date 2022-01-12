@@ -214,7 +214,7 @@ enum class duplicate_keep_option {
 };
 
 /**
- * @brief Create a new table without duplicate rows
+ * @brief Create a new table without duplicate rows.
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
  * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
@@ -235,7 +235,7 @@ enum class duplicate_keep_option {
  *
  * @return Table with unique rows as per specified `keep`.
  */
-std::unique_ptr<table> drop_duplicates(
+std::unique_ptr<table> unordered_drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
@@ -244,7 +244,7 @@ std::unique_ptr<table> drop_duplicates(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Count the unique elements in the column_view
+ * @brief Count the unique elements in the column_view.
  *
  * Given an input column_view, number of unique elements in this column_view is returned
  *
@@ -259,9 +259,9 @@ std::unique_ptr<table> drop_duplicates(
  *
  * @return number of unique elements
  */
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling);
+cudf::size_type unordered_distinct_count(column_view const& input,
+                                         null_policy null_handling,
+                                         nan_policy nan_handling);
 
 /**
  * @brief Count the unique rows in a table.
@@ -273,8 +273,8 @@ cudf::size_type distinct_count(column_view const& input,
  *
  * @return number of unique rows in the table
  */
-cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal = null_equality::EQUAL);
+cudf::size_type unordered_distinct_count(table_view const& input,
+                                         null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
 }  // namespace cudf

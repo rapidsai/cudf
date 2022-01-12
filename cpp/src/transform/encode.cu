@@ -44,13 +44,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   // side effects of this function we are now dependent on:
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
-  auto keys_table = cudf::detail::drop_duplicates(input_table,
-                                                  drop_keys,
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  null_order::AFTER,
-                                                  stream,
-                                                  mr);
+  auto keys_table = cudf::detail::unordered_drop_duplicates(input_table,
+                                                            drop_keys,
+                                                            duplicate_keep_option::KEEP_FIRST,
+                                                            null_equality::EQUAL,
+                                                            null_order::AFTER,
+                                                            stream,
+                                                            mr);
 
   auto indices_column =
     cudf::detail::lower_bound(keys_table->view(),

@@ -98,13 +98,13 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 }
 }  // namespace
 
-std::unique_ptr<table> drop_duplicates(table_view const& input,
-                                       std::vector<size_type> const& keys,
-                                       duplicate_keep_option keep,
-                                       null_equality nulls_equal,
-                                       null_order null_precedence,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
+                                                 std::vector<size_type> const& keys,
+                                                 duplicate_keep_option keep,
+                                                 null_equality nulls_equal,
+                                                 null_order null_precedence,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
     return empty_like(input);
@@ -132,15 +132,15 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<table> drop_duplicates(table_view const& input,
-                                       std::vector<size_type> const& keys,
-                                       duplicate_keep_option const keep,
-                                       null_equality nulls_equal,
-                                       null_order null_precedence,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
+                                                 std::vector<size_type> const& keys,
+                                                 duplicate_keep_option const keep,
+                                                 null_equality nulls_equal,
+                                                 null_order null_precedence,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_duplicates(
+  return detail::unordered_drop_duplicates(
     input, keys, keep, nulls_equal, null_precedence, rmm::cuda_stream_default, mr);
 }
 

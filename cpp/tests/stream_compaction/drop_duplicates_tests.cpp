@@ -47,8 +47,9 @@ TYPED_TEST(DistinctCountCommon, NoNull)
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
 
   cudf::size_type expected = std::set<double>(input.begin(), input.end()).size();
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TYPED_TEST(DistinctCountCommon, TableNoNull)
@@ -73,7 +74,7 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
   cudf::table_view input_table(cols);
 
   cudf::size_type expected = std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
-  EXPECT_EQ(expected, cudf::distinct_count(input_table, null_equality::EQUAL));
+  EXPECT_EQ(expected, cudf::unordered_distinct_count(input_table, null_equality::EQUAL));
 }
 
 struct DistinctCount : public cudf::test::BaseFixture {
@@ -91,8 +92,9 @@ TEST_F(DistinctCount, WithNull)
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
   cudf::size_type expected = std::set<double>(input.begin(), input.end()).size();
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, IgnoringNull)
@@ -108,8 +110,9 @@ TEST_F(DistinctCount, IgnoringNull)
 
   cudf::size_type expected = std::set<T>(input.begin(), input.end()).size();
   // Removing 2 from expected to remove count for 70 and 3
-  EXPECT_EQ(expected - 2,
-            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(
+    expected - 2,
+    cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, WithNansAndNull)
@@ -124,8 +127,9 @@ TEST_F(DistinctCount, WithNansAndNull)
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
   cudf::size_type expected = std::set<T>(input.begin(), input.end()).size();
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, WithNansOnly)
@@ -138,8 +142,9 @@ TEST_F(DistinctCount, WithNansOnly)
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
   cudf::size_type expected = 5;
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, NansAsNullWithNoNull)
@@ -152,8 +157,9 @@ TEST_F(DistinctCount, NansAsNullWithNoNull)
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
   cudf::size_type expected = 5;
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, NansAsNullWithNull)
@@ -166,8 +172,9 @@ TEST_F(DistinctCount, NansAsNullWithNull)
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
   cudf::size_type expected = 4;
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, NansAsNullWithIgnoreNull)
@@ -180,8 +187,9 @@ TEST_F(DistinctCount, NansAsNullWithIgnoreNull)
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
   cudf::size_type expected = 3;
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, EmptyColumn)
@@ -191,8 +199,9 @@ TEST_F(DistinctCount, EmptyColumn)
   cudf::test::fixed_width_column_wrapper<T> input_col{};
 
   cudf::size_type expected = 0;
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, StringColumnWithNull)
@@ -203,8 +212,9 @@ TEST_F(DistinctCount, StringColumnWithNull)
 
   cudf::size_type expected =
     (std::vector<std::string>{"", "this", "is", "This", "a", "column", "of", "strings"}).size();
-  EXPECT_EQ(expected,
-            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(
+    expected,
+    cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, TableWithNull)
@@ -215,8 +225,8 @@ TEST_F(DistinctCount, TableWithNull)
                                                        {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0}};
   cudf::table_view input{{col1, col2}};
 
-  EXPECT_EQ(8, cudf::distinct_count(input, null_equality::EQUAL));
-  EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
+  EXPECT_EQ(8, cudf::unordered_distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(10, cudf::unordered_distinct_count(input, null_equality::UNEQUAL));
 }
 
 TEST_F(DistinctCount, EmptyColumnedTable)
@@ -225,10 +235,10 @@ TEST_F(DistinctCount, EmptyColumnedTable)
 
   cudf::table_view input(cols);
 
-  EXPECT_EQ(0, cudf::distinct_count(input, null_equality::EQUAL));
-  EXPECT_EQ(0, cudf::distinct_count(input, null_equality::UNEQUAL));
-  EXPECT_EQ(0, cudf::distinct_count(cudf::table_view{}, null_equality::EQUAL));
-  EXPECT_EQ(0, cudf::distinct_count(cudf::table_view{}, null_equality::UNEQUAL));
+  EXPECT_EQ(0, cudf::unordered_distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(0, cudf::unordered_distinct_count(input, null_equality::UNEQUAL));
+  EXPECT_EQ(0, cudf::unordered_distinct_count(cudf::table_view{}, null_equality::EQUAL));
+  EXPECT_EQ(0, cudf::unordered_distinct_count(cudf::table_view{}, null_equality::UNEQUAL));
 }
 
 TEST_F(DistinctCount, TableMixedTypes)
@@ -241,8 +251,8 @@ TEST_F(DistinctCount, TableMixedTypes)
                                                         {1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0}};
   cudf::table_view input{{col1, col2, col3}};
 
-  EXPECT_EQ(9, cudf::distinct_count(input, null_equality::EQUAL));
-  EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
+  EXPECT_EQ(9, cudf::unordered_distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(10, cudf::unordered_distinct_count(input, null_equality::UNEQUAL));
 }
 
 TEST_F(DistinctCount, TableWithStringColumnWithNull)
@@ -254,8 +264,8 @@ TEST_F(DistinctCount, TableWithStringColumnWithNull)
     {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0}};
 
   cudf::table_view input{{col1, col2}};
-  EXPECT_EQ(9, cudf::distinct_count(input, null_equality::EQUAL));
-  EXPECT_EQ(10, cudf::distinct_count(input, null_equality::UNEQUAL));
+  EXPECT_EQ(9, cudf::unordered_distinct_count(input, null_equality::EQUAL));
+  EXPECT_EQ(10, cudf::unordered_distinct_count(input, null_equality::UNEQUAL));
 }
 
 struct DropDuplicate : public cudf::test::BaseFixture {
@@ -280,7 +290,7 @@ TEST_F(DropDuplicate, NonNullTable)
   cudf::table_view expected_first{
     {exp_col1_first, exp_col2_first, exp_col1_key_first, exp_col2_key_first}};
 
-  auto got_first = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST);
+  auto got_first = unordered_drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
@@ -292,7 +302,7 @@ TEST_F(DropDuplicate, NonNullTable)
   cudf::table_view expected_last{
     {exp_col1_last, exp_col2_last, exp_col1_key_last, exp_col2_key_last}};
 
-  auto got_last = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
+  auto got_last = unordered_drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
@@ -304,7 +314,7 @@ TEST_F(DropDuplicate, NonNullTable)
   cudf::table_view expected_unique{
     {exp_col1_unique, exp_col2_unique, exp_col1_key_unique, exp_col2_key_unique}};
 
-  auto got_unique = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
+  auto got_unique = unordered_drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
@@ -320,8 +330,8 @@ TEST_F(DropDuplicate, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first{{4, 5, 5, 8}, {0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_first{{exp_col_first, exp_key_col_first}};
-  auto got_first =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got_first = unordered_drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
@@ -329,7 +339,7 @@ TEST_F(DropDuplicate, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last{{3, 1, 5, 8}, {1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_last{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_last{{exp_col_last, exp_key_col_last}};
-  auto got_last = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
+  auto got_last = unordered_drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
@@ -337,7 +347,7 @@ TEST_F(DropDuplicate, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique{{5, 8}, {1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique{{20, 21}, {1, 1}};
   cudf::table_view expected_unique{{exp_col_unique, exp_key_col_unique}};
-  auto got_unique = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
+  auto got_unique = unordered_drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
@@ -354,7 +364,7 @@ TEST_F(DropDuplicate, StringKeyColumn)
                                                       {0, 1, 1, 1, 1}};
   cudf::table_view expected_last{{exp_col_last, exp_key_col_last}};
 
-  auto got_last = drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
+  auto got_last = unordered_drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 }
@@ -365,8 +375,8 @@ TEST_F(DropDuplicate, EmptyInputTable)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got = unordered_drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
@@ -376,8 +386,8 @@ TEST_F(DropDuplicate, NoColumnInputTable)
   cudf::table_view input{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got = unordered_drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
@@ -389,8 +399,8 @@ TEST_F(DropDuplicate, EmptyKeys)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
+  auto got = unordered_drop_duplicates(
+    input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{empty_col}}, got->view());
 }

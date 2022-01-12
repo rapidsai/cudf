@@ -2833,7 +2833,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     auto const keys_indices =
         std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
 
-    auto result = cudf::drop_duplicates(
+    auto result = cudf::unordered_drop_duplicates(
         *input, keys_indices,
         keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
                      cudf::duplicate_keep_option::KEEP_LAST,

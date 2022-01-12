@@ -45,7 +45,7 @@ void BM_compaction(benchmark::State& state, cudf::duplicate_keep_option keep)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::drop_duplicates(input_table, {0}, keep);
+    auto result = cudf::unordered_drop_duplicates(input_table, {0}, keep);
   }
 }
 
