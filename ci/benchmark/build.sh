@@ -37,7 +37,7 @@ export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
+export DASK_DISTRIBUTED_GIT_TAG='main'
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?

@@ -31,7 +31,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
+export DASK_DISTRIBUTED_GIT_TAG='main'
 
 # ucx-py version
 export UCX_PY_VERSION='0.24.*'
