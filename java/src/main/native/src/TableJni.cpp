@@ -911,9 +911,10 @@ jlongArray mixed_join_size(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
     if (join_size_info.second->size() > std::numeric_limits<cudf::size_type>::max()) {
       throw std::runtime_error("Too many values in device buffer to convert into a column");
     }
-    auto col = std::make_unique<cudf::column>(
-        cudf::data_type{cudf::type_id::INT32}, join_size_info.second->size(),
-        join_size_info.second->release(), rmm::device_buffer{}, 0);
+    auto col_size = join_size_info.second->size();
+    auto col_data = join_size_info.second->release();
+    auto col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32}, col_size,
+                                              std::move(col_data), rmm::device_buffer{}, 0);
     cudf::jni::native_jlongArray result(env, 2);
     result[0] = static_cast<jlong>(join_size_info.first);
     result[1] = reinterpret_cast<jlong>(col.release());
