@@ -61,7 +61,6 @@ using mixed_multimap_type = cuco::static_multimap<hash_value_type,
                                                   hash_table_allocator_type,
                                                   cuco::double_hashing<1, hash_type, hash_type>>;
 
-// TODO: The key type here is not hash_value_type, but size_type.
 using semi_map_type = cuco::
   static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 

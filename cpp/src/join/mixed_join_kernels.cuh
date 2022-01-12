@@ -39,7 +39,34 @@ namespace detail {
 namespace cg = cooperative_groups;
 
 /**
- * @brief Device functor to determine if two pairs are identical.
+ * @brief Equality comparator for use with cuco map methods that require expression evaluation.
+ *
+ * This class just defines the construction of the class and the necessary
+ * attributes, specifically the equality operator for the non-conditional parts
+ * of the operator and the evaluator used for the conditional.
+ */
+template <bool has_nulls>
+struct expression_equality {
+  __device__ expression_equality(
+    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
+    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
+    bool const swap_tables,
+    row_equality const& equality_probe)
+    : evaluator{evaluator},
+      thread_intermediate_storage{thread_intermediate_storage},
+      swap_tables{swap_tables},
+      equality_probe{equality_probe}
+  {
+  }
+
+  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
+  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
+  bool const swap_tables;
+  row_equality const& equality_probe;
+};
+
+/**
+ * @brief Equality comparator for cuco::static_multimap queries.
  *
  * This equality comparator is designed for use with cuco::static_multimap's
  * pair* APIs, which will compare equality based on comparing (key, value)
@@ -51,24 +78,10 @@ namespace cg = cooperative_groups;
  * probe_row_hash == build_row_hash) and then using a row_equality_comparator
  * to compare the contents of the row indices that are stored as the payload in
  * the hash map.
- *
- * This particular comparator is a specialized version of the pair_equality used in hash joins. This
- * version also checks the expression_evaluator.
  */
 template <bool has_nulls>
-class pair_expression_equality {
- public:
-  __device__ pair_expression_equality(
-    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
-    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    bool const swap_tables,
-    row_equality const& equality_probe)
-    : evaluator{evaluator},
-      thread_intermediate_storage{thread_intermediate_storage},
-      swap_tables{swap_tables},
-      equality_probe{equality_probe}
-  {
-  }
+struct pair_expression_equality : public expression_equality<has_nulls> {
+  using expression_equality<has_nulls>::expression_equality;
 
   // The parameters are build/probe rather than left/right because the operator
   // is called by cuco's kernels with parameters in this order (note that this
@@ -88,53 +101,28 @@ class pair_expression_equality {
     // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
     if ((probe_row.first == build_row.first) &&
-        equality_probe(probe_row.second, build_row.second)) {
-      auto const lrow_idx = swap_tables ? build_row.second : probe_row.second;
-      auto const rrow_idx = swap_tables ? probe_row.second : build_row.second;
-      evaluator.evaluate(output_dest, lrow_idx, rrow_idx, 0, thread_intermediate_storage);
+        this->equality_probe(probe_row.second, build_row.second)) {
+      auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
+      auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
+      this->evaluator.evaluate(
+        output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
     }
     return false;
   }
-
- private:
-  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
-  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
-  bool const swap_tables;
-  row_equality const& equality_probe;
 };
 
 /**
- * @brief Device functor to determine if two pairs are identical.
+ * @brief Equality comparator for cuco::static_map queries.
  *
- * This equality comparator is designed for use with cuco::static_multimap's
- * pair* APIs, which will compare equality based on comparing (key, value)
- * pairs. In the context of joins, these pairs are of the form
- * (row_hash, row_id). A hash probe hit indicates that hash of a probe row's hash is
- * equal to the hash of the hash of some row in the multimap, at which point we need an
- * equality comparator that will check whether the contents of the rows are
- * identical. This comparator does so by verifying key equality (i.e. that
- * probe_row_hash == build_row_hash) and then using a row_equality_comparator
- * to compare the contents of the row indices that are stored as the payload in
- * the hash map.
- *
- * This particular comparator is a specialized version of the pair_equality used in hash joins. This
- * version also checks the expression_evaluator.
+ * This equality comparator is designed for use with cuco::static_map's APIs. A
+ * probe hit indicates that the hashes of the keys are equal, at which point
+ * this comparator checks whether the keys themselves are equal (using the
+ * provided equality_probe) and then evaluates the conditional expression
  */
 template <bool has_nulls>
-class expression_equality {
- public:
-  __device__ expression_equality(
-    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
-    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    bool const swap_tables,
-    row_equality const& equality_probe)
-    : evaluator{evaluator},
-      thread_intermediate_storage{thread_intermediate_storage},
-      swap_tables{swap_tables},
-      equality_probe{equality_probe}
-  {
-  }
+struct single_expression_equality : expression_equality<has_nulls> {
+  using expression_equality<has_nulls>::expression_equality;
 
   // The parameters are build/probe rather than left/right because the operator
   // is called by cuco's kernels with parameters in this order (note that this
@@ -149,29 +137,22 @@ class expression_equality {
                                              hash_value_type const probe_row_index) const noexcept
   {
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-    // Three levels of checks:
-    // 1. Row hashes of the columns involved in the equality condition are equal.
-    // 2. The contents of the columns involved in the equality condition are equal.
-    // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
+    // Two levels of checks:
+    // 1. The contents of the columns involved in the equality condition are equal.
+    // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (equality_probe(probe_row_index, build_row_index)) {
-      auto const lrow_idx = swap_tables ? build_row_index : probe_row_index;
-      auto const rrow_idx = swap_tables ? probe_row_index : build_row_index;
-      evaluator.evaluate(output_dest,
-                         static_cast<size_type>(lrow_idx),
-                         static_cast<size_type>(rrow_idx),
-                         0,
-                         thread_intermediate_storage);
+    if (this->equality_probe(probe_row_index, build_row_index)) {
+      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
+      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
+      this->evaluator.evaluate(output_dest,
+                               static_cast<size_type>(lrow_idx),
+                               static_cast<size_type>(rrow_idx),
+                               0,
+                               this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
     }
     return false;
   }
-
- private:
-  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
-  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
-  bool const swap_tables;
-  row_equality const& equality_probe;
 };
 
 /**
@@ -238,8 +219,6 @@ __global__ void compute_mixed_join_output_size(
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  // TODO: The hash join code assumes that nulls exist here, so I'm doing the
-  // same but at some point we may want to benchmark that.
   row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
@@ -252,12 +231,8 @@ __global__ void compute_mixed_join_output_size(
 
   for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    // TODO: This entire kernel probably won't work for left anti joins since I
-    // need to use a normal map (not a multimap), so this condition is probably
-    // overspecified at the moment.
     auto query_pair = pair_func(outer_row_index);
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
-        join_type == join_kind::FULL_JOIN) {
+    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       matches_per_row[outer_row_index] =
         hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
     } else {
@@ -310,18 +285,13 @@ __global__ void compute_mixed_join_output_size_semi(
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
-
-  // TODO: The hash join code assumes that nulls exist here, so I'm doing the
-  // same but at some point we may want to benchmark that.
   row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
-
   // TODO: Address asymmetry in operator.
-  auto equality = expression_equality<has_nulls>{
+  auto equality = single_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    // TODO: Need to use an equality operator that includes the conditional part...
     thread_counter += ((join_type == join_kind::LEFT_ANTI_JOIN) !=
                        (hash_table_view.contains(outer_row_index, hash_probe, equality)));
   }
@@ -402,8 +372,6 @@ __global__ void mixed_join(table_device_view left_table,
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  // TODO: The hash join code assumes that nulls exist here, so I'm doing the
-  // same but at some point we may want to benchmark that.
   row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
@@ -423,11 +391,7 @@ __global__ void mixed_join(table_device_view left_table,
     auto contained_value_begin = swap_tables ? join_output_l + join_result_offsets[outer_row_index]
                                              : join_output_r + join_result_offsets[outer_row_index];
 
-    // TODO: This entire kernel probably won't work for left anti joins since I
-    // need to use a normal map (not a multimap), so this condition is probably
-    // overspecified at the moment.
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
-        join_type == join_kind::FULL_JOIN) {
+    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
       hash_table_view.pair_retrieve_outer(this_thread,
                                           query_pair,
                                           probe_key_begin,
