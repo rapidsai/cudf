@@ -76,8 +76,8 @@ else
 fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
-  gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" 'arrow-cpp-proc=*=cuda'
-  mamba install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" 'arrow-cpp-proc=*=cuda'
+  gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc" 'arrow-cpp-proc=*=cuda'
+  mamba install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" "orc" 'arrow-cpp-proc=*=cuda'
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
