@@ -209,3 +209,26 @@ def test_query_with_index_keyword(query, a_val, b_val, c_val):
     expect = pdf.query(query)
 
     assert_eq(out, expect)
+
+
+@pytest.mark.parametrize(
+    "data, query",
+    [
+        # Only need to test the dtypes that pandas
+        # supports but that we do not
+        (["a", "b", "c"], "data == 'a'"),
+    ],
+)
+def test_query_unsupported_dtypes(data, query):
+    gdf = cudf.DataFrame({"data": data})
+
+    # make sure the query works in pandas
+    pdf = gdf.to_pandas()
+    pdf_result = pdf.query(query)
+
+    expect = pd.DataFrame({"data": ["a"]})
+    assert_eq(expect, pdf_result)
+
+    # but fails in cuDF
+    with pytest.raises(TypeError):
+        gdf.query(query)

@@ -177,6 +177,7 @@ ConfigureBench(
   groupby/group_shift_benchmark.cu
   groupby/group_struct_benchmark.cu
   groupby/group_no_requests_benchmark.cu
+  groupby/group_scan_benchmark.cu
 )
 
 # ##################################################################################################
