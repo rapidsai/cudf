@@ -124,7 +124,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
     else
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
@@ -181,12 +181,10 @@ else
     done
 
     # Copy libcudf build time results
-    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
-    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
         gpuci_logger "Copying build time results"
         cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
-        mkdir -p "$WORKSPACE/build-metrics"
-        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
     fi
 
     ################################################################################
@@ -224,7 +222,7 @@ else
     install_dask
 
     gpuci_logger "Build python libs from source"
-    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka --ptds
     else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds

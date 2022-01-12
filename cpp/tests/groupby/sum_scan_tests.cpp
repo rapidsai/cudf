@@ -61,6 +61,24 @@ TYPED_TEST(groupby_sum_scan_test, basic)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TYPED_TEST(groupby_sum_scan_test, pre_sorted)
+{
+  using value_wrapper  = typename TestFixture::value_wrapper;
+  using result_wrapper = typename TestFixture::result_wrapper;
+
+  // clang-format off
+  key_wrapper keys  {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  value_wrapper vals{0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
+
+  key_wrapper expect_keys   {1, 1, 1, 2, 2,  2,  2, 3, 3, 3};
+  result_wrapper expect_vals{0, 3, 9, 1, 5, 10, 19, 2, 9, 17};
+  // clang-format on
+
+  auto agg = cudf::make_sum_aggregation<groupby_scan_aggregation>();
+  test_single_scan(
+    keys, vals, expect_keys, expect_vals, std::move(agg), null_policy::EXCLUDE, sorted::YES);
+}
+
 TYPED_TEST(groupby_sum_scan_test, empty_cols)
 {
   using value_wrapper  = typename TestFixture::value_wrapper;

@@ -198,9 +198,10 @@ Write a DataFrame to the parquet format.
 
 Parameters
 ----------
-path : str
+path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
-    while writing a partitioned dataset.
+    while writing a partitioned dataset. Use list of str with partition_offsets
+    to write parts of the dataframe to different files.
 compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
@@ -218,6 +219,16 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+partition_offsets : list, optional, default None
+    Offsets to partition the dataframe by. Should be used when path is list
+    of str. Should be a list of integers of size ``len(path) + 1``
+statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    Level at which column statistics should be included in file.
+metadata_file_path : str, optional, default None
+    If specified, this function will return a binary blob containing the footer
+    metadata of the written parquet file. The returned blob will have the
+    ``chunk.file_path`` field set to the ``metadata_file_path`` for each chunk.
+    When using with ``partition_offsets``, should be same size as ``len(path)``
 int96_timestamps : bool, default False
     If ``True``, write timestamps in int96 format. This will convert
     timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
@@ -230,6 +241,9 @@ row_group_size_bytes: integer or None, default None
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
+**kwargs
+    To request metadata binary blob when using with ``partition_cols``, Pass
+    ``return_metadata=True`` instead of specifying ``metadata_file_path``
 
 
 See Also

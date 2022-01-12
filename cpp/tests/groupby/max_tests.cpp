@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,6 +382,27 @@ TEST_F(groupby_max_struct_test, null_keys_and_values)
     auto child1 = strings_column_wrapper{"año", "zit", "₹1", "" /*NULL*/};
     auto child2 = fixed_width_column_wrapper<int32_t>{9, 5, 7, null};
     return structs_column_wrapper{{child1, child2}, null_at(3)};
+  }();
+
+  auto agg = cudf::make_max_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
+TEST_F(groupby_max_struct_test, values_with_null_child)
+{
+  constexpr int32_t null{0};
+  auto const keys = fixed_width_column_wrapper<int32_t>{1, 1};
+  auto const vals = [] {
+    auto child1 = fixed_width_column_wrapper<int32_t>{1, 1};
+    auto child2 = fixed_width_column_wrapper<int32_t>{{-1, null}, null_at(1)};
+    return structs_column_wrapper{child1, child2};
+  }();
+
+  auto const expect_keys = fixed_width_column_wrapper<int32_t>{1};
+  auto const expect_vals = [] {
+    auto child1 = fixed_width_column_wrapper<int32_t>{1};
+    auto child2 = fixed_width_column_wrapper<int32_t>{-1};
+    return structs_column_wrapper{child1, child2};
   }();
 
   auto agg = cudf::make_max_aggregation<groupby_aggregation>();

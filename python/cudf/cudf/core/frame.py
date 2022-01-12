@@ -150,8 +150,8 @@ class Frame:
         n_index_columns = 0
         if index_names is not None:
             n_index_columns = len(index_names)
-            index = cudf.core.index._index_from_data(
-                dict(zip(range(n_index_columns), columns))
+            index = cudf.core.index._index_from_columns(
+                columns[:n_index_columns]
             )
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
@@ -1460,19 +1460,6 @@ class Frame:
             out_cols.append(col)
 
         return self[out_cols]
-
-    def _apply_boolean_mask(self, boolean_mask):
-        """
-        Applies boolean mask to each row of `self`,
-        rows corresponding to `False` is dropped
-        """
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.apply_boolean_mask(
-                self, as_column(boolean_mask)
-            )
-        )
-        result._copy_type_metadata(self)
-        return result
 
     def interpolate(
         self,

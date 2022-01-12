@@ -77,7 +77,7 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Install dependencies"
-gpuci_conda_retry install -y \
+gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
                   "rapids-build-env=$MINOR_VERSION.*" \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
@@ -86,10 +86,14 @@ gpuci_conda_retry install -y \
                   "ucx-py=${UCX_PY_VERSION}" \
                   "openjdk=8.*" \
                   "maven"
+# "mamba install openjdk" adds an activation script to set JAVA_HOME but this is
+# not triggered on installation. Re-activating the conda environment will set
+# this environment variable so that CMake can find JNI.
+conda activate rapids
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_conda_retry install -y "your-pkg=1.0.0"
+# gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
 gpuci_logger "Check compiler versions"
@@ -130,7 +134,7 @@ KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without e
 KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
 gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
 install_dask
 

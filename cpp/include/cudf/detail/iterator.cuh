@@ -107,8 +107,7 @@ struct null_replaced_value_accessor {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  CUDA_DEVICE_CALLABLE
-  Element operator()(cudf::size_type i) const
+  __device__ inline Element operator()(cudf::size_type i) const
   {
     return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
@@ -135,8 +134,7 @@ struct validity_accessor {
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
 
-  CUDA_DEVICE_CALLABLE
-  bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
+  __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
 };
 
 /**
@@ -344,8 +342,7 @@ struct scalar_value_accessor {
    *
    * @return value of the scalar.
    */
-  CUDA_DEVICE_CALLABLE
-  const Element operator()(size_type) const
+  __device__ inline const Element operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return dscalar.value();
@@ -423,8 +420,7 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
    *
    * @return a thrust::optional<Element> for the scalar value.
    */
-  CUDA_HOST_DEVICE_CALLABLE
-  const value_type operator()(size_type) const
+  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
   {
     if (has_nulls) {
       return (super_t::dscalar.is_valid()) ? Element{super_t::dscalar.value()}
@@ -457,8 +453,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
    *
    * @return a pair with value and validity of the scalar.
    */
-  CUDA_HOST_DEVICE_CALLABLE
-  const value_type operator()(size_type) const
+  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};
@@ -509,8 +504,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
    *
    * @return a pair with representative value and validity of the scalar.
    */
-  CUDA_DEVICE_CALLABLE
-  const value_type operator()(size_type) const
+  __device__ inline const value_type operator()(size_type) const
   {
     return {get_rep(base::dscalar), base::dscalar.is_valid()};
   }
@@ -518,14 +512,14 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  private:
   template <typename DeviceScalar,
             std::enable_if_t<!has_rep_member<DeviceScalar>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
+  __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
   {
     return dscalar.value();
   }
 
   template <typename DeviceScalar,
             std::enable_if_t<has_rep_member<DeviceScalar>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
+  __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
   {
     return dscalar.rep();
   }
