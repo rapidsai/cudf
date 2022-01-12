@@ -594,9 +594,15 @@ public class HostColumnVectorCore implements AutoCloseable {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {
-          ColumnVector.closeBuffers(data);
-          ColumnVector.closeBuffers(offsets);
-          ColumnVector.closeBuffers(valid);
+          if (data != null) {
+            data.close();
+          }
+          if (offsets != null) {
+            offsets.close();
+          }
+          if (valid != null) {
+            valid.close();
+          }
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and

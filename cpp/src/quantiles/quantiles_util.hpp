@@ -23,7 +23,7 @@
 namespace cudf {
 namespace detail {
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type location)
+CUDF_HOST_DEVICE inline Result get_array_value(T const* devarr, size_type location)
 {
   T result;
 #if defined(__CUDA_ARCH__)
@@ -36,7 +36,7 @@ CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type loca
 
 namespace interpolate {
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac)
+CUDF_HOST_DEVICE inline Result linear(T lhs, T rhs, double frac)
 {
   // TODO: safe operation to avoid overflow/underflow
   // double can fully represent int8-32 value range.
@@ -52,7 +52,7 @@ CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac)
 }
 
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE Result midpoint(T lhs, T rhs)
+CUDF_HOST_DEVICE inline Result midpoint(T lhs, T rhs)
 {
   // TODO: try std::midpoint (C++20) if available
   double dlhs = static_cast<double>(lhs);
@@ -61,7 +61,7 @@ CUDA_HOST_DEVICE_CALLABLE Result midpoint(T lhs, T rhs)
 }
 
 template <typename Result>
-CUDA_HOST_DEVICE_CALLABLE Result midpoint(int64_t lhs, int64_t rhs)
+CUDF_HOST_DEVICE inline Result midpoint(int64_t lhs, int64_t rhs)
 {
   // caring to avoid integer overflow and underflow between int64_t and Result( double )
   int64_t half = lhs / 2 + rhs / 2;
@@ -70,7 +70,7 @@ CUDA_HOST_DEVICE_CALLABLE Result midpoint(int64_t lhs, int64_t rhs)
 }
 
 template <>
-CUDA_HOST_DEVICE_CALLABLE int64_t midpoint(int64_t lhs, int64_t rhs)
+CUDF_HOST_DEVICE inline int64_t midpoint(int64_t lhs, int64_t rhs)
 {
   // caring to avoid integer overflow
   int64_t half   = lhs / 2 + rhs / 2;
@@ -92,8 +92,7 @@ struct quantile_index {
   size_type nearest;
   double fraction;
 
-  CUDA_HOST_DEVICE_CALLABLE
-  quantile_index(size_type count, double quantile)
+  CUDF_HOST_DEVICE inline quantile_index(size_type count, double quantile)
   {
     quantile = std::min(std::max(quantile, 0.0), 1.0);
 
@@ -123,8 +122,10 @@ struct quantile_index {
  * @returns Value of the desired quantile.
  */
 template <typename Result, typename ValueAccessor>
-CUDA_HOST_DEVICE_CALLABLE Result
-select_quantile(ValueAccessor get_value, size_type size, double q, interpolation interp)
+CUDF_HOST_DEVICE inline Result select_quantile(ValueAccessor get_value,
+                                               size_type size,
+                                               double q,
+                                               interpolation interp)
 {
   if (size < 2) { return get_value(0); }
 
@@ -154,8 +155,10 @@ select_quantile(ValueAccessor get_value, size_type size, double q, interpolation
 }
 
 template <typename Result, typename Iterator>
-CUDA_HOST_DEVICE_CALLABLE Result
-select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
+CUDF_HOST_DEVICE inline Result select_quantile_data(Iterator begin,
+                                                    size_type size,
+                                                    double q,
+                                                    interpolation interp)
 {
   if (size == 0) return static_cast<Result>(*begin);
 
@@ -184,10 +187,10 @@ select_quantile_data(Iterator begin, size_type size, double q, interpolation int
 }
 
 template <typename Iterator>
-CUDA_HOST_DEVICE_CALLABLE bool select_quantile_validity(Iterator begin,
-                                                        size_type size,
-                                                        double q,
-                                                        interpolation interp)
+CUDF_HOST_DEVICE inline bool select_quantile_validity(Iterator begin,
+                                                      size_type size,
+                                                      double q,
+                                                      interpolation interp)
 {
   quantile_index idx(size, q);
 
