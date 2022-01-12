@@ -1269,18 +1269,16 @@ def _open_remote_files(
     # Just use call-back function if one was specified
     if open_file_func is not None:
         return [
-            _set_context(open_file_func(path, **kwargs), context_stack) for path in paths
+            _set_context(open_file_func(path, **kwargs), context_stack)
+            for path in paths
         ]
 
     # Check if the "precache" option is supported.
-    # In the future, fsspec will do this check for us,
-    # but that feature
+    # In the future, fsspec should do this check for us
     precache_options = (precache_options or {}).copy()
-    precache =  precache_options.pop("method", None)
+    precache = precache_options.pop("method", None)
     if precache not in ("parquet", None):
-        raise ValueError(
-            f"{precache} not a supported `precache` option."
-        )
+        raise ValueError(f"{precache} not a supported `precache` option.")
 
     # Check that "parts" caching (used for all format-aware file handling)
     # is supported by the installed fsspec/s3fs version
@@ -1313,7 +1311,9 @@ def _open_remote_files(
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.
-        row_groups = precache_options.pop("row_groups", None) or ([None] * len(paths))
+        row_groups = precache_options.pop("row_groups", None) or (
+            [None] * len(paths)
+        )
         return [
             ArrowPythonFile(
                 _set_context(
