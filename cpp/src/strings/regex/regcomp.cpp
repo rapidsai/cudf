@@ -261,7 +261,7 @@ class regex_parser {
         char32_t c = *exprp;
         while (c >= '0' && c <= '7') {
           yy = (yy << 3) | (c - '0');
-          c  = *++exprp;
+          c  = *(++exprp);
         }
         return CHAR;
       } else {
