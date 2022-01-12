@@ -66,36 +66,25 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cudf_io_types.table_with_metadata read_parquet(
         parquet_reader_options args) except +
 
-    cdef cppclass column_in_metadata:
-        column_in_metadata& set_name(const string& name)
-        column_in_metadata& set_nullability(bool nullable)
-        column_in_metadata& set_list_column_as_map()
-        column_in_metadata& set_int96_timestamps(bool req)
-        column_in_metadata& set_decimal_precision(uint8_t precision)
-        column_in_metadata& child(size_type i)
-
-    cdef cppclass table_input_metadata:
-        table_input_metadata() except +
-        table_input_metadata(const cudf_table_view.table_view& table) except +
-        table_input_metadata(
-            const cudf_table_view.table_view& table,
-            map[string, string] user_data
-        ) except +
-
-        vector[column_in_metadata] column_metadata
-        map[string, string] user_data
-
     cdef cppclass parquet_writer_options:
         parquet_writer_options() except +
         cudf_io_types.sink_info get_sink_info() except +
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
         cudf_table_view.table_view get_table() except +
-        const table_input_metadata get_metadata() except +
-        string get_column_chunks_file_path() except+
+        const cudf_io_types.table_input_metadata get_metadata() except +
+        string get_column_chunks_file_paths() except+
+        size_t get_row_group_size_bytes() except+
+        size_type get_row_group_size_rows() except+
 
+        void set_partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
         void set_metadata(
-            table_input_metadata *m
+            cudf_io_types.table_input_metadata *m
+        ) except +
+        void set_key_value_metadata(
+            vector[map[string, string]] kvm
         ) except +
         void set_stats_level(
             cudf_io_types.statistics_freq sf
@@ -103,9 +92,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_compression(
             cudf_io_types.compression_type compression
         ) except +
-        void set_column_chunks_file_path(
-            string column_chunks_file_path
+        void set_column_chunks_file_paths(
+            vector[string] column_chunks_file_paths
         ) except +
+        void set_row_group_size_bytes(size_t val) except+
+        void set_row_group_size_rows(size_type val) except+
 
         @staticmethod
         parquet_writer_options_builder builder(
@@ -120,8 +111,14 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_io_types.sink_info sink_,
             cudf_table_view.table_view table_
         ) except +
+        parquet_writer_options_builder& partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
         parquet_writer_options_builder& metadata(
-            table_input_metadata *m
+            cudf_io_types.table_input_metadata *m
+        ) except +
+        parquet_writer_options_builder& key_value_metadata(
+            vector[map[string, string]] kvm
         ) except +
         parquet_writer_options_builder& stats_level(
             cudf_io_types.statistics_freq sf
@@ -129,12 +126,18 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& compression(
             cudf_io_types.compression_type compression
         ) except +
-        parquet_writer_options_builder& column_chunks_file_path(
-            string column_chunks_file_path
+        parquet_writer_options_builder& column_chunks_file_paths(
+            vector[string] column_chunks_file_paths
         ) except +
         parquet_writer_options_builder& int96_timestamps(
             bool enabled
         ) except +
+        parquet_writer_options_builder& row_group_size_bytes(
+            size_t val
+        ) except+
+        parquet_writer_options_builder& row_group_size_rows(
+            size_type val
+        ) except+
 
         parquet_writer_options build() except +
 
@@ -147,11 +150,16 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         cudf_io_types.sink_info get_sink() except +
         cudf_io_types.compression_type get_compression() except +
         cudf_io_types.statistics_freq get_stats_level() except +
-        table_input_metadata* get_metadata(
+        cudf_io_types.table_input_metadata* get_metadata(
         ) except+
+        size_t get_row_group_size_bytes() except+
+        size_type get_row_group_size_rows() except+
 
         void set_metadata(
-            table_input_metadata *m
+            cudf_io_types.table_input_metadata *m
+        ) except +
+        void set_key_value_metadata(
+            vector[map[string, string]] kvm
         ) except +
         void set_stats_level(
             cudf_io_types.statistics_freq sf
@@ -159,6 +167,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_compression(
             cudf_io_types.compression_type compression
         ) except +
+        void set_row_group_size_bytes(size_t val) except+
+        void set_row_group_size_rows(size_type val) except+
 
         @staticmethod
         chunked_parquet_writer_options_builder builder(
@@ -171,7 +181,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_io_types.sink_info sink_,
         ) except +
         chunked_parquet_writer_options_builder& metadata(
-            table_input_metadata *m
+            cudf_io_types.table_input_metadata *m
+        ) except +
+        chunked_parquet_writer_options_builder& key_value_metadata(
+            vector[map[string, string]] kvm
         ) except +
         chunked_parquet_writer_options_builder& stats_level(
             cudf_io_types.statistics_freq sf
@@ -179,6 +192,12 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         chunked_parquet_writer_options_builder& compression(
             cudf_io_types.compression_type compression
         ) except +
+        parquet_writer_options_builder& row_group_size_bytes(
+            size_t val
+        ) except+
+        parquet_writer_options_builder& row_group_size_rows(
+            size_type val
+        ) except+
 
         chunked_parquet_writer_options build() except +
 
@@ -189,9 +208,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             cudf_table_view.table_view table_,
         ) except+
         unique_ptr[vector[uint8_t]] close(
-            string column_chunks_file_path,
+            vector[string] column_chunks_file_paths,
         ) except+
 
-    cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
+    cdef unique_ptr[vector[uint8_t]] merge_row_group_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +

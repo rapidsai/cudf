@@ -32,11 +32,20 @@ class expression_parser;
 /**
  * @brief A generic expression that can be evaluated to return a value.
  *
- * This class is a part of a "visitor" pattern with the `linearizer` class.
- * Nodes inheriting from this class can accept visitors.
+ * This class is a part of a "visitor" pattern with the `expression_parser` class.
+ * Expressions inheriting from this class can accept parsers as visitors.
  */
 struct expression {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
+
+  bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
+  {
+    return may_evaluate_null(left, left, stream);
+  }
+
+  virtual bool may_evaluate_null(table_view const& left,
+                                 table_view const& right,
+                                 rmm::cuda_stream_view stream) const = 0;
 
   virtual ~expression() {}
 };
@@ -46,51 +55,65 @@ struct expression {
  */
 enum class ast_operator {
   // Binary operators
-  ADD,            ///< operator +
-  SUB,            ///< operator -
-  MUL,            ///< operator *
-  DIV,            ///< operator / using common type of lhs and rhs
-  TRUE_DIV,       ///< operator / after promoting type to floating point
-  FLOOR_DIV,      ///< operator / after promoting to 64 bit floating point and then
-                  ///< flooring the result
-  MOD,            ///< operator %
-  PYMOD,          ///< operator % but following python's sign rules for negatives
-  POW,            ///< lhs ^ rhs
-  EQUAL,          ///< operator ==
-  NOT_EQUAL,      ///< operator !=
-  LESS,           ///< operator <
-  GREATER,        ///< operator >
-  LESS_EQUAL,     ///< operator <=
-  GREATER_EQUAL,  ///< operator >=
-  BITWISE_AND,    ///< operator &
-  BITWISE_OR,     ///< operator |
-  BITWISE_XOR,    ///< operator ^
-  LOGICAL_AND,    ///< operator &&
-  LOGICAL_OR,     ///< operator ||
+  ADD,         ///< operator +
+  SUB,         ///< operator -
+  MUL,         ///< operator *
+  DIV,         ///< operator / using common type of lhs and rhs
+  TRUE_DIV,    ///< operator / after promoting type to floating point
+  FLOOR_DIV,   ///< operator / after promoting to 64 bit floating point and then
+               ///< flooring the result
+  MOD,         ///< operator %
+  PYMOD,       ///< operator % using Python's sign rules for negatives
+  POW,         ///< lhs ^ rhs
+  EQUAL,       ///< operator ==
+  NULL_EQUAL,  ///< operator == with Spark rules: NULL_EQUAL(null, null) is true, NULL_EQUAL(null,
+               ///< valid) is false, and
+               ///< NULL_EQUAL(valid, valid) == EQUAL(valid, valid)
+  NOT_EQUAL,   ///< operator !=
+  LESS,        ///< operator <
+  GREATER,     ///< operator >
+  LESS_EQUAL,  ///< operator <=
+  GREATER_EQUAL,     ///< operator >=
+  BITWISE_AND,       ///< operator &
+  BITWISE_OR,        ///< operator |
+  BITWISE_XOR,       ///< operator ^
+  LOGICAL_AND,       ///< operator &&
+  NULL_LOGICAL_AND,  ///< operator && with Spark rules: NULL_LOGICAL_AND(null, null) is null,
+                     ///< NULL_LOGICAL_AND(null, true) is
+                     ///< null, NULL_LOGICAL_AND(null, false) is false, and NULL_LOGICAL_AND(valid,
+                     ///< valid) == LOGICAL_AND(valid, valid)
+  LOGICAL_OR,        ///< operator ||
+  NULL_LOGICAL_OR,   ///< operator || with Spark rules: NULL_LOGICAL_OR(null, null) is null,
+                     ///< NULL_LOGICAL_OR(null, true) is true,
+                     ///< NULL_LOGICAL_OR(null, false) is null, and NULL_LOGICAL_OR(valid, valid) ==
+                     ///< LOGICAL_OR(valid, valid)
   // Unary operators
-  IDENTITY,    ///< Identity function
-  SIN,         ///< Trigonometric sine
-  COS,         ///< Trigonometric cosine
-  TAN,         ///< Trigonometric tangent
-  ARCSIN,      ///< Trigonometric sine inverse
-  ARCCOS,      ///< Trigonometric cosine inverse
-  ARCTAN,      ///< Trigonometric tangent inverse
-  SINH,        ///< Hyperbolic sine
-  COSH,        ///< Hyperbolic cosine
-  TANH,        ///< Hyperbolic tangent
-  ARCSINH,     ///< Hyperbolic sine inverse
-  ARCCOSH,     ///< Hyperbolic cosine inverse
-  ARCTANH,     ///< Hyperbolic tangent inverse
-  EXP,         ///< Exponential (base e, Euler number)
-  LOG,         ///< Natural Logarithm (base e)
-  SQRT,        ///< Square-root (x^0.5)
-  CBRT,        ///< Cube-root (x^(1.0/3))
-  CEIL,        ///< Smallest integer value not less than arg
-  FLOOR,       ///< largest integer value not greater than arg
-  ABS,         ///< Absolute value
-  RINT,        ///< Rounds the floating-point argument arg to an integer value
-  BIT_INVERT,  ///< Bitwise Not (~)
-  NOT          ///< Logical Not (!)
+  IDENTITY,        ///< Identity function
+  SIN,             ///< Trigonometric sine
+  COS,             ///< Trigonometric cosine
+  TAN,             ///< Trigonometric tangent
+  ARCSIN,          ///< Trigonometric sine inverse
+  ARCCOS,          ///< Trigonometric cosine inverse
+  ARCTAN,          ///< Trigonometric tangent inverse
+  SINH,            ///< Hyperbolic sine
+  COSH,            ///< Hyperbolic cosine
+  TANH,            ///< Hyperbolic tangent
+  ARCSINH,         ///< Hyperbolic sine inverse
+  ARCCOSH,         ///< Hyperbolic cosine inverse
+  ARCTANH,         ///< Hyperbolic tangent inverse
+  EXP,             ///< Exponential (base e, Euler number)
+  LOG,             ///< Natural Logarithm (base e)
+  SQRT,            ///< Square-root (x^0.5)
+  CBRT,            ///< Cube-root (x^(1.0/3))
+  CEIL,            ///< Smallest integer value not less than arg
+  FLOOR,           ///< largest integer value not greater than arg
+  ABS,             ///< Absolute value
+  RINT,            ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,      ///< Bitwise Not (~)
+  NOT,             ///< Logical Not (!)
+  CAST_TO_INT64,   ///< Cast value to int64_t
+  CAST_TO_UINT64,  ///< Cast value to uint64_t
+  CAST_TO_FLOAT64  ///< Cast value to double
 };
 
 /**
@@ -99,9 +122,9 @@ enum class ast_operator {
  * This determines which table to use in cases with two tables (e.g. joins).
  */
 enum class table_reference {
-  LEFT,   // Column index in the left table
-  RIGHT,  // Column index in the right table
-  OUTPUT  // Column index in the output table
+  LEFT,   ///< Column index in the left table
+  RIGHT,  ///< Column index in the right table
+  OUTPUT  ///< Column index in the output table
 };
 
 /**
@@ -116,7 +139,8 @@ class literal : public expression {
    * @param value A numeric scalar value.
    */
   template <typename T>
-  literal(cudf::numeric_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  literal(cudf::numeric_scalar<T>& value)
+    : scalar(value), value(cudf::get_scalar_device_view(value))
   {
   }
 
@@ -127,7 +151,8 @@ class literal : public expression {
    * @param value A timestamp scalar value.
    */
   template <typename T>
-  literal(cudf::timestamp_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  literal(cudf::timestamp_scalar<T>& value)
+    : scalar(value), value(cudf::get_scalar_device_view(value))
   {
   }
 
@@ -138,7 +163,8 @@ class literal : public expression {
    * @param value A duration scalar value.
    */
   template <typename T>
-  literal(cudf::duration_scalar<T>& value) : value(cudf::get_scalar_device_view(value))
+  literal(cudf::duration_scalar<T>& value)
+    : scalar(value), value(cudf::get_scalar_device_view(value))
   {
   }
 
@@ -164,7 +190,22 @@ class literal : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  bool may_evaluate_null(table_view const& left,
+                         table_view const& right,
+                         rmm::cuda_stream_view stream) const override
+  {
+    return !is_valid(stream);
+  }
+
+  /**
+   * @brief Check if the underlying scalar is valid.
+   *
+   * @return bool
+   */
+  bool is_valid(rmm::cuda_stream_view stream) const { return scalar.is_valid(stream); }
+
  private:
+  cudf::scalar const& scalar;
   cudf::detail::fixed_width_scalar_device_view_base const value;
 };
 
@@ -240,6 +281,13 @@ class column_reference : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
+  bool may_evaluate_null(table_view const& left,
+                         table_view const& right,
+                         rmm::cuda_stream_view stream) const override
+  {
+    return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
+  }
+
  private:
   cudf::size_type column_index;
   table_reference table_source;
@@ -295,6 +343,17 @@ class operation : public expression {
    * @return cudf::size_type Index of device data reference for this instance.
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  bool may_evaluate_null(table_view const& left,
+                         table_view const& right,
+                         rmm::cuda_stream_view stream) const override
+  {
+    return std::any_of(operands.cbegin(),
+                       operands.cend(),
+                       [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
+                         return subexpr.get().may_evaluate_null(left, right, stream);
+                       });
+  };
 
  private:
   ast_operator const op;

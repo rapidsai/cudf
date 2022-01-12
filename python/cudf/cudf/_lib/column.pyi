@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, TypeVar, Union
+from typing import Dict, Optional, Tuple, TypeVar
 
 from cudf._typing import Dtype, DtypeObj, ScalarLike
 from cudf.core.buffer import Buffer
@@ -21,6 +21,7 @@ class Column:
     _null_count: int
     _children: Tuple[ColumnBase, ...]
     _base_children: Tuple[ColumnBase, ...]
+    _distinct_count: Dict[bool, int]
 
     def __init__(
         self,
@@ -69,8 +70,7 @@ class Column:
     def nullable(self) -> bool:
         ...
 
-    @property
-    def has_nulls(self) -> bool:
+    def has_nulls(self, include_nan: bool=False) -> bool:
         ...
 
     @property

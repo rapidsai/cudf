@@ -30,6 +30,10 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
  */
 public class ColumnView implements AutoCloseable, BinaryOperable {
 
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
   public static final long UNKNOWN_NULL_COUNT = -1;
 
   protected long viewHandle;
@@ -101,11 +105,39 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         || !nullCount.isPresent();
   }
 
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   The offsetbuffer for columns that need an offset buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer, BaseDeviceMemoryBuffer offsetBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
   private ColumnView(DType type, long rows, int nullCount,
                      BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
                      BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
     this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
-        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+        offsetBuffer, children == null ? new long[]{} :
+            Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
   }
 
   /** Creates a ColumnVector from a column view handle
@@ -138,6 +170,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public final DType getType() {
     return type;
+  }
+
+  /**
+   * Returns the child column views for this view
+   * Please note that it is the responsibility of the caller to close these views.
+   * @return an array of child column views
+   */
+  public final ColumnView[] getChildColumnViews() {
+    int numChildren = getNumChildren();
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    ColumnView[] views = new ColumnView[numChildren];
+    try {
+      for (int i = 0; i < numChildren; i++) {
+        views[i] = getChildColumnView(i);
+      }
+      return views;
+    } catch(Throwable t) {
+      for (ColumnView v: views) {
+        if (v != null) {
+          v.close();
+        }
+      }
+      throw t;
+    }
   }
 
   /**
@@ -296,6 +354,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is a fixed-point, and FALSE if its not a fixed-point.
+   * A null will be returned for null entries.
+   *
+   * The sign and the exponent is optional. The decimal point may only appear once.
+   * The integer component must fit within the size limits of the underlying fixed-point
+   * storage type. The value of the integer component is based on the scale of the target
+   * decimalType.
+   *
+   * Example:
+   * vec = ["A", "nan", "Inf", "-Inf", "Infinity", "infinity", "2.1474", "112.383", "-2.14748",
+   *        "NULL", "null", null, "1.2", "1.2e-4", "0.00012"]
+   * vec.isFixedPoint() = [false, false, false, false, false, false, true, true, true, false, false,
+   *                       null, true, true, true]
+   *
+   * @param decimalType the data type that should be used for bounds checking. Note that only
+   *                Decimal types (fixed-point) are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isFixedPoint(DType decimalType) {
+    assert type.equals(DType.STRING);
+    assert decimalType.isDecimalType();
+    return new ColumnVector(isFixedPoint(getNativeView(),
+        decimalType.getTypeId().getNativeId(), decimalType.getScale()));
+  }
+
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
    * for null entries.
    *
@@ -316,11 +402,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * for null entries.
    *
    * @param intType the data type that should be used for bounds checking. Note that only
-   *                integer types are allowed.
+   *                cudf integer types are allowed including signed/unsigned int8 through int64
    * @return Boolean vector
    */
   public final ColumnVector isInteger(DType intType) {
     assert type.equals(DType.STRING);
+    assert intType.isBackedByInt() || intType.isBackedByLong() || intType.isBackedByByte()
+        || intType.isBackedByShort();
     return new ColumnVector(isIntegerWithType(getNativeView(),
         intType.getTypeId().getNativeId(), intType.getScale()));
   }
@@ -713,6 +801,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
 
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+  }
+
+  /**
+   * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   * 
+   * The boolColumn must have the same number of rows as the current column.
+   * The result column will have the same number of rows as the current column. 
+   * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   * 
+   * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the row value is undefined.
+   * 
+   * @param boolColumn bool column whose value is to be used as the validity mask.
+   * @return Deep copy of the column with replaced validity mask.
+   */    
+  public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
+    return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1370,11 +1477,38 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Required percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(double[] percentiles) {
+    try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
+      return approxPercentile(cv);
+    }
+  }
+
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Column containing percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(ColumnVector percentiles) {
+    return new ColumnVector(approxPercentile(getNativeView(), percentiles.getNativeView()));
+  }
+
+  /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
-   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector quantile(QuantileMethod method, double[] quantiles) {
     return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
@@ -2104,6 +2238,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector extractListElement(int index) {
     assert type.equals(DType.LIST) : "A column of type LIST is required for .extractListElement()";
     return new ColumnVector(extractListElement(getNativeView(), index));
+  }
+
+  /**
+   * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
+   * producing a LIST column in which each list contain only unique elements.
+   *
+   * Order of the output elements within each list are not guaranteed to be preserved as in the
+   * input.
+   *
+   * @return A new LIST column having unique list elements.
+   */
+  public final ColumnVector dropListDuplicates() {
+    return new ColumnVector(dropListDuplicates(getNativeView()));
+  }
+
+  /**
+   * Given a LIST column in which each element is a struct containing a <key, value> pair. An output
+   * LIST column is generated by copying elements of the current column in a way such that if a list
+   * contains multiple elements having the same key then only the last element will be copied.
+   *
+   * @return A new LIST column having list elements with unique keys.
+   */
+  public final ColumnVector dropListDuplicatesWithKeysValues() {
+    return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3012,8 +3170,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key is null
    * 2. The column vector list value is null
-   * 3. The list row does not contain the key, and contains at least
-   *    one null.
    * @param key the scalar to look up
    * @return a Boolean ColumnVector with the result of the lookup
    */
@@ -3025,16 +3181,67 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a column of bool values indicating whether the list rows of the first
    * column contain the corresponding values in the second column.
+   * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key value is null
    * 2. The column vector list value is null
-   * 3. The list row does not contain the key, and contains at least
-   *    one null.
    * @param key the ColumnVector with look up values
    * @return a Boolean ColumnVector with the result of the lookup
    */
   public final ColumnVector listContainsColumn(ColumnView key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the list rows of the specified
+   * column contain null elements.
+   * Output `column[i]` is set to null iff the input list row is null.
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContainsNulls() {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsNulls(getNativeView()));
+  }
+
+  /**
+   * Enum to choose behaviour of listIndexOf functions:
+   *   1. FIND_FIRST finds the first occurrence of a search key.
+   *   2. FIND_LAST finds the last occurrence of a search key.
+   */
+  public enum FindOptions {FIND_FIRST, FIND_LAST};
+
+  /**
+   * Create a column of int32 indices, indicating the position of the scalar search key
+   * in each list row.
+   * All indices are 0-based. If a search key is not found, the index is set to -1.
+   * The index is set to null if one of the following is true: 
+   * 1. The search key is null.
+   * 2. The list row is null.
+   * @param key The scalar search key
+   * @param findOption Whether to find the first index of the key, or the last.
+   * @return The resultant column of int32 indices
+   */
+  public final ColumnVector listIndexOf(Scalar key, FindOptions findOption) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
+    return new ColumnVector(listIndexOfScalar(getNativeView(), key.getScalarHandle(), isFindFirst));
+  }
+
+  /**
+   * Create a column of int32 indices, indicating the position of each row in the
+   * search key column in the corresponding row of the lists column.
+   * All indices are 0-based. If a search key is not found, the index is set to -1.
+   * The index is set to null if one of the following is true: 
+   * 1. The search key row is null.
+   * 2. The list row is null.
+   * @param key ColumnView of search keys.
+   * @param findOption Whether to find the first index of the key, or the last.
+   * @return The resultant column of int32 indices
+   */
+  public final ColumnVector listIndexOf(ColumnView keys, FindOptions findOption) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
+    return new ColumnVector(listIndexOfColumn(getNativeView(), keys.getNativeView(), isFindFirst));
   }
 
   /**
@@ -3114,6 +3321,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+
+  private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
 
   /**
    * Native method to concatenate a list column of strings (each row is a list of strings),
@@ -3435,6 +3645,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long extractListElement(long nativeView, int index);
 
+  private static native long dropListDuplicates(long nativeView);
+
+  private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
+
   /**
    * Native method for list lookup
    * @param nativeView the column view handle of the list
@@ -3450,6 +3664,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return column handle of the resultant
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
+
+  /**
+   * Native method to search list rows for null elements.
+   * @param nativeView the column view handle of the list
+   * @return column handle of the resultant boolean column 
+   */
+  private static native long listContainsNulls(long nativeView);
+
+  /**
+   * Native method to find the first (or last) index of a specified scalar key,
+   * in each row of a list column.
+   * @param nativeView the column view handle of the list
+   * @param scalarKeyHandle handle to the scalar search key
+   * @param isFindFirst Whether to find the first index of the key, or the last.
+   * @return column handle of the resultant column of int32 indices
+   */
+  private static native long listIndexOfScalar(long nativeView, long scalarKeyHandle, boolean isFindFirst);
+
+  /**
+   * Native method to find the first (or last) index of each search key in the specified column,
+   * in each row of a list column.
+   * @param nativeView the column view handle of the list
+   * @param scalarColumnHandle handle to the search key column
+   * @param isFindFirst Whether to find the first index of the key, or the last.
+   * @return column handle of the resultant column of int32 indices
+   */
+  private static native long listIndexOfColumn(long nativeView, long keyColumnHandle, boolean isFindFirst);
 
   private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
 
@@ -3483,6 +3724,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the upper method.
    */
   private static native long upperStrings(long cudfViewHandle);
+
+  /**
+   * Native method to compute approx percentiles.
+   * @param cudfColumnHandle T-Digest column
+   * @param percentilesHandle Percentiles
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the approxPercentile method.
+   */
+  private static native long approxPercentile(long cudfColumnHandle, long percentilesHandle) throws CudfException;
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
@@ -3596,6 +3846,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
+
+  /**
+   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   * 
+   * The boolColumn must have the same number of rows as the exemplar column.
+   * The result column will have the same number of rows as the exemplar.
+   * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   * 
+   * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the resultant row value is undefined.
+   * 
+   * @param exemplarViewHandle column view of the column that is deep copied.
+   * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
+   * @return Deep copy of the column with replaced null mask.
+   */                                                      
+  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
+                                                             long boolColumnViewHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.

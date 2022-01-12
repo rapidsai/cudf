@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/config_utils.hpp>
+#include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -31,6 +33,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <nvcomp/snappy.h>
 
 #include <algorithm>
 #include <array>
@@ -98,8 +103,7 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
  */
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id,
-                   bool strict_decimal_types)
+                   type_id timestamp_type_id)
 {
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
@@ -133,16 +137,20 @@ type_id to_type_id(SchemaElement const& schema,
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
     case parquet::DECIMAL:
-      if (physical == parquet::INT32)
-        return type_id::DECIMAL32;
-      else if (physical == parquet::INT64)
-        return type_id::DECIMAL64;
-      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
-        return type_id::DECIMAL64;
-      } else {
-        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
-        return type_id::FLOAT64;
+      if (physical == parquet::INT32) { return type_id::DECIMAL32; }
+      if (physical == parquet::INT64) { return type_id::DECIMAL64; }
+      if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+          return type_id::DECIMAL32;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+          return type_id::DECIMAL64;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+          return type_id::DECIMAL128;
+        }
       }
+      CUDF_FAIL("Invalid representation of decimal type");
       break;
 
     // maps are just List<Struct<>>.
@@ -178,21 +186,13 @@ type_id to_type_id(SchemaElement const& schema,
 }
 
 /**
- * @brief Function that translates cuDF time unit to Parquet clock frequency
+ * @brief Converts cuDF type enum to column logical type
  */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
+data_type to_data_type(type_id t_id, SchemaElement const& schema)
 {
-  switch (timestamp_type_id) {
-    case type_id::DURATION_SECONDS: return 1;
-    case type_id::DURATION_MILLISECONDS: return 1000;
-    case type_id::DURATION_MICROSECONDS: return 1000000;
-    case type_id::DURATION_NANOSECONDS: return 1000000000;
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
-    default: return 0;
-  }
+  return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
+           ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
+           : data_type{t_id};
 }
 
 /**
@@ -204,6 +204,11 @@ T required_bits(uint32_t max_level)
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
+/**
+ * @brief Converts cuDF units to Parquet units.
+ *
+ * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ */
 std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
                                                      type_id timestamp_type_id,
                                                      parquet::Type physical,
@@ -224,7 +229,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
   int8_t converted_type = converted;
   if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      column_type_id != type_id::DECIMAL32 && column_type_id != type_id::DECIMAL64) {
+      not cudf::is_fixed_point(column_type_id)) {
     converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
@@ -296,7 +301,7 @@ struct metadata : public FileMetaData {
   }
 };
 
-class aggregate_metadata {
+class aggregate_reader_metadata {
   std::vector<metadata> const per_file_metadata;
   std::map<std::string, std::string> const agg_keyval_map;
   size_type const num_rows;
@@ -352,7 +357,7 @@ class aggregate_metadata {
   }
 
  public:
-  aggregate_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
+  aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       agg_keyval_map(merge_keyval_metadata()),
       num_rows(calc_num_rows()),
@@ -419,6 +424,9 @@ class aggregate_metadata {
     // walk upwards, skipping repeated fields
     while (schema_index > 0) {
       if (!pfm.schema[schema_index].is_stub()) { depth++; }
+      // schema of one-level encoding list doesn't contain nesting information, so we need to
+      // manually add an extra nesting level
+      if (pfm.schema[schema_index].is_one_level_list()) { depth++; }
       schema_index = pfm.schema[schema_index].parent_idx;
     }
     return depth;
@@ -558,7 +566,6 @@ class aggregate_metadata {
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
-   * @param strict_decimal_types Type conversion parameter
    *
    * @return input column information, output column information, list of output column schema
    * indices
@@ -566,8 +573,7 @@ class aggregate_metadata {
   auto select_columns(std::vector<std::string> const& use_names,
                       bool include_index,
                       bool strings_to_categorical,
-                      type_id timestamp_type_id,
-                      bool strict_decimal_types) const
+                      type_id timestamp_type_id) const
   {
     auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
       auto const& col_schema_idx = std::find_if(
@@ -604,10 +610,10 @@ class aggregate_metadata {
 
         // if we're at the root, this is a new output column
         auto const col_type =
-          to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
-                             ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
-                             : data_type{col_type};
+          schema_elem.is_one_level_list()
+            ? type_id::LIST
+            : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+        auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
         // store the index of this element if inserted in out_col_array
@@ -637,6 +643,23 @@ class aggregate_metadata {
         if (schema_elem.num_children == 0) {
           input_column_info& input_col =
             input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+
+          // set up child output column for one-level encoding list
+          if (schema_elem.is_one_level_list()) {
+            // determine the element data type
+            auto const element_type =
+              to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+            auto const element_dtype = to_data_type(element_type, schema_elem);
+
+            column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            // store the index of this element
+            nesting.push_back(static_cast<int>(output_col.children.size()));
+            // TODO: not sure if we should assign a name or leave it blank
+            element_col.name = "element";
+
+            output_col.children.push_back(std::move(element_col));
+          }
+
           std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
@@ -799,7 +822,7 @@ class aggregate_metadata {
  */
 void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>>& remap,
                                int src_col_schema,
-                               aggregate_metadata const& md)
+                               aggregate_reader_metadata const& md)
 {
   // already generated for this level
   if (remap.find(src_col_schema) != remap.end()) { return; }
@@ -856,6 +879,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
+        }
+        // if it's one-level encoding list
+        else if (cur_schema.is_one_level_list()) {
+          shallowest = cur_depth - 1;
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
         schema_idx = cur_schema.parent_idx;
@@ -1005,6 +1032,73 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
+void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
+                       device_span<gpu_inflate_status_s> comp_stat,
+                       size_t max_uncomp_page_size,
+                       rmm::cuda_stream_view stream)
+{
+  size_t num_comp_pages = comp_in.size();
+  size_t temp_size;
+
+  nvcompStatus_t nvcomp_status =
+    nvcompBatchedSnappyDecompressGetTempSize(num_comp_pages, max_uncomp_page_size, &temp_size);
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+               "Unable to get scratch size for snappy decompression");
+
+  // Not needed now but nvcomp API makes no promises about future
+  rmm::device_buffer scratch(temp_size, stream);
+  // Analogous to comp_in.srcDevice
+  rmm::device_uvector<void const*> compressed_data_ptrs(num_comp_pages, stream);
+  // Analogous to comp_in.srcSize
+  rmm::device_uvector<size_t> compressed_data_sizes(num_comp_pages, stream);
+  // Analogous to comp_in.dstDevice
+  rmm::device_uvector<void*> uncompressed_data_ptrs(num_comp_pages, stream);
+  // Analogous to comp_in.dstSize
+  rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
+
+  // Analogous to comp_stat.bytes_written
+  rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_comp_pages, stream);
+  // Convertible to comp_stat.status
+  rmm::device_uvector<nvcompStatus_t> statuses(num_comp_pages, stream);
+
+  // Prepare the vectors
+  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
+                                           compressed_data_sizes.begin(),
+                                           uncompressed_data_ptrs.begin(),
+                                           uncompressed_data_sizes.data());
+  thrust::transform(rmm::exec_policy(stream),
+                    comp_in.begin(),
+                    comp_in.end(),
+                    comp_it,
+                    [] __device__(gpu_inflate_input_s in) {
+                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
+                    });
+
+  nvcomp_status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
+                                                     compressed_data_sizes.data(),
+                                                     uncompressed_data_sizes.data(),
+                                                     actual_uncompressed_data_sizes.data(),
+                                                     num_comp_pages,
+                                                     scratch.data(),
+                                                     scratch.size(),
+                                                     uncompressed_data_ptrs.data(),
+                                                     statuses.data(),
+                                                     stream.value());
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+               "unable to perform snappy decompression");
+
+  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+                             uncompressed_data_sizes.begin(),
+                             uncompressed_data_sizes.end(),
+                             actual_uncompressed_data_sizes.begin()),
+               "Mismatch in expected and actual decompressed size during snappy decompression");
+  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+                             statuses.begin(),
+                             statuses.end(),
+                             thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),
+               "Error during snappy decompression");
+}
+
 /**
  * @copydoc cudf::io::detail::parquet::decompress_page_data
  */
@@ -1031,18 +1125,27 @@ rmm::device_buffer reader::impl::decompress_page_data(
   // Count the exact number of compressed pages
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
-  std::array<std::pair<parquet::Compression, size_t>, 3> codecs{std::make_pair(parquet::GZIP, 0),
-                                                                std::make_pair(parquet::SNAPPY, 0),
-                                                                std::make_pair(parquet::BROTLI, 0)};
+
+  struct codec_stats {
+    parquet::Compression compression_type;
+    size_t num_pages;
+    int32_t max_decompressed_size;
+  };
+
+  std::array<codec_stats, 3> codecs{codec_stats{parquet::GZIP, 0, 0},
+                                    codec_stats{parquet::SNAPPY, 0, 0},
+                                    codec_stats{parquet::BROTLI, 0, 0}};
 
   for (auto& codec : codecs) {
-    for_each_codec_page(codec.first, [&](size_t page) {
-      total_decomp_size += pages[page].uncompressed_page_size;
-      codec.second++;
+    for_each_codec_page(codec.compression_type, [&](size_t page) {
+      auto page_uncomp_size = pages[page].uncompressed_page_size;
+      total_decomp_size += page_uncomp_size;
+      codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
+      codec.num_pages++;
       num_comp_pages++;
     });
-    if (codec.first == parquet::BROTLI && codec.second > 0) {
-      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second), stream);
+    if (codec.compression_type == parquet::BROTLI && codec.num_pages > 0) {
+      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.num_pages), stream);
     }
   }
 
@@ -1051,13 +1154,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
 
+  device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
+  device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
+
   size_t decomp_offset = 0;
   int32_t argc         = 0;
   for (const auto& codec : codecs) {
-    if (codec.second > 0) {
+    if (codec.num_pages > 0) {
       int32_t start_pos = argc;
 
-      for_each_codec_page(codec.first, [&](size_t page) {
+      for_each_codec_page(codec.compression_type, [&](size_t page) {
         auto dst_base              = static_cast<uint8_t*>(decomp_pages.data());
         inflate_in[argc].srcDevice = pages[page].page_data;
         inflate_in[argc].srcSize   = pages[page].compressed_page_size;
@@ -1083,7 +1189,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
                                cudaMemcpyHostToDevice,
                                stream.value()));
-      switch (codec.first) {
+
+      switch (codec.compression_type) {
         case parquet::GZIP:
           CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
                               inflate_out.device_ptr(start_pos),
@@ -1092,10 +1199,17 @@ rmm::device_buffer reader::impl::decompress_page_data(
                               stream))
           break;
         case parquet::SNAPPY:
-          CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
-                              inflate_out.device_ptr(start_pos),
-                              argc - start_pos,
-                              stream));
+          if (nvcomp_integration::is_stable_enabled()) {
+            snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
+                              inflate_out_view.subspan(start_pos, argc - start_pos),
+                              codec.max_decompressed_size,
+                              stream);
+          } else {
+            CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
+                                inflate_out.device_ptr(start_pos),
+                                argc - start_pos,
+                                stream));
+          }
           break;
         case parquet::BROTLI:
           CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
@@ -1313,8 +1427,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc>& chu
   // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
   // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
-  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths);
-  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths);
+  auto chunk_nested_valids = hostdevice_vector<uint32_t*>(sum_max_depths, stream);
+  auto chunk_nested_data   = hostdevice_vector<void*>(sum_max_depths, stream);
   auto chunk_offsets       = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
@@ -1473,14 +1587,12 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   : _mr(mr), _sources(std::move(sources))
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_metadata>(_sources);
+  _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
     _timestamp_type = options.get_timestamp_type();
   }
-
-  _strict_decimal_types = options.is_enabled_strict_decimal_types();
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -1490,8 +1602,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _metadata->select_columns(options.get_columns(),
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              _timestamp_type.id(),
-                              _strict_decimal_types);
+                              _timestamp_type.id());
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1559,12 +1670,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         int32_t clock_rate;
         int8_t converted_type;
 
-        std::tie(type_width, clock_rate, converted_type) = conversion_info(
-          to_type_id(schema, _strings_to_categorical, _timestamp_type.id(), _strict_decimal_types),
-          _timestamp_type.id(),
-          schema.type,
-          schema.converted_type,
-          schema.type_length);
+        std::tie(type_width, clock_rate, converted_type) =
+          conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
+                          _timestamp_type.id(),
+                          schema.type,
+                          schema.converted_type,
+                          schema.type_length);
 
         column_chunk_offsets[chunks.size()] =
           (col_meta.dictionary_page_offset != 0)
@@ -1691,18 +1802,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 }
 
 // Forward to implementation
-reader::reader(std::vector<std::string> const& filepaths,
-               parquet_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepaths), options, mr))
-{
-}
-
-// Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                parquet_reader_options const& options,
-               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {

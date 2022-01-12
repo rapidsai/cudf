@@ -26,21 +26,17 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/drop_list_duplicates.hpp>
-#include <cudf/rolling.hpp>
-#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -54,13 +50,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/detail/execution_policy.h>
-#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
+
+#include <cuda/std/limits>
 
 #include <memory>
 
@@ -280,6 +275,86 @@ struct DeviceRollingCountAll {
 };
 
 /**
+ * @brief Operator for applying a VAR rolling aggregation on a single window.
+ */
+template <typename InputType>
+struct DeviceRollingVariance {
+  size_type const min_periods;
+  size_type const ddof;
+
+  // what operations do we support
+  template <typename T = InputType, aggregation::Kind O = aggregation::VARIANCE>
+  static constexpr bool is_supported()
+  {
+    return is_fixed_width<InputType>() and not is_chrono<InputType>();
+  }
+
+  DeviceRollingVariance(size_type _min_periods, size_type _ddof)
+    : min_periods(_min_periods), ddof{_ddof}
+  {
+  }
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const&,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index) const
+  {
+    using DeviceInputType = device_storage_type_t<InputType>;
+
+    // valid counts in the window
+    cudf::size_type const count =
+      has_nulls ? thrust::count_if(thrust::seq,
+                                   thrust::make_counting_iterator(start_index),
+                                   thrust::make_counting_iterator(end_index),
+                                   [&input](auto i) { return input.is_valid_nocheck(i); })
+                : end_index - start_index;
+
+    // Result will be null if any of the following conditions are met:
+    // - All inputs are null
+    // - Number of valid inputs is less than `min_periods`
+    bool output_is_valid = count > 0 and (count >= min_periods);
+
+    if (output_is_valid) {
+      if (count >= ddof) {
+        // Welford algorithm
+        // See https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+        OutputType m{0}, m2{0};
+        size_type running_count{0};
+
+        for (size_type i = start_index; i < end_index; i++) {
+          if (has_nulls and input.is_null_nocheck(i)) { continue; }
+
+          OutputType const x = static_cast<OutputType>(input.element<DeviceInputType>(i));
+
+          running_count++;
+          OutputType const tmp1 = x - m;
+          m += tmp1 / running_count;
+          OutputType const tmp2 = x - m;
+          m2 += tmp1 * tmp2;
+        }
+        if constexpr (is_fixed_point<InputType>()) {
+          // For fixed_point types, the previous computed value used unscaled rep-value,
+          // the final result should be multiplied by the square of decimal `scale`.
+          OutputType scaleby = exp10(static_cast<double>(input.type().scale()));
+          scaleby *= scaleby;
+          output.element<OutputType>(current_index) = m2 / (count - ddof) * scaleby;
+        } else {
+          output.element<OutputType>(current_index) = m2 / (count - ddof);
+        }
+      } else {
+        output.element<OutputType>(current_index) =
+          cuda::std::numeric_limits<OutputType>::signaling_NaN();
+      }
+    }
+
+    return output_is_valid;
+  }
+};
+
+/**
  * @brief Operator for applying a ROW_NUMBER rolling aggregation on a single window.
  */
 template <typename InputType>
@@ -321,12 +396,12 @@ struct agg_specific_empty_output {
     }
 
     if constexpr (cudf::is_fixed_width<target_type>()) {
-      return cudf::make_empty_column(data_type{type_to_id<target_type>()});
+      return cudf::make_empty_column(type_to_id<target_type>());
     }
 
     if constexpr (op == aggregation::COLLECT_LIST) {
       return cudf::make_lists_column(
-        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(input), 0, {});
+        0, make_empty_column(type_to_id<offset_type>()), empty_like(input), 0, {});
     }
 
     return empty_like(input);
@@ -507,6 +582,11 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
 };
 
 template <typename InputType>
+struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
+  using type = DeviceRollingVariance<InputType>;
+};
+
+template <typename InputType>
 struct corresponding_rolling_operator<InputType, aggregation::Kind::LAG> {
   using type = DeviceRollingLag<InputType>;
 };
@@ -527,13 +607,22 @@ struct create_rolling_operator<
   InputType,
   op,
   std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported()>> {
-  template <
-    typename T                                                                     = InputType,
-    aggregation::Kind O                                                            = op,
-    std::enable_if_t<O != aggregation::Kind::LEAD && O != aggregation::Kind::LAG>* = nullptr>
+  template <typename T                                          = InputType,
+            aggregation::Kind O                                 = op,
+            std::enable_if_t<O != aggregation::Kind::LEAD && O != aggregation::Kind::LAG &&
+                             O != aggregation::Kind::VARIANCE>* = nullptr>
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
     return typename corresponding_rolling_operator<InputType, op>::type(min_periods);
+  }
+
+  template <typename T                                          = InputType,
+            aggregation::Kind O                                 = op,
+            std::enable_if_t<O == aggregation::Kind::VARIANCE>* = nullptr>
+  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  {
+    return DeviceRollingVariance<InputType>{
+      min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }
 
   template <typename T                                      = InputType,
@@ -630,6 +719,16 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     data_type, cudf::detail::collect_set_aggregation const&) override
   {
     return {};
+  }
+
+  // STD aggregations depends on VARIANCE aggregation. Each element is applied
+  // with square-root in the finalize() step.
+  std::vector<std::unique_ptr<aggregation>> visit(data_type,
+                                                  cudf::detail::std_aggregation const& agg) override
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_variance_aggregation(agg._ddof));
+    return aggs;
   }
 
   // LEAD and LAG have custom behaviors for non fixed-width types.
@@ -750,6 +849,12 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
       lists_column_view(collected_list->view()), agg._nulls_equal, agg._nans_equal, stream, mr);
   }
 
+  // perform the element-wise square root operation on result of VARIANCE
+  void visit(cudf::detail::std_aggregation const&) override
+  {
+    result = detail::unary_operation(intermediate->view(), unary_operator::SQRT, stream, mr);
+  }
+
   std::unique_ptr<column> get_result()
   {
     CUDF_EXPECTS(result != nullptr,
@@ -810,9 +915,9 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
  * @param output Output column device view
  * @param output_valid_count Output count of valid values
  * @param device_operator The operator used to perform a single window operation
- * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
+ * @param[in] preceding_window_begin Rolling window size iterator, accumulates from
  *                in_col[i-preceding_window] to in_col[i] inclusive
- * @param following_window_begin[in] Rolling window size iterator in the forward
+ * @param[in] following_window_begin Rolling window size iterator in the forward
  *                direction, accumulates from in_col[i] to
  *                in_col[i+following_window] inclusive
  */
@@ -840,12 +945,15 @@ __launch_bounds__(block_size) __global__
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
   while (i < input.size()) {
-    size_type preceding_window = preceding_window_begin[i];
-    size_type following_window = following_window_begin[i];
+    // to prevent overflow issues when computing bounds use int64_t
+    int64_t preceding_window = preceding_window_begin[i];
+    int64_t following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start       = min(input.size(), max(0, i - preceding_window + 1));
-    size_type end         = min(input.size(), max(0, i + following_window + 1));
+    size_type start = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(0L, i - preceding_window + 1)));
+    size_type end = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(0L, i + following_window + 1)));
     size_type start_index = min(start, end);
     size_type end_index   = max(start, end);
 

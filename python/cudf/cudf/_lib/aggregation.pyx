@@ -1,6 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 import numba
 import numpy as np
@@ -11,7 +11,11 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.types import NullHandling, cudf_to_np_types, np_to_cudf_types
+from cudf._lib.types import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+    NullHandling,
+)
 from cudf.utils import cudautils
 
 from cudf._lib.types cimport (
@@ -26,6 +30,7 @@ from cudf._lib.types import Interpolation
 
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
 
 import cudf
 
@@ -53,6 +58,22 @@ class AggregationKind(Enum):
     UNIQUE = libcudf_aggregation.aggregation.Kind.COLLECT_SET
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
+    CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
+
+
+class CorrelationType(IntEnum):
+    PEARSON = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.PEARSON
+    )
+    KENDALL = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.KENDALL
+    )
+    SPEARMAN = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.SPEARMAN
+    )
 
 
 cdef class Aggregation:
@@ -281,7 +302,7 @@ cdef class Aggregation:
         compiled_op = cudautils.compile_udf(op, type_signature)
         output_np_dtype = cudf.dtype(compiled_op[1])
         cpp_str = compiled_op[0].encode('UTF-8')
-        if output_np_dtype not in np_to_cudf_types:
+        if output_np_dtype not in SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
@@ -289,7 +310,7 @@ cdef class Aggregation:
         tid = (
             <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[output_np_dtype]
+                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[output_np_dtype]
                 )
             )
         )
@@ -314,6 +335,22 @@ cdef class Aggregation:
         agg.c_obj = move(
             libcudf_aggregation.make_count_aggregation[aggregation](
                 libcudf_types.null_policy.INCLUDE
+            ))
+        return agg
+
+    @classmethod
+    def corr(cls, method, libcudf_types.size_type min_periods):
+        cdef Aggregation agg = cls()
+        cdef libcudf_aggregation.correlation_type c_method = (
+            <libcudf_aggregation.correlation_type> (
+                <underlying_type_t_correlation_type> (
+                    CorrelationType[method.upper()]
+                )
+            )
+        )
+        agg.c_obj = move(
+            libcudf_aggregation.make_correlation_aggregation[aggregation](
+                c_method, min_periods
             ))
         return agg
 
@@ -379,6 +416,24 @@ cdef class RollingAggregation:
         return agg
 
     @classmethod
+    def var(cls, ddof=1):
+        cdef RollingAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_variance_aggregation[rolling_aggregation](
+                ddof
+            )
+        )
+        return agg
+
+    @classmethod
+    def std(cls, ddof=1):
+        cdef RollingAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_std_aggregation[rolling_aggregation](ddof)
+        )
+        return agg
+
+    @classmethod
     def count(cls, dropna=True):
         cdef libcudf_types.null_policy c_null_handling
         if dropna:
@@ -425,7 +480,7 @@ cdef class RollingAggregation:
         compiled_op = cudautils.compile_udf(op, type_signature)
         output_np_dtype = cudf.dtype(compiled_op[1])
         cpp_str = compiled_op[0].encode('UTF-8')
-        if output_np_dtype not in np_to_cudf_types:
+        if output_np_dtype not in SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(
                 "Result of window function has unsupported dtype {}"
                 .format(op[1])
@@ -433,7 +488,7 @@ cdef class RollingAggregation:
         tid = (
             <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
-                    np_to_cudf_types[output_np_dtype]
+                    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[output_np_dtype]
                 )
             )
         )
@@ -669,6 +724,24 @@ cdef class GroupbyAggregation:
             )
         )
         return agg
+
+    @classmethod
+    def corr(cls, method, libcudf_types.size_type min_periods):
+        cdef GroupbyAggregation agg = cls()
+        cdef libcudf_aggregation.correlation_type c_method = (
+            <libcudf_aggregation.correlation_type> (
+                <underlying_type_t_correlation_type> (
+                    CorrelationType[method.upper()]
+                )
+            )
+        )
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_correlation_aggregation[groupby_aggregation](
+                c_method, min_periods
+            ))
+        return agg
+
 
 cdef class GroupbyScanAggregation:
     """A Cython wrapper for groupby scan aggregations.

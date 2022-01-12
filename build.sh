@@ -18,7 +18,7 @@ ARGS=$*
 REPODIR=$(cd $(dirname $0); pwd)
 
 VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l] [--cmake-args=\"<args>\"]
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
@@ -165,11 +165,17 @@ fi
 
 if buildAll || hasArg libcudf; then
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES="
+        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=NATIVE"
         echo "Building for the architecture of the GPU in the system..."
     else
-        CUDF_CMAKE_CUDA_ARCHITECTURES=""
+        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=ALL"
         echo "Building for *ALL* supported GPU architectures..."
+    fi
+
+    # get the current count before the compile starts
+    FILES_IN_CCACHE=""
+    if [ -x "$(command -v ccache)" ]; then
+        FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
     fi
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
@@ -185,7 +191,19 @@ if buildAll || hasArg libcudf; then
 
     cd ${LIB_BUILD_DIR}
 
+    compile_start=$(date +%s)
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    compile_end=$(date +%s)
+    compile_total=$(( compile_end - compile_start ))
+
+    # Record build times
+    if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+        echo "Formatting build times"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
+        message="$FILES_IN_CCACHE <p>$PARALLEL_LEVEL parallel build time is $compile_total seconds"
+        echo "$message"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$message" > ${LIB_BUILD_DIR}/ninja_log.html
+    fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}

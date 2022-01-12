@@ -23,6 +23,8 @@
 
 #include <cudf/types.hpp>
 
+#include <thrust/optional.h>
+
 #include <map>
 #include <memory>
 #include <string>
@@ -85,9 +87,9 @@ enum class quote_style {
  * @brief Column statistics granularity type for parquet/orc writers
  */
 enum statistics_freq {
-  STATISTICS_NONE     = 0,  //!< No column statistics
-  STATISTICS_ROWGROUP = 1,  //!< Per-Rowgroup column statistics
-  STATISTICS_PAGE     = 2,  //!< Per-page column statistics
+  STATISTICS_NONE     = 0,  ///< No column statistics
+  STATISTICS_ROWGROUP = 1,  ///< Per-Rowgroup column statistics
+  STATISTICS_PAGE     = 2,  ///< Per-page column statistics
 };
 
 /**
@@ -126,34 +128,6 @@ struct table_metadata {
 };
 
 /**
- * @brief Derived class of table_metadata which includes flattened nullability information of input.
- *
- * This information is used as an optimization for chunked writes. If the caller leaves
- * column_nullable uninitialized, the writer code will assume the worst case : that all columns are
- * nullable.
- *
- * If the column_nullable field is not empty, it is expected that it has a length equal to the
- * number of columns in the flattened table being written.
- *
- * Flattening refers to the flattening of nested columns. For list columns, the number of values
- * expected in the nullability vector is equal to the depth of the nesting. e.g. for a table of
- * three columns of types: {int, list<double>, float}, the nullability vector contains the values:
- *
- * |Index| Nullability of                         |
- * |-----|----------------------------------------|
- * |  0  | int column                             |
- * |  1  | Level 0 of list column (list itself)   |
- * |  2  | Level 1 of list column (double values) |
- * |  3  | float column                           |
- *
- * In the case where column nullability is known, pass `true` if the corresponding column could
- * contain nulls in one or more subtables to be written, otherwise `false`.
- */
-struct table_metadata_with_nullability : public table_metadata {
-  std::vector<bool> column_nullable;  //!< Per-column nullability information.
-};
-
-/**
  * @brief Table with table metadata used by io readers to return the metadata by value
  */
 struct table_with_metadata {
@@ -177,59 +151,274 @@ struct host_buffer {
  * @brief Source information for read interfaces
  */
 struct source_info {
-  io_type type = io_type::FILEPATH;
-  std::vector<std::string> filepaths;
-  std::vector<host_buffer> buffers;
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> files;
-  std::vector<cudf::io::datasource*> user_sources;
+  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;
 
   source_info() = default;
 
   explicit source_info(std::vector<std::string> const& file_paths)
-    : type(io_type::FILEPATH), filepaths(file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
   {
   }
   explicit source_info(std::string const& file_path)
-    : type(io_type::FILEPATH), filepaths({file_path})
+    : _type(io_type::FILEPATH), _filepaths({file_path})
   {
   }
 
   explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : type(io_type::HOST_BUFFER), buffers(host_buffers)
+    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
   {
   }
   explicit source_info(const char* host_data, size_t size)
-    : type(io_type::HOST_BUFFER), buffers({{host_data, size}})
+    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
   {
   }
 
   explicit source_info(std::vector<cudf::io::datasource*> const& sources)
-    : type(io_type::USER_IMPLEMENTED), user_sources(sources)
+    : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
   {
   }
   explicit source_info(cudf::io::datasource* source)
-    : type(io_type::USER_IMPLEMENTED), user_sources({source})
+    : _type(io_type::USER_IMPLEMENTED), _user_sources({source})
   {
   }
+
+  auto type() const { return _type; }
+  auto const& filepaths() const { return _filepaths; }
+  auto const& buffers() const { return _buffers; }
+  auto const& files() const { return _files; }
+  auto const& user_sources() const { return _user_sources; }
+
+ private:
+  io_type _type = io_type::FILEPATH;
+  std::vector<std::string> _filepaths;
+  std::vector<host_buffer> _buffers;
+  std::vector<cudf::io::datasource*> _user_sources;
 };
 
 /**
  * @brief Destination information for write interfaces
  */
 struct sink_info {
-  io_type type = io_type::VOID;
-  std::string filepath;
-  std::vector<char>* buffer      = nullptr;
-  cudf::io::data_sink* user_sink = nullptr;
-
   sink_info() = default;
+  sink_info(size_t num_sinks) : _type(io_type::VOID), _num_sinks(num_sinks) {}
 
-  explicit sink_info(const std::string& file_path) : type(io_type::FILEPATH), filepath(file_path) {}
+  explicit sink_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
+  {
+  }
+  explicit sink_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
 
-  explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffer(buffer) {}
+  explicit sink_info(std::vector<std::vector<char>*> const& buffers)
+    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
+  {
+  }
+  explicit sink_info(std::vector<char>* buffer) : _type(io_type::HOST_BUFFER), _buffers({buffer}) {}
 
-  explicit sink_info(class cudf::io::data_sink* user_sink_)
-    : type(io_type::USER_IMPLEMENTED), user_sink(user_sink_)
+  explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
+    : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
+  {
+  }
+  explicit sink_info(class cudf::io::data_sink* user_sink)
+    : _type(io_type::USER_IMPLEMENTED), _user_sinks({user_sink})
+  {
+  }
+
+  auto type() const { return _type; }
+  auto num_sinks() const { return _num_sinks; }
+  auto const& filepaths() const { return _filepaths; }
+  auto const& buffers() const { return _buffers; }
+  auto const& user_sinks() const { return _user_sinks; }
+
+ private:
+  io_type _type     = io_type::VOID;
+  size_t _num_sinks = 1;
+  std::vector<std::string> _filepaths;
+  std::vector<std::vector<char>*> _buffers;
+  std::vector<cudf::io::data_sink*> _user_sinks;
+};
+
+class table_input_metadata;
+
+class column_in_metadata {
+  friend table_input_metadata;
+  std::string _name = "";
+  thrust::optional<bool> _nullable;
+  bool _list_column_is_map  = false;
+  bool _use_int96_timestamp = false;
+  // bool _output_as_binary = false;
+  thrust::optional<uint8_t> _decimal_precision;
+  std::vector<column_in_metadata> children;
+
+ public:
+  column_in_metadata() = default;
+  column_in_metadata(std::string_view name) : _name{name} {}
+  /**
+   * @brief Get the children of this column metadata
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& add_child(column_in_metadata const& child)
+  {
+    children.push_back(child);
+    return *this;
+  }
+
+  /**
+   * @brief Set the name of this column
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& set_name(std::string const& name)
+  {
+    _name = name;
+    return *this;
+  }
+
+  /**
+   * @brief Set the nullability of this column
+   *
+   * Only valid in case of chunked writes. In single writes, this option is ignored.
+   *
+   * @return column_in_metadata&
+   */
+  column_in_metadata& set_nullability(bool nullable)
+  {
+    _nullable = nullable;
+    return *this;
+  }
+
+  /**
+   * @brief Specify that this list column should be encoded as a map in the written parquet file
+   *
+   * The column must have the structure list<struct<key, value>>. This option is invalid otherwise
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& set_list_column_as_map()
+  {
+    _list_column_is_map = true;
+    return *this;
+  }
+
+  /**
+   * @brief Specifies whether this timestamp column should be encoded using the deprecated int96
+   * physical type. Only valid for the following column types:
+   * timestamp_s, timestamp_ms, timestamp_us, timestamp_ns
+   *
+   * @param req True = use int96 physical type. False = use int64 physical type
+   * @return this for chaining
+   */
+  column_in_metadata& set_int96_timestamps(bool req)
+  {
+    _use_int96_timestamp = req;
+    return *this;
+  }
+
+  /**
+   * @brief Set the decimal precision of this column. Only valid if this column is a decimal
+   * (fixed-point) type
+   *
+   * @param precision The integer precision to set for this decimal column
+   * @return this for chaining
+   */
+  column_in_metadata& set_decimal_precision(uint8_t precision)
+  {
+    _decimal_precision = precision;
+    return *this;
+  }
+
+  /**
+   * @brief Get reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  column_in_metadata& child(size_type i) { return children[i]; }
+
+  /**
+   * @brief Get const reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  column_in_metadata const& child(size_type i) const { return children[i]; }
+
+  /**
+   * @brief Get the name of this column
+   */
+  std::string get_name() const { return _name; }
+
+  /**
+   * @brief Get whether nullability has been explicitly set for this column.
+   */
+  bool is_nullability_defined() const { return _nullable.has_value(); }
+
+  /**
+   * @brief Gets the explicitly set nullability for this column.
+   * @throws If nullability is not explicitly defined for this column.
+   *         Check using `is_nullability_defined()` first.
+   */
+  bool nullable() const { return _nullable.value(); }
+
+  /**
+   * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
+   */
+  bool is_map() const { return _list_column_is_map; }
+
+  /**
+   * @brief Get whether to encode this timestamp column using deprecated int96 physical type
+   */
+  bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
+
+  /**
+   * @brief Get whether precision has been set for this decimal column
+   */
+  bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
+
+  /**
+   * @brief Get the decimal precision that was set for this column.
+   * @throws If decimal precision was not set for this column.
+   *         Check using `is_decimal_precision_set()` first.
+   */
+  uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+
+  /**
+   * @brief Get the number of children of this column
+   */
+  size_type num_children() const { return children.size(); }
+};
+
+class table_input_metadata {
+ public:
+  table_input_metadata() = default;  // Required by cython
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_view.
+   *
+   * The constructed table_input_metadata has the same structure as the passed table_view
+   *
+   * @param table The table_view to construct metadata for
+   */
+  table_input_metadata(table_view const& table);
+
+  std::vector<column_in_metadata> column_metadata;
+};
+
+/**
+ * @brief Information used while writing partitioned datasets
+ *
+ * This information defines the slice of an input table to write to file. In partitioned dataset
+ * writing, one partition_info struct defines one partition and corresponds to one output file
+ */
+struct partition_info {
+  size_type start_row;
+  size_type num_rows;
+
+  partition_info() = default;
+  partition_info(size_type start_row, size_type num_rows) : start_row(start_row), num_rows(num_rows)
   {
   }
 };

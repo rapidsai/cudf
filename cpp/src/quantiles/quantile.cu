@@ -16,12 +16,13 @@
 
 #include <quantiles/quantiles_util.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -30,6 +31,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
 
 #include <memory>
 #include <vector>
@@ -76,14 +80,14 @@ struct quantile_functor {
     }
 
     auto d_input  = column_device_view::create(input, stream);
-    auto d_output = mutable_column_device_view::create(output->mutable_view());
+    auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
-    auto q_device = cudf::detail::make_device_uvector_sync(q);
+    auto q_device = cudf::detail::make_device_uvector_sync(q, stream);
 
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
         thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
-      thrust::transform(rmm::exec_policy(),
+      thrust::transform(rmm::exec_policy(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
@@ -93,7 +97,7 @@ struct quantile_functor {
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
-      thrust::transform(rmm::exec_policy(),
+      thrust::transform(rmm::exec_policy(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),

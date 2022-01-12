@@ -13,8 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_range.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -81,7 +84,9 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            std::move(offsets),
                            std::move(child),
                            cudf::UNKNOWN_NULL_COUNT,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

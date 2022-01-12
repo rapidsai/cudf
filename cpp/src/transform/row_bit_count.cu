@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -205,7 +206,7 @@ struct flatten_functor {
                   thrust::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
-    size_type const branch_depth_start = cur_branch_depth;
+    auto const branch_depth_start = cur_branch_depth;
     auto const is_list_inside_struct =
       parent_index && out[parent_index.value()].type().id() == type_id::STRUCT;
     if (is_list_inside_struct) {
@@ -408,7 +409,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
   if (tid >= num_rows) { return; }
 
   // branch stack. points to the last list prior to branching.
-  row_span* my_branch_stack = thread_branch_stacks + (tid * max_branch_depth);
+  row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
   // current row span - always starts at 1 row.
@@ -468,7 +469,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::mr::device_memory_resource* mr)
 {
   // no rows
-  if (t.num_rows() <= 0) { return cudf::make_empty_column(data_type{type_id::INT32}); }
+  if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
 
   // flatten the hierarchy and determine some information about it.
   std::vector<cudf::column_view> cols;
@@ -496,12 +497,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
 
   // move stack info to the gpu
-  rmm::device_uvector<column_info> d_info(info.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(d_info.data(),
-                           info.data(),
-                           sizeof(column_info) * info.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<column_info> d_info = cudf::detail::make_device_uvector_async(info, stream);
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer

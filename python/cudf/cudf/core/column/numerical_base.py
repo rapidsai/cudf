@@ -77,10 +77,13 @@ class NumericalBaseColumn(ColumnBase):
             "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
         )
 
+    def _can_return_nan(self, skipna: bool = None) -> bool:
+        return not skipna and self.has_nulls()
+
     def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
 
-        if len(self) == 0 or (not skipna and self.has_nulls):
+        if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()  # type: ignore
@@ -105,7 +108,7 @@ class NumericalBaseColumn(ColumnBase):
     def skew(self, skipna: bool = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
-        if len(self) == 0 or (not skipna and self.has_nulls):
+        if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()  # type: ignore
@@ -128,7 +131,7 @@ class NumericalBaseColumn(ColumnBase):
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
-        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
+        if isinstance(q, Number) or cudf.api.types.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
                 raise ValueError(
@@ -148,7 +151,7 @@ class NumericalBaseColumn(ColumnBase):
     def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
-        if not skipna and self.has_nulls:
+        if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         # enforce linear in case the default ever changes
@@ -194,8 +197,7 @@ class NumericalBaseColumn(ColumnBase):
     def round(
         self, decimals: int = 0, how: str = "half_even"
     ) -> NumericalBaseColumn:
-        """Round the values in the Column to the given number of decimals.
-        """
+        """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 
     def _apply_scan_op(self, op: str) -> ColumnBase:

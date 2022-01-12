@@ -23,6 +23,7 @@ Properties
 
    Index.empty
    Index.gpu_values
+   Index.has_duplicates
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
@@ -46,6 +47,14 @@ Modifying and computations
    Index.drop_duplicates
    Index.equals
    Index.factorize
+   Index.is_boolean
+   Index.is_categorical
+   Index.is_floating
+   Index.is_integer
+   Index.is_interval
+   Index.is_mixed
+   Index.is_numeric
+   Index.is_object
    Index.min
    Index.max
    Index.rename
@@ -84,9 +93,15 @@ Conversion
    :toctree: api/
 
    Index.astype
+   Index.to_array
+   Index.to_arrow
    Index.to_list
    Index.to_series
    Index.to_frame
+   Index.to_pandas
+   Index.to_dlpack
+   Index.from_pandas
+   Index.from_arrow
 
 Sorting
 ~~~~~~~
@@ -110,6 +125,8 @@ Combining / joining / set operations
    :toctree: api/
 
    Index.append
+   Index.union
+   Index.intersection
    Index.join
    Index.difference
 
@@ -249,7 +266,13 @@ Time/date components
    DatetimeIndex.minute
    DatetimeIndex.second
    DatetimeIndex.dayofweek
+   DatetimeIndex.dayofyear
+   DatetimeIndex.day_of_year
    DatetimeIndex.weekday
+   DatetimeIndex.is_leap_year
+   DatetimeIndex.quarter
+   DatetimeIndex.isocalendar
+
 
 Time-specific operations
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -257,6 +280,8 @@ Time-specific operations
    :toctree: api/
 
    DatetimeIndex.round
+   DatetimeIndex.ceil
+   DatetimeIndex.floor
 
 Conversion
 ~~~~~~~~~~

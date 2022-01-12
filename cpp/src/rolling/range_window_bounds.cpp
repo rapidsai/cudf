@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include "range_window_bounds_detail.hpp"
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
-#include "range_window_bounds_detail.hpp"
 
 namespace cudf {
 namespace {
@@ -69,10 +69,10 @@ range_window_bounds range_window_bounds::unbounded(data_type type)
   return range_window_bounds(true, make_default_constructed_scalar(type));
 }
 
-range_window_bounds range_window_bounds::get(scalar const& scalar_)
+range_window_bounds range_window_bounds::get(scalar const& boundary)
 {
   return range_window_bounds{
-    false, cudf::type_dispatcher(scalar_.type(), range_scalar_constructor{}, scalar_)};
+    false, cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};
 }
 
 }  // namespace cudf

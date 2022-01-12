@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <string>
@@ -167,14 +167,19 @@ struct string_dictionaries {
 };
 
 /**
+ * @brief Maximum size of stripes in the output file.
+ */
+struct stripe_size_limits {
+  size_t bytes;
+  size_type rows;
+};
+
+/**
  * @brief Implementation for ORC writer
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
-
-  // ORC datasets are divided into fixed-size, independent stripes
-  static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
 
   // ORC compresses streams into independent chunks
   static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
@@ -263,23 +268,6 @@ class writer::impl {
                              std::map<uint32_t, size_t> const& decimal_column_sizes);
 
   /**
-   * @brief Encodes the input columns into streams.
-   *
-   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
-   * @param dict_data Dictionary data memory
-   * @param dict_index Dictionary index memory
-   * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param segmentation stripe and rowgroup ranges
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Encoded data and per-chunk stream descriptors
-   */
-  encoded_data encode_columns(orc_table_view const& orc_table,
-                              string_dictionaries&& dictionaries,
-                              encoder_decimal_info&& dec_chunk_sizes,
-                              file_segmentation const& segmentation,
-                              orc_streams const& streams);
-
-  /**
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams.
    *
@@ -342,13 +330,14 @@ class writer::impl {
    * @param[in,out] stream_out Temporary host output buffer
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
+   * @return An std::future that should be synchronized to ensure the writing is complete
    */
-  void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::encoder_chunk_streams const& enc_stream,
-                         uint8_t const* compressed_data,
-                         uint8_t* stream_out,
-                         StripeInformation* stripe,
-                         orc_streams* streams);
+  std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
+                                      gpu::encoder_chunk_streams const& enc_stream,
+                                      uint8_t const* compressed_data,
+                                      uint8_t* stream_out,
+                                      StripeInformation* stripe,
+                                      orc_streams* streams);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
@@ -360,10 +349,10 @@ class writer::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
-  size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_          = default_row_index_stride;
+  stripe_size_limits max_stripe_size;
+  size_type row_index_stride;
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
@@ -375,14 +364,13 @@ class writer::impl {
   cudf::io::orc::Metadata md;
   // current write position for rowgroups/chunks
   size_t current_chunk_offset;
-  // optional user metadata
-  table_metadata const* user_metadata = nullptr;
-  // only used in the write_chunked() case. copied from the (optionally) user supplied
-  // argument to write_chunked_begin()
-  table_metadata_with_nullability user_metadata_with_nullability;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
+  // optional user metadata
+  std::unique_ptr<table_input_metadata> table_meta;
+  // optional user metadata
+  std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
 

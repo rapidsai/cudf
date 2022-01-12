@@ -116,7 +116,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
   // returns a column that does this work correctly.
   size_type null_count = column.null_count();
   if (null_count > 0) {
-    auto list_cdv = column_device_view::create(column);
+    auto list_cdv = column_device_view::create(column, stream);
     auto validity = cudf::detail::valid_if(
       gather_map_begin,
       gather_map_begin + gd.gather_map_size,
@@ -150,7 +150,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count = list.null_count();
   if (null_count > 0) {
-    auto list_cdv = column_device_view::create(list.parent());
+    auto list_cdv = column_device_view::create(list.parent(), stream);
     auto validity = cudf::detail::valid_if(
       gather_map_begin,
       gather_map_begin + gather_map_size,
@@ -176,7 +176,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                              std::move(child_gd.offsets),
                              std::move(child),
                              null_count,
-                             std::move(null_mask));
+                             std::move(null_mask),
+                             stream,
+                             mr);
   }
 
   // it's a leaf.  do a regular gather
@@ -187,7 +189,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            std::move(child_gd.offsets),
                            std::move(child),
                            null_count,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

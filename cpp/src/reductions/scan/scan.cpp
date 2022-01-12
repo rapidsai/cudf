@@ -31,6 +31,18 @@ std::unique_ptr<column> scan(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
+
+  if (agg->kind == aggregation::RANK) {
+    CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
+                 "Unsupported rank aggregation operator for exclusive scan");
+    return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
+  }
+  if (agg->kind == aggregation::DENSE_RANK) {
+    CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
+                 "Unsupported dense rank aggregation operator for exclusive scan");
+    return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+  }
+
   return inclusive == scan_type::EXCLUSIVE
            ? detail::scan_exclusive(input, agg, null_handling, rmm::cuda_stream_default, mr)
            : detail::scan_inclusive(input, agg, null_handling, rmm::cuda_stream_default, mr);

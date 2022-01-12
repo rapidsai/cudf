@@ -47,8 +47,8 @@ namespace {
  * @param start First character position to start the search.
  * @param stop Last character position (exclusive) to end the search.
  * @param pfn Functor used for locating `target` in each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 template <typename FindFunction>
@@ -60,7 +60,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
   if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
   //
@@ -172,8 +172,8 @@ namespace {
  * @param strings Column of strings to check for target.
  * @param target UTF-8 encoded string to check in strings column.
  * @param pfn Returns bool value if target is found in the given string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL column.
  */
 template <typename BoolFunction>
@@ -184,9 +184,9 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
+  if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
   {
     auto const true_scalar = make_fixed_width_scalar<bool>(true, stream);
@@ -233,8 +233,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
  * @param strings Column of strings to check for `targets[i]`.
  * @param targets Column of strings to be checked in `strings[i]``.
  * @param pfn Returns bool value if target is found in the given string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL column.
  */
 template <typename BoolFunction>
@@ -244,7 +244,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::BOOL8});
+  if (strings.is_empty()) return make_empty_column(type_id::BOOL8);
 
   CUDF_EXPECTS(targets.size() == strings.size(),
                "strings and targets column must be the same size");

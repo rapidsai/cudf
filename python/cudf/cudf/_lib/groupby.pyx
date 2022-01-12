@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from collections import defaultdict
 
@@ -7,7 +7,7 @@ from pandas.core.groupby.groupby import DataError
 
 import rmm
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_interval_dtype,
@@ -26,7 +26,7 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport table_view_from_table
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -54,7 +54,7 @@ _CATEGORICAL_AGGS = {"COUNT", "SIZE", "NUNIQUE", "UNIQUE"}
 _STRING_AGGS = {"COUNT", "SIZE", "MAX", "MIN", "NUNIQUE", "NTH", "COLLECT",
                 "UNIQUE"}
 _LIST_AGGS = {"COLLECT"}
-_STRUCT_AGGS = set()
+_STRUCT_AGGS = {"CORRELATION"}
 _INTERVAL_AGGS = set()
 _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
                  "NTH", "COLLECT"}
@@ -66,7 +66,7 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, Table keys, bool dropna=True, *args, **kwargs):
+    def __cinit__(self, keys, bool dropna=True, *args, **kwargs):
         cdef libcudf_types.null_policy c_null_handling
 
         if dropna:
@@ -74,7 +74,7 @@ cdef class GroupBy:
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        cdef table_view keys_view = keys.view()
+        cdef table_view keys_view = table_view_from_table(keys)
 
         with nogil:
             self.c_obj.reset(
@@ -84,13 +84,13 @@ cdef class GroupBy:
                 )
             )
 
-    def __init__(self, Table keys, bool dropna=True):
+    def __init__(self, keys, bool dropna=True):
         self.keys = keys
         self.dropna = dropna
 
-    def groups(self, Table values):
+    def groups(self, values):
 
-        cdef table_view values_view = values.view()
+        cdef table_view values_view = table_view_from_table(values)
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
@@ -99,10 +99,12 @@ cdef class GroupBy:
         c_grouped_values = move(c_groups.values)
         c_group_offsets = c_groups.offsets
 
-        grouped_keys = cudf.Index._from_data(*data_from_unique_ptr(
-            move(c_grouped_keys),
-            column_names=range(c_grouped_keys.get()[0].num_columns())
-        ))
+        grouped_keys = cudf.core.index._index_from_data(
+            *data_from_unique_ptr(
+                move(c_grouped_keys),
+                column_names=range(c_grouped_keys.get()[0].num_columns())
+            )
+        )
         grouped_values = data_from_unique_ptr(
             move(c_grouped_values),
             index_names=values._index_names,
@@ -110,7 +112,7 @@ cdef class GroupBy:
         )
         return grouped_keys, grouped_values, c_group_offsets
 
-    def aggregate_internal(self, Table values, aggregations):
+    def aggregate_internal(self, values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef libcudf_groupby.aggregation_request c_agg_request
@@ -186,9 +188,10 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return result_data, cudf.Index._from_data(grouped_keys)
+        return result_data, cudf.core.index._index_from_data(
+            grouped_keys)
 
-    def scan_internal(self, Table values, aggregations):
+    def scan_internal(self, values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.scan_request] c_agg_requests
         cdef libcudf_groupby.scan_request c_agg_request
@@ -264,15 +267,16 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return result_data, cudf.Index._from_data(grouped_keys)
+        return result_data, cudf.core.index._index_from_data(
+            grouped_keys)
 
-    def aggregate(self, Table values, aggregations):
+    def aggregate(self, values, aggregations):
         """
         Parameters
         ----------
-        values : Table
+        values : Frame
         aggregations
-            A dict mapping column names in `Table` to a list of aggregations
+            A dict mapping column names in `Frame` to a list of aggregations
             to perform on that column
 
             Each aggregation may be specified as:
@@ -281,15 +285,15 @@ cdef class GroupBy:
 
         Returns
         -------
-        Table of aggregated values
+        Frame of aggregated values
         """
         if _is_all_scan_aggregate(aggregations):
             return self.scan_internal(values, aggregations)
 
         return self.aggregate_internal(values, aggregations)
 
-    def shift(self, Table values, int periods, list fill_values):
-        cdef table_view view = values.view()
+    def shift(self, values, int periods, list fill_values):
+        cdef table_view view = table_view_from_table(values)
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
@@ -311,10 +315,12 @@ cdef class GroupBy:
                 self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
-        grouped_keys = cudf.Index._from_data(*data_from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
-        ))
+        grouped_keys = cudf.core.index._index_from_data(
+            *data_from_unique_ptr(
+                move(c_result.first),
+                column_names=self.keys._column_names
+            )
+        )
 
         shifted, _ = data_from_unique_ptr(
             move(c_result.second), column_names=values._column_names
@@ -322,8 +328,8 @@ cdef class GroupBy:
 
         return shifted, grouped_keys
 
-    def replace_nulls(self, Table values, object method):
-        cdef table_view val_view = values.view()
+    def replace_nulls(self, values, object method):
+        cdef table_view val_view = table_view_from_table(values)
         cdef pair[unique_ptr[table], unique_ptr[table]] c_result
         cdef replace_policy policy = (
             replace_policy.PRECEDING

@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include "file_io_utilities.hpp"
+
 #include <cudf/io/datasource.hpp>
+#include <cudf/utilities/error.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-#include <cudf/utilities/error.hpp>
-#include "file_io_utilities.hpp"
 
 namespace cudf {
 namespace io {
@@ -239,7 +240,7 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
                                                size_t size)
 {
 #ifdef CUFILE_FOUND
-  if (detail::cufile_config::instance()->is_required()) {
+  if (detail::cufile_integration::is_always_enabled()) {
     // avoid mmap as GDS is expected to be used for most reads
     return std::make_unique<direct_read_source>(filepath.c_str());
   }

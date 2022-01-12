@@ -10,15 +10,14 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.extract cimport extract as cpp_extract
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def extract(Column source_strings, object pattern):
     """
-    Returns a Table which contains extracted capture groups provided in
+    Returns data which contains extracted capture groups provided in
     `pattern` for all `source_strings`.
-    The returning Table contains one row for each subject string,
+    The returning data contains one row for each subject string,
     and one column for each group.
     """
     cdef unique_ptr[table] c_result

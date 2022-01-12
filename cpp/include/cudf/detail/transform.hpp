@@ -78,6 +78,17 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @copydoc cudf::one_hot_encode
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
+  column_view const& input,
+  column_view const& categories,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @copydoc cudf::mask_to_bools
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.

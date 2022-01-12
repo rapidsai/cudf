@@ -34,7 +34,7 @@ struct groupby_median_test : public cudf::test::BaseFixture {
 using K               = int32_t;
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-TYPED_TEST_CASE(groupby_median_test, supported_types);
+TYPED_TEST_SUITE(groupby_median_test, supported_types);
 
 TYPED_TEST(groupby_median_test, basic)
 {

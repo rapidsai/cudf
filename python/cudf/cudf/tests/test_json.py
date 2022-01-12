@@ -190,7 +190,7 @@ def test_json_lines_basic(json_input, engine):
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
-        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -209,7 +209,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
-        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
 @pytest.mark.parametrize("engine", ["auto", "cudf"])
@@ -240,7 +240,7 @@ def test_json_read_directory(tmpdir, json_input, engine):
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
-        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
 def test_json_lines_byte_range(json_input):
@@ -340,9 +340,9 @@ def test_json_bool_values():
 
     # types should be ['bool', 'int64']
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
-    np.testing.assert_array_equal(pd_df[0], cu_df["0"].to_array())
+    np.testing.assert_array_equal(pd_df[0], cu_df["0"].to_numpy())
     # boolean values should be converted to 0/1
-    np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_array())
+    np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
     cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
@@ -364,15 +364,9 @@ def test_json_null_literal(buffer):
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
     np.testing.assert_array_equal(
-        df["0"].to_array(fillna=np.nan), [1.0, np.nan]
+        df["0"].to_numpy(na_value=np.nan), [1.0, np.nan]
     )
-    np.testing.assert_array_equal(
-        df["1"].to_array(fillna=np.nan),
-        [
-            df["1"]._column.default_na_value(),
-            df["1"]._column.default_na_value(),
-        ],
-    )
+    np.testing.assert_array_equal(df["1"].to_numpy(na_value=0), [0, 0])
 
 
 def test_json_bad_protocol_string():

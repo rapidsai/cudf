@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
+#include "ColumnViewJni.hpp"
 #include <numeric>
+
+#include <jni.h>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
@@ -26,6 +29,7 @@
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
@@ -60,17 +64,16 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/transform.hpp>
+#include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <map_lookup.hpp>
-
-#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
-#include "jni.h"
 #include "jni_utils.hpp"
+#include "map_lookup.hpp"
 
 namespace {
 
@@ -288,6 +291,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(JNIEnv *env, jclass clazz,
+                                                                        jlong input_column,
+                                                                        jlong percentiles_column) {
+  JNI_NULL_CHECK(env, input_column, "input_column native handle is null", 0);
+  JNI_NULL_CHECK(env, percentiles_column, "percentiles_column native handle is null", 0);
+  try {
+    using namespace cudf;
+    using tdigest_column_view = cudf::tdigest::tdigest_column_view;
+    jni::auto_set_device(env);
+    auto const tdigest_view =
+        tdigest_column_view{structs_column_view{*reinterpret_cast<column_view *>(input_column)}};
+    auto const p_percentiles = reinterpret_cast<column_view *>(percentiles_column);
+    auto result = percentile_approx(tdigest_view, *p_percentiles);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quantile(JNIEnv *env, jclass clazz,
                                                                 jlong input_column,
                                                                 jint quantile_method,
@@ -395,6 +416,84 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv *env, jclass,
+                                                                          jlong column_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const *cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::drop_list_duplicates(lcv);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKeysValues(
+    JNIEnv *env, jclass, jlong keys_vals_handle) {
+  JNI_NULL_CHECK(env, keys_vals_handle, "keys_vals_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
+    CUDF_EXPECTS(input_cv->offset() == 0, "Input column has non-zero offset.");
+    CUDF_EXPECTS(input_cv->type().id() == cudf::type_id::LIST,
+                 "Input column is not a lists column.");
+
+    // Extract list offsets and a column of struct<keys, values> from the input lists column.
+    auto const lists_keys_vals = cudf::lists_column_view(*input_cv);
+    auto const keys_vals = lists_keys_vals.get_sliced_child(rmm::cuda_stream_default);
+    CUDF_EXPECTS(keys_vals.type().id() == cudf::type_id::STRUCT,
+                 "Input column has child that is not a structs column.");
+    CUDF_EXPECTS(keys_vals.num_children() == 2,
+                 "Input column has child that does not have 2 children.");
+
+    auto const lists_offsets = lists_keys_vals.offsets();
+    auto const structs_keys_vals = cudf::structs_column_view(keys_vals);
+
+    // Assemble a lists_column_view from the existing data (offsets + child).
+    // This will not copy any data, just create a view, for performance reason.
+    auto const make_lists_view = [&input_cv](auto const &offsets, auto const &child) {
+      return cudf::lists_column_view(
+          cudf::column_view(cudf::data_type{input_cv->type()}, input_cv->size(), nullptr,
+                            input_cv->null_mask(), input_cv->null_count(), 0, {offsets, child}));
+    };
+
+    // Extract keys and values lists columns from the input lists of structs column.
+    auto const keys = make_lists_view(lists_offsets, structs_keys_vals.child(0));
+    auto const vals = make_lists_view(lists_offsets, structs_keys_vals.child(1));
+
+    // Apache Spark desires to keep the last duplicate element.
+    auto [out_keys, out_vals] =
+        cudf::lists::drop_list_duplicates(keys, vals, cudf::duplicate_keep_option::KEEP_LAST);
+
+    // Release the contents of the outputs.
+    auto out_keys_content = out_keys->release();
+    auto out_vals_content = out_vals->release();
+
+    // Total number of elements in the child column.
+    // This should be the same for the out_vals column.
+    auto const out_child_size =
+        out_keys_content.children[cudf::lists_column_view::child_column_index]->size();
+
+    // Assemble a lists column of struct<out_keys, out_vals> for the final output.
+    auto out_structs_members = std::vector<std::unique_ptr<cudf::column>>();
+    out_structs_members.emplace_back(
+        std::move(out_keys_content.children[cudf::lists_column_view::child_column_index]));
+    out_structs_members.emplace_back(
+        std::move(out_vals_content.children[cudf::lists_column_view::child_column_index]));
+    auto &out_offsets = out_keys_content.children[cudf::lists_column_view::offsets_column_index];
+
+    auto out_structs =
+        cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0, {});
+    auto result = cudf::make_lists_column(input_cv->size(), std::move(out_offsets),
+                                          std::move(out_structs), 0, {});
+
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env, jclass,
                                                                     jlong column_view,
                                                                     jlong lookup_key) {
@@ -412,6 +511,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsNulls(JNIEnv *env, jclass,
+                                                                         jlong column_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto cv = reinterpret_cast<cudf::column_view *>(column_view);
+    auto lcv = cudf::lists_column_view{*cv};
+    return reinterpret_cast<jlong>(cudf::lists::contains_nulls(lcv).release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv *env, jclass,
                                                                           jlong column_view,
                                                                           jlong lookup_key_cv) {
@@ -425,6 +536,44 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv
 
     std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_cv);
     return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listIndexOfScalar(JNIEnv *env, jclass,
+                                                                         jlong column_view,
+                                                                         jlong lookup_key,
+                                                                         jboolean is_find_first) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const lcv = cudf::lists_column_view{*cv};
+    auto const lookup_key_scalar = reinterpret_cast<cudf::scalar const *>(lookup_key);
+    auto const find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
+                                             cudf::lists::duplicate_find_option::FIND_LAST;
+    auto result = cudf::lists::index_of(lcv, *lookup_key_scalar, find_option);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listIndexOfColumn(JNIEnv *env, jclass,
+                                                                         jlong column_view,
+                                                                         jlong lookup_keys,
+                                                                         jboolean is_find_first) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_keys, "lookup key column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const lcv = cudf::lists_column_view{*cv};
+    auto const lookup_key_column = reinterpret_cast<cudf::column_view const *>(lookup_keys);
+    auto const find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
+                                             cudf::lists::duplicate_find_option::FIND_LAST;
+    auto result = cudf::lists::index_of(lcv, *lookup_key_column, find_option);
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
@@ -817,7 +966,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::INT64:
         case cudf::type_id::UINT64: result = cudf::strings::from_integers(*column); break;
         case cudf::type_id::DECIMAL32:
-        case cudf::type_id::DECIMAL64: result = cudf::strings::from_fixed_point(*column); break;
+        case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128: result = cudf::strings::from_fixed_point(*column); break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
@@ -837,6 +987,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
           break;
         case cudf::type_id::DECIMAL32:
         case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128:
           result = cudf::strings::to_fixed_point(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
@@ -1457,16 +1608,35 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
     switch (op) {
-      case cudf::binary_operator::BITWISE_AND:
-        copy->set_null_mask(cudf::bitmask_and(*input_table));
+      case cudf::binary_operator::BITWISE_AND: {
+        auto [new_bitmask, null_count] = cudf::bitmask_and(*input_table);
+        copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
-      case cudf::binary_operator::BITWISE_OR:
-        copy->set_null_mask(cudf::bitmask_or(*input_table));
+      }
+      case cudf::binary_operator::BITWISE_OR: {
+        auto [new_bitmask, null_count] = cudf::bitmask_or(*input_table);
+        copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
+      }
       default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
     }
 
     return reinterpret_cast<jlong>(copy.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyWithBooleanColumnAsValidity(
+    JNIEnv *env, jobject j_object, jlong exemplar_handle, jlong validity_column_handle) {
+  JNI_NULL_CHECK(env, exemplar_handle, "ColumnView handle is null", 0);
+  JNI_NULL_CHECK(env, validity_column_handle, "Validity column handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+
+    auto const exemplar = *reinterpret_cast<cudf::column_view *>(exemplar_handle);
+    auto const validity = *reinterpret_cast<cudf::column_view *>(validity_column_handle);
+    auto deep_copy = cudf::jni::new_column_with_boolean_column_as_validity(exemplar, validity);
+    return reinterpret_cast<jlong>(deep_copy.release());
   }
   CATCH_STD(env, 0);
 }
@@ -1915,6 +2085,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv *env, jo
     cudf::jni::auto_set_device(env);
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
     std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFixedPoint(JNIEnv *env, jobject,
+                                                                    jlong handle, jint j_dtype,
+                                                                    jint scale) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::data_type fp_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_fixed_point(*view, fp_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0)

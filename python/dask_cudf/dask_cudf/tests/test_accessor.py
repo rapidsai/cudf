@@ -438,3 +438,79 @@ def test_sorting(data, ascending, na_position, ignore_index):
         .reset_index(drop=True)
     )
     assert_eq(expect, got)
+
+
+#############################################################################
+#                            Struct Accessor                                #
+#############################################################################
+struct_accessor_data_params = [
+    [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
+    [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
+    [{"a": 1, "b": 2}],
+    [{"a": 1, "b": 3, "c": 4}],
+]
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_create_struct_series(data):
+    expect = pd.Series(data)
+    ds_got = dgd.from_cudf(Series(data), 2)
+    assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_struct_field_str(data):
+    for test_key in ["a", "b"]:
+        expect = Series(data).struct.field(test_key)
+        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_struct_field_integer(data):
+    for test_key in [0, 1]:
+        expect = Series(data).struct.field(test_key)
+        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_dask_struct_field_Key_Error(data):
+    got = dgd.from_cudf(Series(data), 2)
+
+    with pytest.raises(KeyError):
+        got.struct.field("notakey").compute()
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_dask_struct_field_Int_Error(data):
+    # breakpoint()
+    got = dgd.from_cudf(Series(data), 2)
+
+    with pytest.raises(IndexError):
+        got.struct.field(1000).compute()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}, {}, {}],
+        [{"a": 100, "b": "abc"}, {"a": 42, "b": "def"}, {"a": -87, "b": ""}],
+        [{"a": [1, 2, 3], "b": {"c": 101}}, {"a": [4, 5], "b": {"c": 102}}],
+    ],
+)
+def test_struct_explode(data):
+    expect = Series(data).struct.explode()
+    got = dgd.from_cudf(Series(data), 2).struct.explode()
+
+    assert_eq(expect, got.compute())

@@ -79,6 +79,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
 
@@ -372,7 +373,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param elements The list of elements
    */
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
@@ -509,11 +510,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same_v<Rep, int32_t>;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,
@@ -574,11 +574,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same_v<Rep, int32_t>;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,
@@ -868,7 +867,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    */
   dictionary_column_wrapper() : column_wrapper{}
   {
-    wrapped = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
+    wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
   }
 
   /**
@@ -941,7 +940,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * // keys = {1, 2, 3}, indices = {0, 1, 2, 0}
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param elements The list of elements
    */
   template <typename ElementFrom>
   dictionary_column_wrapper(std::initializer_list<ElementFrom> elements)
@@ -1042,11 +1041,13 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
 
   /**
    * @brief Access keys column view
+   * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
 
@@ -1401,7 +1402,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   lists_column_wrapper() : column_wrapper{}
   {
-    build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
+    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
   }
 
   /**
@@ -1501,11 +1502,8 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(std::cbegin(cols),
-                    std::cend(cols),
-                    valids,  // stencil
-                    std::back_inserter(children),
-                    thrust::identity<bool>{});
+    thrust::copy_if(
+      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 
@@ -1712,7 +1710,7 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {struct_column_wrapper.release()};
    * @endcode
    *
-   * @param child_columns_wrappers The list of child column wrappers
+   * @param child_column_wrappers The list of child column wrappers
    * @param validity The vector of bools representing the column validity values
    */
   structs_column_wrapper(
@@ -1745,8 +1743,8 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {struct_column_wrapper.release()};
    * @endcode
    *
-   * @param child_columns_wrappers The list of child column wrappers
-   * @param validity Iterator returning the per-row validity bool
+   * @param child_column_wrappers The list of child column wrappers
+   * @param validity_iter Iterator returning the per-row validity bool
    */
   template <typename V>
   structs_column_wrapper(

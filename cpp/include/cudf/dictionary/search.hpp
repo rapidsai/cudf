@@ -34,6 +34,7 @@ namespace dictionary {
  *
  * @param dictionary The dictionary to search for the key.
  * @param key The value to search for in the dictionary keyset.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Numeric scalar index value of the key within the dictionary
  */
 std::unique_ptr<scalar> get_index(

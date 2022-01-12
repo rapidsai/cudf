@@ -14,25 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include "rolling_detail.cuh"
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
-
-// Applies a fixed-size rolling window function to the values in a column.
-std::unique_ptr<column> rolling_window(column_view const& input,
-                                       size_type preceding_window,
-                                       size_type following_window,
-                                       size_type min_periods,
-                                       rolling_aggregation const& agg,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  auto defaults =
-    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
-  return rolling_window(
-    input, empty_like(defaults)->view(), preceding_window, following_window, min_periods, agg, mr);
-}
-
 namespace detail {
 
 // Applies a fixed-size rolling window function to the values in a column.
@@ -127,7 +112,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
 }  // namespace detail
 
-// Applies a fixed-size rolling window function to the values in a column.
+// Applies a fixed-size rolling window function to the values in a column, with default output
+// specified
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& default_outputs,
                                        size_type preceding_window,
@@ -144,6 +130,20 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                 agg,
                                 rmm::cuda_stream_default,
                                 mr);
+}
+
+// Applies a fixed-size rolling window function to the values in a column, without default specified
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       size_type preceding_window,
+                                       size_type following_window,
+                                       size_type min_periods,
+                                       rolling_aggregation const& agg,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  auto defaults =
+    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+  return rolling_window(
+    input, empty_like(defaults)->view(), preceding_window, following_window, min_periods, agg, mr);
 }
 
 // Applies a variable-size rolling window function to the values in a column.

@@ -13,12 +13,10 @@ from cudf._lib.cpp.concatenate cimport (
     concatenate_tables as libcudf_concatenate_tables,
 )
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.table cimport Table
 from cudf._lib.utils cimport (
     data_from_unique_ptr,
     make_column_views,
-    make_table_data_views,
-    make_table_views,
+    table_view_from_table,
 )
 
 from cudf.core.buffer import Buffer
@@ -47,10 +45,9 @@ cpdef concat_columns(object columns):
 cpdef concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
-    if ignore_index is False:
-        c_views = make_table_views(tables)
-    else:
-        c_views = make_table_data_views(tables)
+    c_views.reserve(len(tables))
+    for tbl in tables:
+        c_views.push_back(table_view_from_table(tbl, ignore_index))
     with nogil:
         c_result = move(libcudf_concatenate_tables(c_views))
 

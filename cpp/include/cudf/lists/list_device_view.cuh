@@ -78,8 +78,8 @@ class list_device_view {
   /**
    * @brief Fetches the element at the specified index within the list row.
    *
-   * @tparam The type of the list's element.
-   * @param The index into the list row
+   * @tparam T The type of the list's element.
+   * @param idx The index into the list row
    * @return The element at the specified index of the list row.
    */
   template <typename T>

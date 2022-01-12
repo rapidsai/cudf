@@ -49,7 +49,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
   auto splits_iter   = thrust::make_transform_iterator(
     one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
-  auto output_column_views = cudf::split(output_column->view(), splits);
+  auto output_column_views = split(output_column->view(), splits, stream);
 
   return std::make_pair(std::move(output_column), table_view(output_column_views));
 }

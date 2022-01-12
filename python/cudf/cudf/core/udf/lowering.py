@@ -9,10 +9,14 @@ from numba.cuda.cudaimpl import (
 )
 from numba.extending import lower_builtin, types
 
+from cudf.core.udf import api
+from cudf.core.udf._ops import (
+    arith_ops,
+    bitwise_ops,
+    comparison_ops,
+    unary_ops,
+)
 from cudf.core.udf.typing import MaskedType, NAType
-
-from . import classes
-from ._ops import arith_ops, comparison_ops
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -79,6 +83,49 @@ def make_arithmetic_op(op):
     return masked_scalar_op_impl
 
 
+def make_unary_op(op):
+    """
+    Make closures that implement unary operations. See register_unary_op for
+    details.
+    """
+
+    def masked_scalar_unary_op_impl(context, builder, sig, args):
+        """
+        Implement <op> `MaskedType`
+        """
+        # MaskedType(...)
+        masked_type_1 = sig.args[0]
+        # MaskedType(...)
+        masked_return_type = sig.return_type
+
+        m1 = cgutils.create_struct_proxy(masked_type_1)(
+            context, builder, value=args[0]
+        )
+
+        # we will return an output struct
+        result = cgutils.create_struct_proxy(masked_return_type)(
+            context, builder
+        )
+
+        # compute output validity
+        result.valid = m1.valid
+        with builder.if_then(m1.valid):
+            # Let numba handle generating the extra IR needed to perform
+            # operations on mixed types, by compiling the final core op between
+            # the two primitive values as a separate function and calling it
+            result.value = context.compile_internal(
+                builder,
+                lambda x: op(x),
+                nb_signature(
+                    masked_return_type.value_type, masked_type_1.value_type,
+                ),
+                (m1.value,),
+            )
+        return result._getvalue()
+
+    return masked_scalar_unary_op_impl
+
+
 def register_arithmetic_op(op):
     """
     Register a lowering implementation for the
@@ -94,6 +141,23 @@ def register_arithmetic_op(op):
     """
     to_lower_op = make_arithmetic_op(op)
     cuda_lower(op, MaskedType, MaskedType)(to_lower_op)
+
+
+def register_unary_op(op):
+    """
+    Register a lowering implementation for the
+    unary op `op`.
+
+    Because the lowering implementations compile the final
+    op separately using a lambda and compile_internal, `op`
+    needs to be tied to each lowering implementation using
+    a closure.
+
+    This function makes and lowers a closure for one op.
+
+    """
+    to_lower_op = make_unary_op(op)
+    cuda_lower(op, MaskedType)(to_lower_op)
 
 
 def masked_scalar_null_op_impl(context, builder, sig, args):
@@ -154,18 +218,25 @@ def register_const_op(op):
     to_lower_op = make_const_op(op)
     cuda_lower(op, MaskedType, types.Number)(to_lower_op)
     cuda_lower(op, types.Number, MaskedType)(to_lower_op)
-
-    # to_lower_op_reflected = make_reflected_const_op(op)
-    # cuda_lower(op, types.Number, MaskedType)(to_lower_op_reflected)
+    cuda_lower(op, MaskedType, types.Boolean)(to_lower_op)
+    cuda_lower(op, types.Boolean, MaskedType)(to_lower_op)
+    cuda_lower(op, MaskedType, types.NPDatetime)(to_lower_op)
+    cuda_lower(op, types.NPDatetime, MaskedType)(to_lower_op)
+    cuda_lower(op, MaskedType, types.NPTimedelta)(to_lower_op)
+    cuda_lower(op, types.NPTimedelta, MaskedType)(to_lower_op)
 
 
 # register all lowering at init
-for op in arith_ops + comparison_ops:
-    register_arithmetic_op(op)
-    register_const_op(op)
+for binary_op in arith_ops + bitwise_ops + comparison_ops:
+    register_arithmetic_op(binary_op)
+    register_const_op(binary_op)
     # null op impl can be shared between all ops
-    cuda_lower(op, MaskedType, NAType)(masked_scalar_null_op_impl)
-    cuda_lower(op, NAType, MaskedType)(masked_scalar_null_op_impl)
+    cuda_lower(binary_op, MaskedType, NAType)(masked_scalar_null_op_impl)
+    cuda_lower(binary_op, NAType, MaskedType)(masked_scalar_null_op_impl)
+
+# register all lowering at init
+for unary_op in unary_ops:
+    register_unary_op(unary_op)
 
 
 @cuda_lower(operator.is_, MaskedType, NAType)
@@ -192,6 +263,26 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
             builder.store(context.get_constant(types.boolean, 1), result)
 
     return builder.load(result)
+
+
+# Main kernel always calls `pack_return` on whatever the user defined
+# function returned. This returns the same data if its already a `Masked`
+# else packs it up into a new one that is valid from the get go
+@cuda_lower(api.pack_return, MaskedType)
+def pack_return_masked_impl(context, builder, sig, args):
+    return args[0]
+
+
+@cuda_lower(api.pack_return, types.Boolean)
+@cuda_lower(api.pack_return, types.Number)
+@cuda_lower(api.pack_return, types.NPDatetime)
+@cuda_lower(api.pack_return, types.NPTimedelta)
+def pack_return_scalar_impl(context, builder, sig, args):
+    outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    outdata.value = args[0]
+    outdata.valid = context.get_constant(types.boolean, 1)
+
+    return outdata._getvalue()
 
 
 @cuda_lower(operator.truth, MaskedType)
@@ -253,7 +344,10 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
 
 # Masked constructor for use in a kernel for testing
-@lower_builtin(classes.Masked, types.Number, types.boolean)
+@lower_builtin(api.Masked, types.Boolean, types.boolean)
+@lower_builtin(api.Masked, types.Number, types.boolean)
+@lower_builtin(api.Masked, types.NPDatetime, types.boolean)
+@lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args

@@ -25,12 +25,15 @@
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -62,6 +65,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  using namespace cudf::structs::detail;
+
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
@@ -70,7 +75,16 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   // satisfied with a hash implementation
   if (_keys_are_sorted == sorted::NO and not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
-    return detail::hash::groupby(_keys, requests, _include_null_keys, stream, mr);
+    // Optionally flatten nested key columns.
+    auto flattened             = flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
+    auto flattened_keys        = flattened.flattened_columns();
+    auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
+    CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
+                 "Unsupported groupby key type does not support equality comparison");
+    auto [grouped_keys, results] =
+      detail::hash::groupby(flattened_keys, requests, _include_null_keys, stream, mr);
+    return std::make_pair(unflatten_nested_columns(std::move(grouped_keys), _keys),
+                          std::move(results));
   } else {
     return sort_aggregate(requests, stream, mr);
   }
@@ -100,7 +114,7 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
-        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(values), 0, {});
+        0, make_empty_column(type_to_id<offset_type>()), empty_like(values), 0, {});
     }
 
     // If `values` is LIST typed, and the aggregation results match the type,

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import builtins
 import datetime as dt
+import locale
 import re
+from locale import nl_langinfo
 from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
@@ -15,16 +17,10 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    column,
-    column_empty_like,
-    string,
-)
-from cudf.utils.dtypes import is_scalar
+from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:
@@ -49,6 +45,56 @@ _dtype_to_format_conversion = {
     "datetime64[ms]": "%Y-%m-%d %H:%M:%S.%3f",
     "datetime64[s]": "%Y-%m-%d %H:%M:%S",
 }
+
+_DATETIME_SPECIAL_FORMATS = {
+    "%b",
+    "%B",
+    "%A",
+    "%a",
+}
+
+_DATETIME_NAMES = [
+    nl_langinfo(locale.AM_STR),  # type: ignore
+    nl_langinfo(locale.PM_STR),  # type: ignore
+    nl_langinfo(locale.DAY_1),
+    nl_langinfo(locale.DAY_2),
+    nl_langinfo(locale.DAY_3),
+    nl_langinfo(locale.DAY_4),
+    nl_langinfo(locale.DAY_5),
+    nl_langinfo(locale.DAY_6),
+    nl_langinfo(locale.DAY_7),
+    nl_langinfo(locale.ABDAY_1),
+    nl_langinfo(locale.ABDAY_2),
+    nl_langinfo(locale.ABDAY_3),
+    nl_langinfo(locale.ABDAY_4),
+    nl_langinfo(locale.ABDAY_5),
+    nl_langinfo(locale.ABDAY_6),
+    nl_langinfo(locale.ABDAY_7),
+    nl_langinfo(locale.MON_1),
+    nl_langinfo(locale.MON_2),
+    nl_langinfo(locale.MON_3),
+    nl_langinfo(locale.MON_4),
+    nl_langinfo(locale.MON_5),
+    nl_langinfo(locale.MON_6),
+    nl_langinfo(locale.MON_7),
+    nl_langinfo(locale.MON_8),
+    nl_langinfo(locale.MON_9),
+    nl_langinfo(locale.MON_10),
+    nl_langinfo(locale.MON_11),
+    nl_langinfo(locale.MON_12),
+    nl_langinfo(locale.ABMON_1),
+    nl_langinfo(locale.ABMON_2),
+    nl_langinfo(locale.ABMON_3),
+    nl_langinfo(locale.ABMON_4),
+    nl_langinfo(locale.ABMON_5),
+    nl_langinfo(locale.ABMON_6),
+    nl_langinfo(locale.ABMON_7),
+    nl_langinfo(locale.ABMON_8),
+    nl_langinfo(locale.ABMON_9),
+    nl_langinfo(locale.ABMON_10),
+    nl_langinfo(locale.ABMON_11),
+    nl_langinfo(locale.ABMON_12),
+]
 
 
 class DatetimeColumn(column.ColumnBase):
@@ -170,6 +216,15 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
+    def ceil(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, freq)
+
+    def floor(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.floor_datetime(self, freq)
+
+    def round(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.round_datetime(self, freq)
+
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
@@ -231,7 +286,7 @@ class DatetimeColumn(column.ColumnBase):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -258,7 +313,7 @@ class DatetimeColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
-            f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
@@ -275,19 +330,24 @@ class DatetimeColumn(column.ColumnBase):
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
+        if format in _DATETIME_SPECIAL_FORMATS:
+            names = as_column(_DATETIME_NAMES)
+        else:
+            names = cudf.core.column.column_empty(
+                0, dtype="object", masked=False
+            )
         if len(self) > 0:
             return string._datetime_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
-            ](self, format)
+            ](self, format, names)
         else:
             return cast(
                 "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column
-        """
+    def _default_na_value(self) -> DatetimeLikeScalar:
+        """Returns the default NA value for this column"""
         return np.datetime64("nat", self.time_unit)
 
     def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
@@ -427,23 +487,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def _make_copy_with_na_as_null(self):
-        """Return a copy with NaN values replaced with nulls."""
-        null = column_empty_like(self, masked=True, newsize=1)
-        out_col = cudf._lib.replace.replace(
-            self,
-            as_column(
-                Buffer(
-                    np.array([self.default_na_value()], dtype=self.dtype).view(
-                        "|u1"
-                    )
-                ),
-                dtype=self.dtype,
-            ),
-            null,
-        )
-        return out_col
-
 
 def binop_offset(lhs, rhs, op):
     if rhs._is_no_op:
@@ -483,7 +526,7 @@ def infer_format(element: str, **kwargs) -> str:
     if len(second_parts) > 1:
         # "Z" indicates Zulu time(widely used in aviation) - Which is
         # UTC timezone that currently cudf only supports. Having any other
-        # unsuppported timezone will let the code fail below
+        # unsupported timezone will let the code fail below
         # with a ValueError.
         second_parts.remove("Z")
         second_part = "".join(second_parts[1:])

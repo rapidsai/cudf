@@ -37,16 +37,16 @@ namespace strings {
  * does not match to any explicitly named enumerator.
  */
 enum string_character_types : uint32_t {
-  DECIMAL    = 1 << 0,                             /// all decimal characters
-  NUMERIC    = 1 << 1,                             /// all numeric characters
-  DIGIT      = 1 << 2,                             /// all digit characters
-  ALPHA      = 1 << 3,                             /// all alphabetic characters
-  SPACE      = 1 << 4,                             /// all space characters
-  UPPER      = 1 << 5,                             /// all upper case characters
-  LOWER      = 1 << 6,                             /// all lower case characters
-  ALPHANUM   = DECIMAL | NUMERIC | DIGIT | ALPHA,  /// all alphanumeric characters
-  CASE_TYPES = UPPER | LOWER,                      /// all case-able characters
-  ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE       /// all character types
+  DECIMAL    = 1 << 0,                             ///< all decimal characters
+  NUMERIC    = 1 << 1,                             ///< all numeric characters
+  DIGIT      = 1 << 2,                             ///< all digit characters
+  ALPHA      = 1 << 3,                             ///< all alphabetic characters
+  SPACE      = 1 << 4,                             ///< all space characters
+  UPPER      = 1 << 5,                             ///< all upper case characters
+  LOWER      = 1 << 6,                             ///< all lower case characters
+  ALPHANUM   = DECIMAL | NUMERIC | DIGIT | ALPHA,  ///< all alphanumeric characters
+  CASE_TYPES = UPPER | LOWER,                      ///< all case-able characters
+  ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE       ///< all character types
 };
 
 /**
@@ -128,6 +128,7 @@ std::unique_ptr<column> all_characters_of_type(
  * @param strings Strings instance for this operation.
  * @param types_to_remove The character types to check in each string.
  *        Use `ALL_TYPES` here to specify `types_to_keep` instead.
+ * @param replacement The replacement character to use when removing characters.
  * @param types_to_keep Default `ALL_TYPES` means all characters of
  *        `types_to_remove` will be filtered.
  * @param mr Device memory resource used to allocate the returned column's device memory.

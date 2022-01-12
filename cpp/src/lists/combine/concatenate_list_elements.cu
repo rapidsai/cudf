@@ -17,7 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -70,7 +70,9 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 
   // The child column of the output lists column is just copied from the input column.
   auto out_entries = std::make_unique<column>(
-    lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream));
+    lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream),
+    stream,
+    mr);
 
   auto [null_mask, null_count] = [&] {
     if (!build_null_mask)
@@ -117,10 +119,10 @@ generate_list_offsets_and_validities(column_view const& input,
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto const lists_of_lists_dv_ptr = column_device_view::create(input);
-  auto const lists_dv_ptr          = column_device_view::create(lists_column_view(input).child());
-  auto const d_out_offsets         = out_offsets->mutable_view().template begin<offset_type>();
-  auto const d_row_offsets         = lists_column_view(input).offsets_begin();
+  auto const lists_of_lists_dv_ptr = column_device_view::create(input, stream);
+  auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child(), stream);
+  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
   // The array of int8_t stores validities for the output list elements.
@@ -202,9 +204,9 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
     });
 
   auto result = cudf::detail::gather(table_view{{entry_col}},
-                                     gather_map.begin(),
-                                     gather_map.end(),
+                                     gather_map,
                                      out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
   return std::move(result->release()[0]);
@@ -225,7 +227,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
   auto list_entries =
     gather_list_entries(input, offsets_view, num_rows, num_output_entries, stream, mr);
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
 
   return make_lists_column(num_rows,
                            std::move(list_offsets),

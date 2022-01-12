@@ -37,9 +37,9 @@ namespace detail {
  * linearization process but cannot be explicitly created by the user.
  */
 enum class device_data_reference_type {
-  COLUMN,       // A value in a table column
-  LITERAL,      // A literal value
-  INTERMEDIATE  // An internal temporary value
+  COLUMN,       ///< A value in a table column
+  LITERAL,      ///< A literal value
+  INTERMEDIATE  ///< An internal temporary value
 };
 
 /**
@@ -107,7 +107,6 @@ struct expression_device_view {
   device_span<ast_operator const> operators;
   device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
-  int shmem_per_thread;
 };
 
 /**
@@ -230,6 +229,7 @@ class expression_parser {
 
   expression_device_view device_expression_data;  ///< The collection of data required to evaluate
                                                   ///< the expression on the device.
+  int shmem_per_thread;
 
  private:
   /**
@@ -292,7 +292,7 @@ class expression_parser {
       reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
-    device_expression_data.shmem_per_thread  = static_cast<int>(
+    shmem_per_thread                         = static_cast<int>(
       (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
       device_expression_data.num_intermediates);
   }

@@ -62,7 +62,7 @@ template <typename T>
 struct FromArrowTestDurationsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
+TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(FromArrowTest, EmptyTable)
 {
@@ -333,11 +333,10 @@ struct FromArrowTestSlice
 
 TEST_P(FromArrowTestSlice, SliceTest)
 {
-  auto tables          = get_tables(10000);
-  auto cudf_table_view = tables.first->view();
-  auto arrow_table     = tables.second;
-  auto start           = std::get<0>(GetParam());
-  auto end             = std::get<1>(GetParam());
+  auto tables             = get_tables(10000);
+  auto cudf_table_view    = tables.first->view();
+  auto arrow_table        = tables.second;
+  auto const [start, end] = GetParam();
 
   auto sliced_cudf_table   = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_cudf_table = cudf::table{sliced_cudf_table};

@@ -35,14 +35,14 @@ struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
 
-TYPED_TEST_CASE(FixedPointTestBothReps, RepresentationTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, RepresentationTypes);
 
-TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction)
+TYPED_TEST(FixedPointTestAllReps, SimpleDecimalXXConstruction)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -63,7 +63,7 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction)
   EXPECT_EQ(1.234567, static_cast<double>(num6));
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction)
+TYPED_TEST(FixedPointTestAllReps, SimpleNegativeDecimalXXConstruction)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -84,7 +84,7 @@ TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction)
   EXPECT_EQ(-1.234567, static_cast<double>(num6));
 }
 
-TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction)
+TYPED_TEST(FixedPointTestAllReps, PaddedDecimalXXConstruction)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -109,7 +109,7 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction)
   EXPECT_EQ(0.000123, static_cast<double>(y));
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction)
+TYPED_TEST(FixedPointTestAllReps, SimpleBinaryFPConstruction)
 {
   using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
 
@@ -138,7 +138,7 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction)
   EXPECT_EQ(1.4375, static_cast<double>(num9));
 }
 
-TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction)
+TYPED_TEST(FixedPointTestAllReps, MoreSimpleBinaryFPConstruction)
 {
   using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
 
@@ -149,7 +149,7 @@ TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction)
   EXPECT_EQ(2.0625, static_cast<double>(num1));
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
+TYPED_TEST(FixedPointTestAllReps, SimpleDecimalXXMath)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -174,7 +174,7 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
   EXPECT_EQ(a - b, a);
 }
 
-TYPED_TEST(FixedPointTestBothReps, ComparisonOperators)
+TYPED_TEST(FixedPointTestAllReps, ComparisonOperators)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -193,7 +193,7 @@ TYPED_TEST(FixedPointTestBothReps, ComparisonOperators)
   EXPECT_TRUE(SIX / TWO >= ONE);
 }
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
+TYPED_TEST(FixedPointTestAllReps, DecimalXXTrickyDivision)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -223,7 +223,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
   EXPECT_EQ(static_cast<int32_t>(n), 20);
 }
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
+TYPED_TEST(FixedPointTestAllReps, DecimalXXRounding)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -251,7 +251,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
   EXPECT_TRUE(FIVE_0 * THREE_0 != TEN_1);
 }
 
-TYPED_TEST(FixedPointTestBothReps, ArithmeticWithDifferentScales)
+TYPED_TEST(FixedPointTestAllReps, ArithmeticWithDifferentScales)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -276,7 +276,7 @@ TYPED_TEST(FixedPointTestBothReps, ArithmeticWithDifferentScales)
   EXPECT_EQ(c - d, zz);
 }
 
-TYPED_TEST(FixedPointTestBothReps, RescaledTest)
+TYPED_TEST(FixedPointTestAllReps, RescaledTest)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -296,7 +296,7 @@ TYPED_TEST(FixedPointTestBothReps, RescaledTest)
   EXPECT_EQ(num5, num6.rescaled(scale_type{-5}));
 }
 
-TYPED_TEST(FixedPointTestBothReps, RescaledRounding)
+TYPED_TEST(FixedPointTestAllReps, RescaledRounding)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -311,7 +311,7 @@ TYPED_TEST(FixedPointTestBothReps, RescaledRounding)
   EXPECT_EQ(-1000, static_cast<TypeParam>(num3.rescaled(scale_type{3})));
 }
 
-TYPED_TEST(FixedPointTestBothReps, BoolConversion)
+TYPED_TEST(FixedPointTestAllReps, BoolConversion)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
@@ -468,7 +468,7 @@ struct cast_to_int32_fn {
   int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointColumnWrapper)
+TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 {
   using namespace numeric;
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
@@ -489,7 +489,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointColumnWrapper)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, w);
 }
 
-TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
+TYPED_TEST(FixedPointTestAllReps, NoScaleOrWrongTypeID)
 {
   auto null_mask = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
 
@@ -498,7 +498,7 @@ TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
     cudf::logic_error);
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
+TYPED_TEST(FixedPointTestAllReps, SimpleFixedPointColumnWrapper)
 {
   using RepType = cudf::device_storage_type_t<TypeParam>;
 
@@ -554,7 +554,7 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
 }
 
-TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
+TYPED_TEST(FixedPointTestAllReps, ExtremelyLargeNegativeScale)
 {
   // This is testing fixed_point values with an extremely large negative scale. The fixed_point
   // implementation should be able to handle any scale representable by an int32_t

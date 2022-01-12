@@ -27,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.NullSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,7 +36,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 
 public class CompiledExpressionTest extends CudfTestBase {
   @Test
@@ -77,20 +78,18 @@ public class CompiledExpressionTest extends CudfTestBase {
         assertColumnsAreEqual(trueExprExpected, trueExprActual);
       }
 
-      // Uncomment the following after https://github.com/rapidsai/cudf/issues/8831 is fixed
-      // Literal nullLiteral = Literal.ofBoolean(null);
-      // UnaryOperation nullExpr = new UnaryOperation(AstOperator.IDENTITY, nullLiteral);
-      // try (CompiledExpression nullCompiledExpr = nullExpr.compile();
-      //      ColumnVector nullExprActual = nullCompiledExpr.computeColumn(t);
-      //      ColumnVector nullExprExpected = ColumnVector.fromBoxedBooleans(null, null, null)) {
-      //   assertColumnsAreEqual(nullExprExpected, nullExprActual);
-      // }
+      Literal nullLiteral = Literal.ofBoolean(null);
+      UnaryOperation nullExpr = new UnaryOperation(UnaryOperator.IDENTITY, nullLiteral);
+      try (CompiledExpression nullCompiledExpr = nullExpr.compile();
+           ColumnVector nullExprActual = nullCompiledExpr.computeColumn(t);
+           ColumnVector nullExprExpected = ColumnVector.fromBoxedBooleans(null, null, null)) {
+        assertColumnsAreEqual(nullExprExpected, nullExprActual);
+      }
     }
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(bytes = 0x12)
   public void testByteLiteralTransform(Byte value) {
     Literal expr = Literal.ofByte(value);
@@ -103,8 +102,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(shorts = 0x1234)
   public void testShortLiteralTransform(Short value) {
     Literal expr = Literal.ofShort(value);
@@ -117,8 +115,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(ints = 0x12345678)
   public void testIntLiteralTransform(Integer value) {
     Literal expr = Literal.ofInt(value);
@@ -131,8 +128,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testLongLiteralTransform(Long value) {
     Literal expr = Literal.ofLong(value);
@@ -145,8 +141,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(floats = { 123456.789f, Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY} )
   public void testFloatLiteralTransform(Float value) {
     Literal expr = Literal.ofFloat(value);
@@ -159,8 +154,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(doubles = { 123456.789f, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY} )
   public void testDoubleLiteralTransform(Double value) {
     Literal expr = Literal.ofDouble(value);
@@ -173,8 +167,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(ints = 0x12345678)
   public void testTimestampDaysLiteralTransform(Integer value) {
     Literal expr = Literal.ofTimestampDaysFromInt(value);
@@ -188,8 +181,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_SECONDS, value);
@@ -203,8 +195,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampMilliSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_MILLISECONDS, value);
@@ -218,8 +209,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampMicroSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_MICROSECONDS, value);
@@ -233,8 +223,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testTimestampNanoSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofTimestampFromLong(DType.TIMESTAMP_NANOSECONDS, value);
@@ -248,8 +237,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(ints = 0x12345678)
   public void testDurationDaysLiteralTransform(Integer value) {
     Literal expr = Literal.ofDurationDaysFromInt(value);
@@ -263,8 +251,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofDurationFromLong(DType.DURATION_SECONDS, value);
@@ -278,8 +265,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationMilliSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofDurationFromLong(DType.DURATION_MILLISECONDS, value);
@@ -293,8 +279,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationMicroSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofDurationFromLong(DType.DURATION_MICROSECONDS, value);
@@ -308,8 +293,7 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
-  // Uncomment the following line after https://github.com/rapidsai/cudf/issues/8831 is fixed
-  // @NullSource
+  @NullSource
   @ValueSource(longs = 0x1234567890abcdefL)
   public void testDurationNanoSecondsLiteralTransform(Long value) {
     Literal expr = Literal.ofDurationFromLong(DType.DURATION_NANOSECONDS, value);
@@ -468,7 +452,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     Integer[] in2 = new Integer[] { 123, -456, null, 0, -3 };
     return Stream.of(
         // nulls compare as equal by default
-        Arguments.of(BinaryOperator.EQUAL, in1, in2, Arrays.asList(false, false, true, false, true)),
+        Arguments.of(BinaryOperator.NULL_EQUAL, in1, in2, Arrays.asList(false, false, true, false, true)),
         Arguments.of(BinaryOperator.NOT_EQUAL, in1, in2, mapArray(in1, in2, (a, b) -> !a.equals(b))),
         Arguments.of(BinaryOperator.LESS, in1, in2, mapArray(in1, in2, (a, b) -> a < b)),
         Arguments.of(BinaryOperator.GREATER, in1, in2, mapArray(in1, in2, (a, b) -> a > b)),
@@ -518,11 +502,13 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   private static Stream<Arguments> createBinaryBooleanOperationParams() {
-    Boolean[] in1 = new Boolean[] { false, true, null, true, false };
-    Boolean[] in2 = new Boolean[] { true, null, null, true, false };
+    Boolean[] in1 = new Boolean[] { false, true, false, null, true, false };
+    Boolean[] in2 = new Boolean[] { true, null, null, null, true, false };
     return Stream.of(
         Arguments.of(BinaryOperator.LOGICAL_AND, in1, in2, mapArray(in1, in2, (a, b) -> a && b)),
-        Arguments.of(BinaryOperator.LOGICAL_OR, in1, in2, mapArray(in1, in2, (a, b) -> a || b)));
+        Arguments.of(BinaryOperator.LOGICAL_OR, in1, in2, mapArray(in1, in2, (a, b) -> a || b)),
+        Arguments.of(BinaryOperator.NULL_LOGICAL_AND, in1, in2, Arrays.asList(false, null, false, null, true, false)),
+        Arguments.of(BinaryOperator.NULL_LOGICAL_OR, in1, in2, Arrays.asList(true, true, null, null, true, false)));
   }
 
   @ParameterizedTest

@@ -224,7 +224,7 @@ struct list_child_constructor {
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
-    if (num_child_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
+    if (num_child_rows == 0) { return make_empty_column(type_id::STRING); }
 
     auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
@@ -279,10 +279,8 @@ struct list_child_constructor {
     return cudf::make_strings_column(num_child_rows,
                                      std::move(string_offsets),
                                      std::move(string_chars),
-                                     child_null_mask.second,            // Null count.
-                                     std::move(child_null_mask.first),  // Null mask.
-                                     stream,
-                                     mr);
+                                     child_null_mask.second,  // Null count.
+                                     std::move(child_null_mask.first));
   }
 
   /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ template <typename V>
 struct groupby_nth_element_test : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_nth_element_test, cudf::test::AllTypes);
+TYPED_TEST_SUITE(groupby_nth_element_test, cudf::test::AllTypes);
 
 // clang-format off
 TYPED_TEST(groupby_nth_element_test, basic)
@@ -372,7 +372,7 @@ template <typename T>
 struct groupby_nth_element_lists_test : BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_nth_element_lists_test, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(groupby_nth_element_lists_test, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(groupby_nth_element_lists_test, Basics)
 {
@@ -414,5 +414,110 @@ TYPED_TEST(groupby_nth_element_lists_test, EmptyInput)
                   cudf::make_nth_element_aggregation<groupby_aggregation>(2));
 }
 
+struct groupby_nth_element_structs_test : BaseFixture {
+};
+
+TEST_F(groupby_nth_element_structs_test, Basics)
+{
+  using structs = cudf::test::structs_column_wrapper;
+  using ints    = cudf::test::fixed_width_column_wrapper<int>;
+  using doubles = cudf::test::fixed_width_column_wrapper<double>;
+  using strings = cudf::test::strings_column_wrapper;
+
+  auto keys   = ints{0, 0, 0, 1, 1, 1, 2, 2, 2, 3};
+  auto child0 = ints{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto child1 = doubles{0.1, 1.2, 2.3, 3.4, 4.51, 5.3e4, 6.3231, -0.07, 832.1, 9.999};
+  auto child2 = strings{"", "a", "b", "c", "d", "e", "f", "g", "HH", "JJJ"};
+  auto values = structs{{child0, child1, child2}, {1, 0, 1, 0, 1, 1, 1, 1, 0, 1}};
+
+  auto expected_keys   = ints{0, 1, 2, 3};
+  auto expected_ch0    = ints{1, 4, 7, 0};
+  auto expected_ch1    = doubles{1.2, 4.51, -0.07, 0.0};
+  auto expected_ch2    = strings{"a", "d", "g", ""};
+  auto expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}, {0, 1, 1, 0}};
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(1));
+
+  expected_keys   = ints{0, 1, 2, 3};
+  expected_ch0    = ints{0, 4, 6, 9};
+  expected_ch1    = doubles{0.1, 4.51, 6.3231, 9.999};
+  expected_ch2    = strings{"", "d", "f", "JJJ"};
+  expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}, {1, 1, 1, 1}};
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(0, null_policy::EXCLUDE));
+}
+
+TEST_F(groupby_nth_element_structs_test, NestedStructs)
+{
+  using structs = cudf::test::structs_column_wrapper;
+  using ints    = cudf::test::fixed_width_column_wrapper<int>;
+  using doubles = cudf::test::fixed_width_column_wrapper<double>;
+  using lists   = cudf::test::lists_column_wrapper<int>;
+
+  auto keys             = ints{0, 0, 0, 1, 1, 1, 2, 2, 2, 3};
+  auto child0           = ints{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto child0_of_child1 = ints{0, -1, -2, -3, -4, -5, -6, -7, -8, -9};
+  auto child1_of_child1 = doubles{0.1, 1.2, 2.3, 3.4, 4.51, 5.3e4, 6.3231, -0.07, 832.1, 9.999};
+  auto child1           = structs{child0_of_child1, child1_of_child1};
+  auto child2           = lists{{0}, {1, 2, 3}, {}, {4}, {5, 6}, {}, {}, {7}, {8, 9}, {}};
+  auto values           = structs{{child0, child1, child2}, {1, 0, 1, 0, 1, 1, 1, 1, 0, 1}};
+
+  auto expected_keys       = ints{0, 1, 2, 3};
+  auto expected_ch0        = ints{1, 4, 7, 0};
+  auto expected_ch0_of_ch1 = ints{-1, -4, -7, 0};
+  auto expected_ch1_of_ch1 = doubles{1.2, 4.51, -0.07, 0.0};
+  auto expected_ch1        = structs{expected_ch0_of_ch1, expected_ch1_of_ch1};
+  auto expected_ch2        = lists{{1, 2, 3}, {5, 6}, {7}, {}};
+  auto expected_values     = structs{{expected_ch0, expected_ch1, expected_ch2}, {0, 1, 1, 0}};
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(1));
+
+  expected_keys       = ints{0, 1, 2, 3};
+  expected_ch0        = ints{0, 4, 6, 9};
+  expected_ch0_of_ch1 = ints{0, -4, -6, -9};
+  expected_ch1_of_ch1 = doubles{0.1, 4.51, 6.3231, 9.999};
+  expected_ch1        = structs{expected_ch0_of_ch1, expected_ch1_of_ch1};
+  expected_ch2        = lists{{0}, {5, 6}, {}, {}};
+  expected_values     = structs{{expected_ch0, expected_ch1, expected_ch2}, {1, 1, 1, 1}};
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(0, null_policy::EXCLUDE));
+}
+
+TEST_F(groupby_nth_element_structs_test, EmptyInput)
+{
+  using structs = cudf::test::structs_column_wrapper;
+  using ints    = cudf::test::fixed_width_column_wrapper<int>;
+  using doubles = cudf::test::fixed_width_column_wrapper<double>;
+  using strings = cudf::test::strings_column_wrapper;
+
+  auto keys   = ints{};
+  auto child0 = ints{};
+  auto child1 = doubles{};
+  auto child2 = strings{};
+  auto values = structs{{child0, child1, child2}};
+
+  auto expected_keys   = ints{};
+  auto expected_ch0    = ints{};
+  auto expected_ch1    = doubles{};
+  auto expected_ch2    = strings{};
+  auto expected_values = structs{{expected_ch0, expected_ch1, expected_ch2}};
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  cudf::make_nth_element_aggregation<groupby_aggregation>(0));
+}
 }  // namespace test
 }  // namespace cudf

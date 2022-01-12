@@ -20,7 +20,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -180,9 +180,9 @@ struct replace_nulls_column_kernel_forwarder {
     auto replace = replace_nulls<col_type, false>;
     if (output_view.nullable()) replace = replace_nulls<col_type, true>;
 
-    auto device_in          = cudf::column_device_view::create(input);
-    auto device_out         = cudf::mutable_column_device_view::create(output_view);
-    auto device_replacement = cudf::column_device_view::create(replacement);
+    auto device_in          = cudf::column_device_view::create(input, stream);
+    auto device_out         = cudf::mutable_column_device_view::create(output_view, stream);
+    auto device_replacement = cudf::column_device_view::create(replacement, stream);
 
     rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
@@ -270,9 +270,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
                                    std::move(offsets),
                                    std::move(output_chars),
                                    input.size() - valid_counter.value(stream),
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>
@@ -313,7 +311,7 @@ struct replace_nulls_scalar_kernel_forwarder {
 
     using ScalarType = cudf::scalar_type_t<col_type>;
     auto& s1         = static_cast<ScalarType const&>(replacement);
-    auto device_in   = cudf::column_device_view::create(input);
+    auto device_in   = cudf::column_device_view::create(input, stream);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};
     thrust::transform(rmm::exec_policy(stream),
@@ -368,7 +366,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
                                                         rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  auto device_in = cudf::column_device_view::create(input);
+  auto device_in = cudf::column_device_view::create(input, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
@@ -389,9 +387,9 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   }
 
   auto output = cudf::detail::gather(cudf::table_view({input}),
-                                     gather_map.begin(),
-                                     gather_map.end(),
+                                     gather_map,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
 
@@ -424,7 +422,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input); }
-  if (!input.has_nulls() || !replacement.is_valid()) {
+  if (!input.has_nulls() || !replacement.is_valid(stream)) {
     return std::make_unique<cudf::column>(input, stream, mr);
   }
 

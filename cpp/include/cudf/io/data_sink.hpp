@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,7 +60,7 @@ class data_sink {
   /**
    * @brief Create a wrapped custom user data sink
    *
-   * @param[in] User-provided data sink (typically custom class)
+   * @param[in] user_sink User-provided data sink (typically custom class)
    *
    * The data sink returned here is not the one passed by the user. It is an internal
    * class that wraps the user pointer.  The principle is to allow the user to declare
@@ -67,6 +68,22 @@ class data_sink {
    *
    */
   static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
+
+  /**
+   * @brief Creates a vector of data sinks, one per element in the input vector.
+   *
+   * @param[in] args vector of parameters
+   */
+  template <typename T>
+  static std::vector<std::unique_ptr<data_sink>> create(std::vector<T> const& args)
+  {
+    std::vector<std::unique_ptr<data_sink>> sinks;
+    sinks.reserve(args.size());
+    std::transform(args.cbegin(), args.cend(), std::back_inserter(sinks), [](auto const& arg) {
+      return data_sink::create(arg);
+    });
+    return sinks;
+  }
 
   /**
    * @brief Base class destructor
@@ -78,8 +95,6 @@ class data_sink {
    *
    * @param[in] data Pointer to the buffer to be written into the sink object
    * @param[in] size Number of bytes to write
-   *
-   * @return void
    */
   virtual void host_write(void const* data, size_t size) = 0;
 
@@ -132,6 +147,34 @@ class data_sink {
   virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("data_sink classes that support device_write must override it.");
+  }
+
+  /**
+   * @brief Asynchronously append the buffer content to the sink from a gpu address
+   *
+   * For optimal performance, should only be called when `is_device_write_preferred` returns `true`.
+   * Data sink implementations that don't support direct device writes don't need to override
+   * this function.
+   *
+   * `gpu_data` must not be freed until this call is synchronized.
+   * @code{.pseudo}
+   * auto result = device_write_async(gpu_data, size, stream);
+   * result.wait(); // OR result.get()
+   * @endcode
+   *
+   * @throws cudf::logic_error the object does not support direct device writes, i.e.
+   * `supports_device_write` returns `false`.
+   * @throws cudf::logic_error
+   *
+   * @param gpu_data Pointer to the buffer to be written into the sink object
+   * @param size Number of bytes to write
+   * @param stream CUDA stream to use
+   */
+  virtual std::future<void> device_write_async(void const* gpu_data,
+                                               size_t size,
+                                               rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("data_sink classes that support device_write_async must override it.");
   }
 
   /**

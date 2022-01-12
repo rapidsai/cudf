@@ -82,7 +82,7 @@ enum class binary_operator : int32_t {
  * This distinction is significant in case of non-commutative binary operations
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand scalar
  * @param rhs         The right operand column
@@ -92,6 +92,8 @@ enum class binary_operator : int32_t {
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  */
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
@@ -108,7 +110,7 @@ std::unique_ptr<column> binary_operation(
  * This distinction is significant in case of non-commutative binary operations
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
@@ -118,6 +120,8 @@ std::unique_ptr<column> binary_operation(
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
@@ -132,7 +136,7 @@ std::unique_ptr<column> binary_operation(
  * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
  *
  * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand column
@@ -142,6 +146,8 @@ std::unique_ptr<column> binary_operation(
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
  * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
+ * operations.
  * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
  */
 std::unique_ptr<column> binary_operation(
@@ -204,89 +210,5 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
 
-namespace experimental {
-/**
- * @brief Performs a binary operation between a scalar and a column.
- *
- * The output contains the result of `op(lhs, rhs[i])` for all `0 <= i < rhs.size()`
- * The scalar is the left operand and the column elements are the right operand.
- * This distinction is significant in case of non-commutative binary operations
- *
- * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands except NullMin and NullMax (logical OR).
- *
- * @param lhs         The left operand scalar
- * @param rhs         The right operand column
- * @param op          The binary operator
- * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
- * @return            Output column of `output_type` type containing the result of
- *                    the binary operation
- * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
- * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
- * operations.
- */
-std::unique_ptr<column> binary_operation(
-  scalar const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Performs a binary operation between a column and a scalar.
- *
- * The output contains the result of `op(lhs[i], rhs)` for all `0 <= i < lhs.size()`
- * The column elements are the left operand and the scalar is the right operand.
- * This distinction is significant in case of non-commutative binary operations
- *
- * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands except NullMin and NullMax (logical OR).
- *
- * @param lhs         The left operand column
- * @param rhs         The right operand scalar
- * @param op          The binary operator
- * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
- * @return            Output column of `output_type` type containing the result of
- *                    the binary operation
- * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
- * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
- * operations.
- */
-std::unique_ptr<column> binary_operation(
-  column_view const& lhs,
-  scalar const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Performs a binary operation between two columns.
- *
- * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
- *
- * Regardless of the operator, the validity of the output value is the logical
- * AND of the validity of the two operands except NullMin and NullMax (logical OR).
- *
- * @param lhs         The left operand column
- * @param rhs         The right operand column
- * @param op          The binary operator
- * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
- * @return            Output column of `output_type` type containing the result of
- *                    the binary operation
- * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
- * @throw cudf::logic_error if @p output_type dtype isn't boolean for comparison and logical
- * operations.
- * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
- */
-std::unique_ptr<column> binary_operation(
-  column_view const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-}  // namespace experimental
 /** @} */  // end of group
 }  // namespace cudf

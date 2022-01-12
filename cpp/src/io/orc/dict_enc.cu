@@ -146,7 +146,7 @@ __global__ void __launch_bounds__(block_size, 2)
 
   if (t == 0) {
     s->chunk             = chunks[group_id][str_col_idx];
-    s->chunk.leaf_column = &orc_columns[col_idx].cudf_column;
+    s->chunk.leaf_column = &orc_columns[col_idx];
     s->chunk.dict_data   = dict_data[str_col_idx].data() + rowgroup_bounds[group_id][col_idx].begin;
     s->chunk.dict_index  = dict_index[str_col_idx].data();
     s->chunk.start_row   = rowgroup_bounds[group_id][col_idx].begin;

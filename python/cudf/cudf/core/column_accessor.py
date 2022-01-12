@@ -244,9 +244,7 @@ class ColumnAccessor(MutableMapping):
             del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
-        """"
-        Convert the keys of the ColumnAccessor to a Pandas Index object.
-        """
+        """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
@@ -539,6 +537,24 @@ class ColumnAccessor(MutableMapping):
 
         return self.__class__(ca)
 
+    def droplevel(self, level):
+        # drop the nth level
+        if level < 0:
+            level += self.nlevels
+
+        self._data = {
+            _remove_key_level(key, level): value
+            for key, value in self._data.items()
+        }
+        self._level_names = (
+            self._level_names[:level] + self._level_names[level + 1 :]
+        )
+
+        if (
+            len(self._level_names) == 1
+        ):  # can't use nlevels, as it depends on multiindex
+            self.multiindex = False
+
 
 def _compare_keys(target: Any, key: Any) -> bool:
     """
@@ -556,3 +572,14 @@ def _compare_keys(target: Any, key: Any) -> bool:
         if k1 != k2:
             return False
     return True
+
+
+def _remove_key_level(key: Any, level: int) -> Any:
+    """
+    Remove a level from key. If detupleize is True, and if only a
+    single level remains, convert the tuple to a scalar.
+    """
+    result = key[:level] + key[level + 1 :]
+    if len(result) == 1:
+        return result[0]
+    return result

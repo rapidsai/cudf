@@ -122,6 +122,20 @@ std::unique_ptr<scalar> make_default_constructed_scalar(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Creates an empty (invalid) scalar of the same type as the `input` column_view.
+ *
+ * @throw cudf::logic_error if the `input` column is struct type and empty
+ *
+ * @param input Immutable view of input column to emulate
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_empty_scalar_like(
+  column_view const& input,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Construct scalar using the given value of fixed width type
  *
  * @tparam T Datatype of the value to be represented by the scalar
@@ -143,6 +157,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
  *
  * @tparam T Datatype of the value to be represented by the scalar
  * @param value The value to store in the scalar object
+ * @param scale The scale of the fixed point value
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
@@ -187,7 +202,7 @@ std::unique_ptr<scalar> make_struct_scalar(
  *
  * The columns must have 1 row.
  *
- * @param value The columnar data to store in the scalar object
+ * @param data The columnar data to store in the scalar object
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */

@@ -13,7 +13,7 @@ from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
-    NUMERIC_TYPES,
+    SIGNED_TYPES,
     _decimal_series,
     assert_eq,
 )
@@ -228,7 +228,7 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     "from_dtype",
     [Decimal64Dtype(7, 2), Decimal64Dtype(11, 4), Decimal64Dtype(17, 10)],
 )
-@pytest.mark.parametrize("to_dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("to_dtype", SIGNED_TYPES)
 def test_typecast_from_decimal(data, from_dtype, to_dtype):
     got = data.astype(from_dtype)
     pa_arr = got.to_arrow().cast(to_dtype, safe=False)

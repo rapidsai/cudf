@@ -34,12 +34,11 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx
     ) except +
 
-    cdef unique_ptr[column] generalized_masked_op(
-        const table_view& data_view,
-        string udf,
-        data_type output_type,
-    ) except +
-
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(
         table_view input
     ) except +
+
+    cdef pair[unique_ptr[column], table_view] one_hot_encode(
+        column_view input_column,
+        column_view categories
+    )

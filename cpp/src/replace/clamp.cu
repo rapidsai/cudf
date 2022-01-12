@@ -20,6 +20,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -83,7 +84,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 {
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
-  size_type null_count     = input.parent().null_count();
+  size_type null_count     = input.null_count();
 
   // build offset column
   auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
@@ -140,9 +141,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             std::move(copy_bitmask(input.parent())),
-                             stream,
-                             mr);
+                             std::move(cudf::detail::copy_bitmask(input.parent(), stream, mr)));
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
@@ -181,7 +180,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   };
 
   auto input_pair_iterator =
-    make_optional_iterator<T>(*input_device_view, contains_nulls::DYNAMIC{}, input.has_nulls());
+    make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});
   thrust::transform(rmm::exec_policy(stream),
                     input_pair_iterator,
                     input_pair_iterator + input.size(),
@@ -233,10 +232,10 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    auto lo_itr         = make_optional_iterator<T>(lo, contains_nulls::YES{});
-    auto hi_itr         = make_optional_iterator<T>(hi, contains_nulls::YES{});
-    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, contains_nulls::NO{});
-    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, contains_nulls::NO{});
+    auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
+    auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});
+    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, nullate::NO{});
+    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, nullate::NO{});
 
     return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
   }
@@ -282,7 +281,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     auto matched_view              = dictionary_column_view(input);
     std::unique_ptr<column> result = nullptr;
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
-      if (key.is_valid()) {
+      if (key.is_valid(stream)) {
         result = dictionary::detail::add_keys(
           matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
         matched_view = dictionary_column_view(result->view());

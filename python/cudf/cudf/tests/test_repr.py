@@ -11,7 +11,7 @@ from hypothesis import given, settings, strategies as st
 import cudf
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing import _utils as utils
-from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 
@@ -27,7 +27,7 @@ def test_null_series(nrows, dtype):
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view.copy_to_host(),
-            dtype=cudf_dtypes_to_pandas_dtypes.get(
+            dtype=np_dtypes_to_pandas_dtypes.get(
                 cudf.dtype(dtype), cudf.dtype(dtype)
             ),
         )
@@ -40,14 +40,6 @@ def test_null_series(nrows, dtype):
     psrepr = psrepr.replace("NaN", "<NA>")
     psrepr = psrepr.replace("NaT", "<NA>")
     psrepr = psrepr.replace("None", "<NA>")
-    if (
-        dtype.startswith("int")
-        or dtype.startswith("uint")
-        or dtype.startswith("long")
-    ):
-        psrepr = psrepr.replace(
-            str(sr._column.default_na_value()) + "\n", "<NA>\n"
-        )
     if "UInt" in psrepr:
         psrepr = psrepr.replace("UInt", "uint")
     elif "Int" in psrepr:
@@ -106,15 +98,9 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
-    ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -336,10 +322,14 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
         ),
         (
             cudf.Index([None, None, None], name="hello"),
+            "StringIndex([None None None], dtype='object', name='hello')",
+        ),
+        (
+            cudf.Index([None, None, None], dtype="float", name="hello"),
             "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
         ),
         (
-            cudf.Index([None], name="hello"),
+            cudf.Index([None], dtype="float64", name="hello"),
             "Float64Index([<NA>], dtype='float64', name='hello')",
         ),
         (
@@ -1152,23 +1142,8 @@ def test_timedelta_index_repr(index, expected_repr):
         ),
     ],
 )
-@pytest.mark.parametrize(
-    "max_seq_items",
-    [
-        None,
-        pytest.param(
-            1,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/38415"
-            ),
-        ),
-        2,
-        5,
-        10,
-        100,
-    ],
-)
-def test_mulitIndex_repr(pmi, max_seq_items):
+@pytest.mark.parametrize("max_seq_items", [None, 1, 2, 5, 10, 100])
+def test_multiIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
 
@@ -1413,7 +1388,7 @@ def test_mulitIndex_repr(pmi, max_seq_items):
         ),
     ],
 )
-def test_mulitIndex_null_repr(gdi, expected_repr):
+def test_multiIndex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()

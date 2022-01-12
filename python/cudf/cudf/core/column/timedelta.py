@@ -19,10 +19,11 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
+from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
-from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
 
 _dtype_to_format_conversion = {
@@ -303,9 +304,8 @@ class TimeDeltaColumn(column.ColumnBase):
             ),
         )
 
-    def default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column
-        """
+    def _default_na_value(self) -> ScalarLike:
+        """Returns the default NA value for this column"""
         return np.timedelta64("nat", self.time_unit)
 
     @property
@@ -343,7 +343,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
         raise TypeError(
-            f"cannot astype a timedelta from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
     def as_string_column(
@@ -586,9 +586,9 @@ class TimeDeltaColumn(column.ColumnBase):
 
 
 def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
-    if np.can_cast(cudf.dtype(lhs_dtype), cudf.dtype(rhs_dtype)):
+    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
         return rhs_dtype
-    elif np.can_cast(cudf.dtype(rhs_dtype), cudf.dtype(lhs_dtype)):
+    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
         return lhs_dtype
     else:
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")

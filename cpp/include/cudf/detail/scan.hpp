@@ -26,22 +26,25 @@ namespace detail {
 /**
  * @brief Computes the exclusive scan of a column.
  *
- * The null values are skipped for the operation, and if an input element
- * at `i` is null, then the output element at `i` will also be null.
+ * The null values are skipped for the operation, and if an input element at `i` is null, then the
+ * output element at `i` will also be null.
  *
- * The identity value for the column type as per the aggregation type
- * is used for the value of the first element in the output column.
+ * The identity value for the column type as per the aggregation type is used for the value of the
+ * first element in the output column.
  *
- * @throws cudf::logic_error if column data_type is not an arithmetic type.
+ * Struct columns are allowed with aggregation types Min and Max.
  *
- * @param input The input column view for the scan
- * @param agg unique_ptr to aggregation operator applied by the scan
- * @param null_handling Exclude null values when computing the result if
- *                      null_policy::EXCLUDE. Include nulls if null_policy::INCLUDE.
- *                      Any operation with a null results in a null.
+ * @throws cudf::logic_error if column data_type is not an arithmetic type or struct type but the
+ *                           `agg` is not Min or Max.
+ *
+ * @param input The input column view for the scan.
+ * @param agg unique_ptr to aggregation operator applied by the scan.
+ * @param null_handling Exclude null values when computing the result if null_policy::EXCLUDE.
+ *                      Include nulls if null_policy::INCLUDE. Any operation with a null results in
+ *                      a null.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @returns Column with scan results
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @returns Column with scan results.
  */
 std::unique_ptr<column> scan_exclusive(column_view const& input,
                                        std::unique_ptr<aggregation> const& agg,
@@ -52,28 +55,52 @@ std::unique_ptr<column> scan_exclusive(column_view const& input,
 /**
  * @brief Computes the inclusive scan of a column.
  *
- * The null values are skipped for the operation, and if an input element
- * at `i` is null, then the output element at `i` will also be null.
+ * The null values are skipped for the operation, and if an input element at `i` is null, then the
+ * output element at `i` will also be null.
  *
- * String columns are allowed with aggregation types Min and Max.
+ * String and struct columns are allowed with aggregation types Min and Max.
  *
- * @throws cudf::logic_error if column data_type is not an arithmetic type
- *                           or string type but the `agg` is not Min or Max
+ * @throws cudf::logic_error if column data_type is not an arithmetic type or string/struct types
+ *                           but the `agg` is not Min or Max.
  *
- * @param input The input column view for the scan
- * @param agg unique_ptr to aggregation operator applied by the scan
- * @param null_handling Exclude null values when computing the result if
- *                      null_policy::EXCLUDE. Include nulls if null_policy::INCLUDE.
- *                      Any operation with a null results in a null.
+ * @param input The input column view for the scan.
+ * @param agg unique_ptr to aggregation operator applied by the scan.
+ * @param null_handling Exclude null values when computing the result if null_policy::EXCLUDE.
+ *                      Include nulls if null_policy::INCLUDE. Any operation with a null results in
+ *                      a null.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @returns Column with scan results
+ * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @returns Column with scan results.
  */
 std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        std::unique_ptr<aggregation> const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Generate row ranks for a column.
+ *
+ * @param order_by Input column to generate ranks for.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return rank values.
+ */
+std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Generate row dense ranks for a column.
+ *
+ * @param order_by Input column to generate ranks for.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return rank values.
+ */
+std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

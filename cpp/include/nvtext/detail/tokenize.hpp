@@ -30,8 +30,8 @@ namespace detail {
  * @param strings Strings column tokenize.
  * @param delimiter UTF-8 characters used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
 std::unique_ptr<cudf::column> tokenize(
@@ -46,8 +46,8 @@ std::unique_ptr<cudf::column> tokenize(
  *
  * @param strings Strings column to tokenize.
  * @param delimiters Strings used to separate individual strings into tokens.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings columns of tokens.
  */
 std::unique_ptr<cudf::column> tokenize(
@@ -63,8 +63,8 @@ std::unique_ptr<cudf::column> tokenize(
  * @param strings Strings column to use for this operation.
  * @param delimiter Strings used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column of token counts.
  */
 std::unique_ptr<cudf::column> count_tokens(
@@ -79,8 +79,8 @@ std::unique_ptr<cudf::column> count_tokens(
  *
  * @param strings Strings column to use for this operation.
  * @param delimiters Strings used to separate each string into tokens.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column of token counts.
  */
 std::unique_ptr<cudf::column> count_tokens(

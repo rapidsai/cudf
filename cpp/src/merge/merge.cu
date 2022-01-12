@@ -36,9 +36,9 @@
 #include <thrust/merge.h>
 #include <thrust/pair.h>
 
+#include "cudf/utilities/traits.hpp"
 #include <queue>
 #include <vector>
-#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace detail {
@@ -80,9 +80,7 @@ __global__ void materialize_merged_bitmask_kernel(
   auto active_threads = __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
   while (destination_row < num_destination_rows) {
-    index_type const& merged_idx = merged_indices[destination_row];
-    side const src_side          = thrust::get<0>(merged_idx);
-    size_type const src_row      = thrust::get<1>(merged_idx);
+    auto const [src_side, src_row] = merged_indices[destination_row];
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
     if (left_have_valids && from_left) {
@@ -113,8 +111,8 @@ void materialize_bitmask(column_view const& left_col,
   constexpr size_type BLOCK_SIZE{256};
   detail::grid_1d grid_config{num_elements, BLOCK_SIZE};
 
-  auto p_left_dcol  = column_device_view::create(left_col);
-  auto p_right_dcol = column_device_view::create(right_col);
+  auto p_left_dcol  = column_device_view::create(left_col, stream);
+  auto p_right_dcol = column_device_view::create(right_col, stream);
 
   auto left_valid  = *p_left_dcol;
   auto right_valid = *p_right_dcol;
@@ -225,11 +223,10 @@ struct column_merger {
   explicit column_merger(index_vector const& row_order) : row_order_(row_order) {}
 
   template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
-  std::unique_ptr<column> operator()(
-    column_view const& lcol,
-    column_view const& rcol,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
+  std::unique_ptr<column> operator()(column_view const&,
+                                     column_view const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Unsupported type for merge.");
   }
@@ -285,8 +282,7 @@ struct column_merger {
                       row_order_.end(),
                       merged_view.begin<Element>(),
                       [d_lcol, d_rcol] __device__(index_type const& index_pair) {
-                        auto side  = thrust::get<0>(index_pair);
-                        auto index = thrust::get<1>(index_pair);
+                        auto const [side, index] = index_pair;
                         return side == side::LEFT ? d_lcol[index] : d_rcol[index];
                       });
 
@@ -500,7 +496,9 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   });
 
   // If there is only one non-empty table_view, return its copy
-  if (merge_queue.size() == 1) { return std::make_unique<cudf::table>(merge_queue.top().view); }
+  if (merge_queue.size() == 1) {
+    return std::make_unique<cudf::table>(merge_queue.top().view, stream, mr);
+  }
   // No inputs have rows, return a table with same columns as the first one
   if (merge_queue.empty()) { return empty_like(first_table); }
 

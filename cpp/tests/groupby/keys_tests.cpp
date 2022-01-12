@@ -34,7 +34,7 @@ struct groupby_keys_test : public cudf::test::BaseFixture {
 using supported_types = cudf::test::
   Types<int8_t, int16_t, int32_t, int64_t, float, double, numeric::decimal32, numeric::decimal64>;
 
-TYPED_TEST_CASE(groupby_keys_test, supported_types);
+TYPED_TEST_SUITE(groupby_keys_test, supported_types);
 
 TYPED_TEST(groupby_keys_test, basic)
 {
@@ -287,6 +287,67 @@ TEST_F(groupby_dictionary_keys_test, basic)
                   expect_vals,
                   cudf::make_sum_aggregation<groupby_aggregation>(),
                   force_use_sort_impl::YES);
+}
+
+struct groupby_cache_test : public cudf::test::BaseFixture {
+};
+
+// To check if the cache doesn't insert multiple times to cache for same aggregation on a column in
+// same request.
+// If this test fails, then insert happened and key stored in cache map becomes dangling reference.
+// Any comparison with same aggregation as key will fail.
+TEST_F(groupby_cache_test, duplicate_agggregations)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  groupby::groupby gb_obj(table_view({keys}));
+
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<groupby_aggregation>());
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<groupby_aggregation>());
+
+  // hash groupby
+  EXPECT_NO_THROW(gb_obj.aggregate(requests));
+
+  // sort groupby
+  // WAR to force groupby to use sort implementation
+  requests[0].aggregations.push_back(make_nth_element_aggregation<groupby_aggregation>(0));
+  EXPECT_NO_THROW(gb_obj.aggregate(requests));
+}
+
+// To check if the cache doesn't insert multiple times to cache for same aggregation on same column
+// but in different requests.
+// If this test fails, then insert happened and key stored in cache map becomes dangling reference.
+// Any comparison with same aggregation as key will fail.
+TEST_F(groupby_cache_test, duplicate_columns)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  groupby::groupby gb_obj(table_view({keys}));
+
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<groupby_aggregation>());
+  requests.emplace_back(groupby::aggregation_request());
+  requests[1].values = vals;
+  requests[1].aggregations.push_back(cudf::make_sum_aggregation<groupby_aggregation>());
+
+  // hash groupby
+  EXPECT_NO_THROW(gb_obj.aggregate(requests));
+
+  // sort groupby
+  // WAR to force groupby to use sort implementation
+  requests[0].aggregations.push_back(make_nth_element_aggregation<groupby_aggregation>(0));
+  EXPECT_NO_THROW(gb_obj.aggregate(requests));
 }
 
 }  // namespace test

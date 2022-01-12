@@ -24,7 +24,9 @@
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/file_utilities.hpp>
 
+#include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/binning_memory_resource.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -48,6 +50,7 @@ class BaseFixture : public ::testing::Test {
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheriting from this fixture
+   * @return pointer to memory resource
    */
   rmm::mr::device_memory_resource* mr() { return _mr; }
 };
@@ -130,6 +133,7 @@ class UniformRandomGenerator {
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
+   * @param seed  seed to initialize generator with
    */
   template <typename TL                                                          = T,
             std::enable_if_t<cudf::is_numeric<TL>() && !cudf::is_boolean<TL>()>* = nullptr>
@@ -154,6 +158,7 @@ class UniformRandomGenerator {
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
+   * @param seed  seed to initialize generator with
    */
   template <typename TL                                                            = T,
             std::enable_if_t<cudf::is_chrono<TL>() or cudf::is_fixed_point<TL>()>* = nullptr>
@@ -166,6 +171,7 @@ class UniformRandomGenerator {
 
   /**
    * @brief Returns the next random number.
+   * @return generated random number
    */
   template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
   T generate()
@@ -207,6 +213,7 @@ class TempDirTestEnvironment : public ::testing::Environment {
   /**
    * @brief Get a temporary filepath to use for the specified filename
    *
+   * @param filename name of the file to be placed in temporary directory.
    * @return std::string The temporary filepath
    */
   std::string get_temp_filepath(std::string filename) { return tmpdir.path() + filename; }
@@ -215,11 +222,18 @@ class TempDirTestEnvironment : public ::testing::Environment {
 /// MR factory functions
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
+inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
+
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+
+inline auto make_arena()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
 }
 
 inline auto make_binning()
@@ -251,7 +265,9 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 {
   if (allocation_mode == "binning") return make_binning();
   if (allocation_mode == "cuda") return make_cuda();
+  if (allocation_mode == "async") return make_async();
   if (allocation_mode == "pool") return make_pool();
+  if (allocation_mode == "arena") return make_arena();
   if (allocation_mode == "managed") return make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
@@ -264,6 +280,9 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
  *
  * Currently only supports 'rmm_mode' string parameter, which set the rmm
  * allocation mode. The default value of the parameter is 'pool'.
+ * Environment variable 'CUDF_TEST_RMM_MODE' can also be used to set the rmm
+ * allocation mode. If both are set, the value of 'rmm_mode' string parameter
+ * takes precedence.
  *
  * @return Parsing results in the form of unordered map
  */
@@ -271,9 +290,12 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
 {
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
+    const char* env_rmm_mode = std::getenv("GTEST_CUDF_RMM_MODE");  // Overridden by CLI options
+    auto default_rmm_mode    = env_rmm_mode ? env_rmm_mode : "pool";
     options.allow_unrecognised_options().add_options()(
-      "rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"));
-
+      "rmm_mode",
+      "RMM allocation mode",
+      cxxopts::value<std::string>()->default_value(default_rmm_mode));
     return options.parse(argc, argv);
   } catch (const cxxopts::OptionException& e) {
     CUDF_FAIL("Error parsing command line options");

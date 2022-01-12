@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -60,17 +61,7 @@ struct sort_groupby_helper {
    */
   sort_groupby_helper(table_view const& keys,
                       null_policy include_null_keys = null_policy::EXCLUDE,
-                      sorted keys_pre_sorted        = sorted::NO)
-    : _keys(keys),
-      _num_keys(-1),
-      _keys_pre_sorted(keys_pre_sorted),
-      _include_null_keys(include_null_keys)
-  {
-    if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
-        has_nulls(keys)) {
-      _keys_pre_sorted = sorted::NO;
-    }
-  };
+                      sorted keys_pre_sorted        = sorted::NO);
 
   ~sort_groupby_helper()                          = default;
   sort_groupby_helper(sort_groupby_helper const&) = delete;
@@ -227,6 +218,8 @@ struct sort_groupby_helper {
   column_ptr _unsorted_keys_labels;  ///< Group labels for unsorted _keys
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
+  table_view _unflattened_keys;      ///< Input keys, unflattened and possibly nested
+  structs::detail::flattened_table _flattened;  ///< Support datastructures for _keys
 
   index_vector_ptr
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups

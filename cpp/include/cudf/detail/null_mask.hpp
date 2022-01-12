@@ -48,9 +48,18 @@ void set_null_mask(bitmask_type* bitmask,
                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @copydoc cudf::count_set_bits
+ * @brief Given a bitmask, counts the number of set (1) bits in the range
+ * `[start, stop)`.
  *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @throws cudf::logic_error if `bitmask == nullptr`
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmask Bitmask residing in device memory whose bits will be counted.
+ * @param start Index of the first bit to count (inclusive).
+ * @param stop Index of the last bit to count (exclusive).
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return The number of non-zero bits in the specified range.
  */
 cudf::size_type count_set_bits(bitmask_type const* bitmask,
                                size_type start,
@@ -58,9 +67,18 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
                                rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::count_unset_bits
+ * @brief Given a bitmask, counts the number of unset (0) bits in the range
+ * `[start, stop)`.
  *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @throws cudf::logic_error if `bitmask == nullptr`
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmask Bitmask residing in device memory whose bits will be counted.
+ * @param start Index of the first bit to count (inclusive).
+ * @param stop Index of the last bit to count (exclusive).
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return The number of zero bits in the specified range.
  */
 cudf::size_type count_unset_bits(bitmask_type const* bitmask,
                                  size_type start,
@@ -68,22 +86,121 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask,
                                  rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::segmented_count_set_bits
+ * @brief Given a bitmask, counts the number of set (1) bits in every range
+ * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
+ * @throws cudf::logic_error if `bitmask == nullptr`
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Bitmask residing in device memory whose bits will be counted.
+ * @param[in] indices A host_span of indices specifying ranges to count the number of set bits.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return A vector storing the number of non-zero bits in the specified ranges.
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 host_span<size_type const> indices,
                                                 rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::segmented_count_unset_bits
+ * @brief Given a bitmask, counts the number of unset (0) bits in every range
+ * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
+ * @throws cudf::logic_error if `bitmask == nullptr`
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Bitmask residing in device memory whose bits will be counted.
+ * @param[in] indices A host_span of indices specifying ranges to count the number of unset bits.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return A vector storing the number of zero bits in the specified ranges.
  */
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream);
+
+/**
+ * @brief Given a validity bitmask, counts the number of valid elements (set bits)
+ * in the range `[start, stop)`.
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and the
+ * function returns `stop-start`.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param[in] bitmask Validity bitmask residing in device memory.
+ * @param[in] start Index of the first bit to count (inclusive).
+ * @param[in] stop Index of the last bit to count (exclusive).
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return The number of valid elements in the specified range.
+ */
+cudf::size_type valid_count(bitmask_type const* bitmask,
+                            size_type start,
+                            size_type stop,
+                            rmm::cuda_stream_view stream);
+
+/**
+ * @brief Given a validity bitmask, counts the number of null elements (unset bits)
+ * in the range `[start, stop)`.
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and the
+ * function returns ``.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param[in] bitmask Validity bitmask residing in device memory.
+ * @param[in] start Index of the first bit to count (inclusive).
+ * @param[in] stop Index of the last bit to count (exclusive).
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return The number of null elements in the specified range.
+ */
+cudf::size_type null_count(bitmask_type const* bitmask,
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Given a validity bitmask, counts the number of valid elements (set
+ * bits) in every range `[indices[2*i], indices[(2*i)+1])` (where 0 <= i <
+ * indices.size() / 2).
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and a vector of
+ * length `indices.size()` containing segment lengths is returned.
+ *
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`.
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`.
+ *
+ * @param[in] bitmask Validity bitmask residing in device memory.
+ * @param[in] indices A host_span of indices specifying ranges to count the number of valid
+ * elements.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return A vector storing the number of valid elements in each specified range.
+ */
+std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
+                                             host_span<size_type const> indices,
+                                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Given a validity bitmask, counts the number of null elements (unset
+ * bits) in every range `[indices[2*i], indices[(2*i)+1])` (where 0 <= i <
+ * indices.size() / 2).
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and a vector of
+ * length `indices.size()` containing all zeros is returned.
+ *
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Validity bitmask residing in device memory.
+ * @param[in] indices A host_span of indices specifying ranges to count the number of null elements.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @return A vector storing the number of null elements in each specified range.
+ */
+std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
+                                            host_span<size_type const> indices,
+                                            rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::copy_bitmask(bitmask_type const*, size_type, size_type,
@@ -114,7 +231,7 @@ rmm::device_buffer copy_bitmask(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-rmm::device_buffer bitmask_and(
+std::pair<rmm::device_buffer, size_type> bitmask_and(
   host_span<bitmask_type const*> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
@@ -126,7 +243,7 @@ rmm::device_buffer bitmask_and(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-rmm::device_buffer bitmask_and(
+std::pair<rmm::device_buffer, size_type> bitmask_and(
   table_view const& view,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -136,7 +253,7 @@ rmm::device_buffer bitmask_and(
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-rmm::device_buffer bitmask_or(
+std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

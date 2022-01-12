@@ -100,34 +100,12 @@ def test_to_dlpack_index(data_1d):
         assert str(type(dlt)) == "<class 'PyCapsule'>"
 
 
-def test_to_dlpack_column(data_1d):
-    expectation = data_size_expectation_builder(data_1d)
-
-    with expectation:
-        gs = cudf.Series(data_1d, nan_as_null=False)
-        dlt = gs._column.to_dlpack()
-
-        # PyCapsules are a C-API thing so couldn't come up with a better way
-        assert str(type(dlt)) == "<class 'PyCapsule'>"
-
-
-def test_to_dlpack_column_null(data_1d):
-    expectation = data_size_expectation_builder(data_1d, nan_null_param=True)
-
-    with expectation:
-        gs = cudf.Series(data_1d, nan_as_null=True)
-        dlt = gs._column.to_dlpack()
-
-        # PyCapsules are a C-API thing so couldn't come up with a better way
-        assert str(type(dlt)) == "<class 'PyCapsule'>"
-
-
 def test_to_dlpack_cupy_1d(data_1d):
     expectation = data_size_expectation_builder(data_1d, False)
     with expectation:
         gs = cudf.Series(data_1d, nan_as_null=False)
-        cudf_host_array = gs.to_array(fillna="pandas")
-        dlt = gs._column.to_dlpack()
+        cudf_host_array = gs.to_numpy(na_value=np.nan)
+        dlt = gs.to_dlpack()
 
         cupy_array = cupy.fromDlpack(dlt)
         cupy_host_array = cupy_array.get()
@@ -155,7 +133,7 @@ def test_from_dlpack_cupy_1d(data_1d):
     dlt = cupy_array.toDlpack()
 
     gs = cudf.from_dlpack(dlt)
-    cudf_host_array = gs.to_array(fillna="pandas")
+    cudf_host_array = gs.to_numpy(na_value=np.nan)
 
     assert_eq(cudf_host_array, cupy_host_array)
 
@@ -190,10 +168,22 @@ def test_to_dlpack_cupy_1d_null(data_1d):
 
     with expectation:
         gs = cudf.Series(data_1d)
-        cudf_host_array = gs.to_array(fillna="pandas")
-        dlt = gs._column.to_dlpack()
+        cudf_host_array = gs.to_numpy(na_value=np.nan)
+        dlt = gs.to_dlpack()
 
         cupy_array = cupy.fromDlpack(dlt)
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
+
+
+def test_to_dlpack_mixed_dtypes():
+    df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [10.32, 0.4, -0.2, -1000.32]})
+
+    cudf_host_array = df.to_numpy()
+    dlt = df.to_dlpack()
+
+    cupy_array = cupy.fromDlpack(dlt)
+    cupy_host_array = cupy_array.get()
+
+    assert_eq(cudf_host_array, cupy_host_array)

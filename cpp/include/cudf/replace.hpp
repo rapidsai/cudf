@@ -260,8 +260,8 @@ std::unique_ptr<column> clamp(
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in] Column of floating-point elements to copy and normalize
- * @param[in] device_memory_resource allocator for allocating output data
+ * @param[in] input column_view of floating-point elements to copy and normalize
+ * @param[in] mr device_memory_resource allocator for allocating output data
  *
  * @returns new column with the modified data
  */
@@ -278,7 +278,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in, out] Column of floating-point elements to normalize
+ * @param[in, out] in_out of floating-point elements to normalize
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out);
 

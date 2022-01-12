@@ -4,7 +4,7 @@ import numpy as np
 
 from cudf._lib.column cimport Column
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string

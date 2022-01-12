@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -29,6 +29,12 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+
+# Dask & Distributed git tag
+export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
+
+# ucx-py version
+export UCX_PY_VERSION='0.24.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -80,10 +86,10 @@ gpuci_mamba_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.21.*"
+                  "ucx-py=${UCX_PY_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
@@ -101,8 +107,8 @@ function install_dask {
     # Install the main version of dask, distributed, and streamz
     gpuci_logger "Install the main version of dask, distributed, and streamz"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
+    pip install "git+https://github.com/dask/distributed.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
     # Need to uninstall streamz that is already in the env.
     pip uninstall -y streamz
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
@@ -163,15 +169,47 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_logger "GoogleTests"
     set -x
     cd $LIB_BUILD_DIR
+
+    gpuci_logger "GoogleTests"
 
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
+
+    # Copy libcudf build time results
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+        gpuci_logger "Copying build time results"
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+        mkdir -p "$WORKSPACE/build-metrics"
+        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+    fi
+
+    ################################################################################
+    # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
+    ################################################################################
+    if [[ "$BUILD_MODE" == "branch" && "$BUILD_TYPE" == "gpu" ]]; then
+        if [[ "$COMPUTE_SANITIZER_ENABLE" == "true" ]]; then
+            gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
+            export GTEST_CUDF_RMM_MODE=cuda
+            COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
+            mkdir -p "$WORKSPACE/test-results/"
+            for gt in gtests/*; do
+                test_name=$(basename ${gt})
+                if [[ "$test_name" == "ERROR_TEST" ]]; then
+                  continue
+                fi
+                echo "Running GoogleTest $test_name"
+                ${COMPUTE_SANITIZER_CMD} ${gt} | tee "$WORKSPACE/test-results/${test_name}.cs.log"
+            done
+            unset GTEST_CUDF_RMM_MODE
+            # test-results/*.cs.log are processed in gpuci
+        fi
+    fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
@@ -181,7 +219,7 @@ else
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 

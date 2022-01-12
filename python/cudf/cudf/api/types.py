@@ -194,7 +194,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: List[Union[cudf.Series, cudf.Index]],
+    to_union: List[Union[cudf.Series, cudf.CategoricalIndex]],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):

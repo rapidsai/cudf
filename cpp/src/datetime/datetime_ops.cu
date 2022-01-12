@@ -20,14 +20,22 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/detail/datetime.hpp>
+#include <cudf/detail/datetime_ops.cuh>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/durations.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
 
 namespace cudf {
 namespace datetime {
@@ -41,6 +49,15 @@ enum class datetime_component {
   HOUR,
   MINUTE,
   SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
+};
+
+enum class rounding_function {
+  CEIL,   ///< Rounds up to the next integer multiple of the provided frequency
+  FLOOR,  ///< Rounds down to the next integer multiple of the provided frequency
+  ROUND   ///< Rounds to the nearest integer multiple of the provided frequency
 };
 
 template <datetime_component Component>
@@ -74,6 +91,63 @@ struct extract_component_operator {
       case datetime_component::SECOND: return secs_.count();
       default: return 0;
     }
+  }
+};
+
+// This functor takes the rounding type as runtime info and dispatches to the ceil/floor/round
+// function.
+template <typename DurationType>
+struct RoundFunctor {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE auto operator()(rounding_function round_kind, Timestamp dt)
+  {
+    switch (round_kind) {
+      case rounding_function::CEIL: return cuda::std::chrono::ceil<DurationType>(dt);
+      case rounding_function::FLOOR: return cuda::std::chrono::floor<DurationType>(dt);
+      case rounding_function::ROUND: return cuda::std::chrono::round<DurationType>(dt);
+      default: cudf_assert(false && "Unsupported rounding kind.");
+    }
+    __builtin_unreachable();
+  }
+};
+
+struct RoundingDispatcher {
+  rounding_function round_kind;
+  rounding_frequency component;
+
+  RoundingDispatcher(rounding_function round_kind, rounding_frequency component)
+    : round_kind(round_kind), component(component)
+  {
+  }
+
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
+  {
+    switch (component) {
+      case rounding_frequency::DAY:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_D>{}(round_kind, ts));
+      case rounding_frequency::HOUR:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_h>{}(round_kind, ts));
+      case rounding_frequency::MINUTE:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_m>{}(round_kind, ts));
+      case rounding_frequency::SECOND:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_s>{}(round_kind, ts));
+      case rounding_frequency::MILLISECOND:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_ms>{}(round_kind, ts));
+      case rounding_frequency::MICROSECOND:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_us>{}(round_kind, ts));
+      case rounding_frequency::NANOSECOND:
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_ns>{}(round_kind, ts));
+      default: cudf_assert(false && "Unsupported datetime rounding resolution.");
+    }
+    __builtin_unreachable();
   }
 };
 
@@ -155,6 +229,46 @@ struct is_leap_year_op {
   }
 };
 
+// Specific function for applying ceil/floor/round date ops
+struct dispatch_round {
+  template <typename Timestamp>
+  std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
+    rounding_function round_kind,
+    rounding_frequency component,
+    cudf::column_view const& column,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
+  {
+    auto size            = column.size();
+    auto output_col_type = data_type{cudf::type_to_id<Timestamp>()};
+
+    // Return an empty column if source column is empty
+    if (size == 0) return make_empty_column(output_col_type);
+
+    auto output = make_fixed_width_column(output_col_type,
+                                          size,
+                                          cudf::detail::copy_bitmask(column, stream, mr),
+                                          column.null_count(),
+                                          stream,
+                                          mr);
+
+    thrust::transform(rmm::exec_policy(stream),
+                      column.begin<Timestamp>(),
+                      column.end<Timestamp>(),
+                      output->mutable_view().begin<Timestamp>(),
+                      RoundingDispatcher{round_kind, component});
+
+    return output;
+  }
+
+  template <typename Timestamp, typename... Args>
+  std::enable_if_t<!cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
+    Args&&...)
+  {
+    CUDF_FAIL("Must be cudf::timestamp");
+  }
+};
+
 // Apply the functor for every element/row in the input column to create the output column
 template <typename TransformFunctor, typename OutputColT>
 struct launch_functor {
@@ -211,49 +325,43 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 }
 
 struct add_calendrical_months_functor {
-  column_view timestamp_column;
-  column_view months_column;
-  mutable_column_view output;
-
-  add_calendrical_months_functor(column_view tsc, column_view mc, mutable_column_view out)
-    : timestamp_column(tsc), months_column(mc), output(out)
-  {
-  }
-
-  template <typename Element>
-  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    rmm::cuda_stream_view stream) const
+  template <typename Element, typename... Args>
+  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, std::unique_ptr<column>>
+  operator()(Args&&...) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
-  template <typename Timestamp>
-  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    rmm::cuda_stream_view stream) const
+  template <typename Timestamp, typename MonthIterator>
+  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, std::unique_ptr<column>>
+  operator()(column_view timestamp_column,
+             MonthIterator months_begin,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
+    auto size            = timestamp_column.size();
+    auto output_col_type = timestamp_column.type();
+
+    // Return an empty column if source column is empty
+    if (size == 0) return make_empty_column(output_col_type);
+
+    // The nullmask of `output` cannot be determined without information from
+    // the `months` type (column or scalar). Therefore, it is initialized as
+    // `UNALLOCATED` and assigned at a later stage.
+    auto output =
+      make_fixed_width_column(output_col_type, size, mask_state::UNALLOCATED, stream, mr);
+    auto output_mview = output->mutable_view();
+
     thrust::transform(rmm::exec_policy(stream),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
-                      months_column.begin<int16_t>(),
-                      output.begin<Timestamp>(),
-                      [] __device__(auto time_val, auto months_val) {
-                        using namespace cuda::std::chrono;
-                        using duration_m = duration<int32_t, months::period>;
-
-                        // Get the days component from the input
-                        auto days_since_epoch = floor<days>(time_val);
-
-                        // Add the number of months
-                        year_month_day ymd{days_since_epoch};
-                        ymd += duration_m{months_val};
-
-                        // If the new date isn't valid, scale it back to the last day of the
-                        // month.
-                        if (!ymd.ok()) ymd = ymd.year() / ymd.month() / last;
-
-                        // Put back the time component to the date
-                        return sys_days{ymd} + (time_val - days_since_epoch);
+                      months_begin,
+                      output->mutable_view().begin<Timestamp>(),
+                      [] __device__(auto& timestamp, auto& months) {
+                        return add_calendrical_months_with_scale_back(
+                          timestamp, cuda::std::chrono::months{months});
                       });
+    return output;
   }
 };
 
@@ -263,27 +371,62 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
-  CUDF_EXPECTS(months_column.type() == data_type{type_id::INT16},
-               "Months column type should be INT16");
+  CUDF_EXPECTS(
+    months_column.type().id() == type_id::INT16 or months_column.type().id() == type_id::INT32,
+    "Months column type should be INT16 or INT32.");
   CUDF_EXPECTS(timestamp_column.size() == months_column.size(),
                "Timestamp and months column should be of the same size");
-  auto size            = timestamp_column.size();
-  auto output_col_type = timestamp_column.type();
 
-  // Return an empty column if source column is empty
-  if (size == 0) return make_empty_column(output_col_type);
+  auto const months_begin_iter =
+    cudf::detail::indexalator_factory::make_input_iterator(months_column);
+  auto output = type_dispatcher(timestamp_column.type(),
+                                add_calendrical_months_functor{},
+                                timestamp_column,
+                                months_begin_iter,
+                                stream,
+                                mr);
 
-  auto output_col_mask =
-    cudf::detail::bitmask_and(table_view({timestamp_column, months_column}), stream, mr);
-  auto output = make_fixed_width_column(
-    output_col_type, size, std::move(output_col_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
-
-  auto launch = add_calendrical_months_functor{
-    timestamp_column, months_column, static_cast<mutable_column_view>(*output)};
-
-  type_dispatcher(timestamp_column.type(), launch, stream);
-
+  auto [output_null_mask, null_count] =
+    cudf::detail::bitmask_and(table_view{{timestamp_column, months_column}}, stream, mr);
+  output->set_null_mask(std::move(output_null_mask), null_count);
   return output;
+}
+
+std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_column,
+                                               scalar const& months,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
+  CUDF_EXPECTS(months.type().id() == type_id::INT16 or months.type().id() == type_id::INT32,
+               "Months type should be INT16 or INT32");
+
+  if (months.is_valid(stream)) {
+    auto const months_begin_iter = thrust::make_permutation_iterator(
+      cudf::detail::indexalator_factory::make_input_iterator(months),
+      thrust::make_constant_iterator(0));
+    auto output = type_dispatcher(timestamp_column.type(),
+                                  add_calendrical_months_functor{},
+                                  timestamp_column,
+                                  months_begin_iter,
+                                  stream,
+                                  mr);
+    output->set_null_mask(cudf::detail::copy_bitmask(timestamp_column, stream, mr));
+    return output;
+  } else {
+    return make_timestamp_column(
+      timestamp_column.type(), timestamp_column.size(), mask_state::ALL_NULL, stream, mr);
+  }
+}
+
+std::unique_ptr<column> round_general(rounding_function round_kind,
+                                      rounding_frequency component,
+                                      column_view const& column,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  return cudf::type_dispatcher(
+    column.type(), dispatch_round{}, round_kind, component, column, stream, mr);
 }
 
 std::unique_ptr<column> extract_year(column_view const& column,
@@ -388,6 +531,33 @@ std::unique_ptr<column> extract_quarter(column_view const& column,
 
 }  // namespace detail
 
+std::unique_ptr<column> ceil_datetimes(column_view const& column,
+                                       rounding_frequency freq,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::round_general(
+    detail::rounding_function::CEIL, freq, column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_datetimes(column_view const& column,
+                                        rounding_frequency freq,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::round_general(
+    detail::rounding_function::FLOOR, freq, column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> round_datetimes(column_view const& column,
+                                        rounding_frequency freq,
+                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::round_general(
+    detail::rounding_function::ROUND, freq, column, rmm::cuda_stream_default, mr);
+}
+
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -454,6 +624,14 @@ std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& ti
   CUDF_FUNC_RANGE();
   return detail::add_calendrical_months(
     timestamp_column, months_column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamp_column,
+                                                     cudf::scalar const& months,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::add_calendrical_months(timestamp_column, months, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> is_leap_year(column_view const& column, rmm::mr::device_memory_resource* mr)

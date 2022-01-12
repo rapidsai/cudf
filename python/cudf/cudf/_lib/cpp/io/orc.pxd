@@ -2,6 +2,7 @@
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -36,6 +37,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
         void set_decimal_cols_as_float(vector[string] val) except+
+        void enable_decimal128(bool val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -57,6 +59,7 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& decimal_cols_as_float(
             vector[string] val
         ) except+
+        orc_reader_options_builder& decimal128(bool val) except+
 
         orc_reader_options build() except+
 
@@ -68,15 +71,22 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options()
         cudf_io_types.sink_info get_sink() except+
         cudf_io_types.compression_type get_compression() except+
-        bool enable_statistics() except+
+        bool is_enabled_statistics() except+
+        size_t get_stripe_size_bytes() except+
+        size_type get_stripe_size_rows() except+
+        size_type get_row_index_stride() except+
         cudf_table_view.table_view get_table() except+
-        const cudf_io_types.table_metadata *get_metadata() except+
+        const cudf_io_types.table_input_metadata *get_metadata() except+
 
         # setter
         void set_compression(cudf_io_types.compression_type comp) except+
         void enable_statistics(bool val) except+
+        void set_stripe_size_bytes(size_t val) except+
+        void set_stripe_size_rows(size_type val) except+
+        void set_row_index_stride(size_type val) except+
         void set_table(cudf_table_view.table_view tbl) except+
-        void set_metadata(cudf_io_types.table_metadata* meta) except+
+        void set_metadata(cudf_io_types.table_input_metadata* meta) except+
+        void set_key_value_metadata(map[string, string] kvm) except +
 
         @staticmethod
         orc_writer_options_builder builder(
@@ -90,11 +100,17 @@ cdef extern from "cudf/io/orc.hpp" \
             cudf_io_types.compression_type comp
         ) except+
         orc_writer_options_builder& enable_statistics(bool val) except+
+        orc_writer_options_builder& stripe_size_bytes(size_t val) except+
+        orc_writer_options_builder& stripe_size_rows(size_type val) except+
+        orc_writer_options_builder& row_index_stride(size_type val) except+
         orc_writer_options_builder& table(
             cudf_table_view.table_view tbl
         ) except+
         orc_writer_options_builder& metadata(
-            cudf_io_types.table_metadata *meta
+            cudf_io_types.table_input_metadata *meta
+        ) except+
+        orc_writer_options_builder& key_value_metadata(
+            map[string, string] kvm
         ) except+
 
         orc_writer_options build() except+
@@ -106,17 +122,24 @@ cdef extern from "cudf/io/orc.hpp" \
         cudf_io_types.sink_info get_sink() except+
         cudf_io_types.compression_type get_compression() except+
         bool enable_statistics() except+
+        size_t stripe_size_bytes() except+
+        size_type stripe_size_rows() except+
+        size_type row_index_stride() except+
         cudf_table_view.table_view get_table() except+
-        const cudf_io_types.table_metadata_with_nullability *get_metadata(
+        const cudf_io_types.table_input_metadata *get_metadata(
         ) except+
 
         # setter
         void set_compression(cudf_io_types.compression_type comp) except+
         void enable_statistics(bool val) except+
+        void set_stripe_size_bytes(size_t val) except+
+        void set_stripe_size_rows(size_type val) except+
+        void set_row_index_stride(size_type val) except+
         void set_table(cudf_table_view.table_view tbl) except+
         void set_metadata(
-            cudf_io_types.table_metadata_with_nullability* meta
+            cudf_io_types.table_input_metadata* meta
         ) except+
+        void set_key_value_metadata(map[string, string] kvm) except +
 
         @staticmethod
         chunked_orc_writer_options_builder builder(
@@ -129,11 +152,17 @@ cdef extern from "cudf/io/orc.hpp" \
             cudf_io_types.compression_type comp
         ) except+
         chunked_orc_writer_options_builder& enable_statistics(bool val) except+
+        orc_writer_options_builder& stripe_size_bytes(size_t val) except+
+        orc_writer_options_builder& stripe_size_rows(size_type val) except+
+        orc_writer_options_builder& row_index_stride(size_type val) except+
         chunked_orc_writer_options_builder& table(
             cudf_table_view.table_view tbl
         ) except+
         chunked_orc_writer_options_builder& metadata(
-            cudf_io_types.table_metadata *meta
+            cudf_io_types.table_input_metadata *meta
+        ) except+
+        chunked_orc_writer_options_builder& key_value_metadata(
+            map[string, string] kvm
         ) except+
 
         chunked_orc_writer_options build() except+

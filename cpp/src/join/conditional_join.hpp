@@ -36,7 +36,6 @@ namespace detail {
  * @param right Table of right  columns to join
  * tables have been flipped, meaning the output indices should also be flipped
  * @param JoinKind The type of join to be performed
- * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Join output indices vector pair
@@ -46,7 +45,6 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_join(table_view const& left,
                  table_view const& right,
                  ast::expression const& binary_predicate,
-                 null_equality compare_nulls,
                  join_kind JoinKind,
                  std::optional<std::size_t> output_size = {},
                  rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
@@ -60,7 +58,6 @@ conditional_join(table_view const& left,
  * @param right Table of right  columns to join
  * tables have been flipped, meaning the output indices should also be flipped
  * @param JoinKind The type of join to be performed
- * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Join output indices vector pair
@@ -69,7 +66,6 @@ std::size_t compute_conditional_join_output_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls,
   join_kind JoinKind,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

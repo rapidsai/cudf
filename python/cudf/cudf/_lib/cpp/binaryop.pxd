@@ -61,3 +61,27 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const string& op,
         data_type output_type
     ) except +
+
+    unique_ptr[column] jit_binary_operation \
+        "cudf::jit::binary_operation" (
+        const column_view& lhs,
+        const column_view& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +
+
+    unique_ptr[column] jit_binary_operation \
+        "cudf::jit::binary_operation" (
+        const column_view& lhs,
+        const scalar& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +
+
+    unique_ptr[column] jit_binary_operation \
+        "cudf::jit::binary_operation" (
+        const scalar& lhs,
+        const column_view& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +

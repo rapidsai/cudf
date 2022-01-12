@@ -6,8 +6,8 @@ import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
 
 
 @ioutils.doc_read_json()
@@ -37,7 +37,7 @@ def read_json(
         for source in path_or_buf:
             if ioutils.is_directory(source, **kwargs):
                 fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None, path=source
+                    passed_filesystem=None, path=source, **kwargs
                 )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
