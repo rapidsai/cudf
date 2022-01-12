@@ -950,7 +950,10 @@ class ParquetDatasetWriter:
                 else metadata[0]
             )
 
-    def __del__(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
         self.close()
 
 

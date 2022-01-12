@@ -484,7 +484,10 @@ cdef class ParquetWriter:
             return np.asarray(out_metadata_py)
         return None
 
-    def __dealloc__(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
         self.close()
 
     def _initialize_chunked_state(self, table, num_partitions=1):
