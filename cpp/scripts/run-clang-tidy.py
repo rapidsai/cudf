@@ -41,7 +41,7 @@ def parse_args():
                            "been run once before running this script!")
     argparser.add_argument("-exe", type=str, default="clang-tidy",
                            help="Path to clang-tidy exe")
-    argparser.add_argument("-ignore", type=str, default="_deps", #"[.]cu$|examples/kmeans/",
+    argparser.add_argument("-ignore", type=str, default="[.]cu$|examples/kmeans/",
                            help="Regex used to ignore files from checking")
     argparser.add_argument("-select", type=str, default=None,
                            help="Regex used to select files for checking")
@@ -144,23 +144,22 @@ def get_tidy_args(cmd, exe):
 
 
 def run_clang_tidy_command(tidy_cmd):
-    file_name = tidy_cmd[-1].split('cudf/cpp')[-1].replace('/','_').replace('.','_')
-    cmd = tidy_cmd[0] + " --export-fixes=fixes" + file_name + ".yaml " + " ".join(tidy_cmd[1:])
-    # cmd = tidy_cmd[0] + " -extra-arg=-Wno-unknown-warning-option " + " ".join(tidy_cmd[1:])
-    # cmd = " ".join(tidy_cmd)
-    
-    # print(cmd)
+    cmd = " ".join(tidy_cmd)
     result = subprocess.run(cmd, check=False, shell=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     status = result.returncode == 0
-    out = ("" if status else "CMD: " + cmd) + result.stdout.decode("utf-8").rstrip()
+    if status:
+        out = ""
+    else:
+        out = "CMD: " + cmd
+    out += result.stdout.decode("utf-8").rstrip()
     return status, out
 
 
 def run_clang_tidy(cmd, args):
     command, is_cuda = get_tidy_args(cmd, args.exe)
     tidy_cmd = [args.exe,
-                "-header-filter='.*cudf/cpp/(src|include|bench|tests).*(?!cxxopts).*'",
+                "-header-filter='.*cudf/cpp/(src|include|bench|comms).*'",
                 cmd["file"], "--", ]
     tidy_cmd.extend(command)
     status = True
@@ -232,7 +231,6 @@ def run_tidy_for_all_files(args, all_files):
     if pool is not None:
         pool.close()
         pool.join()
-    print("There were " + str(len(results)) + "errors.")
     return print_results()
 
 
