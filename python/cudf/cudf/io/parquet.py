@@ -860,7 +860,9 @@ class ParquetDatasetWriter:
         self.partition_cols = partition_cols
         # Collection of `ParquetWriter`s, and the corresponding
         # partition_col values they're responsible for
-        self._chunked_writers: List[Tuple[ParquetWriter, List[str], str]] = []
+        self._chunked_writers: List[
+            Tuple[libparquet.ParquetWriter, List[str], str]
+        ] = []
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
