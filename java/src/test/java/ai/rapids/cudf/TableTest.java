@@ -2020,7 +2020,6 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testMixedInnerJoinGatherMapsNulls() {
-    final int inv = Integer.MIN_VALUE;
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(1, TableReference.LEFT),
         new ColumnReference(1, TableReference.RIGHT));
@@ -2088,7 +2087,6 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testMixedInnerJoinGatherMapsNullsWithSize() {
-    final int inv = Integer.MIN_VALUE;
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(1, TableReference.LEFT),
         new ColumnReference(1, TableReference.RIGHT));
@@ -2378,6 +2376,222 @@ public class TableTest extends CudfTestBase {
         for (GatherMap map : maps) {
           map.close();
         }
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMap() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8)
+             .build();
+         GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMapNulls() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 7, 8)
+             .build();
+         GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMapWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftSemiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.UNEQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMapNullsWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 7, 8)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftSemiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.EQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMap() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6, 9)
+             .build();
+         GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMapNulls() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4, 5, 6, 9)
+             .build();
+         GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMapWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6, 9)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftAntiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.UNEQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMapNullsWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4, 5, 6, 9)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftAntiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.EQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
       }
     }
   }
