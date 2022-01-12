@@ -19,8 +19,8 @@ from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
 from cudf.io.parquet import (
-    ParquetWriter,
     ParquetDatasetWriter,
+    ParquetWriter,
     merge_parquet_filemetadata,
 )
 from cudf.testing import dataset_generator as dg
