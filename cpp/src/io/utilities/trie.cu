@@ -33,8 +33,8 @@
 namespace cudf {
 namespace detail {
 
-auto create_serialized_trie(const std::vector<std::string>& keys,
-                                                             rmm::cuda_stream_view stream) -> rmm::device_uvector<serial_trie_node>
+auto create_serialized_trie(const std::vector<std::string>& keys, rmm::cuda_stream_view stream)
+  -> rmm::device_uvector<serial_trie_node>
 {
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {

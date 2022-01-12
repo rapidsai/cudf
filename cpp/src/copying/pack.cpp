@@ -73,8 +73,8 @@ struct serialized_column {
  * @return Fully formed column_view
  */
 auto deserialize_column(serialized_column serial_column,
-                               std::vector<column_view> const& children,
-                               uint8_t const* base_ptr) -> column_view
+                        std::vector<column_view> const& children,
+                        uint8_t const* base_ptr) -> column_view
 {
   auto const data_ptr =
     serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : nullptr;
@@ -139,8 +139,8 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
  * @copydoc cudf::detail::pack
  */
 auto pack(cudf::table_view const& input,
-                    rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) -> packed_columns
+          rmm::cuda_stream_view stream,
+          rmm::mr::device_memory_resource* mr) -> packed_columns
 {
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
@@ -150,9 +150,9 @@ auto pack(cudf::table_view const& input,
 
 template <typename ColumnIter>
 auto pack_metadata(ColumnIter begin,
-                                       ColumnIter end,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size) -> packed_columns::metadata
+                   ColumnIter end,
+                   uint8_t const* contiguous_buffer,
+                   size_t buffer_size) -> packed_columns::metadata
 {
   std::vector<serialized_column> metadata;
 
@@ -224,9 +224,8 @@ auto pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr) ->
 /**
  * @copydoc cudf::pack_metadata
  */
-auto pack_metadata(table_view const& table,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size) -> packed_columns::metadata
+auto pack_metadata(table_view const& table, uint8_t const* contiguous_buffer, size_t buffer_size)
+  -> packed_columns::metadata
 {
   CUDF_FUNC_RANGE();
   return table.is_empty()

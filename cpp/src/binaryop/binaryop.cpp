@@ -52,9 +52,9 @@ namespace binops {
  * @brief Computes output valid mask for op between a column and a scalar
  */
 auto scalar_col_valid_mask_and(column_view const& col,
-                                             scalar const& s,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
+                               scalar const& s,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
 {
   if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
 
@@ -371,9 +371,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 }
 }  // namespace detail
 
-auto binary_operation_fixed_point_scale(binary_operator op,
-                                           int32_t left_scale,
-                                           int32_t right_scale) -> int32_t
+auto binary_operation_fixed_point_scale(binary_operator op, int32_t left_scale, int32_t right_scale)
+  -> int32_t
 {
   CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
                "Unsupported fixed_point binary operation.");
@@ -383,8 +382,8 @@ auto binary_operation_fixed_point_scale(binary_operator op,
 }
 
 auto binary_operation_fixed_point_output_type(binary_operator op,
-                                                         cudf::data_type const& lhs,
-                                                         cudf::data_type const& rhs) -> cudf::data_type
+                                              cudf::data_type const& lhs,
+                                              cudf::data_type const& rhs) -> cudf::data_type
 {
   cudf::binops::compiled::fixed_point_binary_operation_validation(op, lhs, rhs);
 

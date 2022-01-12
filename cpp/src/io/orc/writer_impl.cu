@@ -293,8 +293,8 @@ auto orc_table_view::num_rows() const noexcept -> size_type
  * @return List of stripe descriptors
  */
 auto calculate_segmentation(host_span<orc_column_view const> columns,
-                                         hostdevice_2dvector<rowgroup_rows>&& rowgroup_bounds,
-                                         stripe_size_limits max_stripe_size) -> file_segmentation
+                            hostdevice_2dvector<rowgroup_rows>&& rowgroup_bounds,
+                            stripe_size_limits max_stripe_size) -> file_segmentation
 {
   std::vector<stripe_rowgroups> infos;
   auto const num_rowgroups = rowgroup_bounds.size().first;
@@ -487,8 +487,9 @@ constexpr auto RLE_stream_size(TypeKind kind, size_t count) -> size_t
 }
 
 auto writer::impl::create_streams(host_span<orc_column_view> columns,
-                                         file_segmentation const& segmentation,
-                                         std::map<uint32_t, size_t> const& decimal_column_sizes) -> orc_streams
+                                  file_segmentation const& segmentation,
+                                  std::map<uint32_t, size_t> const& decimal_column_sizes)
+  -> orc_streams
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -639,8 +640,8 @@ auto writer::impl::create_streams(host_span<orc_column_view> columns,
   return {std::move(streams), std::move(ids), std::move(types)};
 }
 
-auto orc_streams::compute_offsets(
-  host_span<orc_column_view const> columns, size_t num_rowgroups) const -> orc_streams::orc_stream_offsets
+auto orc_streams::compute_offsets(host_span<orc_column_view const> columns,
+                                  size_t num_rowgroups) const -> orc_streams::orc_stream_offsets
 {
   std::vector<size_t> strm_offsets(streams.size());
   size_t non_rle_data_size = 0;
@@ -830,11 +831,11 @@ struct segmented_valid_cnt_input {
 };
 
 auto encode_columns(orc_table_view const& orc_table,
-                            string_dictionaries&& dictionaries,
-                            encoder_decimal_info&& dec_chunk_sizes,
-                            file_segmentation const& segmentation,
-                            orc_streams const& streams,
-                            rmm::cuda_stream_view stream) -> encoded_data
+                    string_dictionaries&& dictionaries,
+                    encoder_decimal_info&& dec_chunk_sizes,
+                    file_segmentation const& segmentation,
+                    orc_streams const& streams,
+                    rmm::cuda_stream_view stream) -> encoded_data
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
@@ -1483,9 +1484,9 @@ struct device_stack {
 };
 
 auto make_orc_table_view(table_view const& table,
-                                   table_device_view const& d_table,
-                                   table_input_metadata const& table_meta,
-                                   rmm::cuda_stream_view stream) -> orc_table_view
+                         table_device_view const& d_table,
+                         table_input_metadata const& table_meta,
+                         rmm::cuda_stream_view stream) -> orc_table_view
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<uint32_t> str_col_indexes;
@@ -1589,8 +1590,8 @@ auto make_orc_table_view(table_view const& table,
 }
 
 auto calculate_rowgroup_bounds(orc_table_view const& orc_table,
-                                                             size_type rowgroup_size,
-                                                             rmm::cuda_stream_view stream) -> hostdevice_2dvector<rowgroup_rows>
+                               size_type rowgroup_size,
+                               rmm::cuda_stream_view stream) -> hostdevice_2dvector<rowgroup_rows>
 {
   auto const num_rowgroups =
     cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
@@ -1638,8 +1639,8 @@ auto calculate_rowgroup_bounds(orc_table_view const& orc_table,
 
 // returns host vector of per-rowgroup sizes
 auto decimal_chunk_sizes(orc_table_view& orc_table,
-                                         file_segmentation const& segmentation,
-                                         rmm::cuda_stream_view stream) -> encoder_decimal_info
+                         file_segmentation const& segmentation,
+                         rmm::cuda_stream_view stream) -> encoder_decimal_info
 {
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
   // Compute per-element offsets (within each row group) on the device

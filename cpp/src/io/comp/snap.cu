@@ -125,10 +125,8 @@ static __device__ auto StoreLiterals(
  *
  * @return Updated pointer to compressed byte stream
  */
-static __device__ auto StoreCopy(uint8_t* dst,
-                                     uint8_t* end,
-                                     uint32_t copy_len,
-                                     uint32_t distance) -> uint8_t*
+static __device__ auto StoreCopy(uint8_t* dst, uint8_t* end, uint32_t copy_len, uint32_t distance)
+  -> uint8_t*
 {
   if (copy_len < 12 && distance < 2048) {
     // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
@@ -179,9 +177,9 @@ static inline __device__ auto HashMatchAny(uint32_t v, uint32_t t) -> uint32_t
  * @return Number of bytes before first match (literal length)
  */
 static __device__ auto FindFourByteMatch(snap_state_s* s,
-                                             const uint8_t* src,
-                                             uint32_t pos0,
-                                             uint32_t t) -> uint32_t
+                                         const uint8_t* src,
+                                         uint32_t pos0,
+                                         uint32_t t) -> uint32_t
 {
   constexpr int max_literal_length = 256;
   // Matches encoder limit as described in snappy format description
@@ -233,10 +231,8 @@ static __device__ auto FindFourByteMatch(snap_state_s* s,
 }
 
 /// @brief Returns the number of matching bytes for two byte sequences up to 63 bytes
-static __device__ auto Match60(const uint8_t* src1,
-                                   const uint8_t* src2,
-                                   uint32_t len,
-                                   uint32_t t) -> uint32_t
+static __device__ auto Match60(const uint8_t* src1, const uint8_t* src2, uint32_t len, uint32_t t)
+  -> uint32_t
 {
   uint32_t mismatch = ballot(t >= len || src1[t] != src2[t]);
   if (mismatch == 0) {
@@ -342,9 +338,9 @@ __global__ void __launch_bounds__(128)
 }
 
 auto __host__ gpu_snap(gpu_inflate_input_s* inputs,
-                              gpu_inflate_status_s* outputs,
-                              int count,
-                              rmm::cuda_stream_view stream) -> cudaError_t
+                       gpu_inflate_status_s* outputs,
+                       int count,
+                       rmm::cuda_stream_view stream) -> cudaError_t
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count, 1);

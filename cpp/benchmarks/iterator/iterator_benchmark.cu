@@ -158,7 +158,8 @@ void BM_iterator(benchmark::State& state)
 
 // operator+ defined for pair iterator reduction
 template <typename T>
-__device__ auto operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs) -> thrust::pair<T, bool>
+__device__ auto operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs)
+  -> thrust::pair<T, bool>
 {
   return thrust::pair<T, bool>{lhs.first * lhs.second + rhs.first * rhs.second,
                                lhs.second + rhs.second};

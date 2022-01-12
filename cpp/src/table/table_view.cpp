@@ -86,8 +86,8 @@ mutable_table_view::mutable_table_view(std::vector<mutable_table_view> const& vi
 }
 
 auto scatter_columns(table_view const& source,
-                           std::vector<size_type> const& map,
-                           table_view const& target) -> table_view
+                     std::vector<size_type> const& map,
+                     table_view const& target) -> table_view
 {
   std::vector<cudf::column_view> updated_columns(target.begin(), target.end());
   // scatter(updated_table.begin(),updated_table.end(),indices.begin(),updated_columns.begin());

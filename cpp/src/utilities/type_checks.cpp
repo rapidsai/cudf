@@ -35,7 +35,8 @@ struct columns_equal_fn {
 };
 
 template <>
-auto columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_view const& rhs) -> bool
+auto columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_view const& rhs)
+  -> bool
 {
   auto const kidx = dictionary_column_view::keys_column_index;
   return lhs.num_children() > 0 and rhs.num_children() > 0
@@ -51,7 +52,8 @@ auto columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view
 }
 
 template <>
-auto columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_view const& rhs) -> bool
+auto columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_view const& rhs)
+  -> bool
 {
   return lhs.num_children() == rhs.num_children() and
          std::all_of(thrust::make_counting_iterator(0),

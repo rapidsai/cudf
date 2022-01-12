@@ -333,7 +333,7 @@ struct row_size_functor {
  */
 template <>
 __device__ auto row_size_functor::operator()<string_view>(column_device_view const& col,
-                                                               row_span const& span) -> size_type
+                                                          row_span const& span) -> size_type
 {
   auto const num_rows{span.row_end - span.row_start};
   if (num_rows == 0) {
@@ -367,7 +367,7 @@ __device__ auto row_size_functor::operator()<string_view>(column_device_view con
  */
 template <>
 __device__ auto row_size_functor::operator()<list_view>(column_device_view const& col,
-                                                             row_span const& span) -> size_type
+                                                        row_span const& span) -> size_type
 {
   auto const num_rows{span.row_end - span.row_start};
 
@@ -383,7 +383,7 @@ __device__ auto row_size_functor::operator()<list_view>(column_device_view const
  */
 template <>
 __device__ auto row_size_functor::operator()<struct_view>(column_device_view const& col,
-                                                               row_span const& span) -> size_type
+                                                          row_span const& span) -> size_type
 {
   auto const num_rows{span.row_end - span.row_start};
   return (col.nullable() ? 1 : 0) * num_rows;  // cost of validity

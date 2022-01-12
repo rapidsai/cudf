@@ -379,7 +379,8 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
  *
  * @returns pointer to uncompressed data, nullptr if error
  */
-auto OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen) -> const uint8_t*
+auto OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen)
+  -> const uint8_t*
 {
   // If uncompressed, just pass-through the input
   if (m_kind == NONE) {

@@ -266,9 +266,9 @@ struct ftos_converter {
    * @return The number of decimal places.
    */
   __device__ auto dissect_value(double value,
-                               unsigned int& integer,
-                               unsigned int& decimal,
-                               int& exp10) -> int
+                                unsigned int& integer,
+                                unsigned int& decimal,
+                                int& exp10) -> int
   {
     int decimal_places = significant_digits - 1;
     // normalize step puts value between lower-limit and upper-limit

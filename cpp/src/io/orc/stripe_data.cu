@@ -38,7 +38,10 @@ constexpr int num_warps  = 32;
 constexpr int block_size = 32 * num_warps;
 // Add some margin to look ahead to future rows in case there are many zeroes
 constexpr int row_decoder_buffer_size = block_size + 128;
-inline __device__ auto is_rlev1(uint8_t encoding_mode) -> uint8_t { return encoding_mode < DIRECT_V2; }
+inline __device__ auto is_rlev1(uint8_t encoding_mode) -> uint8_t
+{
+  return encoding_mode < DIRECT_V2;
+}
 
 inline __device__ auto is_dictionary(uint8_t encoding_mode) -> uint8_t { return encoding_mode & 1; }
 
@@ -248,8 +251,8 @@ inline __device__ auto bytestream_readu64(volatile orc_bytestream_s* bs, int pos
  * @return decoded value
  */
 inline __device__ auto bytestream_readbits(volatile orc_bytestream_s* bs,
-                                               int bitpos,
-                                               uint32_t numbits) -> uint32_t
+                                           int bitpos,
+                                           uint32_t numbits) -> uint32_t
 {
   int idx    = bitpos >> 5;
   uint32_t a = __byte_perm(bs->buf.u32[(idx + 0) & bytestream_buffer_mask], 0, 0x0123);
@@ -266,8 +269,8 @@ inline __device__ auto bytestream_readbits(volatile orc_bytestream_s* bs,
  * @return decoded value
  */
 inline __device__ auto bytestream_readbits64(volatile orc_bytestream_s* bs,
-                                                 int bitpos,
-                                                 uint32_t numbits) -> uint64_t
+                                             int bitpos,
+                                             uint32_t numbits) -> uint64_t
 {
   int idx       = bitpos >> 5;
   uint32_t a    = __byte_perm(bs->buf.u32[(idx + 0) & bytestream_buffer_mask], 0, 0x0123);
@@ -394,7 +397,8 @@ inline __device__ auto varint_length(volatile orc_bytestream_s* bs, int pos) -> 
  * @return new position in byte stream buffer
  */
 template <class T>
-inline __device__ auto decode_base128_varint(volatile orc_bytestream_s* bs, int pos, T& result) -> int
+inline __device__ auto decode_base128_varint(volatile orc_bytestream_s* bs, int pos, T& result)
+  -> int
 {
   uint32_t v = bytestream_readbyte(bs, pos++);
   if (v > 0x7f) {
@@ -465,7 +469,8 @@ inline __device__ auto decode_varint128(volatile orc_bytestream_s* bs, int pos) 
 /**
  * @brief Decodes an unsigned 32-bit varint
  */
-inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uint32_t& result) -> int
+inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uint32_t& result)
+  -> int
 {
   uint32_t u;
   pos    = decode_base128_varint<uint32_t>(bs, pos, u);
@@ -476,7 +481,8 @@ inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uin
 /**
  * @brief Decodes an unsigned 64-bit varint
  */
-inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uint64_t& result) -> int
+inline __device__ auto decode_varint(volatile orc_bytestream_s* bs, int pos, uint64_t& result)
+  -> int
 {
   uint64_t u;
   pos    = decode_base128_varint<uint64_t>(bs, pos, u);
@@ -537,7 +543,8 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
  */
 template <class T>
 static __device__ auto Integer_RLEv1(
-  orc_bytestream_s* bs, volatile orc_rlev1_state_s* rle, volatile T* vals, uint32_t maxvals, int t) -> uint32_t
+  orc_bytestream_s* bs, volatile orc_rlev1_state_s* rle, volatile T* vals, uint32_t maxvals, int t)
+  -> uint32_t
 {
   uint32_t numvals, numruns;
   if (t == 0) {
@@ -644,11 +651,11 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  */
 template <class T>
 static __device__ auto Integer_RLEv2(orc_bytestream_s* bs,
-                                         volatile orc_rlev2_state_s* rle,
-                                         volatile T* vals,
-                                         uint32_t maxvals,
-                                         int t,
-                                         bool has_buffered_values = false) -> uint32_t
+                                     volatile orc_rlev2_state_s* rle,
+                                     volatile T* vals,
+                                     uint32_t maxvals,
+                                     int t,
+                                     bool has_buffered_values = false) -> uint32_t
 {
   if (t == 0) {
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
@@ -902,10 +909,10 @@ inline __device__ auto rle8_read_bool32(volatile uint32_t* vals, uint32_t bitpos
  * @return number of values decoded
  */
 static __device__ auto Byte_RLE(orc_bytestream_s* bs,
-                                    volatile orc_byterle_state_s* rle,
-                                    volatile uint8_t* vals,
-                                    uint32_t maxvals,
-                                    int t) -> uint32_t
+                                volatile orc_byterle_state_s* rle,
+                                volatile uint8_t* vals,
+                                uint32_t maxvals,
+                                int t) -> uint32_t
 {
   uint32_t numvals, numruns;
   int r, tr;
@@ -1013,13 +1020,13 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  * @return number of values decoded
  */
 static __device__ auto Decode_Decimals(orc_bytestream_s* bs,
-                                      volatile orc_byterle_state_s* scratch,
-                                      volatile orcdec_state_s::values& vals,
-                                      int val_scale,
-                                      int numvals,
-                                      type_id dtype_id,
-                                      int col_scale,
-                                      int t) -> int
+                                       volatile orc_byterle_state_s* scratch,
+                                       volatile orcdec_state_s::values& vals,
+                                       int val_scale,
+                                       int numvals,
+                                       type_id dtype_id,
+                                       int col_scale,
+                                       int t) -> int
 {
   uint32_t num_vals_read = 0;
   // Iterates till `numvals` are read or there is nothing to read once the

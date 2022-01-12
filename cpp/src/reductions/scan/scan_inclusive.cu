@@ -38,9 +38,9 @@ namespace detail {
 
 // logical-and scan of the null mask of the input view
 auto mask_scan(column_view const& input_view,
-                             scan_type inclusive,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
+               scan_type inclusive,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);

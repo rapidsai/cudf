@@ -101,9 +101,8 @@ auto logical_type_to_converted_type(parquet::LogicalType const& logical) -> parq
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
-auto to_type_id(SchemaElement const& schema,
-                   bool strings_to_categorical,
-                   type_id timestamp_type_id) -> type_id
+auto to_type_id(SchemaElement const& schema, bool strings_to_categorical, type_id timestamp_type_id)
+  -> type_id
 {
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
@@ -381,7 +380,8 @@ class aggregate_reader_metadata {
     }
   }
 
-  [[nodiscard]] auto get_row_group(size_type row_group_index, size_type src_idx) const -> auto const&
+  [[nodiscard]] auto get_row_group(size_type row_group_index, size_type src_idx) const
+    -> auto const&
   {
     CUDF_EXPECTS(src_idx >= 0 && src_idx < static_cast<size_type>(per_file_metadata.size()),
                  "invalid source index");
@@ -389,8 +389,8 @@ class aggregate_reader_metadata {
   }
 
   [[nodiscard]] auto get_column_metadata(size_type row_group_index,
-                                                size_type src_idx,
-                                                int schema_idx) const -> auto const&
+                                         size_type src_idx,
+                                         int schema_idx) const -> auto const&
   {
     auto col = std::find_if(
       per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
@@ -1816,8 +1816,8 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
 reader::~reader() = default;
 
 // Forward to implementation
-auto reader::read(parquet_reader_options const& options,
-                                 rmm::cuda_stream_view stream) -> table_with_metadata
+auto reader::read(parquet_reader_options const& options, rmm::cuda_stream_view stream)
+  -> table_with_metadata
 {
   return _impl->read(
     options.get_skip_rows(), options.get_num_rows(), options.get_row_groups(), stream);

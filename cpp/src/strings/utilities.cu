@@ -41,7 +41,8 @@ namespace detail {
  * @copydoc create_string_vector_from_column
  */
 auto create_string_vector_from_column(cudf::strings_column_view strings,
-                                                                  rmm::cuda_stream_view stream) -> rmm::device_uvector<string_view>
+                                      rmm::cuda_stream_view stream)
+  -> rmm::device_uvector<string_view>
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;

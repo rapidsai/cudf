@@ -150,7 +150,7 @@ struct MD5Hasher {
 
   MD5Hasher(const MD5Hasher&) = delete;
   auto operator=(const MD5Hasher&) -> MD5Hasher& = delete;
-  MD5Hasher(MD5Hasher&&)                 = delete;
+  MD5Hasher(MD5Hasher&&)                         = delete;
   auto operator=(MD5Hasher&&) -> MD5Hasher& = delete;
 
   template <typename Element>

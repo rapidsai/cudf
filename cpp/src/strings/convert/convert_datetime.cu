@@ -202,7 +202,8 @@ struct parse_datetime {
   }
 
   // Walk the format_items to parse the string into date/time components
-  [[nodiscard]] __device__ auto parse_into_parts(string_view const& d_string) const -> timestamp_components
+  [[nodiscard]] __device__ auto parse_into_parts(string_view const& d_string) const
+    -> timestamp_components
   {
     timestamp_components timeparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -310,7 +311,8 @@ struct parse_datetime {
     return timeparts;
   }
 
-  [[nodiscard]] __device__ auto timestamp_from_parts(timestamp_components const& timeparts) const -> int64_t
+  [[nodiscard]] __device__ auto timestamp_from_parts(timestamp_components const& timeparts) const
+    -> int64_t
   {
     auto const ymd =  // convenient chrono class handles the leap year calculations for us
       cuda::std::chrono::year_month_day(
@@ -442,9 +444,9 @@ struct check_datetime_format {
    * @return If value is valid and number of bytes not successfully processed
    */
   __device__ auto check_value(char const* str,
-                                                       size_type const bytes,
-                                                       int const min_value,
-                                                       int const max_value) -> thrust::pair<bool, size_type>
+                              size_type const bytes,
+                              int const min_value,
+                              int const max_value) -> thrust::pair<bool, size_type>
   {
     if (*str < '0' || *str > '9') { return thrust::make_pair(false, bytes); }
     int32_t value   = 0;
@@ -466,7 +468,8 @@ struct check_datetime_format {
    * The checking here is a little more strict than the actual
    * parser used for conversion.
    */
-  __device__ auto check_string(string_view const& d_string) -> thrust::optional<timestamp_components>
+  __device__ auto check_string(string_view const& d_string)
+    -> thrust::optional<timestamp_components>
   {
     timestamp_components dateparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -886,7 +889,8 @@ struct datetime_formatter : public from_timestamp_base<T> {
   }
 
   [[nodiscard]] __device__ auto get_week_of_year(cuda::std::chrono::sys_days const days,
-                                                   cuda::std::chrono::sys_days const start) const -> int8_t
+                                                 cuda::std::chrono::sys_days const start) const
+    -> int8_t
   {
     return days < start
              ? 0

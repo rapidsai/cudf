@@ -47,8 +47,8 @@ namespace {
  * @return Edit distance value
  */
 __device__ auto compute_distance(cudf::string_view const& d_str,
-                                    cudf::string_view const& d_tgt,
-                                    int16_t* buffer) -> int32_t
+                                 cudf::string_view const& d_tgt,
+                                 int16_t* buffer) -> int32_t
 {
   auto const str_length = d_str.length();
   auto const tgt_length = d_tgt.length();

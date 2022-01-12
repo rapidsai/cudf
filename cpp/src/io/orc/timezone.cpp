@@ -373,8 +373,8 @@ static auto get_transition_time(dst_transition_s const& trans, int year) -> int6
   return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-auto build_timezone_transition_table(std::string const& timezone_name,
-                                               rmm::cuda_stream_view stream) -> timezone_table
+auto build_timezone_transition_table(std::string const& timezone_name, rmm::cuda_stream_view stream)
+  -> timezone_table
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC

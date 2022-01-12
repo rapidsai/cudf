@@ -416,7 +416,10 @@ uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
 }
 
 struct copy_if_fn {  // inline lambda not allowed in private or protected member function
-  __device__ auto operator()(uint32_t cp) -> bool { return cp != std::numeric_limits<uint32_t>::max(); }
+  __device__ auto operator()(uint32_t cp) -> bool
+  {
+    return cp != std::numeric_limits<uint32_t>::max();
+  }
 };
 
 struct tranform_fn {  // just converting uint8 value to uint32

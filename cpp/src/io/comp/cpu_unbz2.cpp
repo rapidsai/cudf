@@ -522,8 +522,11 @@ static void bzUnRLE(unbz_state_s* s)
   s->out = out;
 }
 
-auto cpu_bz2_uncompress(
-  const uint8_t* source, size_t sourceLen, uint8_t* dest, size_t* destLen, uint64_t* block_start) -> int32_t
+auto cpu_bz2_uncompress(const uint8_t* source,
+                        size_t sourceLen,
+                        uint8_t* dest,
+                        size_t* destLen,
+                        uint64_t* block_start) -> int32_t
 {
   unbz_state_s s{};
   uint32_t v;

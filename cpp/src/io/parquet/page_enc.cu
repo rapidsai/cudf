@@ -1250,9 +1250,9 @@ class header_encoder {
 };
 
 __device__ auto EncodeStatistics(uint8_t* start,
-                                     const statistics_chunk* s,
-                                     uint8_t dtype,
-                                     float* fp_scratch) -> uint8_t*
+                                 const statistics_chunk* s,
+                                 uint8_t dtype,
+                                 float* fp_scratch) -> uint8_t*
 {
   uint8_t *end, dtype_len;
   switch (dtype) {
@@ -1572,10 +1572,10 @@ struct def_level_fn {
  * ```
  */
 auto get_dremel_data(column_view h_col,
-                            // TODO(cp): use device_span once it is converted to a single hd_vec
-                            rmm::device_uvector<uint8_t> const& d_nullability,
-                            std::vector<uint8_t> const& nullability,
-                            rmm::cuda_stream_view stream) -> dremel_data
+                     // TODO(cp): use device_span once it is converted to a single hd_vec
+                     rmm::device_uvector<uint8_t> const& d_nullability,
+                     std::vector<uint8_t> const& nullability,
+                     rmm::cuda_stream_view stream) -> dremel_data
 {
   auto get_list_level = [](column_view col) {
     while (col.type().id() == type_id::STRUCT) {

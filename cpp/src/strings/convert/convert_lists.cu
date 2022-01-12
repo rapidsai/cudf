@@ -95,9 +95,9 @@ struct format_lists_fn {
   }
 
   __device__ auto write_strings(column_device_view const& col,
-                                     size_type left_idx,
-                                     size_type right_idx,
-                                     char* d_output) -> size_type
+                                size_type left_idx,
+                                size_type right_idx,
+                                char* d_output) -> size_type
   {
     size_type bytes = 0;
     for (size_type idx = left_idx; idx < right_idx; ++idx) {

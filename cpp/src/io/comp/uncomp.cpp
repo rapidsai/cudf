@@ -216,7 +216,8 @@ auto OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len) -> bool
   return (dst->eocd && dst->cdfh);
 }
 
-auto cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data, size_t comp_len) -> int
+auto cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data, size_t comp_len)
+  -> int
 {
   int zerr;
   z_stream strm;
@@ -471,10 +472,8 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
   HostDecompressor_SNAPPY() {}
-  auto Decompress(uint8_t* dstBytes,
-                    size_t dstLen,
-                    const uint8_t* srcBytes,
-                    size_t srcLen) -> size_t override
+  auto Decompress(uint8_t* dstBytes, size_t dstLen, const uint8_t* srcBytes, size_t srcLen)
+    -> size_t override
   {
     uint32_t uncompressed_size, bytes_left, dst_pos;
     const uint8_t* cur = srcBytes;

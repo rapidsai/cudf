@@ -50,7 +50,10 @@ void scalar::set_valid_async(bool is_valid, rmm::cuda_stream_view stream)
   _is_valid.set_value_async(is_valid, stream);
 }
 
-auto scalar::is_valid(rmm::cuda_stream_view stream) const -> bool { return _is_valid.value(stream); }
+auto scalar::is_valid(rmm::cuda_stream_view stream) const -> bool
+{
+  return _is_valid.value(stream);
+}
 
 auto scalar::validity_data() -> bool* { return _is_valid.data(); }
 
@@ -167,8 +170,8 @@ fixed_point_scalar<T>::fixed_point_scalar(fixed_point_scalar<T> const& other,
 }
 
 template <typename T>
-auto fixed_point_scalar<T>::value(
-  rmm::cuda_stream_view stream) const -> typename fixed_point_scalar<T>::rep_type
+auto fixed_point_scalar<T>::value(rmm::cuda_stream_view stream) const ->
+  typename fixed_point_scalar<T>::rep_type
 {
   return _data.value(stream);
 }

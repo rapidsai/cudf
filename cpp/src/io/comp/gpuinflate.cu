@@ -156,9 +156,8 @@ struct inflate_state_s {
   } u;
 };
 
-inline __device__ auto bfe(unsigned int source,
-                                   unsigned int bit_start,
-                                   unsigned int num_bits) -> unsigned int
+inline __device__ auto bfe(unsigned int source, unsigned int bit_start, unsigned int num_bits)
+  -> unsigned int
 {
   unsigned int bits;
   asm("bfe.u32 %0, %1, %2, %3;" : "=r"(bits) : "r"(source), "r"(bit_start), "r"(num_bits));
@@ -1196,10 +1195,10 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
 }
 
 auto __host__ gpuinflate(gpu_inflate_input_s* inputs,
-                                gpu_inflate_status_s* outputs,
-                                int count,
-                                int parse_hdr,
-                                rmm::cuda_stream_view stream) -> cudaError_t
+                         gpu_inflate_status_s* outputs,
+                         int count,
+                         int parse_hdr,
+                         rmm::cuda_stream_view stream) -> cudaError_t
 {
   constexpr int block_size = 128;  // Threads per block
   if (count > 0) {
@@ -1210,8 +1209,8 @@ auto __host__ gpuinflate(gpu_inflate_input_s* inputs,
 }
 
 auto __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
-                                                  int count,
-                                                  rmm::cuda_stream_view stream) -> cudaError_t
+                                           int count,
+                                           rmm::cuda_stream_view stream) -> cudaError_t
 {
   if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream.value()>>>(inputs); }
   return cudaSuccess;

@@ -50,7 +50,10 @@ tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(c
   CUDF_EXPECTS(weight.type().id() == type_id::FLOAT64, "Encountered invalid tdigest weight column");
 }
 
-auto tdigest_column_view::centroids() const -> lists_column_view { return child(centroid_column_index); }
+auto tdigest_column_view::centroids() const -> lists_column_view
+{
+  return child(centroid_column_index);
+}
 
 auto tdigest_column_view::means() const -> column_view
 {

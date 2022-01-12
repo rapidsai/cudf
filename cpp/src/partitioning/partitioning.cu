@@ -51,7 +51,10 @@ class modulo_partitioner {
  public:
   modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
 
-  __device__ auto operator()(hash_value_t hash_value) const -> size_type { return hash_value % divisor; }
+  __device__ auto operator()(hash_value_t hash_value) const -> size_type
+  {
+    return hash_value % divisor;
+  }
 
  private:
   const size_type divisor;
@@ -357,13 +360,13 @@ void copy_block_partitions_impl(InputIter const input,
 }
 
 auto compute_gather_map(size_type num_rows,
-                                                  size_type num_partitions,
-                                                  size_type const* row_partition_numbers,
-                                                  size_type const* row_partition_offset,
-                                                  size_type const* block_partition_sizes,
-                                                  size_type const* scanned_block_partition_sizes,
-                                                  size_type grid_size,
-                                                  rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
+                        size_type num_partitions,
+                        size_type const* row_partition_numbers,
+                        size_type const* row_partition_offset,
+                        size_type const* block_partition_sizes,
+                        size_type const* scanned_block_partition_sizes,
+                        size_type grid_size,
+                        rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
 {
   auto sequence = thrust::make_counting_iterator(0);
   rmm::device_uvector<size_type> gather_map(num_rows, stream);

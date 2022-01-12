@@ -605,9 +605,9 @@ class ListsStructsLeafTest : public ColumnFactoryTest {
    */
   template <typename MaskIterator>
   auto make_test_structs_column(cudf::test::fixed_width_column_wrapper<T> field1,
-                               cudf::test::strings_column_wrapper field2,
-                               cudf::test::lists_column_wrapper<T, int32_t> field3,
-                               MaskIterator mask) -> SCW
+                                cudf::test::strings_column_wrapper field2,
+                                cudf::test::lists_column_wrapper<T, int32_t> field3,
+                                MaskIterator mask) -> SCW
   {
     return SCW{{field1, field2, field3}, mask};
   }
@@ -692,8 +692,8 @@ class ListsZeroLengthColumnTest : public ColumnFactoryTest {
  protected:
   using StructsCW = cudf::test::structs_column_wrapper;
   auto make_test_structs_column(cudf::test::fixed_width_column_wrapper<int32_t> field1,
-                                     cudf::test::strings_column_wrapper field2,
-                                     cudf::test::lists_column_wrapper<int32_t> field3) -> StructsCW
+                                cudf::test::strings_column_wrapper field2,
+                                cudf::test::lists_column_wrapper<int32_t> field3) -> StructsCW
   {
     return StructsCW{field1, field2, field3};
   }

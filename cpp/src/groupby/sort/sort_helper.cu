@@ -185,8 +185,8 @@ auto sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream) -> column
   return sliced_key_sorted_order();
 }
 
-auto sort_groupby_helper::group_offsets(
-  rmm::cuda_stream_view stream) -> sort_groupby_helper::index_vector const&
+auto sort_groupby_helper::group_offsets(rmm::cuda_stream_view stream)
+  -> sort_groupby_helper::index_vector const&
 {
   if (_group_offsets) return *_group_offsets;
 
@@ -210,8 +210,8 @@ auto sort_groupby_helper::group_offsets(
   return *_group_offsets;
 }
 
-auto sort_groupby_helper::group_labels(
-  rmm::cuda_stream_view stream) -> sort_groupby_helper::index_vector const&
+auto sort_groupby_helper::group_labels(rmm::cuda_stream_view stream)
+  -> sort_groupby_helper::index_vector const&
 {
   if (_group_labels) return *_group_labels;
 

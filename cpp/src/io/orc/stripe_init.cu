@@ -224,8 +224,8 @@ enum row_entry_state_e {
  * @return bytes consumed
  */
 static auto __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
-                                                      const uint8_t* start,
-                                                      const uint8_t* end) -> uint32_t
+                                                  const uint8_t* start,
+                                                  const uint8_t* end) -> uint32_t
 {
   constexpr uint32_t pb_rowindexentry_id = static_cast<uint32_t>(PB_TYPE_FIXEDLEN) + 8;
 

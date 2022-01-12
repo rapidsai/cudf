@@ -121,8 +121,8 @@ __device__ auto is_head_byte(unsigned char utf8_byte) -> bool { return (utf8_byt
  * @return New code point value for this byte.
  */
 __device__ auto extract_code_points_from_utf8(unsigned char const* strings,
-                                                  size_t const total_bytes,
-                                                  uint32_t const start_byte_for_thread) -> uint32_t
+                                              size_t const total_bytes,
+                                              uint32_t const start_byte_for_thread) -> uint32_t
 {
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};

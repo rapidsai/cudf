@@ -80,9 +80,9 @@ struct token_reader_fn {
   string_index_pair* d_tokens{};
 
   __device__ auto resolve_token(string_view const& d_str,
-                                             size_type start_pos,
-                                             size_type end_pos,
-                                             size_type delimiter_pos) const -> string_index_pair
+                                size_type start_pos,
+                                size_type end_pos,
+                                size_type delimiter_pos) const -> string_index_pair
   {
     if (dir == Dir::FORWARD) {
       auto const byte_offset = d_str.byte_offset(start_pos);

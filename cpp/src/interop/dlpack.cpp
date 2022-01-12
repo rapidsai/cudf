@@ -197,8 +197,8 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
 }
 
 auto to_dlpack(table_view const& input,
-                           rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr) -> DLManagedTensor*
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr) -> DLManagedTensor*
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();

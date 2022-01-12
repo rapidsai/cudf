@@ -68,9 +68,9 @@ template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type>
 auto reduce_device(InputIterator d_in,
-                                             cudf::size_type num_items,
-                                             Op binary_op,
-                                             rmm::cuda_stream_view stream) -> rmm::device_scalar<OutputType>
+                   cudf::size_type num_items,
+                   Op binary_op,
+                   rmm::cuda_stream_view stream) -> rmm::device_scalar<OutputType>
 {
   OutputType identity{};
   rmm::device_scalar<OutputType> result{identity, stream};
@@ -102,7 +102,8 @@ auto reduce_device(InputIterator d_in,
 template <typename T>
 struct minmax_binary_op
   : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
-  __device__ auto operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const -> minmax_pair<T>
+  __device__ auto operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
+    -> minmax_pair<T>
   {
     return minmax_pair<T>{thrust::min(lhs.min_val, rhs.min_val),
                           thrust::max(lhs.max_val, rhs.max_val)};

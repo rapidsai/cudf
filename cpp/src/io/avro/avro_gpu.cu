@@ -32,7 +32,8 @@ constexpr int max_shared_schema_len = 1000;
  * Avro varint encoding - see
  * https://avro.apache.org/docs/1.2.0/spec.html#binary_encoding
  */
-static inline auto __device__ avro_decode_zigzag_varint(const uint8_t*& cur, const uint8_t* end) -> int64_t
+static inline auto __device__ avro_decode_zigzag_varint(const uint8_t*& cur, const uint8_t* end)
+  -> int64_t
 {
   uint64_t u = 0;
   if (cur < end) {
@@ -65,15 +66,15 @@ static inline auto __device__ avro_decode_zigzag_varint(const uint8_t*& cur, con
  *
  * @return data pointer at the end of the row (start of next row)
  */
-static auto __device__
-avro_decode_row(schemadesc_s const* schema,
-                schemadesc_s* schema_g,
-                uint32_t schema_len,
-                size_t row,
-                size_t max_rows,
-                uint8_t const* cur,
-                uint8_t const* end,
-                device_span<string_index_pair const> global_dictionary) -> uint8_t const*
+static auto __device__ avro_decode_row(schemadesc_s const* schema,
+                                       schemadesc_s* schema_g,
+                                       uint32_t schema_len,
+                                       size_t row,
+                                       size_t max_rows,
+                                       uint8_t const* cur,
+                                       uint8_t const* end,
+                                       device_span<string_index_pair const> global_dictionary)
+  -> uint8_t const*
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;

@@ -37,7 +37,10 @@ inline __device__ auto rotl32(uint32_t x, uint32_t r) -> uint32_t
   return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
 }
 
-inline __device__ auto rolling_index(int index) -> int { return index & (non_zero_buffer_size - 1); }
+inline __device__ auto rolling_index(int index) -> int
+{
+  return index & (non_zero_buffer_size - 1);
+}
 
 namespace cudf {
 namespace io {
@@ -179,9 +182,9 @@ inline __device__ auto get_vlq32(const uint8_t*& cur, const uint8_t* end) -> uin
  * @return The length of the section
  */
 __device__ auto InitLevelSection(page_state_s* s,
-                                     const uint8_t* cur,
-                                     const uint8_t* end,
-                                     level_type lvl) -> uint32_t
+                                 const uint8_t* cur,
+                                 const uint8_t* end,
+                                 level_type lvl) -> uint32_t
 {
   int32_t len;
   int level_bits    = s->col.level_bits[lvl];

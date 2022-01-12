@@ -65,11 +65,11 @@ namespace {
  * slice of `unique_indices`.
  */
 auto get_unique_ordered_indices(cudf::table_view const& keys,
-                                       cudf::mutable_column_view& unique_indices,
-                                       duplicate_keep_option keep,
-                                       null_equality nulls_equal,
-                                       null_order null_precedence,
-                                       rmm::cuda_stream_view stream) -> column_view
+                                cudf::mutable_column_view& unique_indices,
+                                duplicate_keep_option keep,
+                                null_equality nulls_equal,
+                                null_order null_precedence,
+                                rmm::cuda_stream_view stream) -> column_view
 {
   // Sort only the indices.
   // Note that stable sort must be used to maintain the order of duplicate elements.

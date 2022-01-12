@@ -95,7 +95,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
  */
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   auto dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
-                       cudf::io::gpu_inflate_status_s* d_inf_stat) -> cudaError_t
+                cudf::io::gpu_inflate_status_s* d_inf_stat) -> cudaError_t
   {
     return cudf::io::gpuinflate(d_inf_args, d_inf_stat, 1, 1, rmm::cuda_stream_default);
   }
@@ -106,7 +106,7 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
  */
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   auto dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
-                       cudf::io::gpu_inflate_status_s* d_inf_stat) -> cudaError_t
+                cudf::io::gpu_inflate_status_s* d_inf_stat) -> cudaError_t
   {
     return cudf::io::gpu_unsnap(d_inf_args, d_inf_stat, 1, rmm::cuda_stream_default);
   }
@@ -117,7 +117,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
  */
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   auto dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
-                       cudf::io::gpu_inflate_status_s* d_inf_stat) -> cudaError_t
+                cudf::io::gpu_inflate_status_s* d_inf_stat) -> cudaError_t
   {
     rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
                                  rmm::cuda_stream_default};

@@ -110,8 +110,8 @@ __device__ std::pair<char const*, char const*> get_next_key(char const* begin,
  */
 template <typename T, int base>
 __inline__ __device__ auto decode_value(const char* begin,
-                                     uint64_t end,
-                                     parse_options_view const& opts) -> T
+                                        uint64_t end,
+                                        parse_options_view const& opts) -> T
 {
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
@@ -128,78 +128,73 @@ __inline__ __device__ auto decode_value(const char* begin,
 template <typename T,
           std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
 __inline__ __device__ auto decode_value(const char* begin,
-                                     const char* end,
-                                     parse_options_view const& opts) -> T
+                                        const char* end,
+                                        parse_options_view const& opts) -> T
 {
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
 __inline__ __device__ auto decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts) -> T
+                                        char const* end,
+                                        parse_options_view const& opts) -> T
 {
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ auto decode_value(char const* begin, char const* end, parse_options_view const&) -> T
+__inline__ __device__ auto decode_value(char const* begin,
+                                        char const* end,
+                                        parse_options_view const&) -> T
 {
   return to_duration<T>(begin, end);
 }
 
 // The purpose of these is merely to allow compilation ONLY
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&) -> cudf::string_view
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> cudf::string_view
 {
   return cudf::string_view{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&) -> cudf::dictionary32
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> cudf::dictionary32
 {
   return cudf::dictionary32{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                   const char*,
-                                                   parse_options_view const&) -> cudf::list_view
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> cudf::list_view
 {
   return cudf::list_view{};
 }
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                     const char*,
-                                                     parse_options_view const&) -> cudf::struct_view
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> cudf::struct_view
 {
   return cudf::struct_view{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&) -> numeric::decimal32
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> numeric::decimal32
 {
   return numeric::decimal32{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                      const char*,
-                                                      parse_options_view const&) -> numeric::decimal64
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> numeric::decimal64
 {
   return numeric::decimal64{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*,
-                                                       const char*,
-                                                       parse_options_view const&) -> numeric::decimal128
+__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
+  -> numeric::decimal128
 {
   return numeric::decimal128{};
 }
@@ -340,10 +335,10 @@ struct field_descriptor {
  * @return Descriptor of the parsed field
  */
 __device__ auto next_field_descriptor(const char* begin,
-                                                  const char* end,
-                                                  parse_options_view const& opts,
-                                                  cudf::size_type field_idx,
-                                                  col_map_type col_map) -> field_descriptor
+                                      const char* end,
+                                      parse_options_view const& opts,
+                                      cudf::size_type field_idx,
+                                      col_map_type col_map) -> field_descriptor
 {
   auto const desc_pre_trim =
     col_map.capacity() == 0
@@ -616,8 +611,8 @@ struct key_value_range {
  * @brief Parse the next field in key:value format and return ranges of its parts.
  */
 __device__ auto get_next_key_value_range(char const* begin,
-                                                    char const* end,
-                                                    parse_options_view const& opts) -> key_value_range
+                                         char const* end,
+                                         parse_options_view const& opts) -> key_value_range
 {
   auto const key_range = get_next_key(begin, end, opts.quotechar);
 

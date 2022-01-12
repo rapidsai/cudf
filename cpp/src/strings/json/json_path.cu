@@ -147,7 +147,8 @@ class parser {
    * indicates allowing either single or double quotes (but not a mixture of both).
    * @returns A result code indicating success, failure or other result.
    */
-  CUDF_HOST_DEVICE inline auto parse_string(string_view& str, bool can_be_empty, char quote) -> parse_result
+  CUDF_HOST_DEVICE inline auto parse_string(string_view& str, bool can_be_empty, char quote)
+    -> parse_result
   {
     str = string_view(nullptr, 0);
 
@@ -690,8 +691,8 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
  */
 template <int max_command_stack_depth>
 __device__ auto parse_json_path(json_state& j_state,
-                                        path_operator const* commands,
-                                        json_output& output) -> parse_result
+                                path_operator const* commands,
+                                json_output& output) -> parse_result
 {
   // manually maintained context stack in lieu of calling parse_json_path recursively.
   struct context {
@@ -855,13 +856,13 @@ constexpr int max_command_stack_depth = 8;
  * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
-__device__ auto get_json_object_single(
-  char const* input,
-  size_t input_len,
-  path_operator const* const commands,
-  char* out_buf,
-  size_t out_buf_size,
-  get_json_object_options options) -> thrust::pair<parse_result, json_output>
+__device__ auto get_json_object_single(char const* input,
+                                       size_t input_len,
+                                       path_operator const* const commands,
+                                       char* out_buf,
+                                       size_t out_buf_size,
+                                       get_json_object_options options)
+  -> thrust::pair<parse_result, json_output>
 {
   json_state j_state(input, input_len, options);
   json_output output{out_buf_size, out_buf};

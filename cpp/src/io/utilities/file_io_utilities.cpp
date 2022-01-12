@@ -238,10 +238,8 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
-auto cufile_input_impl::read(size_t offset,
-                               size_t size,
-                               uint8_t* dst,
-                               rmm::cuda_stream_view stream) -> size_t
+auto cufile_input_impl::read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
+  -> size_t
 {
   auto result = read_async(offset, size, dst, stream);
   return result.get();

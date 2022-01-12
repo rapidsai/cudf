@@ -167,9 +167,9 @@ struct replace_negative_nans_dispatch {
  * @return An array containing 1-based list indices corresponding to each list entry.
  */
 auto generate_entry_list_indices(size_type num_lists,
-                                                           size_type num_entries,
-                                                           offset_type const* offsets_begin,
-                                                           rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
+                                 size_type num_entries,
+                                 offset_type const* offsets_begin,
+                                 rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
 {
   auto entry_list_indices = rmm::device_uvector<size_type>(num_entries, stream);
 

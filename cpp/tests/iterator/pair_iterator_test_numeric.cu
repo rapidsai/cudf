@@ -46,7 +46,7 @@ struct transformer_pair_meanvar {
 struct sum_if_not_null {
   template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(const thrust::pair<T, bool>& lhs,
-                                                           const thrust::pair<T, bool>& rhs) -> thrust::pair<T, bool>
+                                          const thrust::pair<T, bool>& rhs) -> thrust::pair<T, bool>
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};

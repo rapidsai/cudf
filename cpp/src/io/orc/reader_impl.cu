@@ -55,9 +55,9 @@ namespace {
  * @brief Function that translates ORC data kind to cuDF type enum
  */
 constexpr auto to_type_id(const orc::SchemaType& schema,
-                             bool use_np_dtypes,
-                             type_id timestamp_type_id,
-                             type_id decimal_type_id) -> type_id
+                          bool use_np_dtypes,
+                          type_id timestamp_type_id,
+                          type_id decimal_type_id) -> type_id
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -159,15 +159,15 @@ struct orc_stream_info {
  * @brief Function that populates column descriptors stream/chunk
  */
 auto gather_stream_info(const size_t stripe_index,
-                          const orc::StripeInformation* stripeinfo,
-                          const orc::StripeFooter* stripefooter,
-                          const std::vector<int>& orc2gdf,
-                          const std::vector<orc::SchemaType> types,
-                          bool use_index,
-                          size_t* num_dictionary_entries,
-                          cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
-                          std::vector<orc_stream_info>& stream_info,
-                          bool apply_struct_map) -> size_t
+                        const orc::StripeInformation* stripeinfo,
+                        const orc::StripeFooter* stripefooter,
+                        const std::vector<int>& orc2gdf,
+                        const std::vector<orc::SchemaType> types,
+                        bool use_index,
+                        size_t* num_dictionary_entries,
+                        cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
+                        std::vector<orc_stream_info>& stream_info,
+                        bool apply_struct_map) -> size_t
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -1310,7 +1310,8 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
 reader::~reader() = default;
 
 // Forward to implementation
-auto reader::read(orc_reader_options const& options, rmm::cuda_stream_view stream) -> table_with_metadata
+auto reader::read(orc_reader_options const& options, rmm::cuda_stream_view stream)
+  -> table_with_metadata
 {
   return _impl->read(
     options.get_skip_rows(), options.get_num_rows(), options.get_stripes(), stream);

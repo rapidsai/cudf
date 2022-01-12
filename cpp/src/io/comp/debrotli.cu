@@ -78,8 +78,8 @@ inline __device__ auto huffcode(T0 len, T1 sym) -> uint16_t
 }
 
 inline __device__ auto brotli_distance_alphabet_size(uint8_t npostfix,
-                                                         uint32_t ndirect,
-                                                         uint32_t maxnbits) -> uint32_t
+                                                     uint32_t ndirect,
+                                                     uint32_t maxnbits) -> uint32_t
 {
   return brotli_num_distance_short_codes + ndirect + (maxnbits << (npostfix + 1));
 }
@@ -95,7 +95,10 @@ inline __device__ auto brev8(uint32_t x) -> uint32_t
 /* typeof(MODE) == ContextType; returns ContextLut */
 __inline__ __device__ auto brotli_context_lut(int mode) -> int { return (mode << 9); }
 
-inline __device__ auto brotli_transform_type(int idx) -> uint8_t { return kTransformsData[(idx * 3) + 1]; }
+inline __device__ auto brotli_transform_type(int idx) -> uint8_t
+{
+  return kTransformsData[(idx * 3) + 1];
+}
 
 inline __device__ auto brotli_transform_prefix(int idx) -> const uint8_t*
 {
@@ -348,8 +351,8 @@ static __device__ void local_heap_grow(debrotli_state_s* s, uint32_t bytes)
 
 /// Alloc memory from the fixed-size heap shared between all blocks (thread0-only)
 static __device__ auto ext_heap_alloc(uint32_t bytes,
-                                          uint8_t* ext_heap_base,
-                                          uint32_t ext_heap_size) -> uint8_t*
+                                      uint8_t* ext_heap_base,
+                                      uint32_t ext_heap_size) -> uint8_t*
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
   volatile auto* heap_ptr   = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
@@ -491,9 +494,9 @@ static __device__ void ext_heap_free(void* ptr,
 }
 
 static __device__ auto BuildSimpleHuffmanTable(uint16_t* lut,
-                                                   int root_bits,
-                                                   uint16_t* val,
-                                                   uint32_t num_symbols) -> uint32_t
+                                               int root_bits,
+                                               uint16_t* val,
+                                               uint32_t num_symbols) -> uint32_t
 {
   uint32_t table_size      = 1;
   const uint32_t goal_size = 1U << root_bits;
@@ -639,9 +642,9 @@ static __device__ auto NextTableBitSize(const uint16_t* const count, int len, in
 
 // Build a huffman lookup table (currently thread0-only)
 static __device__ auto BuildHuffmanTable(uint16_t* root_lut,
-                                             int root_bits,
-                                             const uint16_t* const symbol_lists,
-                                             uint16_t* count) -> uint32_t
+                                         int root_bits,
+                                         const uint16_t* const symbol_lists,
+                                         uint16_t* count) -> uint32_t
 {
   uint32_t code;     // current table entry
   uint16_t* lut;     // next available space in table
@@ -889,9 +892,9 @@ invalid.
 
 // Decode Huffman tree (thread0-only)
 static __device__ auto DecodeHuffmanTree(debrotli_state_s* s,
-                                             uint32_t alphabet_size,
-                                             uint32_t max_symbol,
-                                             uint16_t* vlctab) -> uint32_t
+                                         uint32_t alphabet_size,
+                                         uint32_t max_symbol,
+                                         uint16_t* vlctab) -> uint32_t
 {
   uint32_t prefix_code_type;
 
@@ -1328,9 +1331,9 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s* s, uint8_t*
 }
 
 static __device__ auto DecodeContextMap(debrotli_state_s* s,
-                                            uint8_t* context_map,
-                                            uint32_t context_map_size,
-                                            uint16_t* context_map_vlc) -> uint32_t
+                                        uint8_t* context_map,
+                                        uint32_t context_map_size,
+                                        uint16_t* context_map_vlc) -> uint32_t
 {
   uint32_t num_htrees = getbits_u8vlc(s) + 1;
   uint32_t bits, context_index, max_run_length_prefix, alphabet_size;
@@ -1415,9 +1418,9 @@ only zero values
 */
 
 static __device__ auto HuffmanTreeGroupInit(debrotli_state_s* s,
-                                                                   uint32_t alphabet_size,
-                                                                   uint32_t max_symbol,
-                                                                   uint32_t ntrees) -> debrotli_huff_tree_group_s*
+                                            uint32_t alphabet_size,
+                                            uint32_t max_symbol,
+                                            uint32_t ntrees) -> debrotli_huff_tree_group_s*
 {
   auto* group          = reinterpret_cast<debrotli_huff_tree_group_s*>(local_alloc(
     s, sizeof(debrotli_huff_tree_group_s) + ntrees * sizeof(uint16_t*) - sizeof(uint16_t*)));
@@ -1525,7 +1528,8 @@ static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s* s,
   HuffmanTreeGroupDecode(s, s->distance_hgroup);
 }
 
-static __device__ auto PrepareLiteralDecoding(debrotli_state_s* s, const uint8_t*& context_map_slice) -> int
+static __device__ auto PrepareLiteralDecoding(debrotli_state_s* s,
+                                              const uint8_t*& context_map_slice) -> int
 {
   int context_mode;
   uint32_t block_type     = s->block_type_rb[1];
@@ -1581,9 +1585,9 @@ inline __device__ auto ToUpperCase(uint8_t* p) -> int
 }
 
 static __device__ auto TransformDictionaryWord(uint8_t* dst,
-                                              const uint8_t* word,
-                                              int len,
-                                              int transform_idx) -> int
+                                               const uint8_t* word,
+                                               int len,
+                                               int transform_idx) -> int
 {
   int idx               = 0;
   const uint8_t* prefix = brotli_transform_prefix(transform_idx);
@@ -2076,11 +2080,11 @@ auto __host__ get_gpu_debrotli_scratch_size(int max_num_inputs) -> size_t
 #endif
 
 auto __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
-                                  gpu_inflate_status_s* outputs,
-                                  void* scratch,
-                                  size_t scratch_size,
-                                  int count,
-                                  rmm::cuda_stream_view stream) -> cudaError_t
+                           gpu_inflate_status_s* outputs,
+                           void* scratch,
+                           size_t scratch_size,
+                           int count,
+                           rmm::cuda_stream_view stream) -> cudaError_t
 {
   uint32_t count32 = (count > 0) ? count : 0;
   uint32_t fb_heap_size;

@@ -143,7 +143,10 @@ void materialize_bitmask(column_view const& left_col,
 struct side_index_generator {
   side _side;
 
-  __device__ auto operator()(size_type i) const noexcept -> index_type { return index_type{_side, i}; }
+  __device__ auto operator()(size_type i) const noexcept -> index_type
+  {
+    return index_type{_side, i};
+  }
 };
 
 /**
@@ -164,11 +167,12 @@ struct side_index_generator {
  * @return A device_uvector of merged indices
  */
 auto generate_merged_indices(table_view const& left_table,
-                                     table_view const& right_table,
-                                     std::vector<order> const& column_order,
-                                     std::vector<null_order> const& null_precedence,
-                                     bool nullable                = true,
-                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default) -> index_vector
+                             table_view const& right_table,
+                             std::vector<order> const& column_order,
+                             std::vector<null_order> const& null_precedence,
+                             bool nullable                = true,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  -> index_vector
 {
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();

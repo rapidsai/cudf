@@ -198,9 +198,9 @@ struct table_flattener {
 };
 
 auto flatten_nested_columns(table_view const& input,
-                                       std::vector<order> const& column_order,
-                                       std::vector<null_order> const& null_precedence,
-                                       column_nullability nullability) -> flattened_table
+                            std::vector<order> const& column_order,
+                            std::vector<null_order> const& null_precedence,
+                            column_nullability nullability) -> flattened_table
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }

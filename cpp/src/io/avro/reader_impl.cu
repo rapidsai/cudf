@@ -152,9 +152,9 @@ class metadata : public file_metadata {
 };
 
 auto decompress_data(datasource& source,
-                                   metadata& meta,
-                                   rmm::device_buffer const& comp_block_data,
-                                   rmm::cuda_stream_view stream) -> rmm::device_buffer
+                     metadata& meta,
+                     rmm::device_buffer const& comp_block_data,
+                     rmm::cuda_stream_view stream) -> rmm::device_buffer
 {
   if (meta.codec == "deflate") {
     size_t uncompressed_data_size = 0;

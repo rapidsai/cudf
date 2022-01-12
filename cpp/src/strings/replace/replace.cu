@@ -233,9 +233,9 @@ struct target_replacer_fn {
  * @return Number of target positions after filtering.
  */
 auto filter_overlap_target_positions(size_type* d_target_positions,
-                                          size_type target_count,
-                                          size_type target_size,
-                                          rmm::cuda_stream_view stream) -> size_type
+                                     size_type target_count,
+                                     size_type target_size,
+                                     rmm::cuda_stream_view stream) -> size_type
 {
   auto overlap_detector = [d_target_positions, target_size] __device__(size_type pos_idx) -> bool {
     return (pos_idx > 0)
@@ -302,9 +302,9 @@ auto filter_overlap_target_positions(size_type* d_target_positions,
  * @return Number of target positions after filtering.
  */
 auto filter_false_target_positions(rmm::device_uvector<size_type>& target_positions,
-                                        device_span<int32_t const> d_offsets_span,
-                                        size_type target_size,
-                                        rmm::cuda_stream_view stream) -> size_type
+                                   device_span<int32_t const> d_offsets_span,
+                                   size_type target_size,
+                                   rmm::cuda_stream_view stream) -> size_type
 {
   // In-place remove any positions for target strings that crossed string boundaries.
   auto d_target_positions = target_positions.data();
@@ -342,10 +342,10 @@ auto filter_false_target_positions(rmm::device_uvector<size_type>& target_positi
  * @return Number of target positions after filtering.
  */
 auto filter_maxrepl_target_positions(size_type* d_target_positions,
-                                          size_type target_count,
-                                          device_span<int32_t const> d_offsets_span,
-                                          size_type max_repl_per_row,
-                                          rmm::cuda_stream_view stream) -> size_type
+                                     size_type target_count,
+                                     device_span<int32_t const> d_offsets_span,
+                                     size_type max_repl_per_row,
+                                     rmm::cuda_stream_view stream) -> size_type
 {
   auto pos_to_row_fn = [d_offsets_span] __device__(size_type target_pos) -> size_type {
     auto upper_bound =

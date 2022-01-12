@@ -57,10 +57,8 @@ class file_source : public datasource {
     return _cufile_in->read(offset, read_size, stream);
   }
 
-  auto device_read(size_t offset,
-                     size_t size,
-                     uint8_t* dst,
-                     rmm::cuda_stream_view stream) -> size_t override
+  auto device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
+    -> size_t override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
@@ -215,10 +213,8 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
-  auto device_read(size_t offset,
-                     size_t size,
-                     uint8_t* dst,
-                     rmm::cuda_stream_view stream) -> size_t override
+  auto device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
+    -> size_t override
   {
     return source->device_read(offset, size, dst, stream);
   }

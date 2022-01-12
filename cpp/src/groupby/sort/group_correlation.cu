@@ -58,7 +58,8 @@ struct is_double_convertible_impl {
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
-  __device__ inline auto operator()(cudf::size_type i, column_device_view const& col) const -> CastType
+  __device__ inline auto operator()(cudf::size_type i, column_device_view const& col) const
+    -> CastType
   {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)

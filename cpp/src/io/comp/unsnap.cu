@@ -708,9 +708,9 @@ __global__ void __launch_bounds__(block_size)
 }
 
 auto __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
-                                gpu_inflate_status_s* outputs,
-                                int count,
-                                rmm::cuda_stream_view stream) -> cudaError_t
+                         gpu_inflate_status_s* outputs,
+                         int count,
+                         rmm::cuda_stream_view stream) -> cudaError_t
 {
   uint32_t count32 = (count > 0) ? count : 0;
   dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block

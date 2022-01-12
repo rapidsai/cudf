@@ -52,7 +52,10 @@ auto get_env_policy() -> usage_policy
 
 auto is_always_enabled() -> bool { return get_env_policy() == usage_policy::ALWAYS; }
 
-auto is_gds_enabled() -> bool { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
+auto is_gds_enabled() -> bool
+{
+  return is_always_enabled() or get_env_policy() == usage_policy::GDS;
+}
 
 }  // namespace cufile_integration
 
@@ -79,7 +82,10 @@ auto get_env_policy() -> usage_policy
 
 auto is_all_enabled() -> bool { return get_env_policy() == usage_policy::ALWAYS; }
 
-auto is_stable_enabled() -> bool { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
+auto is_stable_enabled() -> bool
+{
+  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
+}
 
 }  // namespace nvcomp_integration
 

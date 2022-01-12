@@ -124,7 +124,10 @@ static inline __device__ auto zigzag(__int128_t v) -> __uint128_t
 }
 
 static inline __device__ auto CountLeadingBytes32(uint32_t v) -> uint32_t { return __clz(v) >> 3; }
-static inline __device__ auto CountLeadingBytes64(uint64_t v) -> uint32_t { return __clzll(v) >> 3; }
+static inline __device__ auto CountLeadingBytes64(uint64_t v) -> uint32_t
+{
+  return __clzll(v) >> 3;
+}
 
 /**
  * @brief Raw data output
@@ -171,7 +174,8 @@ static __device__ void StoreBytes(
  */
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ auto ByteRLE(
-  orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t) -> uint32_t
+  orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+  -> uint32_t
 {
   uint8_t* dst     = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
@@ -357,7 +361,8 @@ template <StreamIndexType cid,
           int block_size,
           typename Storage>
 static __device__ auto IntegerRLE(
-  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage) -> uint32_t
+  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
+  -> uint32_t
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];

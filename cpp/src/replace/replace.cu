@@ -85,9 +85,9 @@ __device__ auto get_new_value(cudf::size_type idx,
 }
 
 __device__ auto get_new_string_value(cudf::size_type idx,
-                                    cudf::column_device_view& input,
-                                    cudf::column_device_view& values_to_replace,
-                                    cudf::column_device_view&) -> int
+                                     cudf::column_device_view& input,
+                                     cudf::column_device_view& values_to_replace,
+                                     cudf::column_device_view&) -> int
 {
   cudf::string_view input_string = input.element<cudf::string_view>(idx);
   int match                      = -1;

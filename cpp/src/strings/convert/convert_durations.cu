@@ -156,7 +156,10 @@ struct format_compiler {
 
   auto compiled_format_items() -> format_item const* { return d_items.data(); }
 
-  [[nodiscard]] auto items_count() const -> size_type { return static_cast<size_type>(d_items.size()); }
+  [[nodiscard]] auto items_count() const -> size_type
+  {
+    return static_cast<size_type>(d_items.size());
+  }
 };
 
 template <typename T>
@@ -185,7 +188,8 @@ struct duration_to_string_size_fn {
   const format_item* d_format_items;
   size_type items_count;
 
-  __device__ auto format_length(char format_char, duration_component const* const timeparts) const -> int8_t
+  __device__ auto format_length(char format_char, duration_component const* const timeparts) const
+    -> int8_t
   {
     switch (format_char) {
       case '-': return timeparts->is_negative; break;
@@ -481,9 +485,9 @@ struct parse_duration {
 
   // function to parse fraction of decimal value with trailing zeros removed.
   __device__ auto str2int_fixed(const char* str,
-                                   int8_t fixed_width,
-                                   size_type string_length,
-                                   int8_t& actual_length) -> int32_t
+                                int8_t fixed_width,
+                                size_type string_length,
+                                int8_t& actual_length) -> int32_t
   {
     const char* ptr = (*str == '.') ? str + 1 : str;
     int32_t value   = 0;
@@ -528,7 +532,8 @@ struct parse_duration {
 
   // Walk the format_items to read the datetime string.
   // Returns 0 if all ok.
-  __device__ auto parse_into_parts(string_view const& d_string, duration_component* timeparts) -> int
+  __device__ auto parse_into_parts(string_view const& d_string, duration_component* timeparts)
+    -> int
   {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();

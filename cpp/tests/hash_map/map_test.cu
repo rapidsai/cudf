@@ -117,7 +117,10 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 struct identical_pair_generator {
   identical_pair_generator(key_type k = 42, value_type v = 42) : key{k}, value{v} {}
-  __device__ auto operator()(cudf::size_type i) -> pair_type { return thrust::make_pair(key, value); }
+  __device__ auto operator()(cudf::size_type i) -> pair_type
+  {
+    return thrust::make_pair(key, value);
+  }
   key_type key;
   value_type value;
 };

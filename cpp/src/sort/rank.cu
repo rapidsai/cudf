@@ -56,8 +56,8 @@ struct unique_comparator {
 
 // Assign rank from 1 to n unique values. Equal values get same rank value.
 auto sorted_dense_rank(column_view input_col,
-                                                 column_view sorted_order_view,
-                                                 rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
+                       column_view sorted_order_view,
+                       rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
 {
   auto device_table     = table_device_view::create(table_view{{input_col}}, stream);
   auto const input_size = input_col.size();

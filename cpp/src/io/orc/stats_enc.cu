@@ -171,7 +171,8 @@ __device__ inline auto pb_put_packed_uint(uint8_t* p, uint32_t id, uint64_t v) -
 }
 
 // Protobuf field encoding for binary/string
-__device__ inline auto pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len) -> uint8_t*
+__device__ inline auto pb_put_binary(uint8_t* p, uint32_t id, const void* bytes, uint32_t len)
+  -> uint8_t*
 {
   p[0] = id * 8 + PB_TYPE_FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);

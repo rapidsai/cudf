@@ -519,8 +519,8 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
 
 }  // namespace detail
 
-auto concatenate_masks(host_span<column_view const> views,
-                                     rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
+auto concatenate_masks(host_span<column_view const> views, rmm::mr::device_memory_resource* mr)
+  -> rmm::device_buffer
 {
   bool const has_nulls =
     std::any_of(views.begin(), views.end(), [](const column_view col) { return col.has_nulls(); });

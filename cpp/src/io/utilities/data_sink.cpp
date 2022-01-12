@@ -49,7 +49,10 @@ class file_sink : public data_sink {
 
   auto bytes_written() -> size_t override { return _bytes_written; }
 
-  [[nodiscard]] auto supports_device_write() const -> bool override { return _cufile_out != nullptr; }
+  [[nodiscard]] auto supports_device_write() const -> bool override
+  {
+    return _cufile_out != nullptr;
+  }
 
   [[nodiscard]] auto is_device_write_preferred(size_t size) const -> bool override
   {

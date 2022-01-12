@@ -300,9 +300,9 @@ template <typename T>
 class ScatterListOfStructScalarTest : public ScatterListScalarTests {
  protected:
   auto make_test_structs(fixed_width_column_wrapper<T> field0,
-                                           strings_column_wrapper field1,
-                                           lists_column_wrapper<T, int32_t> field2,
-                                           std::vector<valid_type> mask) -> structs_column_wrapper
+                         strings_column_wrapper field1,
+                         lists_column_wrapper<T, int32_t> field2,
+                         std::vector<valid_type> mask) -> structs_column_wrapper
   {
     return structs_column_wrapper({field0, field1, field2}, mask.begin());
   }

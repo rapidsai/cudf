@@ -124,14 +124,14 @@ __global__ void kernel_compute_tensor_metadata(
 }  // namespace
 
 auto subword_tokenize(cudf::strings_column_view const& strings,
-                                  hashed_vocabulary const& vocab_table,
-                                  uint32_t max_sequence_length,
-                                  uint32_t stride,
-                                  bool do_lower_case,
-                                  bool do_truncate,
-                                  uint32_t max_rows_tensor,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr) -> tokenizer_result
+                      hashed_vocabulary const& vocab_table,
+                      uint32_t max_sequence_length,
+                      uint32_t stride,
+                      bool do_lower_case,
+                      bool do_truncate,
+                      uint32_t max_rows_tensor,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr) -> tokenizer_result
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
@@ -250,13 +250,13 @@ auto subword_tokenize(cudf::strings_column_view const& strings,
 }  // namespace detail
 
 auto subword_tokenize(cudf::strings_column_view const& strings,
-                                  hashed_vocabulary const& vocabulary_table,
-                                  uint32_t max_sequence_length,
-                                  uint32_t stride,
-                                  bool do_lower_case,
-                                  bool do_truncate,
-                                  uint32_t max_rows_tensor,
-                                  rmm::mr::device_memory_resource* mr) -> tokenizer_result
+                      hashed_vocabulary const& vocabulary_table,
+                      uint32_t max_sequence_length,
+                      uint32_t stride,
+                      bool do_lower_case,
+                      bool do_truncate,
+                      uint32_t max_rows_tensor,
+                      rmm::mr::device_memory_resource* mr) -> tokenizer_result
 {
   CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
