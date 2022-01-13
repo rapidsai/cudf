@@ -24,7 +24,6 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
-    random_bitmask,
 )
 
 
@@ -2046,7 +2045,8 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     gdf = cudf.from_pandas(pdf)
     if add_nulls:
         for col in gdf:
-            gdf[col] = gdf[col].set_mask(random_bitmask(len(gdf)))
+            # Assign a random null mask
+            gdf[col][np.random.choice([True, False], len(gdf))] = pd.NA
     gdf.to_parquet(file_path, index=False)
 
     # Read back from pyarrow
