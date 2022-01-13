@@ -20,9 +20,8 @@ repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
     size = 5
-    mask = utils.random_bitmask(size)
-    data = cudf.Series(np.random.randint(1, 9, size))
-    column = data.set_mask(mask)
+    column = cudf.Series(np.random.randint(1, 9, size))
+    column[np.random.choice([True, False], size)] = pd.NA
     sr = cudf.Series(column).astype(dtype)
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
@@ -62,9 +61,8 @@ def test_null_dataframe(ncols):
     size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(dtype_categories):
-        mask = utils.random_bitmask(size)
-        data = cudf.Series(np.random.randint(0, 128, size))
-        column = data.set_mask(mask)
+        column = cudf.Series(np.random.randint(0, 128, size))
+        column[np.random.choice([True, False], size)] = pd.NA
         sr = cudf.Series(column).astype(dtype)
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
