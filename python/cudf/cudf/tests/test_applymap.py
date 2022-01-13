@@ -4,6 +4,7 @@ from itertools import product
 from math import floor
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from cudf import Series
@@ -17,20 +18,16 @@ def test_applymap_round(nelem, masked):
     # Generate data
     np.random.seed(0)
     data = np.random.random(nelem) * 100
+    sr = Series(data)
 
     if masked:
-        # Make mask
+        # Mask the Series
         bitmask = utils.random_bitmask(nelem)
         boolmask = np.asarray(
             utils.expand_bits_to_bytes(bitmask), dtype=np.bool_
         )[:nelem]
         data[~boolmask] = np.nan
-
-    sr = Series(data)
-
-    if masked:
-        # Mask the Series
-        sr = sr.set_mask(bitmask)
+        sr[~boolmask] = pd.NA
 
     # Call applymap
     out = sr.applymap(
