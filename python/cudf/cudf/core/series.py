@@ -3458,8 +3458,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> renamed_series.name
         'numeric_series'
         """
-        out = self.copy(deep=copy)
-        return Series._from_data(out._data, self.index, name=index)
+        out_data = self._data.copy(deep=copy)
+        return Series._from_data(out_data, self.index, name=index)
 
     def merge(
         self,
