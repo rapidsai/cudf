@@ -64,13 +64,13 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
     std::size_t c = 0;
     // when nulls are equal and input has nulls, only non-null rows are inserted. Thus the
     // total distinct count equals the number of valid rows plus one (number of null rows)
-    if ((compare_nulls == null_equality::EQUAL) and has_null) {
+    if ((nulls_equal == null_equality::EQUAL) and has_null) {
       thrust::counting_iterator<size_type> stencil(0);
       auto const row_bitmask = cudf::detail::bitmask_and(keys, stream).first;
       row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
       // insert valid rows only
-      hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.valu());
+      key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
       c = key_map.get_size() + 1;
     } else {
       key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
