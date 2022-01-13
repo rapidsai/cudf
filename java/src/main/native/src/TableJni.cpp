@@ -1838,13 +1838,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readArrowIPCChunkToArrowTable(
     cudf::jni::auto_set_device(env);
     // This is a little odd because we have to return a pointer
     // and arrow wants to deal with shared pointers for everything.
-    std::unique_ptr<std::shared_ptr<arrow::Table>> result(
-        new std::shared_ptr<arrow::Table>(nullptr));
-    *result = state->next(row_target);
-    if (!result->get()) {
-      return 0;
-    }
-    return reinterpret_cast<jlong>(result.release());
+    auto result = state->next(row_target);
+    return result ? to_jlong(new std::shared_ptr<arrow::Table>{result}) : 0;
   }
   CATCH_STD(env, 0)
 }
@@ -2447,8 +2442,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_interleaveColumns(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *table_view = reinterpret_cast<cudf::table_view *>(j_cudf_table_view);
-    std::unique_ptr<cudf::column> result = cudf::interleave_columns(*table_view);
-    return reinterpret_cast<jlong>(result.release());
+    return release_as_jlong(cudf::interleave_columns(*table_view));
   }
   CATCH_STD(env, 0);
 }
@@ -2742,12 +2736,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByReplaceNulls(
     }
     cudf::table_view n_replace_table(n_replace_cols);
 
-    std::vector<cudf::replace_policy> policies;
-    policies.reserve(n_is_preceding.size());
-    for (int i = 0; i < n_is_preceding.size(); i++) {
-      policies.push_back(n_is_preceding[i] ? cudf::replace_policy::PRECEDING :
-                                             cudf::replace_policy::FOLLOWING);
-    }
+    std::vector<cudf::replace_policy> policies = n_is_preceding.transform_if_else(
+        cudf::replace_policy::PRECEDING, cudf::replace_policy::FOLLOWING);
 
     std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> result =
         grouper.replace_nulls(n_replace_table, policies);
@@ -2980,25 +2970,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_bound(JNIEnv *env, jclass, jlo
     cudf::jni::native_jbooleanArray const n_desc_flags(env, desc_flags);
     cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, are_nulls_smallest);
 
-    std::vector<cudf::order> column_desc_flags(n_desc_flags.size());
-    std::vector<cudf::null_order> column_null_orders(n_are_nulls_smallest.size());
+    std::vector<cudf::order> column_desc_flags{
+        n_desc_flags.transform_if_else(cudf::order::DESCENDING, cudf::order::ASCENDING)};
+    std::vector<cudf::null_order> column_null_orders{
+        n_are_nulls_smallest.transform_if_else(cudf::null_order::BEFORE, cudf::null_order::AFTER)};
 
     JNI_ARG_CHECK(env, (column_desc_flags.size() == column_null_orders.size()),
                   "null-order and sort-order size mismatch", 0);
-    size_t num_columns = column_null_orders.size();
-    for (size_t i = 0; i < num_columns; i++) {
-      column_desc_flags[i] = n_desc_flags[i] ? cudf::order::DESCENDING : cudf::order::ASCENDING;
-      column_null_orders[i] =
-          n_are_nulls_smallest[i] ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
-    }
 
-    std::unique_ptr<column> result;
-    if (is_upper_bound) {
-      result = std::move(cudf::upper_bound(*input, *values, column_desc_flags, column_null_orders));
-    } else {
-      result = std::move(cudf::lower_bound(*input, *values, column_desc_flags, column_null_orders));
-    }
-    return reinterpret_cast<jlong>(result.release());
+    return release_as_jlong(
+        is_upper_bound ? cudf::upper_bound(*input, *values, column_desc_flags, column_null_orders) :
+                         cudf::lower_bound(*input, *values, column_desc_flags, column_null_orders));
   }
   CATCH_STD(env, 0);
 }
@@ -3073,13 +3055,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
 
       int agg_column_index = values[i];
       if (default_output[i] != nullptr) {
-        result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
+        result_columns.emplace_back(cudf::grouped_rolling_window(
             groupby_keys, input_table->column(agg_column_index), *default_output[i], preceding[i],
-            following[i], min_periods[i], *agg)));
+            following[i], min_periods[i], *agg));
       } else {
-        result_columns.emplace_back(std::move(
+        result_columns.emplace_back(
             cudf::grouped_rolling_window(groupby_keys, input_table->column(agg_column_index),
-                                         preceding[i], following[i], min_periods[i], *agg)));
+                                         preceding[i], following[i], min_periods[i], *agg));
       }
     }
 
@@ -3165,7 +3147,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
       JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation",
                     nullptr);
 
-      result_columns.emplace_back(std::move(cudf::grouped_range_rolling_window(
+      result_columns.emplace_back(cudf::grouped_range_rolling_window(
           groupby_keys, order_by_column,
           orderbys_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
           input_table->column(agg_column_index),
@@ -3173,7 +3155,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
                                    cudf::range_window_bounds::get(*preceding[i]),
           unbounded_following[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
                                    cudf::range_window_bounds::get(*following[i]),
-          min_periods[i], *agg)));
+          min_periods[i], *agg));
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
@@ -3243,8 +3225,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_rowBitCount(JNIEnv *env, jclas
   try {
     cudf::jni::auto_set_device(env);
     auto t = reinterpret_cast<cudf::table_view *>(j_table);
-    std::unique_ptr<cudf::column> result = cudf::row_bit_count(*t);
-    return reinterpret_cast<jlong>(result.release());
+    return release_as_jlong(cudf::row_bit_count(*t));
   }
   CATCH_STD(env, 0);
 }
