@@ -1067,13 +1067,18 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   orc_table_view const& orc_table,
   file_segmentation const& segmentation)
 {
-  auto const num_stripe_blobs = segmentation.num_stripes() * orc_table.num_columns();
-  auto const num_file_blobs   = orc_table.num_columns();
-  auto const num_stat_blobs   = num_stripe_blobs + num_file_blobs;
+  auto const num_rowgroup_blobs = segmentation.rowgroups.count();
+  auto const num_stripe_blobs   = segmentation.num_stripes() * orc_table.num_columns();
+  auto const num_file_blobs     = orc_table.num_columns();
+  auto const num_stat_blobs     = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
+
   if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs, stream);
+  auto rowgroup_stat_merge = stat_merge.host_ptr();
+  auto stripe_stat_merge   = rowgroup_stat_merge + num_rowgroup_blobs;
+  auto file_stat_merge     = stripe_stat_merge + num_stripe_blobs;
 
   for (auto const& column : orc_table.columns) {
     stats_column_desc* desc = &stat_desc[column.index()];
@@ -1106,14 +1111,21 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
       desc->ts_scale = 0;
     }
     for (auto const& stripe : segmentation.stripes) {
-      auto grp = &stat_merge[column.index() * segmentation.num_stripes() + stripe.id];
-      grp->col = stat_desc.device_ptr(column.index());
-      grp->start_chunk =
+      auto& grp = stripe_stat_merge[column.index() * segmentation.num_stripes() + stripe.id];
+      grp.col   = stat_desc.device_ptr(column.index());
+      grp.start_chunk =
         static_cast<uint32_t>(column.index() * segmentation.num_rowgroups() + stripe.first);
-      grp->num_chunks = stripe.size;
+      grp.num_chunks = stripe.size;
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+        auto& rg_grp =
+          rowgroup_stat_merge[column.index() * segmentation.num_rowgroups() + *rg_idx_it];
+        rg_grp.col         = stat_desc.device_ptr(column.index());
+        rg_grp.start_chunk = *rg_idx_it;
+        rg_grp.num_chunks  = 1;
+      }
     }
-    statistics_merge_group* col_stats = &stat_merge[num_stripe_blobs + column.index()];
-    col_stats->col                    = stat_desc.device_ptr(column.index());
+    auto col_stats         = &file_stat_merge[column.index()];
+    col_stats->col         = stat_desc.device_ptr(column.index());
     col_stats->start_chunk = static_cast<uint32_t>(column.index() * segmentation.num_stripes());
     col_stats->num_chunks  = static_cast<uint32_t>(segmentation.num_stripes());
   }
@@ -1121,51 +1133,53 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   stat_merge.host_to_device(stream);
   set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
-  auto const num_chunks = segmentation.rowgroups.count();
-  rmm::device_uvector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs, stream);
-  rmm::device_uvector<statistics_group> stat_groups(num_chunks, stream);
+  rmm::device_uvector<statistics_chunk> stat_chunks(num_stat_blobs, stream);
+  auto rowgroup_stat_chunks = stat_chunks.data();
+  auto stripe_stat_chunks   = rowgroup_stat_chunks + num_rowgroup_blobs;
+  auto file_stat_chunks     = stripe_stat_chunks + num_stripe_blobs;
+
+  rmm::device_uvector<statistics_group> stat_groups(num_rowgroup_blobs, stream);
   gpu::orc_init_statistics_groups(
     stat_groups.data(), stat_desc.device_ptr(), segmentation.rowgroups, stream);
 
   detail::calculate_group_statistics<detail::io_file_format::ORC>(
-    stat_chunks.data(), stat_groups.data(), num_chunks, stream);
-  detail::merge_group_statistics<detail::io_file_format::ORC>(stat_chunks.data() + num_chunks,
-                                                              stat_chunks.data(),
-                                                              stat_merge.device_ptr(),
-                                                              num_stripe_blobs,
-                                                              stream);
+    stat_chunks.data(), stat_groups.data(), num_rowgroup_blobs, stream);
 
   detail::merge_group_statistics<detail::io_file_format::ORC>(
-    stat_chunks.data() + num_chunks + num_stripe_blobs,
-    stat_chunks.data() + num_chunks,
-    stat_merge.device_ptr(num_stripe_blobs),
-    orc_table.num_columns(),
+    stripe_stat_chunks,
+    rowgroup_stat_chunks,
+    stat_merge.device_ptr(num_rowgroup_blobs),
+    num_stripe_blobs,
+    stream);
+
+  detail::merge_group_statistics<detail::io_file_format::ORC>(
+    file_stat_chunks,
+    stripe_stat_chunks,
+    stat_merge.device_ptr(num_rowgroup_blobs + num_stripe_blobs),
+    num_file_blobs,
     stream);
   gpu::orc_init_statistics_buffersize(
-    stat_merge.device_ptr(), stat_chunks.data() + num_chunks, num_stat_blobs, stream);
+    stat_merge.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
   stat_merge.device_to_host(stream, true);
 
   hostdevice_vector<uint8_t> blobs(
     stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks, stream);
-  gpu::orc_encode_statistics(blobs.device_ptr(),
-                             stat_merge.device_ptr(),
-                             stat_chunks.data() + num_chunks,
-                             num_stat_blobs,
-                             stream);
+  gpu::orc_encode_statistics(
+    blobs.device_ptr(), stat_merge.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
 
   std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
   for (size_t i = 0; i < num_stripe_blobs; i++) {
-    const uint8_t* stat_begin = blobs.host_ptr(stat_merge[i].start_chunk);
-    const uint8_t* stat_end   = stat_begin + stat_merge[i].num_chunks;
+    auto const stat_begin = blobs.host_ptr(stripe_stat_merge[i].start_chunk);
+    auto const stat_end   = stat_begin + stripe_stat_merge[i].num_chunks;
     stripe_blobs[i].assign(stat_begin, stat_end);
   }
 
   std::vector<ColStatsBlob> file_blobs(num_file_blobs);
   for (size_t i = 0; i < num_file_blobs; i++) {
-    const uint8_t* stat_begin = blobs.host_ptr(stat_merge[num_stripe_blobs + i].start_chunk);
-    const uint8_t* stat_end   = stat_begin + stat_merge[num_stripe_blobs + i].num_chunks;
+    auto const stat_begin = blobs.host_ptr(file_stat_merge[i].start_chunk);
+    auto const stat_end   = stat_begin + file_stat_merge[i].num_chunks;
     file_blobs[i].assign(stat_begin, stat_end);
   }
 
