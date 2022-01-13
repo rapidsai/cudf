@@ -70,27 +70,30 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
+  // insert unique indices into the map.
   key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
 
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   rmm::device_uvector<bool> existences(num_rows, stream, mr);
+  // enumerate all indices to check if they are present in the map.
   key_map.contains(counting_iter, counting_iter + num_rows, existences.begin(), hash_key);
 
   auto const output_size{key_map.get_size()};
 
-  rmm::device_uvector<size_type> unique_indices(output_size, stream, mr);
+  // write unique indices to a numeric column
+  auto unique_indices = make_numeric_column(
+    data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
+  auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   thrust::copy_if(rmm::exec_policy(stream),
                   counting_iter,
                   counting_iter + num_rows,
                   existences.begin(),
-                  unique_indices.begin(),
+                  mutable_view->begin<size_type>(),
                   [] __device__(bool const b) { return b; });
-
-  column_view unique_indices_view(data_type{type_id::INT32}, output_size, unique_indices.data());
 
   // run gather operation to establish new order
   return detail::gather(input,
-                        unique_indices_view,
+                        unique_indices->view(),
                         out_of_bounds_policy::DONT_CHECK,
                         detail::negative_index_policy::NOT_ALLOWED,
                         stream,
