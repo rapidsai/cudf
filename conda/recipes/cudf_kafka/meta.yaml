@@ -3,7 +3,8 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
-{% set py_version = environ.get('python', '3.8') %}
+{% set py_version = environ.get('PY_VER', '3.8') %}
+{% set py_version_numeric = py_version.replace('.', '') %}
 
 package:
   name: cudf_kafka
@@ -14,7 +15,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version.replace('.', '') }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: py{{ py_version_numeric }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -34,7 +35,7 @@ requirements:
   run:
     - python {{ py_version }}
     - libcudf_kafka {{ version }}
-    - python-confluent-kafka >=1.7.0,<1.8.0a0=py{{ py_version.replace('.', '') }}*
+    - python-confluent-kafka >=1.7.0,<1.8.0a0=py{{ py_version_numeric }}*
     - cudf {{ version }}
 
 test:                                   # [linux64]
