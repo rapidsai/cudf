@@ -975,8 +975,8 @@ cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
 } // namespace jni
 } // namespace cudf
 
+using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
-using cudf::jni::to_jlong;
 
 extern "C" {
 
@@ -1008,7 +1008,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_createCudfTableView(JNIEnv *en
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, j_cudf_columns);
 
     std::vector<cudf::column_view> column_views = n_cudf_columns.get_dereferenced();
-    return to_jlong(new cudf::table_view(column_views));
+    return ptr_as_jlong(new cudf::table_view(column_views));
   }
   CATCH_STD(env, 0);
 }
@@ -1045,7 +1045,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_columnViewsFromPacked(JNI
       // In the ideal case we would keep the view where it is at, and pass in a pointer to it
       // That pointer would then be copied when Java takes ownership of it, but that adds an
       // extra JNI call that I would like to avoid for performance reasons.
-      views[i] = to_jlong(new cudf::column_view(table.column(i)));
+      views[i] = ptr_as_jlong(new cudf::column_view(table.column(i)));
     }
     views.commit();
 
@@ -1455,7 +1455,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
-    return to_jlong(ret);
+    return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
 }
@@ -1499,7 +1499,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr));
-    return to_jlong(ret);
+    return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
 }
@@ -1626,7 +1626,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
         new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), std::move(data_sink));
-    return to_jlong(ret);
+    return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
 }
@@ -1669,7 +1669,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
         new cudf::jni::native_orc_writer_handle(std::move(writer_ptr));
-    return to_jlong(ret);
+    return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
 }
@@ -1724,7 +1724,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv
 
     cudf::jni::native_arrow_ipc_writer_handle *ret =
         new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), data_sink);
-    return to_jlong(ret);
+    return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
 }
@@ -1741,7 +1741,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCFileBegin(JNIEnv *
 
     cudf::jni::native_arrow_ipc_writer_handle *ret =
         new cudf::jni::native_arrow_ipc_writer_handle(col_names.as_cpp_vector(), output_path.get());
-    return to_jlong(ret);
+    return ptr_as_jlong(ret);
   }
   CATCH_STD(env, 0)
 }
@@ -1765,7 +1765,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     using result_t = std::shared_ptr<arrow::Table>;
 
     auto result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
-    return to_jlong(new result_t{result});
+    return ptr_as_jlong(new result_t{result});
   }
   CATCH_STD(env, 0)
 }
@@ -1809,7 +1809,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_readArrowIPCFileBegin(JNIEnv *e
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring input_path(env, j_input_path);
-    return to_jlong(new cudf::jni::native_arrow_ipc_reader_handle(input_path.get()));
+    return ptr_as_jlong(new cudf::jni::native_arrow_ipc_reader_handle(input_path.get()));
   }
   CATCH_STD(env, 0)
 }
@@ -1821,7 +1821,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_readArrowIPCBufferBegin(JNIEnv 
     cudf::jni::auto_set_device(env);
     std::shared_ptr<cudf::jni::jni_arrow_input_stream> data_source(
         new cudf::jni::jni_arrow_input_stream(env, provider));
-    return to_jlong(new cudf::jni::native_arrow_ipc_reader_handle(data_source));
+    return ptr_as_jlong(new cudf::jni::native_arrow_ipc_reader_handle(data_source));
   }
   CATCH_STD(env, 0)
 }
@@ -1839,7 +1839,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readArrowIPCChunkToArrowTable(
     // This is a little odd because we have to return a pointer
     // and arrow wants to deal with shared pointers for everything.
     auto result = state->next(row_target);
-    return result ? to_jlong(new std::shared_ptr<arrow::Table>{result}) : 0;
+    return result ? ptr_as_jlong(new std::shared_ptr<arrow::Table>{result}) : 0;
   }
   CATCH_STD(env, 0)
 }

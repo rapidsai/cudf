@@ -37,8 +37,8 @@
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
 
+using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
-using cudf::jni::to_jlong;
 
 extern "C" {
 
@@ -364,7 +364,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeColumnView(JNI
   try {
     cudf::jni::auto_set_device(env);
     cudf::column *column = reinterpret_cast<cudf::column *>(handle);
-    return to_jlong(new cudf::column_view{*column});
+    return ptr_as_jlong(new cudf::column_view{*column});
   }
   CATCH_STD(env, 0);
 }

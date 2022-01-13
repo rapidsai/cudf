@@ -75,7 +75,7 @@ inline void check_java_exception(JNIEnv *const env) {
  * This is useful when, for instance, converting a cudf::column pointer
  * to a jlong, for use in JNI.
  */
-template <typename T> jlong to_jlong(T *ptr) {
+template <typename T> jlong ptr_as_jlong(T *ptr) {
   return reinterpret_cast<jlong>(ptr);
 }
 
@@ -84,7 +84,7 @@ template <typename T> jlong to_jlong(T *ptr) {
  * the pointer as a jlong.
  */
 template <typename T> jlong release_as_jlong(std::unique_ptr<T> &&ptr) {
-  return to_jlong(ptr.release());
+  return ptr_as_jlong(ptr.release());
 }
 
 /**

@@ -75,8 +75,8 @@
 #include "jni_utils.hpp"
 #include "map_lookup.hpp"
 
+using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
-using cudf::jni::to_jlong;
 
 namespace {
 
@@ -368,9 +368,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_slice(JNIEnv *env, j
     std::vector<cudf::column_view> result = cudf::slice(*n_column, indices);
     cudf::jni::native_jlongArray n_result(env, result.size());
 
-    std::transform(
-        result.begin(), result.end(), n_result.begin(),
-        [](cudf::column_view const &result_col) { return to_jlong(new cudf::column{result_col}); });
+    std::transform(result.begin(), result.end(), n_result.begin(),
+                   [](cudf::column_view const &result_col) {
+                     return ptr_as_jlong(new cudf::column{result_col});
+                   });
 
     return n_result.get_jArray();
   }
@@ -608,7 +609,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
 
     std::transform(result.begin(), result.end(), n_result.begin(),
                    [](cudf::column_view const &result_col) {
-                     return to_jlong(new cudf::column_view{result_col});
+                     return ptr_as_jlong(new cudf::column_view{result_col});
                    });
 
     return n_result.get_jArray();
@@ -880,7 +881,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
     if (n_data_type == column->type()) {
-      return to_jlong(new cudf::column(*column));
+      return ptr_as_jlong(new cudf::column(*column));
     }
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
@@ -963,7 +964,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitCastTo(JNIEnv *env, jc
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
-    return to_jlong(new cudf::column_view{cudf::bit_cast(*column, n_data_type)});
+    return ptr_as_jlong(new cudf::column_view{cudf::bit_cast(*column, n_data_type)});
   }
   CATCH_STD(env, 0);
 }
@@ -1532,7 +1533,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
 
     if (n_type == cudf::type_id::STRING) {
       if (size == 0) {
-        return to_jlong(
+        return ptr_as_jlong(
             new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0));
       } else {
         JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
@@ -1543,9 +1544,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
         cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
         cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
         cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
-        return to_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr,
-                                              valid, j_null_count, 0,
-                                              {offsets_column, data_column}));
+        return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size,
+                                                  nullptr, valid, j_null_count, 0,
+                                                  {offsets_column, data_column}));
       }
     } else if (n_type == cudf::type_id::LIST) {
       JNI_NULL_CHECK(env, j_children, "children of a list are null", 0);
@@ -1560,17 +1561,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
       }
       cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, offsets_size,
                                        offsets);
-      return to_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr,
-                                            valid, j_null_count, 0,
-                                            {offsets_column, *children[0]}));
+      return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr,
+                                                valid, j_null_count, 0,
+                                                {offsets_column, *children[0]}));
     } else if (n_type == cudf::type_id::STRUCT) {
       JNI_NULL_CHECK(env, j_children, "children of a struct are null", 0);
       cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
       std::vector<column_view> children_vector = children.get_dereferenced();
-      return to_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, size, nullptr,
-                                            valid, j_null_count, 0, children_vector));
+      return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, size,
+                                                nullptr, valid, j_null_count, 0, children_vector));
     } else {
-      return to_jlong(new cudf::column_view(n_data_type, size, data, valid, j_null_count));
+      return ptr_as_jlong(new cudf::column_view(n_data_type, size, data, valid, j_null_count));
     }
   }
   CATCH_STD(env, 0);
@@ -1709,7 +1710,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getChildCvPointer(JNIEnv 
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     auto const is_list = column->type().id() == cudf::type_id::LIST;
     auto const child = column->child(child_index + (is_list ? 1 : 0));
-    return to_jlong(new cudf::column_view(child));
+    return ptr_as_jlong(new cudf::column_view(child));
   }
   CATCH_STD(env, 0);
 }
@@ -1725,13 +1726,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeOffsetsAddress(J
       if (column->size() > 0) {
         cudf::strings_column_view view = cudf::strings_column_view(*column);
         cudf::column_view offsets_view = view.offsets();
-        result = to_jlong(offsets_view.data<char>());
+        result = ptr_as_jlong(offsets_view.data<char>());
       }
     } else if (column->type().id() == cudf::type_id::LIST) {
       if (column->size() > 0) {
         cudf::lists_column_view view = cudf::lists_column_view(*column);
         cudf::column_view offsets_view = view.offsets();
-        result = to_jlong(offsets_view.data<char>());
+        result = ptr_as_jlong(offsets_view.data<char>());
       }
     }
     return result;
@@ -1770,7 +1771,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityAddress(
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    return to_jlong(column->null_mask());
+    return ptr_as_jlong(column->null_mask());
   }
   CATCH_STD(env, 0);
 }
@@ -1875,8 +1876,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *en
     cudf::jni::auto_set_device(env);
     auto children = cudf::jni::native_jpointerArray<cudf::column_view>{env, handles};
     auto children_vector = children.get_dereferenced();
-    return to_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, row_count,
-                                          nullptr, nullptr, 0, 0, children_vector));
+    return ptr_as_jlong(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, row_count,
+                                              nullptr, nullptr, 0, 0, children_vector));
   }
   CATCH_STD(env, 0);
 }
@@ -1969,7 +1970,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
-    return to_jlong(new cudf::column(*view));
+    return ptr_as_jlong(new cudf::column(*view));
   }
   CATCH_STD(env, 0)
 }
