@@ -805,3 +805,45 @@ TYPED_TEST(MixedLeftSemiJoinTest, BasicEquality)
              left_zero_eq_right_zero,
              {1});
 }
+
+TYPED_TEST(MixedLeftSemiJoinTest, BasicNullEqualityEqual)
+{
+  this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},
+                   {{{0, 1, 3}, {1, 1, 0}}, {{5, 4, 5}, {1, 1, 1}}, {{30, 40, 30}, {1, 1, 1}}},
+                   {0},
+                   {1, 2},
+                   left_zero_eq_right_zero,
+                   {1, 2},
+                   cudf::null_equality::EQUAL);
+};
+
+TYPED_TEST(MixedLeftSemiJoinTest, BasicNullEqualityUnequal)
+{
+  this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},
+                   {{{0, 1, 3}, {1, 1, 0}}, {{5, 4, 5}, {1, 1, 1}}, {{30, 40, 30}, {1, 1, 1}}},
+                   {0},
+                   {1, 2},
+                   left_zero_eq_right_zero,
+                   {1},
+                   cudf::null_equality::UNEQUAL);
+};
+
+TYPED_TEST(MixedLeftSemiJoinTest, AsymmetricEquality)
+{
+  this->test({{0, 2, 1}, {3, 5, 4}, {10, 30, 20}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {2});
+}
+
+TYPED_TEST(MixedLeftSemiJoinTest, AsymmetricLeftLargerEquality)
+{
+  this->test({{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {2});
+}
