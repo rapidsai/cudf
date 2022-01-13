@@ -104,4 +104,4 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
 
-    ctypedef unsigned long long int128
+    ctypedef int int128 "__int128_t"
