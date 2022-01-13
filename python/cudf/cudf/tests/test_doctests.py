@@ -16,24 +16,30 @@ def _is_public_name(parent, name):
     return not name.startswith("_")
 
 
-def _find_doctests_in_obj(finder, obj, criteria):
+def _find_doctests_in_obj(obj, finder=None, criteria=None):
     """Find all doctests in an object.
 
     Parameters
     ----------
-    finder : doctest.DocTestFinder
-        The DocTestFinder object to use.
     obj : module or class
         The object to search for docstring examples.
-    criteria : callable
+    finder : doctest.DocTestFinder, optional
+        The DocTestFinder object to use. If not provided, a DocTestFinder is
+        constructed.
+    criteria : callable, optional
         Callable indicating whether to recurse over members of the provided
-        object.
+        object. If not provided, names not defined in the object's ``__all__``
+        property are ignored.
 
     Yields
     ------
     doctest.DocTest
         The next doctest found in the object.
     """
+    if finder is None:
+        finder = doctest.DocTestFinder()
+    if criteria is None:
+        criteria = _name_in_all
     for docstring in finder.find(obj):
         if docstring.examples:
             yield docstring
@@ -45,13 +51,13 @@ def _find_doctests_in_obj(finder, obj, criteria):
         # module's __all__)
         if inspect.ismodule(member):
             yield from _find_doctests_in_obj(
-                finder, member, criteria=_name_in_all
+                member, finder, criteria=_name_in_all
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
         if inspect.isclass(member):
             yield from _find_doctests_in_obj(
-                finder, member, criteria=_is_public_name
+                member, finder, criteria=_is_public_name
             )
 
 
@@ -67,9 +73,7 @@ class TestDoctests:
 
     @pytest.mark.parametrize(
         "docstring",
-        _find_doctests_in_obj(
-            finder=doctest.DocTestFinder(), obj=cudf, criteria=_name_in_all
-        ),
+        _find_doctests_in_obj(cudf),
         ids=lambda docstring: docstring.name,
     )
     def test_docstring(self, docstring):
