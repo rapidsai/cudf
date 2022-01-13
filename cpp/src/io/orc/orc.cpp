@@ -212,25 +212,25 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          TypeKind kind)
 {
   size_t sz = 0, lpos;
-  putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
+  put_byte(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
   lpos = m_buf->size();
-  putb(0xcd);                      // sz+2
-  putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:positions[packed=true]
-  putb(0xcd);                      // sz
+  put_byte(0xcd);                      // sz+2
+  put_byte(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:positions[packed=true]
+  put_byte(0xcd);                      // sz
   if (present_blk >= 0) sz += put_uint(present_blk);
   if (present_ofs >= 0) {
     sz += put_uint(present_ofs) + 2;
-    putb(0);  // run pos = 0
-    putb(0);  // bit pos = 0
+    put_byte(0);  // run pos = 0
+    put_byte(0);  // bit pos = 0
   }
   if (data_blk >= 0) { sz += put_uint(data_blk); }
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
     if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
-      putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      put_byte(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
       sz++;
       if (kind == BOOLEAN) {
-        putb(0);  // bit position in byte, always zero
+        put_byte(0);  // bit position in byte, always zero
         sz++;
       }
     }
@@ -241,7 +241,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
     if (data2_blk >= 0) { sz += put_uint(data2_blk); }
     if (data2_ofs >= 0) {
       sz += put_uint(data2_ofs) + 1;
-      putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      put_byte(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
     }
   }
   m_buf->data()[lpos]     = (uint8_t)(sz + 2);

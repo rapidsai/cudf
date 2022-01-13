@@ -54,7 +54,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   {
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     auto lpos = p->m_buf->size();
-    p->putb(0);
+    p->put_byte(0);
     auto sz = std::accumulate(value.begin(), value.end(), 0, [p = this->p](size_t sum, auto val) {
       return sum + p->put_uint(val);
     });
@@ -74,7 +74,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
     for (size_t i = 0; i < len; i++)
-      p->putb(value[i]);
+      p->put_byte(value[i]);
   }
 
   /**
@@ -87,7 +87,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
     for (size_t i = 0; i < len; i++)
-      p->putb(value[i]);
+      p->put_byte(value[i]);
   }
 
   /**
@@ -98,7 +98,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   {
     struct_size += p->put_uint((field)*8 + PB_TYPE_FIXEDLEN);
     auto lpos = p->m_buf->size();
-    p->putb(0);
+    p->put_byte(0);
     auto sz = p->write(value);
     struct_size += sz + 1;
     for (; sz > 0x7f; sz >>= 7, struct_size++)

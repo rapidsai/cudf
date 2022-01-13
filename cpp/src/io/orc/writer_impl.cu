@@ -2006,7 +2006,7 @@ void writer::impl::write(table_view const& table)
     if (single_write_mode and statistics.file_level.has_value()) {
       // First entry contains total number of rows
       buffer_.resize(0);
-      pbw_.putb(1 * 8 + PB_TYPE_VARINT);
+      pbw_.put_byte(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(num_rows);
       ff.statistics.reserve(1 + orc_table.num_columns());
       ff.statistics.emplace_back(std::move(buffer_));
@@ -2022,7 +2022,7 @@ void writer::impl::write(table_view const& table)
       for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
         md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + orc_table.num_columns());
         buffer_.resize(0);
-        pbw_.putb(1 * 8 + PB_TYPE_VARINT);
+        pbw_.put_byte(1 * 8 + PB_TYPE_VARINT);
         pbw_.put_uint(stripes[stripe_id].numberOfRows);
         md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
         for (size_t col_idx = 0; col_idx < orc_table.num_columns(); col_idx++) {

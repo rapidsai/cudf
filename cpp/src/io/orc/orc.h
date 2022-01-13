@@ -470,16 +470,16 @@ class ProtobufWriter {
  public:
   ProtobufWriter() { m_buf = nullptr; }
   ProtobufWriter(std::vector<uint8_t>* output) { m_buf = output; }
-  void putb(uint8_t v) { m_buf->push_back(v); }
+  void put_byte(uint8_t v) { m_buf->push_back(v); }
   uint32_t put_uint(uint64_t v)
   {
     int l = 1;
     while (v > 0x7f) {
-      putb(static_cast<uint8_t>(v | 0x80));
+      put_byte(static_cast<uint8_t>(v | 0x80));
       v >>= 7;
       l++;
     }
-    putb(static_cast<uint8_t>(v));
+    put_byte(static_cast<uint8_t>(v));
     return l;
   }
   uint32_t put_int(int64_t v)
