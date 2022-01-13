@@ -2812,11 +2812,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05, 0.17])
         >>> s.autocorr()
-        0.10355263309024071
+        0.1438853844...
         >>> s.autocorr(lag=2)
-        -0.9999999999999999
+        -0.9647548490...
         """
         return self.corr(self.shift(lag))
 
