@@ -550,13 +550,10 @@ TEST_F(ToArrowTest, FixedPoint64TableNulls)
       std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9, 0, 10, 0};
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
-    for (int64_t i = 0; i < input.column(0).size(); ++i) {
-      if (i % 2 == 0) {
-        decimal_builder.Append(
-          reinterpret_cast<const uint8_t*>(expect_data.data() + BIT_WIDTH_RATIO * i));
-      } else {
-        decimal_builder.AppendNull();
-      }
+    for (int64_t i = 0; i < input.column(0).size(); i += 2) {
+      decimal_builder.Append(
+        reinterpret_cast<const uint8_t*>(expect_data.data() + BIT_WIDTH_RATIO * i));
+      decimal_builder.AppendNull();
     }
 
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
@@ -584,12 +581,9 @@ TEST_F(ToArrowTest, FixedPoint128TableNulls)
     auto const expect_data = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
-    for (int64_t i = 0; i < input.column(0).size(); ++i) {
-      if (i % 2 == 0) {
-        decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + i));
-      } else {
-        decimal_builder.AppendNull();
-      }
+    for (int64_t i = 0; i < input.column(0).size(); i += 2) {
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + i));
+      decimal_builder.AppendNull();
     }
 
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");

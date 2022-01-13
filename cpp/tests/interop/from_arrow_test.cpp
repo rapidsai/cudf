@@ -450,12 +450,9 @@ TEST_F(FromArrowTest, FixedPoint128TableNullsLarge)
 
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -i), arrow::default_memory_pool());
-    for (int64_t i = 0; i < NUM_ELEMENTS; ++i) {
-      if (i % 2 == 0) {
-        decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + i));
-      } else {
-        decimal_builder.AppendNull();
-      }
+    for (int64_t i = 0; i < NUM_ELEMENTS; i += 2) {
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + i));
+      decimal_builder.AppendNull();
     }
 
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
