@@ -1560,8 +1560,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out._data[name] = col._with_type_metadata(
                     tables[0]._data[name].dtype
                 )
-            else:
-                out._data[name] = col
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
