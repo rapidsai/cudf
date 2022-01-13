@@ -60,24 +60,28 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
 
-  auto const count = [&]() {
-    std::size_t c = 0;
-    // when nulls are equal and input has nulls, only non-null rows are inserted. Thus the
-    // total distinct count equals the number of valid rows plus one (number of null rows)
-    if ((nulls_equal == null_equality::EQUAL) and has_null) {
-      thrust::counting_iterator<size_type> stencil(0);
-      auto const row_bitmask = cudf::detail::bitmask_and(keys, stream).first;
-      row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-      // insert valid rows only
-      key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
-      c = key_map.get_size() + 1;
-    } else {
-      key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
-      c = key_map.get_size();
-    }
-    return c;
-  }();
+  // TODO: debug the code below to improve efficiency: when nulls are equal, only non-null row
+  //  indices are inserted into the hash map.
+  //  auto const count = [&]() {
+  //    std::size_t c = 0;
+  //    // when nulls are equal and input has nulls, only non-null rows are inserted. Thus the
+  //    // total distinct count equals the number of valid rows plus one (number of null rows)
+  //    if ((nulls_equal == null_equality::EQUAL) and has_null) {
+  //      thrust::counting_iterator<size_type> stencil(0);
+  //      auto const row_bitmask = cudf::detail::bitmask_and(keys, stream).first;
+  //      row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+  //      // insert valid rows only
+  //      key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal,
+  //      stream.value()); c = key_map.get_size() + 1;
+  //    } else {
+  //      key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+  //      c = key_map.get_size();
+  //    }
+  //    return c;
+  //  }();
+  //
+  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+  auto count = key_map.get_size();
 
   return count;
 }
