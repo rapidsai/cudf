@@ -29,7 +29,7 @@ class Compaction : public cudf::benchmark {
 };
 
 template <typename Type>
-void BM_compaction(benchmark::State& state, cudf::duplicate_keep_option keep)
+void BM_compaction(benchmark::State& state)
 {
   auto const n_rows = static_cast<cudf::size_type>(state.range(0));
 
@@ -45,34 +45,26 @@ void BM_compaction(benchmark::State& state, cudf::duplicate_keep_option keep)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::unordered_drop_duplicates(input_table, {0}, keep);
+    auto result = cudf::unordered_drop_duplicates(input_table, {0});
   }
 }
 
-#define concat(a, b, c) a##b##c
-#define get_keep(op)    cudf::duplicate_keep_option::KEEP_##op
-
-// TYPE, OP
-#define RBM_BENCHMARK_DEFINE(name, type, keep)                     \
-  BENCHMARK_DEFINE_F(Compaction, name)(::benchmark::State & state) \
-  {                                                                \
-    BM_compaction<type>(state, get_keep(keep));                    \
-  }                                                                \
-  BENCHMARK_REGISTER_F(Compaction, name)                           \
-    ->UseManualTime()                                              \
-    ->Arg(10000)    /* 10k */                                      \
-    ->Arg(100000)   /* 100k */                                     \
-    ->Arg(1000000)  /* 1M */                                       \
+// TYPE
+#define RBM_BENCHMARK_DEFINE(name, type)                                                           \
+  BENCHMARK_DEFINE_F(Compaction, name)(::benchmark::State & state) { BM_compaction<type>(state); } \
+  BENCHMARK_REGISTER_F(Compaction, name)                                                           \
+    ->UseManualTime()                                                                              \
+    ->Arg(10000)    /* 10k */                                                                      \
+    ->Arg(100000)   /* 100k */                                                                     \
+    ->Arg(1000000)  /* 1M */                                                                       \
     ->Arg(10000000) /* 10M */
 
-#define COMPACTION_BENCHMARK_DEFINE(type, keep) \
-  RBM_BENCHMARK_DEFINE(concat(type, _, keep), type, keep)
+#define COMPACTION_BENCHMARK_DEFINE(type) RBM_BENCHMARK_DEFINE(type, type)
 
-COMPACTION_BENCHMARK_DEFINE(bool, NONE);
-COMPACTION_BENCHMARK_DEFINE(int8_t, NONE);
-COMPACTION_BENCHMARK_DEFINE(int32_t, NONE);
-COMPACTION_BENCHMARK_DEFINE(int32_t, FIRST);
-COMPACTION_BENCHMARK_DEFINE(int32_t, LAST);
+COMPACTION_BENCHMARK_DEFINE(bool);
+COMPACTION_BENCHMARK_DEFINE(int8_t);
+COMPACTION_BENCHMARK_DEFINE(int32_t);
+COMPACTION_BENCHMARK_DEFINE(int64_t);
 using cudf::timestamp_ms;
-COMPACTION_BENCHMARK_DEFINE(timestamp_ms, NONE);
-COMPACTION_BENCHMARK_DEFINE(float, NONE);
+COMPACTION_BENCHMARK_DEFINE(timestamp_ms);
+COMPACTION_BENCHMARK_DEFINE(float);
