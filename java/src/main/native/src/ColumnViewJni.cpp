@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1933,16 +1933,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
       result = cudf::bitmask_allocation_size_bytes(column->size());
     }
     return result;
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize(JNIEnv *env,
-                                                                                 jobject j_object,
-                                                                                 jint size) {
-  try {
-    cudf::jni::auto_set_device(env);
-    return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
   }
   CATCH_STD(env, 0);
 }
