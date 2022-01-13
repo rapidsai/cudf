@@ -1971,7 +1971,9 @@ class DatetimeIndex(GenericIndex):
         ...     "2001-01-01 00:05:04",
         ... ], dtype="datetime64[ns]")
         >>> dt_idx
-        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:05:04', '2001-01-01 00:04:58'], dtype='datetime64[ns]')
+        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:04:58',
+                       '2001-01-01 00:05:04'],
+                      dtype='datetime64[ns]')
         >>> dt_idx.round('H')
         DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
         >>> dt_idx.round('T')
