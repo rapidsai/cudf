@@ -631,11 +631,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                          matches_per_row_span.end(),
                          join_result_offsets.begin());
 
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
-
+  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto const& join_output_l = left_indices->data();
-  auto const& join_output_r = right_indices->data();
 
   if (has_nulls) {
     mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
@@ -648,7 +645,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         kernel_join_type,
         hash_table_view,
         join_output_l,
-        join_output_r,
         parser.device_expression_data,
         join_result_offsets.data(),
         swap_tables);
@@ -663,7 +659,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         kernel_join_type,
         hash_table_view,
         join_output_l,
-        join_output_r,
         parser.device_expression_data,
         join_result_offsets.data(),
         swap_tables);

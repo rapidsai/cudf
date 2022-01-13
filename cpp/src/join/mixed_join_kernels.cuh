@@ -420,8 +420,7 @@ __global__ void mixed_join(table_device_view left_table,
 template <cudf::size_type block_size,
           cudf::size_type output_cache_size,
           bool has_nulls,
-          typename OutputIt1,
-          typename OutputIt2>
+          typename OutputIt1>
 __global__ void mixed_join_semi(table_device_view left_table,
                                 table_device_view right_table,
                                 table_device_view probe,
@@ -430,7 +429,6 @@ __global__ void mixed_join_semi(table_device_view left_table,
                                 join_kind const join_type,
                                 cudf::detail::semi_map_type::device_view hash_table_view,
                                 OutputIt1 join_output_l,
-                                OutputIt2 join_output_r,
                                 cudf::ast::detail::expression_device_view device_expression_data,
                                 cudf::size_type const* join_result_offsets,
                                 bool const swap_tables)
@@ -464,8 +462,7 @@ __global__ void mixed_join_semi(table_device_view left_table,
     if ((join_type == join_kind::LEFT_ANTI_JOIN) !=
         (hash_table_view.contains(outer_row_index, hash_probe, equality))) {
       // TODO: Ignoring the swap_tables case since it doesn't happen here.
-      *(join_output_l + join_result_offsets[outer_row_index]) = swap_tables ? 0 : outer_row_index;
-      *(join_output_r + join_result_offsets[outer_row_index]) = swap_tables ? outer_row_index : 0;
+      *(join_output_l + join_result_offsets[outer_row_index]) = outer_row_index;
     }
   }
 }
