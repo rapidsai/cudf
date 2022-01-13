@@ -45,6 +45,7 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
 {
   auto table_ptr = cudf::table_device_view::create(keys, stream);
   auto const num_rows{table_ptr->num_rows()};
+  auto const has_null = cudf::has_nulls(keys);
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
                         COMPACTION_EMPTY_KEY_SENTINEL,
@@ -54,13 +55,31 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
 
   compaction_hash hash_key{nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr};
   row_equality_comparator row_equal(
-    nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr, *table_ptr, nulls_equal);
+    nullate::DYNAMIC{has_null}, *table_ptr, *table_ptr, nulls_equal);
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
-  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
 
-  return key_map.get_size();
+  auto const count = [&]() {
+    std::size_t c = 0;
+    // when nulls are equal and input has nulls, only non-null rows are inserted. Thus the
+    // total distinct count equals the number of valid rows plus one (number of null rows)
+    if ((compare_nulls == null_equality::EQUAL) and has_null) {
+      thrust::counting_iterator<size_type> stencil(0);
+      auto const row_bitmask = cudf::detail::bitmask_and(keys, stream).first;
+      row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+      // insert valid rows only
+      hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.valu());
+      c = key_map.get_size() + 1;
+    } else {
+      key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+      c = key_map.get_size();
+    }
+    return c;
+  }();
+
+  return count;
 }
 
 /**
