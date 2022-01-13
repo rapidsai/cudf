@@ -1,4 +1,5 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 """Define common type operations."""
 
 from __future__ import annotations

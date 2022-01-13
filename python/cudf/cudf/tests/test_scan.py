@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from itertools import product
 
 import numpy as np
