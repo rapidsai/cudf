@@ -21,7 +21,7 @@ def _cast_to_appropriate_type(ar, cast_type):
         from torch.utils.dlpack import from_dlpack
 
     elif cast_type == "tf":
-        from tf.experimental.dlpack import from_dlpack
+        from tensorflow.experimental.dlpack import from_dlpack
 
     return from_dlpack(ar.astype("int32").toDlpack())
 

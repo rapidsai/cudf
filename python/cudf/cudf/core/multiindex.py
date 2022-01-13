@@ -1743,3 +1743,39 @@ class MultiIndex(Frame, BaseIndex):
         if sort is None and len(other):
             return midx.sort_values()
         return midx
+
+    def _split_columns_by_levels(self, levels):
+        # This function assumes that for levels with duplicate names, they are
+        # specified by indices, not name by ``levels``. E.g. [None, None] can
+        # only be specified by 0, 1, not "None".
+
+        if levels is None:
+            return (
+                list(self._data.columns),
+                [],
+                [
+                    f"level_{i}" if name is None else name
+                    for i, name in enumerate(self.names)
+                ],
+                [],
+            )
+
+        # Normalize named levels into indices
+        level_names = list(self.names)
+        level_indices = {
+            lv if isinstance(lv, int) else level_names.index(lv)
+            for lv in levels
+        }
+
+        # Split the columns
+        data_columns, index_columns = [], []
+        data_names, index_names = [], []
+        for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
+            if i in level_indices:
+                name = f"level_{i}" if name is None else name
+                data_columns.append(col)
+                data_names.append(name)
+            else:
+                index_columns.append(col)
+                index_names.append(name)
+        return data_columns, index_columns, data_names, index_names

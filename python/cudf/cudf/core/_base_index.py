@@ -9,8 +9,15 @@ from typing import Any, Set
 import pandas as pd
 
 import cudf
+from cudf._lib.stream_compaction import apply_boolean_mask
 from cudf._typing import DtypeObj
-from cudf.api.types import is_dtype_equal, is_integer, is_list_like, is_scalar
+from cudf.api.types import (
+    is_bool_dtype,
+    is_dtype_equal,
+    is_integer,
+    is_list_like,
+    is_scalar,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
@@ -1415,6 +1422,32 @@ class BaseIndex(Serializable):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+    def _apply_boolean_mask(self, boolean_mask):
+        """Apply boolean mask to each row of `self`.
+
+        Rows corresponding to `False` is dropped.
+        """
+        boolean_mask = cudf.core.column.as_column(boolean_mask)
+        if not is_bool_dtype(boolean_mask.dtype):
+            raise ValueError("boolean_mask is not boolean type.")
+
+        result = self.__class__._from_columns(
+            apply_boolean_mask(list(self._columns), boolean_mask),
+            column_names=self._column_names,
+        )
+        result._copy_type_metadata(self)
+        return result
+
+    def _split_columns_by_levels(self, levels):
+        if isinstance(levels, int) and levels > 0:
+            raise ValueError(f"Out of bound level: {levels}")
+        return (
+            [self._data[self.name]],
+            [],
+            ["index" if self.name is None else self.name],
+            [],
+        )
 
 
 def _get_result_name(left_name, right_name):
