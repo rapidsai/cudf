@@ -11,10 +11,10 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
-    unordered_distinct_count as cpp_distinct_count,
-    unordered_drop_duplicates as cpp_drop_duplicates,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
+    unordered_distinct_count as cpp_distinct_count,
+    unordered_drop_duplicates as cpp_drop_duplicates,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -152,7 +152,6 @@ def drop_duplicates(columns: list,
             cpp_drop_duplicates(
                 source_table_view,
                 cpp_keys,
-                cpp_keep_option,
                 cpp_nulls_equal
             )
         )
