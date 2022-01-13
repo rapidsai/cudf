@@ -1433,11 +1433,10 @@ class BaseIndex(Serializable):
         """
         Drop duplicate rows in index.
 
-        keep : ["first", "last", False]
+        keep : {"first", "last", False}, default "first"
             - 'first' : Drop duplicates except for the first occurrence.
             - 'last' : Drop duplicates except for the last occurrence.
             - ``False`` : Drop all duplicates.
-
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
@@ -1459,7 +1458,7 @@ class BaseIndex(Serializable):
         """
         Drop null rows from Index.
 
-        how : {"any", "all"}, optional
+        how : {"any", "all"}, default "any"
             Specifies how to decide whether to drop a row.
             "any" (default) drops rows containing at least
             one null value. "all" drops only rows containing

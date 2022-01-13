@@ -234,7 +234,10 @@ def test_dropna_dataframe_np_nan(data, axis):
     "data, dtype",
     [
         ([1, float("nan"), 2], "float64"),
+        (["x", None, "y"], "str"),
+        (["x", None, "y"], "category"),
         (["2020-01-20", pd.NaT, "2020-03-15"], "datetime64[ns]"),
+        (["1s", pd.NaT, "3d"], "timedelta64[ns]"),
     ],
 )
 def test_dropna_index(data, dtype):
