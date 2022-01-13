@@ -389,43 +389,27 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   string_offsets.resize(new_string_offsets_size, stream);
 
-  // // make offsets zero-based.
-  // thrust::transform(rmm::exec_policy(stream),
-  //                   string_offsets.begin(),  //
-  //                   string_offsets.end(),
-  //                   string_offsets.begin(),
-  //                   [a](auto idx) { return idx - a; });
-
-  // std::cout << "a: " << a   //
-  //           << " b: " << b  //
-  //           << std::endl;
-  // std::cout << "string_offsets: " << new_string_offsets_size  //
-  //           << " chars: " << string_chars_size                //
-  //           << std::endl;
-
-  // std::cout << "::1::" << std::endl;
+  if (a != 0) {
+    // make offsets zero-based.
+    thrust::transform(rmm::exec_policy(stream),
+                      string_offsets.begin(),  //
+                      string_offsets.end(),
+                      string_offsets.begin(),
+                      [a] __device__(auto idx) { return idx - a; });
+  }
 
   auto string_chars = rmm::device_uvector<char>(string_chars_size, stream, mr);
 
-  // std::cout << "::2::" << std::endl;
-
   auto reader = source.create_reader();
-
-  // std::cout << "::3::" << std::endl;
 
   // replace this with a "reader->read_to(string_chars, stream)" call, instead of creating a buffer
   reader->skip_bytes(a);
   auto relevant_bytes = reader->get_next_chunk(string_chars_size, stream);
 
-  // std::cout << "::4::" << std::endl;
-
   thrust::copy(rmm::exec_policy(stream),
                relevant_bytes->data(),  //
                relevant_bytes->data() + relevant_bytes->size(),
                string_chars.begin());
-
-  // std::cout << "string_offsets.size(): " << string_offsets.size()  //
-  //           << " string_chars.size(): " << string_chars.size();
 
   return cudf::make_strings_column(
     string_offsets.size() - 1, std::move(string_offsets), std::move(string_chars));

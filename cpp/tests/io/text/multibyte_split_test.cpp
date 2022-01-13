@@ -153,6 +153,9 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
     host_input += "...:|";
   }
 
+  // make the last value non-empty, otherwise string concat (used in this test) will omit it.
+  host_input += ".";
+
   auto delimiter = std::string("...:|");
   auto source    = cudf::io::text::make_source(host_input);
 
@@ -166,5 +169,5 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
 
   auto expected = cudf::io::text::multibyte_split(*source, delimiter);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
 }

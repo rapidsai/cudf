@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/integer_utils.hpp>
+
 #include <limits>
 #include <vector>
 
@@ -26,21 +28,17 @@ namespace text {
 struct byte_range_info {
   size_t offset;
   size_t size;
-  bool is_first;
-  bool is_last;
 
   static std::vector<byte_range_info> create_consecutive(size_t total_bytes, size_t range_count)
   {
-    auto range_size = total_bytes / range_count;
+    auto range_size = util::div_rounding_up_safe(total_bytes, range_count);
 
     std::vector<byte_range_info> ranges;
 
     for (size_t i = 0; i < range_count; i++) {
-      ranges.push_back(  //
-        byte_range_info{i * range_size,
-                        std::min(range_size, total_bytes - i * range_size),
-                        i == 0,
-                        i == range_count - 1});
+      auto offset = i * range_size;
+      auto size   = std::min(range_size, total_bytes - offset);
+      ranges.push_back(byte_range_info{offset, size});
     }
 
     return ranges;
@@ -48,7 +46,7 @@ struct byte_range_info {
 
   static byte_range_info whole_source()
   {
-    return {0, std::numeric_limits<size_t>::max(), true, true};
+    return {0, std::numeric_limits<size_t>::max()};
   }
 };
 
