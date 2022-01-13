@@ -159,10 +159,3 @@ def register_index_accessor(name):
 def register_series_accessor(name):
     """{docstring}"""
     return _register_accessor(name, cudf.Series)
-
-
-__all__ = [
-    "register_dataframe_accessor",
-    "register_index_accessor",
-    "register_series_accessor",
-]
