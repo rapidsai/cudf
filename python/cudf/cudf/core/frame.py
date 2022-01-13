@@ -84,13 +84,6 @@ class Frame:
         return len(self._data)
 
     @property
-    def _num_indices(self) -> int:
-        if self._index is None:
-            return 0
-        else:
-            return len(self._index_names)
-
-    @property
     def _num_rows(self) -> int:
         if self._index is not None:
             return len(self._index)
@@ -157,8 +150,8 @@ class Frame:
         n_index_columns = 0
         if index_names is not None:
             n_index_columns = len(index_names)
-            index = cudf.core.index._index_from_data(
-                dict(zip(range(n_index_columns), columns))
+            index = cudf.core.index._index_from_columns(
+                columns[:n_index_columns]
             )
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
@@ -268,15 +261,6 @@ class Frame:
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame."""
         return self._num_rows, self._num_columns
-
-    @property
-    def _is_homogeneous(self):
-        # make sure that the dataframe has columns
-        if not self._data.columns:
-            return True
-
-        first_type = self._data.columns[0].dtype.name
-        return all(x.dtype.name == first_type for x in self._data.columns)
 
     @property
     def empty(self):
@@ -579,19 +563,6 @@ class Frame:
 
         result._copy_type_metadata(self)
         return result
-
-    def _hash(self, method, initial_hash=None):
-        return libcudf.hash.hash(self, method, initial_hash)
-
-    def _hash_partition(
-        self, columns_to_hash, num_partitions, keep_index=True
-    ):
-        output_data, output_index, offsets = libcudf.hash.hash_partition(
-            self, columns_to_hash, num_partitions, keep_index
-        )
-        output = self.__class__._from_data(output_data, output_index)
-        output._copy_type_metadata(self, include_index=keep_index)
-        return output, offsets
 
     def _as_column(self):
         """
@@ -1009,30 +980,6 @@ class Frame:
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _partition(self, scatter_map, npartitions, keep_index=True):
-
-        data, index, output_offsets = libcudf.partitioning.partition(
-            self, scatter_map, npartitions, keep_index
-        )
-        partitioned = self.__class__._from_data(data, index)
-
-        # due to the split limitation mentioned
-        # here: https://github.com/rapidsai/cudf/issues/4607
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after the above issue is fixed.
-        output_offsets = output_offsets[1:-1]
-
-        result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        for frame in result:
-            frame._copy_type_metadata(self, include_index=keep_index)
-
-        if npartitions:
-            for _ in range(npartitions - len(result)):
-                result.append(self._empty_like(keep_index))
-
-        return result
-
     def pipe(self, func, *args, **kwargs):
         """
         Apply ``func(self, *args, **kwargs)``.
@@ -1139,9 +1086,29 @@ class Frame:
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        tables = self._partition(map_index, map_size, keep_index)
+        data, index, output_offsets = libcudf.partitioning.partition(
+            self, map_index, map_size, keep_index
+        )
+        partitioned = self.__class__._from_data(data, index)
 
-        return tables
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = partitioned._split(output_offsets, keep_index=keep_index)
+
+        for frame in result:
+            frame._copy_type_metadata(self, include_index=keep_index)
+
+        if map_size:
+            result += [
+                self._empty_like(keep_index)
+                for _ in range(map_size - len(result))
+            ]
+
+        return result
 
     def dropna(
         self, axis=0, how="any", thresh=None, subset=None, inplace=False
@@ -1494,21 +1461,6 @@ class Frame:
 
         return self[out_cols]
 
-    def _apply_boolean_mask(self, boolean_mask):
-        """
-        Applies boolean mask to each row of `self`,
-        rows corresponding to `False` is dropped
-        """
-        boolean_mask = as_column(boolean_mask)
-
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.apply_boolean_mask(
-                self, as_column(boolean_mask)
-            )
-        )
-        result._copy_type_metadata(self)
-        return result
-
     def interpolate(
         self,
         method="linear",
@@ -1798,40 +1750,27 @@ class Frame:
                 "Only axis=`None` supported at this time."
             )
 
-        return self._repeat(repeats)
-
-    def _repeat(self, count):
-        if not is_scalar(count):
-            count = as_column(count)
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
 
         result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, count)
+            *libcudf.filling.repeat(self, repeats)
         )
 
         result._copy_type_metadata(self)
         return result
 
-    def _fill(self, fill_values, begin, end, inplace):
-        col_and_fill = zip(self._columns, fill_values)
-
-        if not inplace:
-            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
-            return self.__class__._from_data(
-                zip(self._column_names, data_columns), self._index
-            )
-
-        for (c, v) in col_and_fill:
-            c.fill(v, begin, end, inplace=True)
-
-        return self
-
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
-        assert axis in (None, 0) and freq is None
-        return self._shift(periods)
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise ValueError("Only axis=0 is supported.")
+        if freq is not None:
+            raise ValueError("The freq argument is not yet supported.")
 
-    def _shift(self, offset, fill_value=None):
-        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data_columns = (
+            col.shift(periods, fill_value) for col in self._columns
+        )
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
         )
@@ -2515,18 +2454,6 @@ class Frame:
                     )
 
         return self
-
-    def _copy_interval_data(self, other, include_index=True):
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
-            if isinstance(other_col, cudf.core.column.IntervalColumn):
-                self._data[name] = cudf.core.column.IntervalColumn(col)
-
-    def _postprocess_columns(self, other, include_index=True):
-        self._copy_categories(other, include_index=include_index)
-        self._copy_struct_names(other, include_index=include_index)
-        self._copy_interval_data(other, include_index=include_index)
 
     def isnull(self):
         """

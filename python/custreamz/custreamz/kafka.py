@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -25,13 +25,7 @@ class CudfKafkaClient:
         """
 
         self.kafka_configs = kafka_configs
-
-        self.kafka_confs = {
-            str.encode(key): str.encode(value)
-            for key, value in self.kafka_configs.items()
-        }
-
-        self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
+        self.kafka_meta_client = KafkaDatasource(kafka_configs)
 
     def list_topics(self, specific_topic=None):
 
@@ -145,7 +139,7 @@ class Consumer(CudfKafkaClient):
             )
 
         kafka_datasource = KafkaDatasource(
-            self.kafka_confs,
+            self.kafka_configs,
             topic.encode(),
             partition,
             start,
@@ -173,7 +167,10 @@ class Consumer(CudfKafkaClient):
         kafka_datasource.close(batch_timeout)
 
         if result is not None:
-            return cudf.DataFrame._from_table(result)
+            if isinstance(result, cudf.DataFrame):
+                return result
+            else:
+                return cudf.DataFrame._from_data(result)
         else:
             # empty Dataframe
             return cudf.DataFrame()
