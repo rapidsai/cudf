@@ -121,14 +121,10 @@ std::unique_ptr<column> set_keys(
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
   // copy the keys -- use unordered_drop_duplicates to make sure they are sorted and unique
-  auto table_keys = cudf::detail::unordered_drop_duplicates(table_view{{new_keys}},
-                                                            std::vector<size_type>{0},
-                                                            duplicate_keep_option::KEEP_FIRST,
-                                                            null_equality::EQUAL,
-                                                            null_order::BEFORE,
-                                                            stream,
-                                                            mr)
-                      ->release();
+  auto table_keys =
+    cudf::detail::unordered_drop_duplicates(
+      table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr)
+      ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls

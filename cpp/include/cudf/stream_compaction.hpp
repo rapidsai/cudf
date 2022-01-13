@@ -217,30 +217,26 @@ enum class duplicate_keep_option {
  * @brief Create a new table without duplicate rows.
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
- * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
- * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
+ * row of `keys` columns is unique. If duplicate rows are present, it is unspecified which
+ * row is copied.
+ *
+ * Elements in the output table are in a random order.
  *
  * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
- * @param[in] null_precedence flag to denote nulls should appear before or after non-null items
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  * memory
  *
- * @return Table with unique rows as per specified `keep`.
+ * @return Table with unique rows in an unspecified order.
  */
 std::unique_ptr<table> unordered_drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
-  null_order null_precedence          = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
