@@ -114,6 +114,13 @@ def _index_from_data(data: MutableMapping, name: Any = None):
     return index_class_type._from_data(data, None, name)
 
 
+def _index_from_columns(
+    columns: List[cudf.core.column.ColumnBase], name: Any = None
+):
+    """Construct an index from ``columns``, with levels named 0, 1, 2..."""
+    return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
+
+
 class RangeIndex(BaseIndex):
     """
     Immutable Index implementing a monotonic integer range.

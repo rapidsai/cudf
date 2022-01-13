@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,10 +137,9 @@ struct column_to_strings_fn {
       (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
-  explicit column_to_strings_fn(
-    csv_writer_options const& options,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  explicit column_to_strings_fn(csv_writer_options const& options,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
     : options_(options), stream_(stream), mr_(mr)
   {
   }
