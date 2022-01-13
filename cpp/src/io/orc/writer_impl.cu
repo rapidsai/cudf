@@ -1189,13 +1189,14 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
 void writer::impl::write_index_stream(int32_t stripe_id,
                                       int32_t stream_id,
                                       host_span<orc_column_view const> columns,
-                                      stripe_rowgroups const& rowgroups_range,
+                                      file_segmentation const& segmentation,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
                                       host_span<gpu_inflate_status_s const> comp_out,
                                       StripeInformation* stripe,
                                       orc_streams* streams,
-                                      ProtobufWriter* pbw)
+                                      ProtobufWriter* pbw,
+                                      std::optional<std::vector<ColStatsBlob>> const& rg_stats)
 {
   row_group_index_info present;
   row_group_index_info data;
@@ -1250,9 +1251,19 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
 
   // Add row index entries
+  auto const& rowgroups_range = segmentation.stripes[stripe_id];
   std::for_each(rowgroups_range.cbegin(), rowgroups_range.cend(), [&](auto rowgroup) {
     pbw->put_row_index_entry(
-      present.comp_pos, present.pos, data.comp_pos, data.pos, data2.comp_pos, data2.pos, kind);
+      present.comp_pos,
+      present.pos,
+      data.comp_pos,
+      data.pos,
+      data2.comp_pos,
+      data2.pos,
+      kind,
+      rg_stats.has_value()
+        ? (rg_stats->data() + column_id * segmentation.num_rowgroups() + rowgroup)
+        : nullptr);
 
     if (stream_id != 0) {
       const auto& strm = enc_streams[column_id][rowgroup];
@@ -1943,8 +1954,7 @@ void writer::impl::write(table_view const& table)
     // Write stripes
     std::vector<std::future<void>> write_tasks;
     for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
-      auto const& rowgroups_range = segmentation.stripes[stripe_id];
-      auto& stripe                = stripes[stripe_id];
+      auto& stripe = stripes[stripe_id];
 
       stripe.offset = out_sink_->bytes_written();
 
@@ -1953,24 +1963,25 @@ void writer::impl::write(table_view const& table)
         write_index_stream(stripe_id,
                            stream_id,
                            orc_table.columns,
-                           rowgroups_range,
+                           segmentation,
                            enc_data.streams,
                            strm_descs,
                            comp_out,
                            &stripe,
                            &streams,
-                           &pbw_);
+                           &pbw_,
+                           statistics.rowgroup_level);
       }
 
       // Column data consisting one or more separate streams
       for (auto const& strm_desc : strm_descs[stripe_id]) {
-        write_tasks.push_back(
-          write_data_stream(strm_desc,
-                            enc_data.streams[strm_desc.column_id][rowgroups_range.first],
-                            static_cast<uint8_t const*>(compressed_data.data()),
-                            stream_output.get(),
-                            &stripe,
-                            &streams));
+        write_tasks.push_back(write_data_stream(
+          strm_desc,
+          enc_data.streams[strm_desc.column_id][segmentation.stripes[stripe_id].first],
+          static_cast<uint8_t const*>(compressed_data.data()),
+          stream_output.get(),
+          &stripe,
+          &streams));
       }
 
       // Write stripefooter consisting of stream information

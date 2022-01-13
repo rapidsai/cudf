@@ -209,7 +209,8 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          int32_t data_ofs,
                                          int32_t data2_blk,
                                          int32_t data2_ofs,
-                                         TypeKind kind)
+                                         TypeKind kind,
+                                         ColStatsBlob const* stats)
 {
   size_t sz = 0, lpos;
   put_byte(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
@@ -227,25 +228,36 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
     if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
-      put_byte(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      put_byte(0);
       sz++;
       if (kind == BOOLEAN) {
-        put_byte(0);  // bit position in byte, always zero
+        // bit position in byte, always zero
+        put_byte(0);
         sz++;
       }
     }
   }
-  if (kind !=
-      INT)  // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
-  {
+  // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
+  if (kind != INT) {
     if (data2_blk >= 0) { sz += put_uint(data2_blk); }
     if (data2_ofs >= 0) {
       sz += put_uint(data2_ofs) + 1;
-      put_byte(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      put_byte(0);
     }
   }
-  m_buf->data()[lpos]     = (uint8_t)(sz + 2);
+  // size of the field 1
   m_buf->data()[lpos + 2] = (uint8_t)(sz);
+
+  if (stats != nullptr) {
+    sz += put_uint(2 * 8 + PB_TYPE_FIXEDLEN);
+    sz += put_uint(stats->size()) + stats->size();
+    put_bytes(*stats);
+  }
+
+  // size of the whole row index entry
+  m_buf->data()[lpos] = (uint8_t)(sz + 2);
 }
 
 size_t ProtobufWriter::write(const PostScript& s)

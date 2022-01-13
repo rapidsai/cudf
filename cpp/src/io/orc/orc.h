@@ -499,7 +499,8 @@ class ProtobufWriter {
                            int32_t data_ofs,
                            int32_t data2_blk,
                            int32_t data2_ofs,
-                           TypeKind kind);
+                           TypeKind kind,
+                           ColStatsBlob const* stats);
 
  public:
   size_t write(const PostScript&);
