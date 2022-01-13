@@ -9,7 +9,6 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
-from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
     assert_eq,
@@ -784,11 +783,11 @@ def test_series_take_positional():
 @pytest.mark.parametrize("slice_start", [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize("slice_end", [None, 0, 1, 30, 50, -1])
 def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
-    gdf = cudf.DataFrame()
-    gdf["a"] = list(range(nelem))
-    gdf["b"] = list(range(nelem, 2 * nelem))
-    gdf["a"] = gdf["a"].set_mask(utils.random_bitmask(nelem))
-    gdf["b"] = gdf["b"].set_mask(utils.random_bitmask(nelem))
+    gdf = cudf.DataFrame(
+        {"a": list(range(nelem)), "b": list(range(nelem, 2 * nelem))}
+    )
+    gdf["a"][np.random.choice([True, False], nelem)] = pd.NA
+    gdf["b"][np.random.choice([True, False], nelem)] = pd.NA
 
     def do_slice(x):
         return x[slice_start:slice_end]
