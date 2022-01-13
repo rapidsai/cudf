@@ -8,43 +8,52 @@ import pytest
 import cudf
 
 
-def _name_in_all(parent, name, member):
+def _name_in_all(parent, name):
     return name in getattr(parent, "__all__", [])
 
 
-def _is_public_name(parent, name, member):
+def _is_public_name(parent, name):
     return not name.startswith("_")
 
 
-def _find_docstrings_in_obj(finder, obj, criteria=None):
+def _find_doctests_in_obj(finder, obj, criteria):
+    """Find all doctests in an object.
+
+    Args:
+        finder (doctest.DocTestFinder): The DocTestFinder object to use.
+        obj (module or class): The object to search for docstring examples.
+        criteria (callable): Callable indicating whether to recurse over
+        members of the provided object.
+
+    Yields:
+        doctest.DocTest: The next doctest found in the object.
+    """
     for docstring in finder.find(obj):
         if docstring.examples:
             yield docstring
     for name, member in inspect.getmembers(obj):
-        # Filter out non-matching objects with criteria
-        if criteria is not None and not criteria(obj, name, member):
+        # Only recurse over members matching the criteria
+        if not criteria(obj, name):
             continue
-        # Recurse over the public API of modules (objects defined in __all__)
+        # Recurse over the public API of modules (objects defined in the
+        # module's __all__)
         if inspect.ismodule(member):
-            yield from _find_docstrings_in_obj(
+            yield from _find_doctests_in_obj(
                 finder, member, criteria=_name_in_all
             )
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
         if inspect.isclass(member):
-            yield from _find_docstrings_in_obj(
+            yield from _find_doctests_in_obj(
                 finder, member, criteria=_is_public_name
             )
-
-
-def _fetch_doctests():
-    finder = doctest.DocTestFinder()
-    yield from _find_docstrings_in_obj(finder, cudf, criteria=_name_in_all)
 
 
 class TestDoctests:
     @pytest.fixture(autouse=True)
     def chdir_to_tmp_path(cls, tmp_path):
+        # Some doctests generate files, so this fixture runs the tests in a
+        # temporary directory.
         original_directory = os.getcwd()
         try:
             os.chdir(tmp_path)
@@ -53,13 +62,25 @@ class TestDoctests:
             os.chdir(original_directory)
 
     @pytest.mark.parametrize(
-        "docstring", _fetch_doctests(), ids=lambda docstring: docstring.name
+        "docstring",
+        _find_doctests_in_obj(
+            finder=doctest.DocTestFinder(), obj=cudf, criteria=_name_in_all
+        ),
+        ids=lambda docstring: docstring.name,
     )
     def test_docstring(self, docstring):
+        # We ignore differences in whitespace in the doctest output, and enable
+        # the use of an ellipsis "..." to match any string in the doctest
+        # output. An ellipsis is useful for, e.g., memory addresses or
+        # imprecise floating point values.
         optionflags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
         runner = doctest.DocTestRunner(optionflags=optionflags)
-        globs = dict(cudf=cudf, np=np,)
-        docstring.globs = globs
+
+        # These global names are pre-defined and can be used in doctests
+        # without first importing them.
+        globals = dict(cudf=cudf, np=np,)
+        docstring.globs = globals
+
         runner.run(docstring)
         results = runner.summarize()
         if results.failed:
