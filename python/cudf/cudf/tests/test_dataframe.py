@@ -995,11 +995,8 @@ def test_dataframe_to_cupy_null_values():
     refvalues = {}
     for k in "abcd":
         df[k] = data = np.random.random(nelem)
-        bitmask = utils.random_bitmask(nelem)
-        df[k] = df[k].set_mask(bitmask)
-        boolmask = np.asarray(
-            utils.expand_bits_to_bytes(bitmask)[:nelem], dtype=np.bool_
-        )
+        boolmask = np.random.choice([True, False], nelem)
+        df[k][~boolmask] = pd.NA
         data[~boolmask] = na
         refvalues[k] = data
 
@@ -1165,15 +1162,14 @@ def test_dataframe_hash_partition_masked_value(nrows):
     gdf = cudf.DataFrame()
     gdf["key"] = np.arange(nrows)
     gdf["val"] = np.arange(nrows) + 100
-    bitmask = utils.random_bitmask(nrows)
-    bytemask = utils.expand_bits_to_bytes(bitmask)
-    gdf["val"] = gdf["val"].set_mask(bitmask)
+    boolmask = np.random.choice([True, False], nrows)
+    gdf["val"][~boolmask] = pd.NA
     parted = gdf.partition_by_hash(["key"], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
         df = p.to_pandas()
         for row in df.itertuples():
-            valid = bool(bytemask[row.key])
+            valid = boolmask[row.key]
             expected_value = row.key + 100 if valid else np.nan
             got_value = row.val
             assert (expected_value == got_value) or (
@@ -1186,15 +1182,14 @@ def test_dataframe_hash_partition_masked_keys(nrows):
     gdf = cudf.DataFrame()
     gdf["key"] = np.arange(nrows)
     gdf["val"] = np.arange(nrows) + 100
-    bitmask = utils.random_bitmask(nrows)
-    bytemask = utils.expand_bits_to_bytes(bitmask)
-    gdf["key"] = gdf["key"].set_mask(bitmask)
+    boolmask = np.random.choice([True, False], nrows)
+    gdf["key"][~boolmask] = pd.NA
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
     # Verify that the valid mask is correct
     for p in parted:
         df = p.to_pandas()
         for row in df.itertuples():
-            valid = bool(bytemask[row.val - 100])
+            valid = boolmask[row.val - 100]
             # val is key + 100
             expected_value = row.val - 100 if valid else np.nan
             got_value = row.key
