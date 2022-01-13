@@ -420,10 +420,10 @@ struct NullLogicalAnd {
   __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x && y)
   {
-    bool lhs_false = lhs_valid && !x;
-    bool rhs_false = rhs_valid && !y;
+    bool lhs_false  = lhs_valid && !x;
+    bool rhs_false  = rhs_valid && !y;
     bool both_valid = lhs_valid && rhs_valid;
-    output_valid = lhs_false || rhs_false || both_valid;
+    output_valid    = lhs_false || rhs_false || both_valid;
     return both_valid && !lhs_false && !rhs_false;
   }
   // To allow std::is_invocable_v = true
@@ -436,10 +436,10 @@ struct NullLogicalOr {
   __device__ inline auto operator()(
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x || y)
   {
-    bool lhs_true = lhs_valid && x;
-    bool rhs_true = rhs_valid && y;
+    bool lhs_true   = lhs_valid && x;
+    bool rhs_true   = rhs_valid && y;
     bool both_valid = lhs_valid && rhs_valid;
-    output_valid = lhs_true || rhs_true || both_valid;
+    output_valid    = lhs_true || rhs_true || both_valid;
     return lhs_true || rhs_true;
   }
   // To allow std::is_invocable_v = true
