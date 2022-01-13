@@ -20,6 +20,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -121,11 +122,15 @@ std::unique_ptr<column> set_keys(
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
   // copy the keys -- use unordered_drop_duplicates to make sure they are sorted and unique
-  auto table_keys =
-    cudf::detail::unordered_drop_duplicates(
-      table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr)
-      ->release();
-  std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+  auto unique_keys = cudf::detail::unordered_drop_duplicates(
+    table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
+  auto sorted_keys = cudf::detail::sort(unique_keys->view(),
+                                        std::vector<order>{order::ASCENDING},
+                                        std::vector<null_order>{null_order::BEFORE},
+                                        stream,
+                                        mr)
+                       ->release();
+  std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // compute the new nulls
   auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
