@@ -256,7 +256,7 @@ def test_dataframe_join_mismatch_cats(how):
 
     pdf1 = pdf1.set_index("join_col")
     pdf2 = pdf2.set_index("join_col")
-    join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
+    join_gdf = gdf1.join(gdf2, how=how, sort=True)
     join_pdf = pdf1.join(pdf2, how=how)
 
     got = join_gdf.fillna(-1).to_pandas()
@@ -403,7 +403,7 @@ def test_dataframe_merge_order():
     gdf2["id"] = [4, 5]
     gdf2["a"] = [7, 8]
 
-    gdf = gdf1.merge(gdf2, how="left", on=["id", "a"], method="hash")
+    gdf = gdf1.merge(gdf2, how="left", on=["id", "a"])
 
     df1 = pd.DataFrame()
     df2 = pd.DataFrame()
