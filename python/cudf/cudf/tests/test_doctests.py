@@ -55,11 +55,9 @@ class TestDoctests:
         # Some doctests generate files, so this fixture runs the tests in a
         # temporary directory.
         original_directory = os.getcwd()
-        try:
-            os.chdir(tmp_path)
-            yield
-        finally:
-            os.chdir(original_directory)
+        os.chdir(tmp_path)
+        yield
+        os.chdir(original_directory)
 
     @pytest.mark.parametrize(
         "docstring",
