@@ -685,6 +685,9 @@ class GroupBy(Serializable):
           3  5
           4  5
 
+        See also
+        --------
+        cudf.core.groupby.GroupBy.agg
         """
         try:
             result = self.agg(function)
