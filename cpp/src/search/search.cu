@@ -178,9 +178,14 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
                                                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+
   auto const scalar_table = static_cast<struct_scalar const*>(&value)->view();
   CUDF_EXPECTS(col.num_children() == scalar_table.num_columns(),
                "struct scalar and structs column must have the same number of children");
+  for (size_type i = 0; i < col.num_children(); ++i) {
+    CUDF_EXPECTS(col.child(i).type() == scalar_table.column(i).type(),
+                 "scalar and column children types must match");
+  }
 
   // Prepare to flatten the structs column and scalar.
   auto const has_null_elements =
@@ -197,12 +202,13 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
     structs::detail::flatten_nested_columns(scalar_table, {}, {}, flatten_nullability);
 
   // The struct scalar only contains the struct member columns.
-  // Thus, if there is any null in the input, we must exclude the first column in the flattenned
+  // Thus, if there is any null in the input, we must exclude the first column in the flattened
   // table of the input column from searching because that column is the materialized bitmask of
   // the input structs column.
   auto const col_flattened_content  = col_flattened.flattened_columns();
   auto const col_flattened_children = table_view{std::vector<column_view>{
-    col_flattened_content.begin() + has_null_elements, col_flattened_content.end()}};
+    col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
+    col_flattened_content.end()}};
 
   auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
   auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
