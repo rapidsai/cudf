@@ -19,14 +19,20 @@ def _is_public_name(parent, name):
 def _find_doctests_in_obj(finder, obj, criteria):
     """Find all doctests in an object.
 
-    Args:
-        finder (doctest.DocTestFinder): The DocTestFinder object to use.
-        obj (module or class): The object to search for docstring examples.
-        criteria (callable): Callable indicating whether to recurse over
-        members of the provided object.
+    Parameters
+    ----------
+    finder : doctest.DocTestFinder
+        The DocTestFinder object to use.
+    obj : module or class
+        The object to search for docstring examples.
+    criteria : callable
+        Callable indicating whether to recurse over members of the provided
+        object.
 
-    Yields:
-        doctest.DocTest: The next doctest found in the object.
+    Yields
+    ------
+    doctest.DocTest
+        The next doctest found in the object.
     """
     for docstring in finder.find(obj):
         if docstring.examples:
