@@ -81,5 +81,4 @@ class TestDoctests:
 
         runner.run(docstring)
         results = runner.summarize()
-        if results.failed:
-            raise AssertionError(results)
+        assert not results.failed, results
