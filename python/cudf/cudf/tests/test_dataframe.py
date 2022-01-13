@@ -1436,10 +1436,8 @@ def test_nonmatching_index_setitem(nrows):
     test_values = np.random.randint(2147483647, size=nrows)
     gdf["c"] = test_values
     assert len(test_values) == len(gdf["c"])
-    gdf_series_with_index = cudf.Series(test_values)
-    gdf_series_with_index.index = gdf.index
-    gdf_series_with_index.name = "c"
-    assert_eq(gdf["c"].to_pandas(), gdf_series_with_index.to_pandas())
+    gdf_series = cudf.Series(test_values, index=gdf.index, name="c")
+    assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
 def test_from_pandas():
