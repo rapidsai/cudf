@@ -309,14 +309,14 @@ class writer::impl {
    * @param[in] stripe_id Stripe's identifier
    * @param[in] stream_id Stream identifier (column id + 1)
    * @param[in] columns List of columns
-   * @param[in] TODO
+   * @param[in] segmentation stripe and rowgroup ranges
    * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in] strm_desc List of stream descriptors
    * @param[in] comp_out Output status for compressed streams
+   * @param[in] rg_stats row group level statistics
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
    * @param[in,out] pbw Protobuf writer
-   * TODO
    */
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
@@ -325,10 +325,10 @@ class writer::impl {
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
                           host_span<gpu_inflate_status_s const> comp_out,
+                          std::optional<std::vector<ColStatsBlob>> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,
-                          ProtobufWriter* pbw,
-                          std::optional<std::vector<ColStatsBlob>> const& rg_stats);
+                          ProtobufWriter* pbw);
 
   /**
    * @brief Write the specified column's data streams

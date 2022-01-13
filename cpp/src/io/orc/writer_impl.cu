@@ -1193,10 +1193,10 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
                                       host_span<gpu_inflate_status_s const> comp_out,
+                                      std::optional<std::vector<ColStatsBlob>> const& rg_stats,
                                       StripeInformation* stripe,
                                       orc_streams* streams,
-                                      ProtobufWriter* pbw,
-                                      std::optional<std::vector<ColStatsBlob>> const& rg_stats)
+                                      ProtobufWriter* pbw)
 {
   row_group_index_info present;
   row_group_index_info data;
@@ -1967,10 +1967,10 @@ void writer::impl::write(table_view const& table)
                            enc_data.streams,
                            strm_descs,
                            comp_out,
+                           statistics.rowgroup_level,
                            &stripe,
                            &streams,
-                           &pbw_,
-                           statistics.rowgroup_level);
+                           &pbw_);
       }
 
       // Column data consisting one or more separate streams
