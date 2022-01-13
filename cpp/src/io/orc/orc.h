@@ -471,6 +471,12 @@ class ProtobufWriter {
   ProtobufWriter() { m_buf = nullptr; }
   ProtobufWriter(std::vector<uint8_t>* output) { m_buf = output; }
   void put_byte(uint8_t v) { m_buf->push_back(v); }
+  template <typename T>
+  void put_bytes(T const& values)
+  {
+    m_buf->reserve(m_buf->size() + values.size());
+    m_buf->insert(m_buf->end(), values.cbegin(), values.cend());
+  }
   uint32_t put_uint(uint64_t v)
   {
     int l = 1;

@@ -73,8 +73,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
     size_t len = value.length();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++)
-      p->put_byte(value[i]);
+    p->put_bytes(value);
   }
 
   /**
@@ -86,8 +85,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
     size_t len = value.size();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     struct_size += p->put_uint(len) + len;
-    for (size_t i = 0; i < len; i++)
-      p->put_byte(value[i]);
+    p->put_bytes(value);
   }
 
   /**
