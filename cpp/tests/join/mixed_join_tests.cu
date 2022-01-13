@@ -656,26 +656,23 @@ struct MixedJoinSingleReturnTest : public MixedJoinTest<T> {
                      std::vector<cudf::size_type> expected_outputs,
                      cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
   {
-    auto result_size = this->join_size(
+    auto [result_size, actual_counts] = this->join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
     EXPECT_TRUE(result_size == expected_outputs.size());
 
-    // auto result = this->join(
-    //  left_equality, right_equality, left_conditional, right_conditional, predicate,
-    //  compare_nulls);
-    // std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-    // for (size_t i = 0; i < result.first->size(); ++i) {
-    //  // Note: Not trying to be terribly efficient here since these tests are
-    //  // small, otherwise a batch copy to host before constructing the tuples
-    //  // would be important.
-    //  result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-    //                          result.second->element(i, rmm::cuda_stream_default)});
-    //}
-    // std::sort(result_pairs.begin(), result_pairs.end());
-    // std::sort(expected_outputs.begin(), expected_outputs.end());
-    //
-    // EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(),
-    // result_pairs.begin()));
+    auto result = this->join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+    std::vector<cudf::size_type> resulting_indices;
+    for (size_t i = 0; i < result->size(); ++i) {
+      // Note: Not trying to be terribly efficient here since these tests are
+      // small, otherwise a batch copy to host before constructing the tuples
+      // would be important.
+      resulting_indices.push_back(result->element(i, rmm::cuda_stream_default));
+    }
+    std::sort(resulting_indices.begin(), resulting_indices.end());
+    std::sort(expected_outputs.begin(), expected_outputs.end());
+    EXPECT_TRUE(
+      std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
   }
 
   /*
@@ -747,24 +744,25 @@ struct MixedJoinSingleReturnTest : public MixedJoinTest<T> {
    * It should be a simply forwarding of arguments to the appropriate cudf
    * mixed join API.
    */
-  // virtual SingleJoinReturn join(cudf::table_view left_equality,
-  //                            cudf::table_view right_equality,
-  //                            cudf::table_view left_conditional,
-  //                            cudf::table_view right_conditional,
-  //                            cudf::ast::operation predicate,
-  //                            cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
+  virtual SingleJoinReturn join(cudf::table_view left_equality,
+                                cudf::table_view right_equality,
+                                cudf::table_view left_conditional,
+                                cudf::table_view right_conditional,
+                                cudf::ast::operation predicate,
+                                cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
 
   /**
    * This method must be implemented by subclasses for specific types of joins.
    * It should be a simply forwarding of arguments to the appropriate cudf
    * mixed join size computation API.
    */
-  virtual std::size_t join_size(cudf::table_view left_equality,
-                                cudf::table_view right_equality,
-                                cudf::table_view left_conditional,
-                                cudf::table_view right_conditional,
-                                cudf::ast::operation predicate,
-                                cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
+  virtual std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
 };
 
 /**
@@ -772,23 +770,24 @@ struct MixedJoinSingleReturnTest : public MixedJoinTest<T> {
  */
 template <typename T>
 struct MixedLeftSemiJoinTest : public MixedJoinSingleReturnTest<T> {
-  // SingleJoinReturn join(
-  //  cudf::table_view left_equality,
-  //  cudf::table_view right_equality,
-  //  cudf::table_view left_conditional,
-  //  cudf::table_view right_conditional,
-  //  cudf::ast::operation predicate,
-  //  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
-  //{
-  //  return cudf::mixed_left_semi_join(left, right, predicate);
-  //}
-
-  std::size_t join_size(cudf::table_view left_equality,
+  SingleJoinReturn join(cudf::table_view left_equality,
                         cudf::table_view right_equality,
                         cudf::table_view left_conditional,
                         cudf::table_view right_conditional,
                         cudf::ast::operation predicate,
                         cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  {
+    return cudf::mixed_left_semi_join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+  }
+
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
     return cudf::mixed_left_semi_join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);

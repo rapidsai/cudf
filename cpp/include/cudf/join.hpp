@@ -1037,6 +1037,16 @@ mixed_full_join(
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Returns the exact number of matches (rows) when performing a
  * mixed inner join between the specified tables where the columns of the
@@ -1153,7 +1163,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  *
  * @return TODO
  */
-std::size_t mixed_left_semi_join_size(
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_semi_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
