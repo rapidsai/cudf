@@ -9,7 +9,7 @@ from typing import Any, Set
 import pandas as pd
 
 import cudf
-from cudf._lib.copying import gather
+from cudf._lib.copying import _gather_map_is_valid, gather
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
     drop_duplicates,
@@ -32,7 +32,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import _gather_map_is_valid, cached_property
+from cudf.utils.utils import cached_property
 
 
 class BaseIndex(Serializable):

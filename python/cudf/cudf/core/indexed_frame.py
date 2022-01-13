@@ -29,7 +29,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import _gather_map_is_valid, cached_property
+from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -551,7 +551,7 @@ class IndexedFrame(Frame):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 
-        if not _gather_map_is_valid(
+        if not libcudf.copying._gather_map_is_valid(
             gather_map, len(self), check_bounds, nullify
         ):
             raise IndexError("Gather map index is out of bounds.")
