@@ -251,7 +251,34 @@ __global__ void compute_mixed_join_output_size(
 }
 
 /**
-  TODO
+ * @brief Computes the output size of joining the left table to the right table for semi/anti joins.
+ *
+ * This method probes the hash table with each row in the probe table using a
+ * custom equality comparator that also checks that the conditional expression
+ * evaluates to true between the left/right tables when a match is found
+ * between probe and build rows.
+ *
+ * @tparam block_size The number of threads per block for this kernel
+ * @tparam has_nulls Whether or not the inputs may contain nulls.
+ *
+ * @param[in] left_table The left table
+ * @param[in] right_table The right table
+ * @param[in] probe The table with which to probe the hash table for matches.
+ * @param[in] build The table with which the hash table was built.
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] join_type The type of join to be performed
+ * @param[in] hash_table_view The hash table built from `build`.
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
+ * @param[out] output_size The resulting output size
+ * @param[out] matches_per_row The number of matches in one pair of
+ * equality/conditional tables for each row in the other pair of tables. If
+ * swap_tables is true, matches_per_row corresponds to the right_table,
+ * otherwise it corresponds to the left_table. Note that corresponding swap of
+ * left/right tables to determine which is the build table and which is the
+ * probe table has already happened on the host.
  */
 template <int block_size, bool has_nulls>
 __global__ void compute_mixed_join_output_size_semi(
@@ -414,9 +441,36 @@ __global__ void mixed_join(table_device_view left_table,
   }
 }
 
-/*
-   TODO
-*/
+/**
+ * @brief Performs a semi/anti join using the combination of a hash lookup to
+ * identify equal rows between one pair of tables and the evaluation of an
+ * expression containing an arbitrary expression.
+ *
+ * This method probes the hash table with each row in the probe table using a
+ * custom equality comparator that also checks that the conditional expression
+ * evaluates to true between the left/right tables when a match is found
+ * between probe and build rows.
+ *
+ * @tparam block_size The number of threads per block for this kernel
+ * @tparam output_cache_size The side of the shared memory buffer to cache join
+ * @tparam has_nulls Whether or not the inputs may contain nulls.
+ *
+ * @param[in] left_table The left table
+ * @param[in] right_table The right table
+ * @param[in] probe The table with which to probe the hash table for matches.
+ * @param[in] build The table with which the hash table was built.
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] join_type The type of join to be performed
+ * @param[in] hash_table_view The hash table built from `build`.
+ * @param[out] join_output_l The left result of the join operation
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
+ * @param[in] join_result_offsets The starting indices in join_output[l|r]
+ * where the matches for each row begin. Equivalent to a prefix sum of
+ * matches_per_row.
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
+ */
 template <cudf::size_type block_size,
           cudf::size_type output_cache_size,
           bool has_nulls,
@@ -461,7 +515,6 @@ __global__ void mixed_join_semi(table_device_view left_table,
 
     if ((join_type == join_kind::LEFT_ANTI_JOIN) !=
         (hash_table_view.contains(outer_row_index, hash_probe, equality))) {
-      // TODO: Ignoring the swap_tables case since it doesn't happen here.
       *(join_output_l + join_result_offsets[outer_row_index]) = outer_row_index;
     }
   }
