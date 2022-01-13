@@ -775,7 +775,7 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
-            if isinstance(index, cudf.Series):
+            if isinstance(result, cudf.Series):
                 result.index = index
             else:
                 result = result.set_index(index)
