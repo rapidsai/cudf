@@ -413,19 +413,13 @@ TEST_F(FromArrowTest, FixedPoint128TableNulls)
   using namespace numeric;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data = std::vector<__int128_t>{1, 2, 3, 4, 5, 6};
+    auto const data  = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const nulls = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col =
       fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
-    std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -scale),
-                                             arrow::default_memory_pool());
-    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), data.size());
-    decimal_builder.AppendNull();
-    decimal_builder.AppendNull();
-
-    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    auto const arr = make_decimal128_arrow_array(data, nulls, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -451,15 +445,8 @@ TEST_F(FromArrowTest, FixedPoint128TableNullsLarge)
     auto const col   = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, nulls, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
-    std::shared_ptr<arrow::Array> arr;
-    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -scale),
-                                             arrow::default_memory_pool());
-    for (int64_t i = 0; i < NUM_ELEMENTS; i += 2) {
-      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + i));
-      decimal_builder.AppendNull();
-    }
-
-    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+    auto const arr =
+      make_decimal128_arrow_array(data, std::vector<int32_t>(nulls, nulls + NUM_ELEMENTS), scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
