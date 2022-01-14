@@ -9030,3 +9030,14 @@ def test_dataframe_add_suffix():
     expected = pdf.add_suffix("_item")
 
     assert_eq(got, expected)
+
+
+def test_dataframe_assign_cp_np_array():
+    m, n = 5, 3
+    cp_ndarray = cupy.random.randn(m, n)
+    pdf = pd.DataFrame({f"f_{i}": range(m) for i in range(n)})
+    gdf = cudf.DataFrame({f"f_{i}": range(m) for i in range(n)})
+    pdf[[f"f_{i}" for i in range(n)]] = cupy.asnumpy(cp_ndarray)
+    gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
+
+    assert_eq(pdf, gdf)
