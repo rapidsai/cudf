@@ -747,70 +747,68 @@ def test_index_astype(nelem):
 
 
 def test_dataframe_to_string():
-    pd.options.display.max_rows = 5
-    pd.options.display.max_columns = 8
-    # Test basic
-    df = cudf.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
-    )
-    string = str(df)
+    with pd.option_context("display.max_rows", 5, "display.max_columns", 8):
+        # Test basic
+        df = cudf.DataFrame(
+            {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
+        )
+        string = str(df)
 
-    assert string.splitlines()[-1] == "[6 rows x 2 columns]"
+        assert string.splitlines()[-1] == "[6 rows x 2 columns]"
 
-    # Test skipped columns
-    df = cudf.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5, 6],
-            "b": [11, 12, 13, 14, 15, 16],
-            "c": [11, 12, 13, 14, 15, 16],
-            "d": [11, 12, 13, 14, 15, 16],
-        }
-    )
-    string = df.to_string()
+        # Test skipped columns
+        df = cudf.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5, 6],
+                "b": [11, 12, 13, 14, 15, 16],
+                "c": [11, 12, 13, 14, 15, 16],
+                "d": [11, 12, 13, 14, 15, 16],
+            }
+        )
+        string = df.to_string()
 
-    assert string.splitlines()[-1] == "[6 rows x 4 columns]"
+        assert string.splitlines()[-1] == "[6 rows x 4 columns]"
 
-    # Test masked
-    df = cudf.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
-    )
+        # Test masked
+        df = cudf.DataFrame(
+            {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
+        )
 
-    data = np.arange(6)
-    mask = np.zeros(1, dtype=cudf.utils.utils.mask_dtype)
-    mask[0] = 0b00101101
+        data = np.arange(6)
+        mask = np.zeros(1, dtype=cudf.utils.utils.mask_dtype)
+        mask[0] = 0b00101101
 
-    masked = cudf.Series.from_masked_array(data, mask)
-    assert masked.null_count == 2
-    df["c"] = masked
+        masked = cudf.Series.from_masked_array(data, mask)
+        assert masked.null_count == 2
+        df["c"] = masked
 
-    # check data
-    values = masked.copy()
-    validids = [0, 2, 3, 5]
-    densearray = masked.dropna().to_numpy()
-    np.testing.assert_equal(data[validids], densearray)
-    # valid position is correct
+        # check data
+        values = masked.copy()
+        validids = [0, 2, 3, 5]
+        densearray = masked.dropna().to_numpy()
+        np.testing.assert_equal(data[validids], densearray)
+        # valid position is correct
 
-    for i in validids:
-        assert data[i] == values[i]
-    # null position is correct
-    for i in range(len(values)):
-        if i not in validids:
-            assert values[i] is cudf.NA
+        for i in validids:
+            assert data[i] == values[i]
+        # null position is correct
+        for i in range(len(values)):
+            if i not in validids:
+                assert values[i] is cudf.NA
 
-    pd.options.display.max_rows = 10
-    got = df.to_string()
-
-    expect = """
-a b  c
-0 1 11 0
-1 2 12 <NA>
-2 3 13 2
-3 4 14 3
-4 5 15 <NA>
-5 6 16 5
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    with pd.option_context("display.max_rows", 10):
+        got = df.to_string()
+        expect = textwrap.dedent(
+            """\
+               a   b     c
+            0  1  11     0
+            1  2  12  <NA>
+            2  3  13     2
+            3  4  14     3
+            4  5  15  <NA>
+            5  6  16     5"""
+        )
+        assert got == expect
 
 
 def test_dataframe_to_string_wide(monkeypatch):
