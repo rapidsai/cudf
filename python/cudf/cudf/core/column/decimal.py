@@ -18,7 +18,12 @@ from cudf._typing import Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
-from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
+from cudf.core.dtypes import (
+    Decimal32Dtype,
+    Decimal64Dtype,
+    Decimal128Dtype,
+    DecimalDtype,
+)
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
@@ -27,7 +32,7 @@ from .numerical_base import NumericalBaseColumn
 class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
-    dtype: Union[Decimal32Dtype, Decimal64Dtype, Decimal128Dtype]
+    dtype: DecimalDtype
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs

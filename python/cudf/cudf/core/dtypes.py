@@ -430,6 +430,16 @@ class DecimalDtype(_BaseDtype):
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
 
+    def __eq__(self, other: Dtype) -> bool:
+        if other is self:
+            return True
+        elif not isinstance(other, self.__class__):
+            return False
+        return self.precision == other.precision and self.scale == other.scale
+
+    def __hash__(self):
+        return hash(self._typ)
+
 
 class Decimal32Dtype(DecimalDtype):
     """
@@ -457,20 +467,7 @@ class Decimal32Dtype(DecimalDtype):
 
     name = "decimal32"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
-
-    @property
-    def itemsize(self):
-        return 4
-
-    def __eq__(self, other: Dtype) -> bool:
-        if other is self:
-            return True
-        elif not isinstance(other, self.__class__):
-            return False
-        return self.precision == other.precision and self.scale == other.scale
-
-    def __hash__(self):
-        return hash(self._typ)
+    itemsize = 4
 
 
 class Decimal64Dtype(DecimalDtype):
@@ -499,20 +496,7 @@ class Decimal64Dtype(DecimalDtype):
 
     name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
-
-    @property
-    def itemsize(self):
-        return 8
-
-    def __eq__(self, other: Dtype) -> bool:
-        if other is self:
-            return True
-        elif not isinstance(other, self.__class__):
-            return False
-        return self.precision == other.precision and self.scale == other.scale
-
-    def __hash__(self):
-        return hash(self._typ)
+    itemsize = 8
 
 
 class Decimal128Dtype(DecimalDtype):
@@ -541,20 +525,7 @@ class Decimal128Dtype(DecimalDtype):
 
     name = "decimal128"
     MAX_PRECISION = 38
-
-    @property
-    def itemsize(self):
-        return 16
-
-    def __eq__(self, other: Dtype) -> bool:
-        if other is self:
-            return True
-        elif not isinstance(other, self.__class__):
-            return False
-        return self.precision == other.precision and self.scale == other.scale
-
-    def __hash__(self):
-        return hash(self._typ)
+    itemsize = 16
 
 
 class IntervalDtype(StructDtype):

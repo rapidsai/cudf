@@ -222,12 +222,12 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         tid = libcudf_types.type_id.LIST
     elif cudf.api.types.is_struct_dtype(dtype):
         tid = libcudf_types.type_id.STRUCT
+    elif cudf.api.types.is_decimal128_dtype(dtype):
+        tid = libcudf_types.type_id.DECIMAL128
     elif cudf.api.types.is_decimal64_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
     elif cudf.api.types.is_decimal32_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL32
-    elif cudf.api.types.is_decimal128_dtype(dtype):
-        tid = libcudf_types.type_id.DECIMAL128
     else:
         tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (
