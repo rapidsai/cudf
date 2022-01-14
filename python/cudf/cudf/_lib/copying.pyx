@@ -37,7 +37,12 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.utils cimport data_from_table_view, data_from_unique_ptr
+from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
+    data_from_table_view,
+    data_from_unique_ptr,
+    table_view_from_columns,
+)
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -144,26 +149,12 @@ def copy_range(Column input_column,
 
 
 def gather(
-    source_table,
+    columns: list,
     Column gather_map,
-    bool keep_index=True,
     bool nullify=False
 ):
-    if not pd.api.types.is_integer_dtype(gather_map.dtype):
-        raise ValueError("Gather map is not integer dtype.")
-
-    if len(gather_map) > 0 and not nullify:
-        gm_min, gm_max = minmax(gather_map)
-        if gm_min < -len(source_table) or gm_max >= len(source_table):
-            raise IndexError(f"Gather map index with min {gm_min},"
-                             f" max {gm_max} is out of bounds in"
-                             f" {type(source_table)} with {len(source_table)}"
-                             f" rows.")
-
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_table(
-        source_table, not keep_index
-    )
+    cdef table_view source_table_view = table_view_from_columns(columns)
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
         cpp_copying.out_of_bounds_policy.NULLIFY if nullify
@@ -179,16 +170,7 @@ def gather(
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if (
-                source_table._index is None)
-            or keep_index is False
-            else source_table._index_names
-        )
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def scatter(object source, Column scatter_map, Column target_column,
@@ -245,47 +227,6 @@ def scatter(object source, Column scatter_map, Column target_column,
     )
 
     return next(iter(data.values()))
-
-
-def _reverse_column(Column source_column):
-    cdef column_view reverse_column_view = source_column.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.reverse(
-            reverse_column_view
-        ))
-
-    return Column.from_unique_ptr(
-        move(c_result)
-    )
-
-
-def _reverse_table(source_table):
-    cdef table_view reverse_table_view = table_view_from_columns(source_table)
-
-    cdef unique_ptr[table] c_result
-    with nogil:
-        c_result = move(cpp_copying.reverse(
-            reverse_table_view
-        ))
-
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=source_table._index_names
-    )
-
-
-def reverse(object source):
-    """
-    Reversing a column or a table
-    """
-    if isinstance(source, Column):
-        return _reverse_column(source)
-    else:
-        return _reverse_table(source)
 
 
 def column_empty_like(Column input_column):

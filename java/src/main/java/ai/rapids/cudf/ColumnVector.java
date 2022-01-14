@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -452,6 +453,24 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a LIST column from the current column and a given offsets column. The output column will
+   * contain lists having elements that are copied from the current column and their sizes are
+   * determined by the given offsets.
+   *
+   * Note that the caller is responsible to make sure the given offsets column is of type INT32 and
+   * it contains valid indices to create a LIST column. There will not be any validity check for
+   * these offsets during calling to this function. If the given offsets are invalid, we may have
+   * bad memory accesses and/or data corruption.
+   *
+   * @param rows the number of rows to create.
+   * @param offsets the offsets pointing to row indices of the current column to create an output
+   *                LIST column.
+   */
+  public ColumnVector makeListFromOffsets(long rows, ColumnView offsets) {
+    return new ColumnVector(makeListFromOffsets(getNativeView(), offsets.getNativeView(), rows));
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -479,6 +498,42 @@ public final class ColumnVector extends ColumnView {
     }
     return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
   }
+
+  /**
+   * Create a list column in which each row is a sequence of values starting from a `start` value,
+   * incrementing by one, and its cardinality is specified by a `size` value. The `start` and `size`
+   * values used to generate each list is taken from the corresponding row of the input start and
+   * size columns.
+   * @param start first values in the result sequences
+   * @param size numbers of values in the result sequences
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(ColumnView start, ColumnView size) {
+    assert start.getNullCount() == 0 || size.getNullCount() == 0 : "starts and sizes input " +
+        "columns must not have nulls.";
+    return new ColumnVector(sequences(start.getNativeView(), size.getNativeView(), 0));
+  }
+
+  /**
+   * Create a list column in which each row is a sequence of values starting from a `start` value,
+   * incrementing by a `step` value, and its cardinality is specified by a `size` value.
+   * The values `start`, `step`, and `size` used to generate each list is taken from the
+   * corresponding row of the input starts, steps, and sizes columns.
+   * @param start first values in the result sequences
+   * @param size numbers of values in the result sequences
+   * @param step increment values for the result sequences.
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(ColumnView start, ColumnView size, ColumnView step) {
+    assert start.getNullCount() == 0 || size.getNullCount() == 0 || step.getNullCount() == 0:
+        "start, size and step must not have nulls.";
+    assert step.getType() == start.getType() : "start and step input columns must" +
+        " have the same type.";
+
+    return new ColumnVector(sequences(start.getNativeView(), size.getNativeView(),
+        step.getNativeView()));
+  }
+
   /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
@@ -661,7 +716,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), new int[0], 0));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), 0));
   }
 
   /**
@@ -685,7 +740,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), seed));
   }
 
   /**
@@ -720,7 +775,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), seed));
   }
 
   /**
@@ -770,6 +825,9 @@ public final class ColumnVector extends ColumnView {
 
   private static native long sequence(long initialValue, long step, int rows);
 
+  private static native long sequences(long startHandle, long sizeHandle, long stepHandle)
+      throws CudfException;
+
   private static native long fromArrow(int type, long col_length,
       long null_count, ByteBuffer data, ByteBuffer validity,
       ByteBuffer offsets) throws CudfException;
@@ -777,6 +835,9 @@ public final class ColumnVector extends ColumnView {
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
   private static native long makeList(long[] handles, long typeHandle, int scale, long rows)
+      throws CudfException;
+
+  private static native long makeListFromOffsets(long childHandle, long offsetsHandle, long rows)
       throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
@@ -837,36 +898,14 @@ public final class ColumnVector extends ColumnView {
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
    * @param hashId integer native ID of the hashing function identifier HashType.
-   * @param initialValues array of integer values, one per column, only used by non-serial murmur3
-   *                      hash. Each element's hash value is merged with its column's initial value
-   *                      before the row is merged into a single value.
    * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId, int[] initialValues,
-                                  int seed) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId, int seed) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
-
-  /**
-   * Close all non-null buffers. Exceptions that occur during the process will
-   * be aggregated into a single exception thrown at the end.
-   */
-  static void closeBuffers(AutoCloseable buffer) {
-    Throwable toThrow = null;
-    if (buffer != null) {
-      try {
-        buffer.close();
-      } catch (Throwable t) {
-        toThrow = t;
-      }
-    }
-    if (toThrow != null) {
-      throw new RuntimeException(toThrow);
-    }
-  }
 
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
@@ -1057,13 +1096,17 @@ public final class ColumnVector extends ColumnView {
       if (!toClose.isEmpty()) {
         try {
           for (MemoryBuffer toCloseBuff : toClose) {
-            closeBuffers(toCloseBuff);
-          }
-        } catch (Throwable t) {
-          if (toThrow != null) {
-            toThrow.addSuppressed(t);
-          } else {
-            toThrow = t;
+            if (toCloseBuff != null) {
+              try {
+                toCloseBuff.close();
+              } catch (Throwable t) {
+                if (toThrow != null) {
+                  toThrow.addSuppressed(t);
+                } else {
+                  toThrow = t;
+                }
+              }
+            }
           }
         } finally {
           toClose.clear();
@@ -1367,6 +1410,18 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
     try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, mode, values)) {
       return host.copyToDevice();
+    }
+  }
+
+
+  /**
+   * Create a new decimal vector from BigIntegers
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBigInt(int scale, BigInteger... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBigIntegers(scale, values)) {
+      ColumnVector columnVector = host.copyToDevice();
+      return columnVector;
     }
   }
 

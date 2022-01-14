@@ -43,9 +43,9 @@ constexpr bool is_bool_result()
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE CastType operator()(cudf::size_type i,
-                                           column_device_view const& col,
-                                           bool is_scalar) const
+  __device__ inline CastType operator()(cudf::size_type i,
+                                        column_device_view const& col,
+                                        bool is_scalar) const
   {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)
@@ -61,9 +61,9 @@ struct type_casted_accessor {
 template <typename FromType>
 struct typed_casted_writer {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE void operator()(cudf::size_type i,
-                                       mutable_column_device_view const& col,
-                                       FromType val) const
+  __device__ inline void operator()(cudf::size_type i,
+                                    mutable_column_device_view const& col,
+                                    FromType val) const
   {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
@@ -117,7 +117,7 @@ struct ops_wrapper {
         } else {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
         }
-        // To supress nvcc warning
+        // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
@@ -164,7 +164,7 @@ struct ops2_wrapper {
         } else {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
         }
-        // To supress nvcc warning
+        // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeLhs, TypeRhs>())
@@ -177,35 +177,51 @@ struct ops2_wrapper {
 };
 
 /**
- * @brief Functor which does single, and double type dispatcher in device code
+ * @brief Functor which does single type dispatcher in device code
  *
  * single type dispatcher for lhs and rhs with common types.
- * double type dispatcher for lhs and rhs without common types.
  *
  * @tparam BinaryOperator binary operator functor
  */
 template <class BinaryOperator>
-struct device_type_dispatcher {
+struct binary_op_device_dispatcher {
+  data_type common_data_type;
   mutable_column_device_view out;
   column_device_view lhs;
   column_device_view rhs;
   bool is_lhs_scalar;
   bool is_rhs_scalar;
-  std::optional<data_type> common_data_type;
 
-  __device__ void operator()(size_type i)
+  __forceinline__ __device__ void operator()(size_type i)
   {
-    if (common_data_type) {
-      type_dispatcher(*common_data_type,
-                      ops_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
-                      i);
-    } else {
-      double_type_dispatcher(
-        lhs.type(),
-        rhs.type(),
-        ops2_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
-        i);
-    }
+    type_dispatcher(common_data_type,
+                    ops_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+                    i);
+  }
+};
+
+/**
+ * @brief Functor which does double type dispatcher in device code
+ *
+ * double type dispatcher for lhs and rhs without common types.
+ *
+ * @tparam BinaryOperator binary operator functor
+ */
+template <class BinaryOperator>
+struct binary_op_double_device_dispatcher {
+  mutable_column_device_view out;
+  column_device_view lhs;
+  column_device_view rhs;
+  bool is_lhs_scalar;
+  bool is_rhs_scalar;
+
+  __forceinline__ __device__ void operator()(size_type i)
+  {
+    double_type_dispatcher(
+      lhs.type(),
+      rhs.type(),
+      ops2_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+      i);
   }
 };
 
@@ -263,10 +279,19 @@ void apply_binary_op(mutable_column_device_view& outd,
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 
   // Create binop functor instance
-  auto binop_func = device_type_dispatcher<BinaryOperator>{
-    outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype};
-  // Execute it on every element
-  for_each(stream, outd.size(), binop_func);
+  if (common_dtype) {
+    // Execute it on every element
+    for_each(stream,
+             outd.size(),
+             binary_op_device_dispatcher<BinaryOperator>{
+               *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+  } else {
+    // Execute it on every element
+    for_each(stream,
+             outd.size(),
+             binary_op_double_device_dispatcher<BinaryOperator>{
+               outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+  }
 }
 
 }  // namespace compiled

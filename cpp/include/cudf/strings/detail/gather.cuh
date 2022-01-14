@@ -227,7 +227,7 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
                                            rmm::mr::device_memory_resource* mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
-  if (output_count == 0) return make_empty_column(data_type{type_id::INT8});
+  if (output_count == 0) return make_empty_column(type_id::INT8);
 
   auto chars_column  = create_chars_child_column(chars_bytes, stream, mr);
   auto const d_chars = chars_column->mutable_view().template data<char>();
@@ -292,14 +292,13 @@ std::unique_ptr<cudf::column> gather(
 {
   auto const output_count  = std::distance(begin, end);
   auto const strings_count = strings.size();
-  if (output_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (output_count == 0) return make_empty_column(type_id::STRING);
 
   // allocate offsets column and use memory to compute string size in each output row
   auto out_offsets_column = make_numeric_column(
     data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
-  auto const d_in_offsets =
-    (strings_count > 0) ? strings.offsets().data<int32_t>() + strings.offset() : nullptr;
+  auto const d_in_offsets  = (strings_count > 0) ? strings.offsets_begin() : nullptr;
   thrust::transform(rmm::exec_policy(stream),
                     begin,
                     end,
@@ -316,7 +315,7 @@ std::unique_ptr<cudf::column> gather(
     d_out_offsets + output_count,
     [] __device__(auto size) { return static_cast<size_t>(size); },
     size_t{0},
-    thrust::plus<size_t>{});
+    thrust::plus{});
   CUDF_EXPECTS(total_bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of output strings is too large for a cudf column");
 

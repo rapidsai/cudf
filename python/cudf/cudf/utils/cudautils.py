@@ -211,13 +211,19 @@ _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 def make_cache_key(udf, sig):
+    """
+    Build a cache key for a user defined function. Used to avoid
+    recompiling the same function for the same set of types
+    """
     codebytes = udf.__code__.co_code
+    constants = udf.__code__.co_consts
     if udf.__closure__ is not None:
         cvars = tuple([x.cell_contents for x in udf.__closure__])
         cvarbytes = dumps(cvars)
     else:
         cvarbytes = b""
-    return codebytes, cvarbytes, sig
+
+    return constants, codebytes, cvarbytes, sig
 
 
 def compile_udf(udf, type_signature):
@@ -252,8 +258,6 @@ def compile_udf(udf, type_signature):
     """
     import cudf.core.udf
 
-    # Check if we've already compiled a similar (but possibly distinct)
-    # function before
     key = make_cache_key(udf, type_signature)
     res = _udf_code_cache.get(key)
     if res:

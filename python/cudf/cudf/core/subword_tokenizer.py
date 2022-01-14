@@ -21,7 +21,7 @@ def _cast_to_appropriate_type(ar, cast_type):
         from torch.utils.dlpack import from_dlpack
 
     elif cast_type == "tf":
-        from tf.experimental.dlpack import from_dlpack
+        from tensorflow.experimental.dlpack import from_dlpack
 
     return from_dlpack(ar.astype("int32").toDlpack())
 
@@ -134,12 +134,12 @@ class SubwordTokenizer:
         Examples
         --------
         >>> import cudf
-        >>> from cudf.utils.hash_vocab_utils  import hash_vocab
+        >>> from cudf.utils.hash_vocab_utils import hash_vocab
         >>> hash_vocab('bert-base-cased-vocab.txt', 'voc_hash.txt')
 
 
         >>> from cudf.core.subword_tokenizer import SubwordTokenizer
-        >>> cudf_tokenizer  = SubwordTokenizer('voc_hash.txt',
+        >>> cudf_tokenizer = SubwordTokenizer('voc_hash.txt',
         ...                                    do_lower_case=True)
         >>> str_series = cudf.Series(['This is the', 'best book'])
         >>> tokenizer_output = cudf_tokenizer(str_series,

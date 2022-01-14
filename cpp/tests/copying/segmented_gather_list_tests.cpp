@@ -16,6 +16,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -34,9 +35,6 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_SUITE(SegmentedGatherTest, FixedWidthTypesNotBool);
 
-class SegmentedGatherTestList : public cudf::test::BaseFixture {
-};
-
 // to disambiguate between {} == 0 and {} == List{0}
 // Also, see note about compiler issues when declaring nested
 // empty lists in lists_column_wrapper documentation
@@ -44,9 +42,7 @@ template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 using cudf::lists_column_view;
 using cudf::lists::detail::segmented_gather;
-using cudf::test::iterators::no_nulls;
-using cudf::test::iterators::null_at;
-using cudf::test::iterators::nulls_at;
+using namespace cudf::test::iterators;
 auto constexpr NULLIFY = cudf::out_of_bounds_policy::NULLIFY;
 
 TYPED_TEST(SegmentedGatherTest, Gather)
@@ -300,6 +296,25 @@ TYPED_TEST(SegmentedGatherTest, GatherNegatives)
   }
 }
 
+TYPED_TEST(SegmentedGatherTest, GatherOnNonCompactedNullLists)
+{
+  using T          = TypeParam;
+  auto constexpr X = -1;  // Signifies null value.
+
+  // List<T>
+  auto list = LCW<T>{{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 0}, {}, {1, 2}, {3, 4, 5}}, no_nulls()};
+  auto const input = list.release();
+
+  // Set non-empty list row at index 5 to null.
+  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 5, 6, false);
+
+  auto const gather_map = LCW<int>{{-1, 2, 1, -4}, {0}, {-2, 1}, {0, 2, 1}, {}, {0}, {1, 2}};
+  auto const expected =
+    LCW<T>{{{4, 3, 2, 1}, {5}, {6, 7}, {8, 0, 9}, {}, {{X}, all_nulls()}, {4, 5}}, null_at(5)};
+  auto const results = segmented_gather(lists_column_view{*input}, lists_column_view{gather_map});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
 TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 {
   using T = TypeParam;
@@ -373,7 +388,8 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     auto const split_a = cudf::split(a, {3});
 
     {
-      auto const gather_map = lists_column_view{LCW<int>{{1, 2}, {0, 2}, {0, 1}}};
+      auto const list       = LCW<int>{{1, 2}, {0, 2}, {0, 1}};
+      auto const gather_map = lists_column_view{list};
       auto const result     = segmented_gather(lists_column_view{split_a[0]}, gather_map);
       auto const expected   = LCW<T>{
         {{2, 2}, {3, 3}},
@@ -384,9 +400,9 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     }
 
     {
-      auto const gather_map =
-        lists_column_view{LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0, 1}, LCW<int>{}}};
-      auto const result = segmented_gather(lists_column_view{split_a[1]}, gather_map);
+      auto const list       = LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0, 1}, LCW<int>{}};
+      auto const gather_map = lists_column_view{list};
+      auto const result     = segmented_gather(lists_column_view{split_a[1]}, gather_map);
       auto const expected =
         LCW<T>{{{10, 10, 10}, {11, 11}}, LCW<T>{}, LCW<T>{}, {{50, 50, 50, 50}, {6, 13}}, LCW<T>{}};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());

@@ -396,12 +396,12 @@ struct agg_specific_empty_output {
     }
 
     if constexpr (cudf::is_fixed_width<target_type>()) {
-      return cudf::make_empty_column(data_type{type_to_id<target_type>()});
+      return cudf::make_empty_column(type_to_id<target_type>());
     }
 
     if constexpr (op == aggregation::COLLECT_LIST) {
       return cudf::make_lists_column(
-        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(input), 0, {});
+        0, make_empty_column(type_to_id<offset_type>()), empty_like(input), 0, {});
     }
 
     return empty_like(input);
@@ -722,7 +722,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   }
 
   // STD aggregations depends on VARIANCE aggregation. Each element is applied
-  // with sqaured-root in the finalize() step.
+  // with square-root in the finalize() step.
   std::vector<std::unique_ptr<aggregation>> visit(data_type,
                                                   cudf::detail::std_aggregation const& agg) override
   {
@@ -915,9 +915,9 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
  * @param output Output column device view
  * @param output_valid_count Output count of valid values
  * @param device_operator The operator used to perform a single window operation
- * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
+ * @param[in] preceding_window_begin Rolling window size iterator, accumulates from
  *                in_col[i-preceding_window] to in_col[i] inclusive
- * @param following_window_begin[in] Rolling window size iterator in the forward
+ * @param[in] following_window_begin Rolling window size iterator in the forward
  *                direction, accumulates from in_col[i] to
  *                in_col[i+following_window] inclusive
  */
@@ -945,12 +945,15 @@ __launch_bounds__(block_size) __global__
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
   while (i < input.size()) {
-    size_type preceding_window = preceding_window_begin[i];
-    size_type following_window = following_window_begin[i];
+    // to prevent overflow issues when computing bounds use int64_t
+    int64_t preceding_window = preceding_window_begin[i];
+    int64_t following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start       = min(input.size(), max(0, i - preceding_window + 1));
-    size_type end         = min(input.size(), max(0, i + following_window + 1));
+    size_type start = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(0L, i - preceding_window + 1)));
+    size_type end = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(0L, i + following_window + 1)));
     size_type start_index = min(start, end);
     size_type end_index   = max(start, end);
 

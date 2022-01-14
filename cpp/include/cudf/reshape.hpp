@@ -43,6 +43,7 @@ namespace cudf {
  * @throws cudf::logic_error if input columns dtypes are not identical.
  *
  * @param[in] input Table containing columns to interleave.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @return The interleaved columns as a single column
  */
@@ -64,6 +65,7 @@ std::unique_ptr<column> interleave_columns(
  *
  * @param[in] input Table containing rows to be repeated.
  * @param[in] count Number of times to tile "rows". Must be non-negative.
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return The table containing the tiled "rows".
  */

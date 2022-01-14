@@ -47,7 +47,7 @@ namespace strings {
  *
  * @throw cudf::logic_error if the size of the output string scalar exceeds the maximum value that
  *        can be stored by the index type
- *        (i.e., `input.size() * repeat_times > numeric_limits<size_type>::max()`).
+ *        (i.e., @code input.size() * repeat_times > numeric_limits<size_type>::max() @endcode).
  *
  * @param input The scalar containing the string to repeat.
  * @param repeat_times The number of times the input string is repeated.

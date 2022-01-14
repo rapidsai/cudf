@@ -25,8 +25,7 @@ from .numerical_base import NumericalBaseColumn
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
-    """Base column for decimal64 and decimal32 columns
-    """
+    """Base column for decimal64 and decimal32 columns"""
 
     dtype: Union[Decimal32Dtype, Decimal64Dtype]
 
@@ -161,7 +160,7 @@ class Decimal64Column(DecimalBaseColumn):
         if reflect:
             self, other = other, self
 
-        # Binary Arithmatics between decimal columns. `Scale` and `precision`
+        # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         if op in ("add", "sub", "mul", "div"):
             scale = _binop_scale(self.dtype, other.dtype, op)
@@ -321,5 +320,5 @@ def _binop_precision(l_dtype, r_dtype, op):
         result = p1 + p2 + 1
     else:
         raise NotImplementedError()
-
+    # TODO
     return min(result, cudf.Decimal64Dtype.MAX_PRECISION)

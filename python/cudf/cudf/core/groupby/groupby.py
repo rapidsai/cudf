@@ -1,9 +1,11 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import collections
+import itertools
 import pickle
 import warnings
 
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
@@ -12,12 +14,13 @@ from cudf._lib import groupby as libgroupby
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
-from cudf.core.column.column import arange
+from cudf.core.column.column import arange, as_column
+from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
-# respectively, which are called in the describe() method to ouput
+# respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
 def _quantile_25(x):
     return x.quantile(0.25)
@@ -31,8 +34,6 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
-# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -70,6 +71,8 @@ class GroupBy(Serializable):
         """
         self.obj = obj
         self._as_index = as_index
+        self._by = by
+        self._level = level
         self._sort = sort
         self._dropna = dropna
 
@@ -240,22 +243,20 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            if result.columns.nlevels == 1:
+            if result._data.nlevels <= 1:  # 0 or 1 levels
                 # make sure it's a flat index:
-                result.columns = result.columns.get_level_values(0)
+                result._data.multiindex = False
 
-            if result.columns.nlevels > 1:
-                try:
-                    # drop the last level
-                    result.columns = result.columns.droplevel(-1)
-                except IndexError:
-                    # Pandas raises an IndexError if we are left
-                    # with an all-nan MultiIndex when dropping
-                    # the last level
-                    if result.shape[1] == 1:
-                        result.columns = [None]
-                    else:
-                        raise
+            if result._data.nlevels > 1:
+                result._data.droplevel(-1)
+
+                # if, after dropping the last level, the only
+                # remaining key is `NaN`, we need to convert to `None`
+                # for Pandas compat:
+                if result._data.names == (np.nan,):
+                    result._data = result._data.rename_levels(
+                        {np.nan: None}, level=0
+                    )
 
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
@@ -780,6 +781,121 @@ class GroupBy(Serializable):
         """Get the column-wise median of the values in each group."""
         return self.agg("median")
 
+    def corr(self, method="pearson", min_periods=1):
+        """
+        Compute pairwise correlation of columns, excluding NA/null values.
+
+        Parameters
+        ----------
+        method: {"pearson", "kendall", "spearman"} or callable,
+            default "pearson". Currently only the pearson correlation
+            coefficient is supported.
+
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        Returns
+        ----------
+        DataFrame
+            Correlation matrix.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...             "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
+        >>> gdf
+        id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").corr(method="pearson")
+                    val1      val2      val3
+        id
+        a   val1  1.000000  0.500000  0.500000
+            val2  0.500000  1.000000  1.000000
+            val3  0.500000  1.000000  1.000000
+        b   val1  1.000000  0.385727  0.385727
+            val2  0.385727  1.000000  1.000000
+            val3  0.385727  1.000000  1.000000
+        c   val1  1.000000  0.714575  0.714575
+            val2  0.714575  1.000000  1.000000
+            val3  0.714575  1.000000  1.000000
+        """
+
+        if not method.lower() in ("pearson",):
+            raise NotImplementedError(
+                "Only pearson correlation is currently supported"
+            )
+
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs to be correlated
+        # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        _cols = self.grouping.values.columns.tolist()
+        len_cols = len(_cols)
+
+        new_df_data = {}
+        for x, y in itertools.combinations_with_replacement(_cols, 2):
+            new_df_data[(x, y)] = cudf.DataFrame._from_data(
+                {"x": self.obj._data[x], "y": self.obj._data[y]}
+            ).to_struct()
+        new_gb = cudf.DataFrame._from_data(new_df_data).groupby(
+            by=self.grouping.keys
+        )
+
+        try:
+            gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
+        except RuntimeError as e:
+            if "Unsupported groupby reduction type-agg combination" in str(e):
+                raise TypeError(
+                    "Correlation accepts only numerical column-pairs"
+                )
+            raise
+
+        # ensure that column-pair labels are arranged in ascending order
+        cols_list = [
+            (y, x) if i > j else (x, y)
+            for j, y in enumerate(_cols)
+            for i, x in enumerate(_cols)
+        ]
+        cols_split = [
+            cols_list[i : i + len_cols]
+            for i in range(0, len(cols_list), len_cols)
+        ]
+
+        # interleave: combine the correlation results for each column-pair
+        # into a single column
+        res = cudf.DataFrame._from_data(
+            {
+                x: gb_corr.loc[:, i].interleave_columns()
+                for i, x in zip(cols_split, _cols)
+            }
+        )
+
+        # create a multiindex for the groupby correlated dataframe,
+        # to match pandas behavior
+        unsorted_idx = gb_corr.index.repeat(len_cols)
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
+        if len(gb_corr):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            sorted_idx._data[None] = as_column(
+                cudf.Series(_cols).tile(len(gb_corr.index))
+            )
+        res.index = MultiIndex._from_data(sorted_idx._data)
+
+        return res
+
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -820,7 +936,7 @@ class GroupBy(Serializable):
         interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
             The interpolation method to use when the desired quantile lies
             between two data points. Defaults to "linear".
-       """
+        """
 
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
@@ -860,9 +976,40 @@ class GroupBy(Serializable):
         """Get the last non-null value in each group."""
         return self.agg("last")
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
-        """Internal implementation for `ffill` and `bfill`
+    def diff(self, periods=1, axis=0):
+        """Get the difference between the values in each group.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        Series or DataFrame
+            First differences of the Series or DataFrame.
         """
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        # grouped values
+        value_columns = self.grouping.values
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
+        grouped = self.obj.__class__._from_data(data, index)
+        grouped = self._mimic_pandas_order(grouped)
+
+        result = grouped - self.shift(periods=periods)
+        return result._copy_type_metadata(value_columns)
+
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        """Internal implementation for `ffill` and `bfill`"""
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
             self._groupby.replace_nulls(
@@ -1043,7 +1190,7 @@ class GroupBy(Serializable):
 
         result = self.obj.__class__._from_data(
             *self._groupby.shift(
-                cudf.core.frame.Frame(value_columns), periods, fill_value
+                cudf.core.frame.Frame(value_columns._data), periods, fill_value
             )
         )
         result = self._mimic_pandas_order(result)
@@ -1150,21 +1297,9 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
-    ):
-        super().__init__(
-            obj=obj,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
-
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            self.grouping, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
     def nunique(self):
@@ -1234,18 +1369,6 @@ class SeriesGroupBy(GroupBy):
     Name: Max Speed, dtype: float64
     """
 
-    def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
-    ):
-        super().__init__(
-            obj=obj,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
-
     def agg(self, func):
         result = super().agg(func)
 
@@ -1272,14 +1395,20 @@ class SeriesGroupBy(GroupBy):
         return result
 
 
+# TODO: should we define this as a dataclass instead?
 class Grouper(object):
-    def __init__(self, key=None, level=None):
+    def __init__(
+        self, key=None, level=None, freq=None, closed=None, label=None
+    ):
         if key is not None and level is not None:
             raise ValueError("Grouper cannot specify both key and level")
-        if key is None and level is None:
+        if (key, level) == (None, None) and not freq:
             raise ValueError("Grouper must specify either key or level")
         self.key = key
         self.level = level
+        self.freq = freq
+        self.closed = closed
+        self.label = label
 
 
 class _Grouping(Serializable):
@@ -1287,14 +1416,6 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
-        # For transform operations, we want to filter out only the value
-        # columns that will be used. When part of the key columns are composed
-        # from columns in `obj`, these columns are not included in the value
-        # columns. This only happens when `by` is specified with
-        # column labels or `Grouper` object with `key` param. To avoid that
-        # external objects overlaps in names to `obj`, these column
-        # names are recorded separately in this list.
-        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -1333,8 +1454,7 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
-        """Return grouping key columns as index
-        """
+        """Return grouping key columns as index"""
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
@@ -1360,9 +1480,7 @@ class _Grouping(Serializable):
         """
         # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x
-            for x in self._obj._data.names
-            if x not in self._key_column_names_from_obj
+            x for x in self._obj._data.names if x not in self._named_columns
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
         return self._obj.__class__._from_data(value_columns)
@@ -1388,13 +1506,17 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
-        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
-        if by.key:
+        if by.freq:
+            self._handle_frequency_grouper(by)
+        elif by.key:
             self._handle_label(by.key)
         else:
             self._handle_level(by.level)
+
+    def _handle_frequency_grouper(self, by):
+        raise NotImplementedError()
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)

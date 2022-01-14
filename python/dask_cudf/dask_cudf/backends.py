@@ -26,6 +26,7 @@ from dask.dataframe.utils import (
     is_scalar,
     make_meta_obj,
 )
+from dask.sizeof import sizeof as sizeof_dispatch
 
 import cudf
 from cudf.api.types import is_string_dtype
@@ -195,7 +196,7 @@ def make_meta_object_cudf(x, index=None):
         )
     elif not hasattr(x, "dtype") and x is not None:
         # could be a string, a dtype object, or a python type. Skip `None`,
-        # because it is implictly converted to `dtype('f8')`, which we don't
+        # because it is implicitly converted to `dtype('f8')`, which we don't
         # want here.
         try:
             dtype = np.dtype(x)
@@ -313,11 +314,7 @@ def union_categoricals_cudf(
 
 
 def safe_hash(frame):
-    index = frame.index
-    if isinstance(frame, cudf.DataFrame):
-        return cudf.Series(frame.hash_columns(), index=index)
-    else:
-        return cudf.Series(frame.hash_values(), index=index)
+    return cudf.Series(frame.hash_values(), index=frame.index)
 
 
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
@@ -349,3 +346,13 @@ def group_split_cudf(df, c, k, ignore_index=False):
             ),
         )
     )
+
+
+@sizeof_dispatch.register(cudf.DataFrame)
+def sizeof_cudf_dataframe(df):
+    return int(df.memory_usage().sum())
+
+
+@sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))
+def sizeof_cudf_series_index(obj):
+    return obj.memory_usage()

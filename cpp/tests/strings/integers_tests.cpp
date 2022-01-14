@@ -17,12 +17,12 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <tests/strings/utilities.h>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <tests/strings/utilities.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -287,7 +287,7 @@ template <typename T>
 class StringsIntegerConvertTest : public StringsConvertTest {
 };
 
-TYPED_TEST_CASE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
@@ -330,7 +330,7 @@ class StringsFloatConvertTest : public StringsConvertTest {
 };
 
 using FloatTypes = cudf::test::Types<float, double>;
-TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
+TYPED_TEST_SUITE(StringsFloatConvertTest, FloatTypes);
 
 TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {

@@ -12,6 +12,7 @@ import pandas as pd
 import rmm
 
 import cudf
+from cudf._lib.reduce import minmax
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
@@ -162,7 +163,7 @@ class cached_property:
             return self
         else:
             value = self.func(instance)
-            setattr(instance, self.func.__name__, value)
+            object.__setattr__(instance, self.func.__name__, value)
             return value
 
 
@@ -353,7 +354,7 @@ def get_appropriate_dispatched_func(
 
         elif hasattr(cupy_submodule, fname):
             cupy_func = getattr(cupy_submodule, fname)
-            # Handle case if cupy impliments it as a numpy function
+            # Handle case if cupy implements it as a numpy function
             # Unsure if needed
             if cupy_func is func:
                 return NotImplemented
@@ -374,7 +375,7 @@ def _cast_to_appropriate_cudf_type(val, index=None):
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
         # if index is not None and is of a different length
         # than the index, cupy dispatching behaviour is undefined
-        # so we dont impliment it
+        # so we don't implement it
         if (index is None) or (len(index) == len(val)):
             return cudf.Series(val, index=index)
 
@@ -383,8 +384,8 @@ def _cast_to_appropriate_cudf_type(val, index=None):
 
 def _get_cupy_compatible_args_index(args, ser_index=None):
     """
-     This function returns cupy compatible arguments and output index
-     if conversion is not possible it returns None
+    This function returns cupy compatible arguments and output index
+    if conversion is not possible it returns None
     """
 
     casted_ls = []
@@ -506,3 +507,20 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
     if (indices == cp.arange(start, stop, step)).all():
         return slice(start, stop, step)
     return indices
+
+
+def _gather_map_is_valid(
+    gather_map: "cudf.core.column.ColumnBase",
+    nrows: int,
+    check_bounds: bool,
+    nullify: bool,
+) -> bool:
+    """Returns true if gather map is valid.
+
+    A gather map is valid if empty or all indices are within the range
+    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    """
+    if not check_bounds or nullify or len(gather_map) == 0:
+        return True
+    gm_min, gm_max = minmax(gather_map)
+    return gm_min >= -nrows and gm_max < nrows

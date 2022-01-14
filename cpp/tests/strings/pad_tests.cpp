@@ -21,10 +21,10 @@
 #include <cudf/strings/wrap.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <tests/strings/utilities.h>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <vector>
 
@@ -104,11 +104,10 @@ TEST_F(StringsPadTest, ZeroSizeStringsColumn)
   cudf::test::expect_strings_empty(results->view());
 }
 
-class StringsPadParmsTest : public StringsPadTest,
-                            public testing::WithParamInterface<cudf::size_type> {
+class PadParameters : public StringsPadTest, public testing::WithParamInterface<cudf::size_type> {
 };
 
-TEST_P(StringsPadParmsTest, Padding)
+TEST_P(PadParameters, Padding)
 {
   std::vector<std::string> h_strings{"eee ddd", "bb cc", "aa", "bbb", "fff", "", "o"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
@@ -128,8 +127,8 @@ TEST_P(StringsPadParmsTest, Padding)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-INSTANTIATE_TEST_CASE_P(StringsPadParmWidthTest,
-                        StringsPadParmsTest,
+INSTANTIATE_TEST_CASE_P(StringsPadTest,
+                        PadParameters,
                         testing::ValuesIn(std::array<cudf::size_type, 3>{5, 6, 7}));
 
 TEST_F(StringsPadTest, ZFill)

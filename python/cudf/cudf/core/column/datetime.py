@@ -20,13 +20,7 @@ from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    column,
-    column_empty_like,
-    string,
-)
+from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:
@@ -222,8 +216,14 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def ceil(self, field: str) -> ColumnBase:
-        return libcudf.datetime.ceil_datetime(self, field)
+    def ceil(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, freq)
+
+    def floor(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.floor_datetime(self, freq)
+
+    def round(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.round_datetime(self, freq)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
@@ -286,7 +286,7 @@ class DatetimeColumn(column.ColumnBase):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -347,8 +347,7 @@ class DatetimeColumn(column.ColumnBase):
             )
 
     def _default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column
-        """
+        """Returns the default NA value for this column"""
         return np.datetime64("nat", self.time_unit)
 
     def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
@@ -488,20 +487,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def _make_copy_with_na_as_null(self):
-        """Return a copy with NaN values replaced with nulls."""
-        null = column_empty_like(self, masked=True, newsize=1)
-        na_value = np.datetime64("nat", self.time_unit)
-        out_col = cudf._lib.replace.replace(
-            self,
-            as_column(
-                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
-                dtype=self.dtype,
-            ),
-            null,
-        )
-        return out_col
-
 
 def binop_offset(lhs, rhs, op):
     if rhs._is_no_op:
@@ -541,7 +526,7 @@ def infer_format(element: str, **kwargs) -> str:
     if len(second_parts) > 1:
         # "Z" indicates Zulu time(widely used in aviation) - Which is
         # UTC timezone that currently cudf only supports. Having any other
-        # unsuppported timezone will let the code fail below
+        # unsupported timezone will let the code fail below
         # with a ValueError.
         second_parts.remove("Z")
         second_part = "".join(second_parts[1:])

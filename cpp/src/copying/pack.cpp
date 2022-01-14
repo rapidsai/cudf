@@ -247,7 +247,7 @@ table_view unpack(packed_columns const& input)
 }
 
 /**
- * @copydoc cudf::unpack
+ * @copydoc cudf::unpack(uint8_t const*, uint8_t const* )
  */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {

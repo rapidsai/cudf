@@ -161,8 +161,29 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
-  random_value_fn(distribution_params<T> const&) {}
-  T operator()(std::mt19937& engine) { CUDF_FAIL("Not implemented"); }
+  using rep = typename T::rep;
+  rep const lower_bound;
+  rep const upper_bound;
+  distribution_fn<rep> dist;
+  std::optional<numeric::scale_type> scale;
+
+  random_value_fn(distribution_params<rep> const& desc)
+    : lower_bound{desc.lower_bound},
+      upper_bound{desc.upper_bound},
+      dist{make_distribution<rep>(desc.id, desc.lower_bound, desc.upper_bound)}
+  {
+  }
+
+  T operator()(std::mt19937& engine)
+  {
+    if (not scale.has_value()) {
+      int const max_scale = std::numeric_limits<rep>::digits10;
+      auto scale_dist     = make_distribution<int>(distribution_id::NORMAL, -max_scale, max_scale);
+      scale = numeric::scale_type{std::max(std::min(scale_dist(engine), max_scale), -max_scale)};
+    }
+    // Clamp the generated random value to the specified range
+    return T{std::max(std::min(dist(engine), upper_bound), lower_bound), *scale};
+  }
 };
 
 /**
@@ -297,12 +318,21 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     }
   }
 
+  // cudf expects the null mask buffer to be padded up to 64 bytes. so allocate the proper size and
+  // copy what we have.
+  rmm::device_buffer result_bitmask{cudf::bitmask_allocation_size_bytes(num_rows),
+                                    rmm::cuda_stream_default};
+  cudaMemcpyAsync(result_bitmask.data(),
+                  null_mask.data(),
+                  null_mask.size() * sizeof(cudf::bitmask_type),
+                  cudaMemcpyHostToDevice,
+                  rmm::cuda_stream_default);
+
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
     rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), rmm::cuda_stream_default),
-    rmm::device_buffer(
-      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
+    std::move(result_bitmask));
 }
 
 /**

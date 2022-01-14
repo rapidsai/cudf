@@ -79,6 +79,7 @@ cdef class Column:
     ):
         self._size = size
         self._cached_sizeof = None
+        self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
@@ -144,8 +145,7 @@ cdef class Column:
     def nullable(self):
         return self.base_mask is not None
 
-    @property
-    def has_nulls(self):
+    def has_nulls(self, include_nan=False):
         return self.null_count != 0
 
     @property
@@ -202,9 +202,14 @@ cdef class Column:
                 raise ValueError(error_msg)
 
         self._mask = None
-        self._null_count = None
         self._children = None
         self._base_mask = value
+        self._clear_cache()
+
+    def _clear_cache(self):
+        self._distinct_count = {}
+        self._cached_sizeof = None
+        self._null_count = None
 
     def set_mask(self, value):
         """
@@ -284,9 +289,17 @@ cdef class Column:
             if self.base_children == ():
                 self._children = ()
             else:
-                self._children = Column.from_unique_ptr(
+                children = Column.from_unique_ptr(
                     make_unique[column](self.view())
                 ).base_children
+                dtypes = [
+                    base_child.dtype for base_child in self.base_children
+                ]
+                self._children = [
+                    child._with_type_metadata(dtype) for child, dtype in zip(
+                        children, dtypes
+                    )
+                ]
         return self._children
 
     def set_base_children(self, value):

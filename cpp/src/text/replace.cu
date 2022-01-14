@@ -203,7 +203,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   if (replacements.size() != 1)
     CUDF_EXPECTS(replacements.size() == targets.size(),
                  "Parameter targets and replacements must be the same size");
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   cudf::size_type const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -239,8 +239,8 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   cudf::size_type const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});

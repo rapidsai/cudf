@@ -21,7 +21,6 @@ package ai.rapids.cudf;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import ai.rapids.cudf.HostColumnVector.BasicType;
 import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
@@ -40,7 +39,7 @@ import org.apache.arrow.vector.util.Text;
 
 import org.junit.jupiter.api.Test;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 

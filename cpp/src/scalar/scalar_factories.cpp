@@ -21,6 +21,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -121,11 +122,23 @@ std::unique_ptr<scalar> make_struct_scalar(host_span<column_view const> data,
 
 namespace {
 struct default_scalar_functor {
-  template <typename T>
+  data_type type;
+
+  template <typename T, typename std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
     return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
+  }
+
+  template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+  {
+    auto const scale_ = numeric::scale_type{type.scale()};
+    auto s            = make_fixed_point_scalar<T>(0, scale_, stream, mr);
+    s->set_valid_async(false, stream);
+    return s;
   }
 };
 
@@ -163,7 +176,7 @@ std::unique_ptr<scalar> make_default_constructed_scalar(data_type type,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(type, default_scalar_functor{}, stream, mr);
+  return type_dispatcher(type, default_scalar_functor{type}, stream, mr);
 }
 
 std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
@@ -172,10 +185,12 @@ std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
 {
   std::unique_ptr<scalar> result;
   switch (column.type().id()) {
-    case type_id::LIST:
-      result = make_list_scalar(empty_like(column)->view(), stream, mr);
+    case type_id::LIST: {
+      auto const empty_child = empty_like(lists_column_view(column).child());
+      result                 = make_list_scalar(empty_child->view(), stream, mr);
       result->set_valid_async(false, stream);
       break;
+    }
     case type_id::STRUCT:
       // The input column must have at least 1 row to extract a scalar (row) from it.
       result = detail::get_element(column, 0, stream, mr);

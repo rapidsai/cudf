@@ -80,18 +80,14 @@ struct tagged_element_relational_comparator {
   __device__ weak_ordering compare(index_type lhs_tagged_index,
                                    index_type rhs_tagged_index) const noexcept
   {
-    side const l_side = thrust::get<0>(lhs_tagged_index);
-    side const r_side = thrust::get<0>(rhs_tagged_index);
-
-    cudf::size_type const l_indx = thrust::get<1>(lhs_tagged_index);
-    cudf::size_type const r_indx = thrust::get<1>(rhs_tagged_index);
+    auto const [l_side, l_indx] = lhs_tagged_index;
+    auto const [r_side, r_indx] = rhs_tagged_index;
 
     column_device_view const* ptr_left_dview{l_side == side::LEFT ? &lhs : &rhs};
-
     column_device_view const* ptr_right_dview{r_side == side::LEFT ? &lhs : &rhs};
 
-    auto erl_comparator =
-      element_relational_comparator<has_nulls>(*ptr_left_dview, *ptr_right_dview, null_precedence);
+    auto erl_comparator = element_relational_comparator(
+      nullate::DYNAMIC{has_nulls}, *ptr_left_dview, *ptr_right_dview, null_precedence);
 
     return cudf::type_dispatcher(lhs.type(), erl_comparator, l_indx, r_indx);
   }

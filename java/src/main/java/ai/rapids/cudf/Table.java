@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -232,6 +234,11 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
+  private static native long[] readJSON(String[] columnNames,
+                                        int[] dTypeIds, int[] dTypeScales,
+                                        String filePath, long address, long length,
+                                        boolean dayFirst, boolean lines) throws CudfException;
+
   /**
    * Read in Parquet formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
@@ -240,11 +247,9 @@ public final class Table implements AutoCloseable {
    * @param address            the address of the buffer to read from or 0 if we should not.
    * @param length             the length of the buffer to read from.
    * @param timeUnit           return type of TimeStamp in units
-   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit,
-                                           boolean strictDecimalTypes) throws CudfException;
+                                           long address, long length, int timeUnit) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -329,43 +334,63 @@ public final class Table implements AutoCloseable {
    * @param usingNumPyTypes   whether the parser should implicitly promote TIMESTAMP
    *                          columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
    * @param timeUnit          return type of TimeStamp in units
+   * @param decimal128Columns name of the columns which are read as Decimal128 rather than Decimal64
    */
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       boolean usingNumPyTypes, int timeUnit) throws CudfException;
+                                       boolean usingNumPyTypes, int timeUnit,
+                                       String[] decimal128Columns) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param filename        local output path
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCFileBegin(String[] columnNames,
+                                               int numChildren,
+                                               int[] flatNumChildren,
                                                boolean[] nullable,
                                                String[] metadataKeys,
                                                String[] metadataValues,
                                                int compression,
+                                               int[] precisions,
+                                               boolean[] isMapValues,
                                                String filename) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCBufferBegin(String[] columnNames,
+                                                 int numChildren,
+                                                 int[] flatNumChildren,
                                                  boolean[] nullable,
                                                  String[] metadataKeys,
                                                  String[] metadataValues,
                                                  int compression,
+                                                 int[] precisions,
+                                                 boolean[] isMapValues,
                                                  HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -623,11 +648,26 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
+                                              boolean keepFirst, boolean nullsEqual,
+                                              boolean nullsBefore) throws CudfException;
+
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
+
+  private static native long[] scatterTable(long srcTableHandle, long scatterView,
+                                            long targetTableHandle, boolean checkBounds)
+                                            throws CudfException;
+  private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
+                                             long targetTableHandle, boolean checkBounds)
+                                             throws CudfException;
 
   private static native long[] convertToRows(long nativeHandle);
 
+  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
+
   private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
+
+  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
 
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
@@ -655,6 +695,8 @@ public final class Table implements AutoCloseable {
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
                                                                 boolean[] keysNullSmallest);
+
+  private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -765,6 +807,97 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read a JSON file using the default JSONOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, File path) {
+    return readJSON(schema, JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read JSON formatted data using the default JSONOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, byte[] buffer) {
+    return readJSON(schema, JSONOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer) {
+    return readJSON(schema, opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read a JSON file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    return new Table(
+        readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+            path.getAbsolutePath(),
+            0, 0,
+            opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readJSON(schema, opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+        null, buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
    * Read a Parquet file using the default ParquetOptions.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
@@ -781,8 +914,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
-        opts.isStrictDecimalType()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -842,8 +974,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
-        opts.isStrictDecimalType()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -863,7 +994,9 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   /**
@@ -923,8 +1056,9 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -1060,40 +1194,34 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param options parameters for the writer
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(ParquetWriterOptions options, File outputFile) {
-    try (TableWriter writer = writeParquetChunked(options, outputFile)) {
-      writer.write(this);
-    }
-  }
-
   private static class ORCTableWriter implements TableWriter {
     private long handle;
     HostBufferConsumer consumer;
 
     private ORCTableWriter(ORCWriterOptions options, File outputFile) {
-      this.handle = writeORCFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCFileBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           outputFile.getAbsolutePath());
       this.consumer = null;
     }
 
     private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeORCBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCBufferBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           consumer);
       this.consumer = consumer;
     }
@@ -1138,33 +1266,6 @@ public final class Table implements AutoCloseable {
    */
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
     return new ORCTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(File outputFile) {
-    // Need to specify the number of columns but leave all column names undefined
-    String[] names = new String[getNumberOfColumns()];
-    Arrays.fill(names, "");
-    ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(names).build();
-    writeORC(opts, outputFile);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(ORCWriterOptions options, File outputFile) {
-    assert options.getColumnNames().length == getNumberOfColumns() : "must specify names for all columns";
-    try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
-      writer.write(this);
-    }
   }
 
   private static class ArrowIPCTableWriter implements TableWriter {
@@ -1786,6 +1887,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Copy rows of the current table to an output table such that duplicate rows in the key columns
+   * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
+   * a subset of the current table columns and their indices are specified by an input array.
+   *
+   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
+   * guaranteed in the future.
+   *
+   * @param keyColumns Array of indices representing key columns from the current table.
+   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
+   *                  copy the last row with a duplicated key.
+   * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
+   *                   key columns to check for uniqueness.
+   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
+   *                    after non-null elements when sorting the table.
+   *
+   * @return Table with unique keys.
+   */
+  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
+                              boolean nullsBefore) {
+    assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
+  }
+
+  /**
    * Split a table at given boundaries, but the result of each split has memory that is laid out
    * in a contiguous range of memory.  This allows for us to optimize copying the data in a single
    * operation.
@@ -2016,7 +2141,7 @@ public final class Table implements AutoCloseable {
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap) {
-    return gather(gatherMap, true);
+    return gather(gatherMap, OutOfBoundsPolicy.NULLIFY);
   }
 
   /**
@@ -2027,14 +2152,73 @@ public final class Table implements AutoCloseable {
    *
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
-
+   *
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param checkBounds if true bounds checking is performed on the value. Be very careful
-   *                    when setting this to false.
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`.
    * @return the resulting Table.
    */
-  public Table gather(ColumnView gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
+    boolean checkBounds = outOfBoundsPolicy == OutOfBoundsPolicy.NULLIFY;
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  /**
+   * Scatters values from the source table into the target table out-of-place, returning a new
+   * result table. The scatter is performed according to a scatter map such that row `scatterMap[i]`
+   * of the destination table gets row `i` of the source table. All other rows of the destination
+   * table equal corresponding rows of the target table.
+   *
+   * The number of columns in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which rows from the current table are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source table into the
+   *         target table.
+   */
+  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
+        checkBounds));
+  }
+
+  /**
+   * Scatters values from the source rows into the target table out-of-place, returning a new result
+   * table. The scatter is performed according to a scatter map such that row `scatterMap[i]` of the
+   * destination table is replaced by the source row `i`. All other rows of the destination table
+   * equal corresponding rows of the target table.
+   *
+   * The number of elements in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param source The input scalars containing values to be scattered into the target table.
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which the values from source are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source values into the
+   *         target table.
+   */
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
+                              boolean checkBounds) {
+    long[] srcScalarHandles = new long[source.length];
+    for(int i = 0; i < source.length; ++i) {
+      assert source[i] != null : "Scalar vectors passed in should not contain null";
+      srcScalarHandles[i] = source[i].getScalarHandle();
+    }
+    return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
+        target.getNativeView(), checkBounds));
   }
 
   private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
@@ -2173,7 +2357,7 @@ public final class Table implements AutoCloseable {
    * the left and right tables, respectively, to produce the result of the left join.
    * It is the responsibility of the caller to close the resulting gather map instances.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join in the join
@@ -2313,7 +2497,7 @@ public final class Table implements AutoCloseable {
    * the left and right tables, respectively, to produce the result of the inner join.
    * It is the responsibility of the caller to close the resulting gather map instances.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join in the join
@@ -2505,7 +2689,7 @@ public final class Table implements AutoCloseable {
    * to produce the result of the left semi join.
    * It is the responsibility of the caller to close the resulting gather map instance.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join
@@ -2584,7 +2768,7 @@ public final class Table implements AutoCloseable {
    * to produce the result of the left anti join.
    * It is the responsibility of the caller to close the resulting gather map instance.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join
@@ -2599,6 +2783,23 @@ public final class Table implements AutoCloseable {
         conditionalLeftAntiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
     return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * For details about how this method functions refer to
+   * {@link #convertToRowsFixedWidthOptimized()}.
+   *
+   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
+   * is that this can handle rougly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
+   * can only handle columns less than 100
+   */
+  public ColumnVector[] convertToRows() {
+    long[] ptrs = convertToRows(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
   }
 
   /**
@@ -2675,8 +2876,8 @@ public final class Table implements AutoCloseable {
    * There are some limits on the size of a single row.  If the row is larger than 1KB this will
    * throw an exception.
    */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
+  public ColumnVector[] convertToRowsFixedWidthOptimized() {
+    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
     for (int i = 0; i < ptrs.length; i++) {
       ret[i] = new ColumnVector(ptrs[i]);
@@ -2687,13 +2888,14 @@ public final class Table implements AutoCloseable {
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
    * @param vec the row data to process.
    * @param schema the types of each column.
    * @return the parsed table.
    */
   public static Table convertFromRows(ColumnView vec, DType ... schema) {
-    // TODO at some point we need a schema that support nesting so we can support nested types
-    // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
     int[] scale = new int[schema.length];
     for (int i = 0; i < schema.length; i++) {
@@ -2702,6 +2904,27 @@ public final class Table implements AutoCloseable {
 
     }
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
+  }
+
+  /**
+   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
+   * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
+   * @param vec the row data to process.
+   * @param schema the types of each column.
+   * @return the parsed table.
+   */
+  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
+    int[] types = new int[schema.length];
+    int[] scale = new int[schema.length];
+    for (int i = 0; i < schema.length; i++) {
+      types[i] = schema[i].typeId.nativeId;
+      scale[i] = schema[i].getScale();
+
+    }
+    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
   }
 
   /**
@@ -2746,6 +2969,34 @@ public final class Table implements AutoCloseable {
     }
 
     return result;
+  }
+
+
+  /**
+   * Gather `n` samples from table randomly
+   * Note: does not preserve the ordering
+   * Example:
+   * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+   * n: 3
+   * replacement: false
+   *
+   * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+   *
+   * replacement: true
+   *
+   * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+   *
+   * throws "logic_error" if `n` > table rows and `replacement` == FALSE.
+   * throws "logic_error" if `n` < 0.
+   *
+   * @param n non-negative number of samples expected from table
+   * @param replacement Allow or disallow sampling of the same row more than once.
+   * @param seed Seed value to initiate random number generator.
+   *
+   * @return Table containing samples
+   */
+  public Table sample(long n, boolean replacement, long seed) {
+    return new Table(sample(nativeHandle, n, replacement, seed));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2922,27 +3173,27 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Computes row-based window aggregation functions on the Table/projection, 
+     * Computes row-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
-     * 
+     *
      * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
+     *
      *  [ // user_id,  sales_amt
      *    { "user1",     10      },
      *    { "user2",     20      },
@@ -2954,19 +3205,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",     60      },
      *    { "user2",     40      }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
      *      <-------user1-------->|<------user2------->
-     * 
+     *
      * The SUM aggregation is applied with 1 preceding and 1 following
      * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
      * yielding the following column:
-     * 
+     *
      *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
@@ -2985,7 +3236,7 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
-          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: " 
+          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
                   + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
@@ -3046,27 +3297,27 @@ public final class Table implements AutoCloseable {
     /**
      * Computes range-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
-     * 
+     *
      * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
      *  2. the number of DAYS preceding and following the current row's date, to consider in the window
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
-     *  [ // user,  sales_amt,  YYYYMMDD (date)  
+     *
+     *  [ // user,  sales_amt,  YYYYMMDD (date)
      *    { "user1",   10,      20200101    },
      *    { "user2",   20,      20200101    },
      *    { "user1",   20,      20200102    },
@@ -3077,19 +3328,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",   60,      20200107    },
      *    { "user2",   40,      20200104    }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
      * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
      *                    <-------user1-------->|<---------user2--------->
-     * 
-     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
+     *
+     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period.
      * The aggregation window is thus 3 *days* wide, yielding the following output column:
-     * 
+     *
      *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
@@ -3338,14 +3589,6 @@ public final class Table implements AutoCloseable {
           groupByOptions.getKeysDescending(),
           groupByOptions.getKeysNullSmallest());
     }
-
-    /**
-     * @deprecated use aggregateWindowsOverRanges
-     */
-    @Deprecated
-    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
-      return aggregateWindowsOverRanges(windowAggregates);
-    }
   }
 
   public static final class TableOperation {
@@ -3539,18 +3782,6 @@ public final class Table implements AutoCloseable {
           type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
-    }
-
-    /**
-     * Hash partition a table into the specified number of partitions.
-     * @deprecated Use {@link #hashPartition(int)}
-     * @param numberOfPartitions - number of partitions to use
-     * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
-     * {@link Table} class
-     */
-    @Deprecated
-    public PartitionedTable partition(int numberOfPartitions) {
-      return hashPartition(numberOfPartitions);
     }
   }
 
@@ -3762,6 +3993,16 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal128Column(int scale, RoundingMode mode, BigInteger... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x, scale, new MathContext(38, mode));
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -3806,6 +4047,7 @@ public final class Table implements AutoCloseable {
           break;
         case DECIMAL32:
         case DECIMAL64:
+        case DECIMAL128:
           int scale = type.getScale();
           if (dataArray instanceof Integer[]) {
             BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))

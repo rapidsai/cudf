@@ -12,7 +12,6 @@ from cudf._lib.nvtext.stemmer import (
     is_letter_multi,
     porter_stemmer_measure,
 )
-from cudf._lib.nvtext.subword_tokenize import subword_tokenize_vocab_file
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column,
     _count_tokens_scalar,
@@ -26,7 +25,7 @@ from cudf._lib.strings.attributes import (
     count_bytes,
     count_characters,
 )
-from cudf._lib.strings.capitalize import capitalize, title
+from cudf._lib.strings.capitalize import capitalize, title, is_title
 from cudf._lib.strings.case import swapcase, to_lower, to_upper
 from cudf._lib.strings.char_types import (
     filter_alphanum,

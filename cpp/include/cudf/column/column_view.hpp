@@ -254,8 +254,6 @@ class column_view_base {
    * indicator bitmask
    * @param null_count Optional, the number of null elements.
    * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
-   * contain additional data
    */
   column_view_base(data_type type,
                    size_type size,

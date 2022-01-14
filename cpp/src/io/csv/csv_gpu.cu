@@ -669,8 +669,8 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
  * @tparam tmask mask to specify principle thread for merging row context
  * @tparam base start location for writing into packed row context tree
  * @tparam level_scale level of the node in the tree
- * @param ctxtree[out] packed row context tree
- * @param ctxb[in] packed row context for the current character block
+ * @param[out] ctxtree packed row context tree
+ * @param[in] ctxb packed row context for the current character block
  * @param t thread id (leaf node id)
  */
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
@@ -725,8 +725,8 @@ inline __device__ void ctx_unmerge(
  *   parent.count[k] = left.count[k] + right.count[left.outctx[k]]
  *   parent.outctx[k] = right.outctx[left.outctx[k]]
  *
- * @param ctxtree[out] packed row context tree
- * @param ctxb[in] packed row context for the current character block
+ * @param[out] ctxtree packed row context tree
+ * @param[in] ctxb packed row context for the current character block
  * @param t thread id (leaf node id)
  */
 static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],

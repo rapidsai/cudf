@@ -16,8 +16,11 @@
 
 #pragma once
 
+#include <reductions/struct_minmax_util.cuh>
+
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -28,6 +31,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace reduction {
@@ -74,7 +80,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 /**
  * @brief Reduction for `sum`, `product`, `min` and `max` for decimal types
  *
- * @tparam DecimalXX  The `decimal32` or `decimal64` type
+ * @tparam DecimalXX  The `decimal32`, `decimal64` or `decimal128` type
  * @tparam Op         The operator of cudf::reduction::op::
  *
  * @param col         Input column of data to reduce
@@ -115,7 +121,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(), scale);
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
 }
 
 /**
@@ -252,8 +258,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
-             std::is_same_v<ElementType, cudf::struct_view>);
+    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view>);
   }
 
   template <typename IndexType,
@@ -279,8 +284,30 @@ struct same_element_type_dispatcher {
 
  public:
   template <typename ElementType,
-            std::enable_if_t<is_supported<ElementType>() &&
-                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
+            std::enable_if_t<std::is_same_v<ElementType, cudf::struct_view> &&
+                             (std::is_same_v<Op, cudf::reduction::op::min> ||
+                              std::is_same_v<Op, cudf::reduction::op::max>)>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
+
+    // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
+    auto const minmax_idx = thrust::reduce(rmm::exec_policy(stream),
+                                           thrust::make_counting_iterator(0),
+                                           thrust::make_counting_iterator(input.size()),
+                                           size_type{0},
+                                           binop_generator.binop());
+
+    return cudf::detail::get_element(input, minmax_idx, stream, mr);
+  }
+
+  template <typename ElementType,
+            std::enable_if_t<is_supported<ElementType>() && !cudf::is_fixed_point<ElementType>() &&
+                             !std::is_same_v<ElementType, cudf::struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -395,7 +422,7 @@ struct element_type_dispatcher {
   }
 
   /**
-   * @brief Specialization for reducing integer column types to any output type.
+   * @brief Specialization for reducing fixed_point column types to fixed_point number
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>

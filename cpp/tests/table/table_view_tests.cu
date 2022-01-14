@@ -45,8 +45,8 @@ void row_comparison(cudf::table_view input1,
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
   auto d_column_order = cudf::detail::make_device_uvector_sync(column_order);
 
-  auto comparator = cudf::row_lexicographic_comparator<false>(
-    *device_table_1, *device_table_2, d_column_order.data());
+  auto comparator = cudf::row_lexicographic_comparator(
+    cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());
 
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,37 +14,27 @@
  * limitations under the License.
  */
 
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/groupby/group_benchmark_common.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
 
 #include <memory>
-#include <random>
 
 class Groupby : public cudf::benchmark {
 };
-
-// TODO: put it in a struct so `uniform` can be remade with different min, max
-template <typename T>
-T random_int(T min, T max)
-{
-  static unsigned seed = 13377331;
-  static std::mt19937 engine{seed};
-  static std::uniform_int_distribution<T> uniform{min, max};
-
-  return uniform(engine);
-}
 
 void BM_basic_sum(benchmark::State& state)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-  // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
   auto data_it = cudf::detail::make_counting_transform_iterator(
@@ -53,7 +43,7 @@ void BM_basic_sum(benchmark::State& state)
   wrapper keys(data_it, data_it + column_size);
   wrapper vals(data_it, data_it + column_size);
 
-  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys, keys, keys}));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
@@ -73,7 +63,9 @@ BENCHMARK_REGISTER_F(Groupby, Basic)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Arg(10000)
-  ->Arg(10000000);
+  ->Arg(1000000)
+  ->Arg(10000000)
+  ->Arg(100000000);
 
 void BM_pre_sorted_sum(benchmark::State& state)
 {

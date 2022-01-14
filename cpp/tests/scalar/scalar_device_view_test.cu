@@ -25,15 +25,15 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/sequence.h>
 #include <random>
-#include "rmm/cuda_stream_view.hpp"
+#include <rmm/cuda_stream_view.hpp>
+#include <thrust/sequence.h>
 
 template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 template <typename ScalarDeviceViewType>
 __global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)

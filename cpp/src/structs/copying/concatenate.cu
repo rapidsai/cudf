@@ -21,8 +21,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

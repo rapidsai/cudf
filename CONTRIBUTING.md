@@ -62,12 +62,12 @@ The following instructions are for developers and contributors to cuDF OSS devel
 Compilers:
 
 * `gcc`     version 9.3+
-* `nvcc`    version 11.0+
+* `nvcc`    version 11.5+
 * `cmake`   version 3.20.1+
 
 CUDA/GPU:
 
-* CUDA 11.0+
+* CUDA 11.5+
 * NVIDIA driver 450.80.02+
 * Pascal architecture or better
 
@@ -86,7 +86,7 @@ git submodule update --init --remote --recursive
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.0.yml
+conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.5.yml
 # activate the environment
 conda activate cudf_dev
 ```

@@ -30,7 +30,7 @@ class ReplaceClamp : public cudf::benchmark {
 };
 
 template <typename type>
-static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
+static void BM_clamp(benchmark::State& state, bool include_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
@@ -58,15 +58,15 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
   }
 }
 
-#define CLAMP_BENCHMARK_DEFINE(name, type, nulls)                         \
-  BENCHMARK_DEFINE_F(ReplaceClamp, name)                                  \
-  (::benchmark::State & state) { BM_reduction_scan<type>(state, nulls); } \
-  BENCHMARK_REGISTER_F(ReplaceClamp, name)                                \
-    ->UseManualTime()                                                     \
-    ->Arg(10000)      /* 10k */                                           \
-    ->Arg(100000)     /* 100k */                                          \
-    ->Arg(1000000)    /* 1M */                                            \
-    ->Arg(10000000)   /* 10M */                                           \
+#define CLAMP_BENCHMARK_DEFINE(name, type, nulls)                \
+  BENCHMARK_DEFINE_F(ReplaceClamp, name)                         \
+  (::benchmark::State & state) { BM_clamp<type>(state, nulls); } \
+  BENCHMARK_REGISTER_F(ReplaceClamp, name)                       \
+    ->UseManualTime()                                            \
+    ->Arg(10000)      /* 10k */                                  \
+    ->Arg(100000)     /* 100k */                                 \
+    ->Arg(1000000)    /* 1M */                                   \
+    ->Arg(10000000)   /* 10M */                                  \
     ->Arg(100000000); /* 100M */
 
 CLAMP_BENCHMARK_DEFINE(int8_no_nulls, int8_t, false);

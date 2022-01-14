@@ -2,7 +2,6 @@
 
 import cudf
 from cudf.api.types import is_decimal_dtype
-from cudf.core.dtypes import Decimal64Dtype
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -18,7 +17,11 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 
 from cudf._lib.aggregation cimport Aggregation, make_aggregation
-from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
+from cudf._lib.types cimport (
+    dtype_to_data_type,
+    is_decimal_type_id,
+    underlying_type_t_type_id,
+)
 
 import numpy as np
 
@@ -40,13 +43,10 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         to the same type as the input column
     """
 
-    col_dtype = incol.dtype
-    if (
-        reduction_op in ['sum', 'sum_of_squares', 'product']
-        and not is_decimal_dtype(col_dtype)
-    ):
-        col_dtype = np.find_common_type([col_dtype], [np.uint64])
-    col_dtype = col_dtype if dtype is None else dtype
+    col_dtype = (
+        dtype if dtype is not None
+        else incol._reduction_result_dtype(reduction_op)
+    )
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
@@ -72,11 +72,11 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             c_out_dtype
         ))
 
-    if c_result.get()[0].type().id() == libcudf_types.type_id.DECIMAL64:
+    if is_decimal_type_id(c_result.get()[0].type().id()):
         scale = -c_result.get()[0].type().scale()
         precision = _reduce_precision(col_dtype, reduction_op, len(incol))
         py_result = DeviceScalar.from_unique_ptr(
-            move(c_result), dtype=cudf.Decimal64Dtype(precision, scale)
+            move(c_result), dtype=col_dtype.__class__(precision, scale)
         )
     else:
         py_result = DeviceScalar.from_unique_ptr(move(c_result))
@@ -157,4 +157,4 @@ def _reduce_precision(dtype, op, nrows):
         new_p = 2 * p + nrows
     else:
         raise NotImplementedError()
-    return max(min(new_p, cudf.Decimal64Dtype.MAX_PRECISION), 0)
+    return max(min(new_p, dtype.MAX_PRECISION), 0)

@@ -338,7 +338,7 @@ class arrow_io_source : public datasource {
   /**
    * @brief Constructs an object from an Apache Arrow Filesystem URI
    *
-   * @param Apache Arrow Filesystem URI
+   * @param arrow_uri Apache Arrow Filesystem URI
    */
   explicit arrow_io_source(std::string_view arrow_uri)
   {

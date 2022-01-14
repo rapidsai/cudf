@@ -208,35 +208,6 @@ class thread_pool {
   }
 
   /**
-   * @brief Submit a function with zero or more arguments and no return value into the task queue,
-   * and get an std::future<bool> that will be set to true upon completion of the task.
-   *
-   * @tparam F The type of the function.
-   * @tparam A The types of the zero or more arguments to pass to the function.
-   * @param task The function to submit.
-   * @param args The zero or more arguments to pass to the function.
-   * @return A future to be used later to check if the function has finished its execution.
-   */
-  template <typename F,
-            typename... A,
-            typename = std::enable_if_t<
-              std::is_void_v<std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>>>
-  std::future<bool> submit(const F& task, const A&... args)
-  {
-    std::shared_ptr<std::promise<bool>> promise(new std::promise<bool>);
-    std::future<bool> future = promise->get_future();
-    push_task([task, args..., promise] {
-      try {
-        task(args...);
-        promise->set_value(true);
-      } catch (...) {
-        promise->set_exception(std::current_exception());
-      };
-    });
-    return future;
-  }
-
-  /**
    * @brief Submit a function with zero or more arguments and a return value into the task queue,
    * and get a future for its eventual returned value.
    *
@@ -250,15 +221,19 @@ class thread_pool {
    */
   template <typename F,
             typename... A,
-            typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>,
-            typename   = std::enable_if_t<!std::is_void_v<R>>>
+            typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
   std::future<R> submit(const F& task, const A&... args)
   {
     std::shared_ptr<std::promise<R>> promise(new std::promise<R>);
     std::future<R> future = promise->get_future();
     push_task([task, args..., promise] {
       try {
-        promise->set_value(task(args...));
+        if constexpr (std::is_void_v<R>) {
+          task(args...);
+          promise->set_value();
+        } else {
+          promise->set_value(task(args...));
+        }
       } catch (...) {
         promise->set_exception(std::current_exception());
       };
