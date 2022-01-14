@@ -70,3 +70,5 @@ TEST_F(NewRowOp, BasicTest)
   // cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
