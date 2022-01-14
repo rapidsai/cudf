@@ -1169,6 +1169,13 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
 
+  std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
+  for (size_t i = 0; i < num_rowgroup_blobs; i++) {
+    auto const stat_begin = blobs.host_ptr(rowgroup_stat_merge[i].start_chunk);
+    auto const stat_end   = stat_begin + rowgroup_stat_merge[i].num_chunks;
+    rowgroup_blobs[i].assign(stat_begin, stat_end);
+  }
+
   std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
   for (size_t i = 0; i < num_stripe_blobs; i++) {
     auto const stat_begin = blobs.host_ptr(stripe_stat_merge[i].start_chunk);
@@ -1182,8 +1189,7 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
     auto const stat_end   = stat_begin + file_stat_merge[i].num_chunks;
     file_blobs[i].assign(stat_begin, stat_end);
   }
-
-  return {{}, stripe_blobs, file_blobs};
+  return {std::move(rowgroup_blobs), std::move(stripe_blobs), std::move(file_blobs)};
 }
 
 void writer::impl::write_index_stream(int32_t stripe_id,
@@ -1193,7 +1199,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
                                       host_span<gpu_inflate_status_s const> comp_out,
-                                      std::optional<std::vector<ColStatsBlob>> const& rg_stats,
+                                      std::vector<ColStatsBlob> const& rg_stats,
                                       StripeInformation* stripe,
                                       orc_streams* streams,
                                       ProtobufWriter* pbw)
@@ -1253,17 +1259,16 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   // Add row index entries
   auto const& rowgroups_range = segmentation.stripes[stripe_id];
   std::for_each(rowgroups_range.cbegin(), rowgroups_range.cend(), [&](auto rowgroup) {
-    pbw->put_row_index_entry(
-      present.comp_pos,
-      present.pos,
-      data.comp_pos,
-      data.pos,
-      data2.comp_pos,
-      data2.pos,
-      kind,
-      rg_stats.has_value()
-        ? (rg_stats->data() + column_id * segmentation.num_rowgroups() + rowgroup)
-        : nullptr);
+    pbw->put_row_index_entry(present.comp_pos,
+                             present.pos,
+                             data.comp_pos,
+                             data.pos,
+                             data2.comp_pos,
+                             data2.pos,
+                             kind,
+                             (rg_stats.empty() or stream_id == 0)
+                               ? nullptr
+                               : (&rg_stats[column_id * segmentation.num_rowgroups() + rowgroup]));
 
     if (stream_id != 0) {
       const auto& strm = enc_streams[column_id][rowgroup];
@@ -2014,7 +2019,7 @@ void writer::impl::write(table_view const& table)
 
     // File-level statistics
     // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
-    if (single_write_mode and statistics.file_level.has_value()) {
+    if (single_write_mode and not statistics.file_level.empty()) {
       // First entry contains total number of rows
       buffer_.resize(0);
       pbw_.put_byte(1 * 8 + PB_TYPE_VARINT);
@@ -2023,11 +2028,11 @@ void writer::impl::write(table_view const& table)
       ff.statistics.emplace_back(std::move(buffer_));
       // Add file stats, stored after stripe stats in `column_stats`
       ff.statistics.insert(ff.statistics.end(),
-                           std::make_move_iterator(statistics.file_level->begin()),
-                           std::make_move_iterator(statistics.file_level->end()));
+                           std::make_move_iterator(statistics.file_level.begin()),
+                           std::make_move_iterator(statistics.file_level.end()));
     }
     // Stripe-level statistics
-    if (statistics.stripe_level.has_value()) {
+    if (not statistics.stripe_level.empty()) {
       size_t first_stripe = md.stripeStats.size();
       md.stripeStats.resize(first_stripe + stripes.size());
       for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
@@ -2039,7 +2044,7 @@ void writer::impl::write(table_view const& table)
         for (size_t col_idx = 0; col_idx < orc_table.num_columns(); col_idx++) {
           size_t idx = stripes.size() * col_idx + stripe_id;
           md.stripeStats[first_stripe + stripe_id].colStats[1 + col_idx] =
-            std::move(statistics.stripe_level.value()[idx]);
+            std::move(statistics.stripe_level[idx]);
         }
       }
     }
