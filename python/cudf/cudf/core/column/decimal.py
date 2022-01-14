@@ -372,3 +372,5 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
             pass
         else:
             return min_decimal_type
+
+    raise OverflowError("Maximum supported decimal type is Decimal128")
