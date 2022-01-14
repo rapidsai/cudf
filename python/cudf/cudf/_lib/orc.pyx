@@ -249,7 +249,6 @@ cdef orc_reader_options make_orc_reader_options(
         .timestamp_type(data_type(timestamp_type))
         .use_index(use_index)
         .decimal_cols_as_float(c_decimal_cols_as_float)
-        .decimal128(True)
         .build()
     )
 
