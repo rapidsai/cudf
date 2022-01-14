@@ -1448,6 +1448,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
+        # Reassign precision for decimal cols & type schema for struct cols
         if isinstance(
             col,
             (cudf.core.column.Decimal64Column, cudf.core.column.StructColumn),
