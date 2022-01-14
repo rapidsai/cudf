@@ -1000,7 +1000,7 @@ class CategoricalColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         return self.codes.data_array_view
 
-    def unique(self) -> CategoricalColumn:
+    def unique(self, *args, **kwargs) -> CategoricalColumn:
         codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,

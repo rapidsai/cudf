@@ -6,17 +6,10 @@
 # for reductions, scans, and binops (and perhaps others).
 
 
-# TODO: Figure out how to support examples in the docstrings.
-
-
 # TODO: Consider using a pyi file to trick mypy into seeing the monkey-patched
 # methods.
 
 # TODO: Add type annotations for the class variables.
-
-# TODO: Extract signature from _reduce
-
-# TODO: Take advantage of the new approach to also format the cls into the doc.
 
 import inspect
 
@@ -66,7 +59,6 @@ class Reducible:
         "prod",
         "idxmin",
         "idxmax",
-        "nunique",
         "first",
         "last",
     }

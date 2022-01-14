@@ -369,13 +369,13 @@ class TimeDeltaColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
+    def mean(self, skipna=None, dtype: Dtype = np.float64, *args, **kwargs) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
         )
 
-    def median(self, skipna: bool = None) -> pd.Timedelta:
+    def median(self, skipna: bool = None, *args, **kwargs) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
@@ -384,7 +384,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs
     ) -> "column.ColumnBase":
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
@@ -394,7 +394,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return result.astype(self.dtype)
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count=0
+        self, skipna: bool = None, dtype: Dtype = None, min_count=0, *args, **kwargs
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # TODO: mypy doesn't fully support monkey-patching, so the
@@ -407,7 +407,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64, *args, **kwargs
     ) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
