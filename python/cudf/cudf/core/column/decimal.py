@@ -344,7 +344,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
 
     if op in ("add", "sub"):
         scale = max(s1, s2)
-        precision = max(s1, s2) + max(p1 - s1, p2 - s2) + 1
+        precision = scale + max(p1 - s1, p2 - s2) + 1
     elif op == "mul":
         scale = s1 + s2
         precision = p1 + p2 + 1

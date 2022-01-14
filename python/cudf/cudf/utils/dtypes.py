@@ -166,20 +166,11 @@ def _find_common_type_decimal(dtypes):
     # precision
     p = s + lhs
 
-    if (
-        cudf.Decimal64Dtype.MAX_PRECISION
-        < p
-        <= cudf.Decimal128Dtype.MAX_PRECISION
-        or p > cudf.Decimal128Dtype.MAX_PRECISION
-    ):
+    if p > cudf.Decimal64Dtype.MAX_PRECISION:
         return cudf.Decimal128Dtype(
             min(cudf.Decimal128Dtype.MAX_PRECISION, p), s
         )
-    elif (
-        cudf.Decimal32Dtype.MAX_PRECISION
-        < p
-        <= cudf.Decimal64Dtype.MAX_PRECISION
-    ):
+    elif p > cudf.Decimal32Dtype.MAX_PRECISION:
         return cudf.Decimal64Dtype(
             min(cudf.Decimal64Dtype.MAX_PRECISION, p), s
         )

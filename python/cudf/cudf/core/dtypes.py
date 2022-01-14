@@ -467,12 +467,7 @@ class Decimal32Dtype(_BaseDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
-        elif self.precision != other.precision:
-            return False
-        elif self.scale != other.scale:
-            return False
-        else:
-            return True
+        return self.precision == other.precision and self.scale == other.scale
 
 
 class Decimal64Dtype(_BaseDtype):
@@ -587,12 +582,7 @@ class Decimal64Dtype(_BaseDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
-        elif self.precision != other.precision:
-            return False
-        elif self.scale != other.scale:
-            return False
-        else:
-            return True
+        return self.precision == other.precision and self.scale == other.scale
 
 
 class Decimal128Dtype(_BaseDtype):
@@ -707,12 +697,7 @@ class Decimal128Dtype(_BaseDtype):
             return True
         elif not isinstance(other, self.__class__):
             return False
-        elif self.precision != other.precision:
-            return False
-        elif self.scale != other.scale:
-            return False
-        else:
-            return True
+        return self.precision == other.precision and self.scale == other.scale
 
 
 class IntervalDtype(StructDtype):
