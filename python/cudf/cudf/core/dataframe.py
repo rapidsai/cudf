@@ -1548,10 +1548,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     cudf.core.index.as_index(out.index._values)
                 )
 
-        # Reassign precision for any decimal cols
+        # Reassign precision for decimal cols & type schema for struct cols
         for name, col in out._data.items():
-            if isinstance(col, cudf.core.column.Decimal64Column):
-                col = col._with_type_metadata(tables[0]._data[name].dtype)
+            if isinstance(
+                col,
+                (
+                    cudf.core.column.Decimal64Column,
+                    cudf.core.column.StructColumn,
+                ),
+            ):
+                out._data[name] = col._with_type_metadata(
+                    tables[0]._data[name].dtype
+                )
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -3438,7 +3446,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        method=None,
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -3490,9 +3497,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
-        method :
-            This parameter is unused. It is deprecated and will be removed in a
-            future version.
 
         Returns
         -------
@@ -3554,13 +3558,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             lsuffix, rsuffix = suffixes
 
-        if method is not None:
-            warnings.warn(
-                "The 'method' argument is deprecated and will be removed "
-                "in a future version of cudf.",
-                FutureWarning,
-            )
-
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -3578,14 +3575,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("JOIN", color="blue", domain="cudf_python")
     def join(
-        self,
-        other,
-        on=None,
-        how="left",
-        lsuffix="",
-        rsuffix="",
-        sort=False,
-        method=None,
+        self, other, on=None, how="left", lsuffix="", rsuffix="", sort=False,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -3599,9 +3589,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
-        method :
-            This parameter is unused. It is deprecated and will be removed in a
-            future version.
 
         Returns
         -------
@@ -3614,13 +3601,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-
-        if method is not None:
-            warnings.warn(
-                "The 'method' argument is deprecated and will be removed "
-                "in a future version of cudf.",
-                FutureWarning,
-            )
 
         df = self.merge(
             other,
