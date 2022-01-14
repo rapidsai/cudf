@@ -85,7 +85,8 @@ void BM_orc_write_varying_options(benchmark::State& state)
     cudf_io::orc_writer_options const options =
       cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(compression)
-        .enable_statistics(enable_stats);
+        .enable_statistics(enable_stats ? cudf::io::ORC_STATISTICS_ROW_GROUP
+                                        : cudf::io::STATISTICS_NONE);
     cudf_io::write_orc(options);
   }
 

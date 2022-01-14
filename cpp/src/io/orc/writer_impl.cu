@@ -1063,14 +1063,15 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
 }
 
 writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
-  bool are_statistics_enabled,
+  statistics_freq stats_freq,
   orc_table_view const& orc_table,
   file_segmentation const& segmentation)
 {
-  auto const num_rowgroup_blobs = segmentation.rowgroups.count();
-  auto const num_stripe_blobs   = segmentation.num_stripes() * orc_table.num_columns();
-  auto const num_file_blobs     = orc_table.num_columns();
-  auto const num_stat_blobs     = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
+  auto const num_rowgroup_blobs     = segmentation.rowgroups.count();
+  auto const num_stripe_blobs       = segmentation.num_stripes() * orc_table.num_columns();
+  auto const num_file_blobs         = orc_table.num_columns();
+  auto const num_stat_blobs         = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
+  auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
 
   if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
 
@@ -1351,7 +1352,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.is_enabled_statistics()),
+    stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
@@ -1372,7 +1373,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.is_enabled_statistics()),
+    stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
@@ -1954,7 +1955,7 @@ void writer::impl::write(table_view const& table)
 
     ProtobufWriter pbw_(&buffer_);
 
-    auto const statistics = gather_statistic_blobs(enable_statistics_, orc_table, segmentation);
+    auto const statistics = gather_statistic_blobs(stats_freq_, orc_table, segmentation);
 
     // Write stripes
     std::vector<std::future<void>> write_tasks;
