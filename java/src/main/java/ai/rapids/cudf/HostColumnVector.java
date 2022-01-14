@@ -1008,8 +1008,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
       rows++;
 
       if (offsets == null) {
-        // Initialize data buffer with at least 64 bytes to avoid growing too frequently.
-        data = HostMemoryBuffer.allocate(Math.max(64, stringLength));
+        // Initialize data buffer with at least 1 byte in case the first appended value is null.
+        data = HostMemoryBuffer.allocate(Math.max(1, stringLength));
         offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
         offsets.setInt(0, 0);
         rowCapacity = estimatedRows;
@@ -1023,11 +1023,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
 
       long currentLength = currentByteIndex + stringLength;
-      long requiredLength = data.length;
-      while (currentLength > requiredLength) {
-        requiredLength = requiredLength * 2;
-      }
-      if (requiredLength > data.length) {
+      if (currentLength > data.length) {
+        long requiredLength = data.length;
+        do {
+          requiredLength = requiredLength * 2;
+        } while (currentLength > requiredLength);
         data = copyBuffer(HostMemoryBuffer.allocate(requiredLength), data);
       }
     }
