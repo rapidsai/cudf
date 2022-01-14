@@ -18,7 +18,11 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
+from cudf.io.parquet import (
+    ParquetDatasetWriter,
+    ParquetWriter,
+    merge_parquet_filemetadata,
+)
 from cudf.testing import dataset_generator as dg
 from cudf.testing._utils import (
     TIMEDELTA_TYPES,
@@ -1573,6 +1577,16 @@ def test_parquet_writer_gpu_chunked(tmpdir, simple_pdf, simple_gdf):
     assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))
 
 
+def test_parquet_writer_gpu_chunked_context(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    with ParquetWriter(gdf_fname) as writer:
+        writer.write_table(simple_gdf)
+        writer.write_table(simple_gdf)
+
+    assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))
+
+
 def test_parquet_write_bytes_io(simple_gdf):
     output = BytesIO()
     simple_gdf.to_parquet(output)
@@ -1625,6 +1639,73 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
         for _, _, files in os.walk(gdf_dir):
             for fn in files:
                 assert fn == filename
+
+
+@pytest.mark.parametrize("return_meta", [True, False])
+def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
+
+    df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
+    df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
+
+    cw = ParquetDatasetWriter(gdf_dir, partition_cols=["a"], index=False)
+    cw.write_table(df1)
+    cw.write_table(df2)
+    meta_byte_array = cw.close(return_metadata=return_meta)
+    pdf = cudf.concat([df1, df2]).to_pandas()
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["a"])
+
+    if return_meta:
+        fmd = pq.ParquetFile(BytesIO(meta_byte_array)).metadata
+        assert fmd.num_rows == len(pdf)
+        assert fmd.num_row_groups == 4
+        files = {
+            os.path.join(directory, files[0])
+            for directory, _, files in os.walk(gdf_dir)
+            if files
+        }
+        meta_files = {
+            os.path.join(gdf_dir, fmd.row_group(i).column(c).file_path)
+            for i in range(fmd.num_row_groups)
+            for c in range(fmd.row_group(i).num_columns)
+        }
+        assert files == meta_files
+
+    # Read back with pandas to compare
+    expect_pd = pd.read_parquet(pdf_dir)
+    got_pd = pd.read_parquet(gdf_dir)
+    assert_eq(expect_pd, got_pd)
+
+    # Check that cudf and pd return the same read
+    got_cudf = cudf.read_parquet(gdf_dir)
+    assert_eq(got_pd, got_cudf)
+
+
+def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
+
+    df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
+    df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
+
+    with ParquetDatasetWriter(
+        gdf_dir, partition_cols=["a"], index=False
+    ) as cw:
+        cw.write_table(df1)
+        cw.write_table(df2)
+
+    pdf = cudf.concat([df1, df2]).to_pandas()
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["a"])
+
+    # Read back with pandas to compare
+    expect_pd = pd.read_parquet(pdf_dir)
+    got_pd = pd.read_parquet(gdf_dir)
+    assert_eq(expect_pd, got_pd)
+
+    # Check that cudf and pd return the same read
+    got_cudf = cudf.read_parquet(gdf_dir)
+    assert_eq(got_pd, got_cudf)
 
 
 @pytest.mark.parametrize("cols", [None, ["b"]])
