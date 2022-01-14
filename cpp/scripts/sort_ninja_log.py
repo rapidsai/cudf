@@ -61,13 +61,6 @@ if len(entries) == 0:
     print("Could not parse", log_file)
     exit()
 
-# utility converts a millisecond value to a colum width in pixels
-def time_to_width(value, end):
-    # map a value from (0,end) to (0,1000)
-    r = (float(value) / float(end)) * 1000.0
-    return int(r)
-
-
 # sort the entries by build-time (descending order)
 sorted_list = sorted(
     list(entries.keys()),
@@ -75,8 +68,8 @@ sorted_list = sorted(
     reverse=True,
 )
 
-if output_fmt == "xml":
-    # output results in XML format
+# output results in XML format
+def output_xml(entries, sorted_list, args):
     root = ET.Element("testsuites")
     testsuite = ET.Element(
         "testsuite",
@@ -105,8 +98,56 @@ if output_fmt == "xml":
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
     print(xmlstr)
 
-elif output_fmt == "html":
-    # output chart results in HTML format
+
+# utility converts a millisecond value to a colum width in pixels
+def time_to_width(value, end):
+    # map a value from (0,end) to (0,1000)
+    r = (float(value) / float(end)) * 1000.0
+    return int(r)
+
+
+# assign each entry to a thread by analyzing the start/end times and
+# slotting them into thread buckets where they fit
+def assign_entries_to_threads(entries):
+    # first sort the entries' keys by end timestamp
+    sorted_keys = sorted(
+        list(entries.keys()), key=lambda k: entries[k][1], reverse=True
+    )
+
+    # build the chart data by assigning entries to threads
+    results = {}
+    threads = []
+    for name in sorted_keys:
+        entry = entries[name]
+
+        # assign this entry by finding the first available thread identified
+        # by the thread's current start time greater than the entry's end time
+        tid = -1
+        for t in range(len(threads)):
+            if threads[t] >= entry[1]:
+                threads[t] = entry[0]
+                tid = t
+                break
+
+        # if no current thread found, create a new one with this entry
+        if tid < 0:
+            threads.append(entry[0])
+            tid = len(threads) - 1
+
+        # add entry name to the array associated with this tid
+        if tid not in results.keys():
+            results[tid] = []
+        results[tid].append(name)
+
+    # first entry has the last end time
+    end_time = entries[sorted_keys[0]][1]
+
+    # return the threaded entries and the last end time
+    return (results, end_time)
+
+
+# output chart results in HTML format
+def output_html(entries, sorted_list, args):
     print("<html><head><title>Chart Ninja Build Times</title>")
     # Note: Jenkins does not support style defined in the html
     # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
@@ -114,35 +155,9 @@ elif output_fmt == "html":
     if args.msg is not None:
         print("<p>", args.msg, "</p>")
 
-    # sort the entries' keys by end timestamp
-    sorted_keys = sorted(
-        list(entries.keys()), key=lambda k: entries[k][1], reverse=True
-    )
-
-    # build the chart data by assigning entries to threads
-    chart_data = {}
-    threads = []
-    for name in sorted_keys:
-        entry = entries[name]
-        # assign this entry to a thread
-        tid = -1
-        for t in range(len(threads)):
-            if threads[t] >= entry[1]:
-                threads[t] = entry[0]
-                tid = t
-                break
-        if tid < 0:
-            threads.append(entry[0])
-            tid = len(threads) - 1
-
-        # add entry name to the array associated with this tid
-        if tid not in chart_data.keys():
-            chart_data[tid] = []
-        chart_data[tid].append(name)
-
-    # first entry has the last end time
-    # this is used to scale all the entries to a fixed output width
-    end_time = entries[sorted_keys[0]][1]
+    # map entries to threads
+    # the end_time is used to scale all the entries to a fixed output width
+    threads, end_time = assign_entries_to_threads(entries)
 
     # color ranges for build times
     summary = {"red": 0, "yellow": 0, "green": 0, "white": 0}
@@ -154,12 +169,12 @@ elif output_fmt == "html":
     # create the build-time chart
     print("<table id='chart' width='1000px' bgcolor='#BBBBBB'>")
     for tid in range(len(threads)):
-        names = chart_data[tid]
+        names = threads[tid]
 
         # sort the names for this tid by start time
         names = sorted(names, key=lambda k: entries[k][0])
 
-        # use the last entry's end time for the total row size
+        # use the last entry's end time as the total row size
         # (this is an estimate and does not have to be exact)
         last_entry = entries[names[len(names) - 1]]
         last_time = time_to_width(last_entry[1], end_time)
@@ -170,8 +185,8 @@ elif output_fmt == "html":
             sep="",
         )
 
-        # write out each entry into a single table row
         prev_end = 0
+        # write out each entry into a single table row
         for name in names:
             entry = entries[name]
             start = entry[0]
@@ -182,6 +197,7 @@ elif output_fmt == "html":
             if prev_end > 0 and start > prev_end:
                 size = time_to_width(start - prev_end, end_time)
                 print("<td width='", size, "px'></td>")
+            # adjust for the cellspacing
             prev_end = end + int(end_time / 500)
 
             # format the build-time
@@ -206,23 +222,19 @@ elif output_fmt == "html":
             else:
                 summary["white"] += 1
 
-            # output table column for this entry
+            # compute the pixel width based on build-time
             size = max(time_to_width(build_time, end_time), 2)
-            print(
-                "<td height='20px' width='",
-                size,  # size based on build_time
-                "px' ",
-                color,
-                "title='",  # provides mouse-over hover text
-                name,
-                "\n",
-                build_time_str,
-                "' align='center' nowrap><font size='-1' face='courier'>",
-                sep="",
-                end="",
-            )
+            # output table column for this entry
+            print("<td height='20px' width='", size, "px' ", sep="", end="")
+            # title text is shown as hover-text by most browsers
+            print(color, "title='", end="")
+            print(name, "\n", build_time_str, "' ", sep="", end="")
+            # centers the name if it fits in the box
+            print("align='center' nowrap>", end="")
+            # slightly smaller, fixed-width font
+            print("<font size='-1' face='courier'>", end="")
 
-            # add file-name if it fits
+            # add file-name to the box if it fits
             # otherwise, truncate the name
             file_name = os.path.basename(name)
             if len(file_name) + 3 > size / 8:
@@ -231,11 +243,12 @@ elif output_fmt == "html":
                     print(file_name[:abbr_size], "...", sep="", end="")
             else:
                 print(file_name, end="")
+            # done with this entry
             print("</font></td>")
-
+            # update entry with just the computed output info
             entries[name] = (build_time_str, color, entry[2])
 
-        # add filler column at the end of the row
+        # add a filler column at the end of each row
         print("<td width='*'></td></tr></table></td></tr>")
 
     # done with the chart
@@ -251,7 +264,6 @@ elif output_fmt == "html":
     )
     for name in sorted_list:
         entry = entries[name]
-
         build_time_str = entry[0]
         color = entry[1]
 
@@ -292,11 +304,20 @@ elif output_fmt == "html":
     print("<td align='right'>", summary["white"], "</td></tr>")
     print("</table></body></html>")
 
-else:
-    # output results in CSV format
+
+# output results in CSV format
+def output_csv(entries, sorted_list, args):
     print("time,size,file")
     for name in sorted_list:
         entry = entries[name]
         build_time = entry[1] - entry[0]
         file_size = entry[2]
         print(build_time, file_size, name, sep=",")
+
+
+if output_fmt == "xml":
+    output_xml(entries, sorted_list, args)
+elif output_fmt == "html":
+    output_html(entries, sorted_list, args)
+else:
+    output_csv(entries, sorted_list, args)
