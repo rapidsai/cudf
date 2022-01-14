@@ -43,7 +43,7 @@ def is_numeric_dtype(obj):
         Whether or not the array or dtype is of a numeric dtype.
     """
     if isclass(obj):
-        if issubclass(obj, cudf.core.dtypes.DecimalDtype,):
+        if issubclass(obj, cudf.core.dtypes.DecimalDtype):
             return True
         if issubclass(obj, _BaseDtype):
             return False

@@ -146,7 +146,7 @@ class Scalar(object):
             else:
                 return NA, dtype
 
-        if isinstance(dtype, cudf.core.dtypes.DecimalDtype,):
+        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
             ).as_py()
@@ -172,7 +172,7 @@ class Scalar(object):
             else:
                 dtype = value.dtype
 
-        if not isinstance(dtype, cudf.core.dtypes.DecimalDtype,):
+        if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             dtype = cudf.dtype(dtype)
 
         if not valid:

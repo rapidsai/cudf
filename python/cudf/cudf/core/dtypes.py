@@ -397,9 +397,6 @@ class DecimalDtype(_BaseDtype):
             f"(precision={self.precision}, scale={self.scale})"
         )
 
-    def __hash__(self):
-        return hash(self._typ)
-
     @classmethod
     def _validate(cls, precision, scale=0):
         if precision > cls.MAX_PRECISION:
@@ -472,6 +469,9 @@ class Decimal32Dtype(DecimalDtype):
             return False
         return self.precision == other.precision and self.scale == other.scale
 
+    def __hash__(self):
+        return hash(self._typ)
+
 
 class Decimal64Dtype(DecimalDtype):
     """
@@ -511,6 +511,9 @@ class Decimal64Dtype(DecimalDtype):
             return False
         return self.precision == other.precision and self.scale == other.scale
 
+    def __hash__(self):
+        return hash(self._typ)
+
 
 class Decimal128Dtype(DecimalDtype):
     """
@@ -549,6 +552,9 @@ class Decimal128Dtype(DecimalDtype):
         elif not isinstance(other, self.__class__):
             return False
         return self.precision == other.precision and self.scale == other.scale
+
+    def __hash__(self):
+        return hash(self._typ)
 
 
 class IntervalDtype(StructDtype):

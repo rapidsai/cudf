@@ -240,7 +240,7 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
 
 cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     return tid in (
+        libcudf_types.type_id.DECIMAL128,
         libcudf_types.type_id.DECIMAL64,
         libcudf_types.type_id.DECIMAL32,
-        libcudf_types.type_id.DECIMAL128,
     )

@@ -2056,23 +2056,7 @@ def as_column(
                 # https://github.com/apache/arrow/pull/9948
                 # Hence we should let the exception propagate to
                 # the user.
-                if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                    data = pa.array(
-                        arbitrary,
-                        type=pa.decimal128(
-                            precision=dtype.precision, scale=dtype.scale
-                        ),
-                    )
-                    return cudf.core.column.Decimal64Column.from_arrow(data)
-                if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                    data = pa.array(
-                        arbitrary,
-                        type=pa.decimal128(
-                            precision=dtype.precision, scale=dtype.scale
-                        ),
-                    )
-                    return cudf.core.column.Decimal32Column.from_arrow(data)
-                elif isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+                if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
                     data = pa.array(
                         arbitrary,
                         type=pa.decimal128(
@@ -2080,6 +2064,23 @@ def as_column(
                         ),
                     )
                     return cudf.core.column.Decimal128Column.from_arrow(data)
+                elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal64Column.from_arrow(data)
+                elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal32Column.from_arrow(data)
+
             pa_type = None
             np_type = None
             try:
@@ -2098,27 +2099,7 @@ def as_column(
                     ) and not isinstance(dtype, cudf.IntervalDtype):
                         data = pa.array(arbitrary, type=dtype.to_arrow())
                         return as_column(data, nan_as_null=nan_as_null)
-                    if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal64Column.from_arrow(
-                            data
-                        )
-                    if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                        data = pa.array(
-                            arbitrary,
-                            type=pa.decimal128(
-                                precision=dtype.precision, scale=dtype.scale
-                            ),
-                        )
-                        return cudf.core.column.Decimal32Column.from_arrow(
-                            data
-                        )
-                    if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+                    elif isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
                         data = pa.array(
                             arbitrary,
                             type=pa.decimal128(
@@ -2128,6 +2109,27 @@ def as_column(
                         return cudf.core.column.Decimal128Column.from_arrow(
                             data
                         )
+                    elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.Decimal64Column.from_arrow(
+                            data
+                        )
+                    elif isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.Decimal32Column.from_arrow(
+                            data
+                        )
+
                     if is_bool_dtype(dtype):
                         # Need this special case handling for bool dtypes,
                         # since 'boolean' & 'pd.BooleanDtype' are not
