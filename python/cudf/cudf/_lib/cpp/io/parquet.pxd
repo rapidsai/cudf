@@ -207,6 +207,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_chunked_writer& write(
             cudf_table_view.table_view table_,
         ) except+
+        parquet_chunked_writer& write(
+            const cudf_table_view.table_view& table_,
+            const vector[cudf_io_types.partition_info]& partitions,
+        ) except+
         unique_ptr[vector[uint8_t]] close(
             vector[string] column_chunks_file_paths,
         ) except+
