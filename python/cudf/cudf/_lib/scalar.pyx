@@ -94,8 +94,7 @@ cdef class DeviceScalar:
         # IMPORTANT: this should only ever be called from __init__
         valid = not _is_null_host_scalar(value)
 
-        if isinstance(dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype,
-                      cudf.Decimal128Dtype)):
+        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             _set_decimal_from_scalar(
                 self.c_value, value, dtype, valid)
         elif isinstance(dtype, cudf.ListDtype):
@@ -125,8 +124,7 @@ cdef class DeviceScalar:
             )
 
     def _to_host_scalar(self):
-        if isinstance(self.dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype,
-                      cudf.Decimal128Dtype)):
+        if isinstance(self.dtype, cudf.core.dtypes.DecimalDtype):
             result = _get_py_decimal_from_fixed_point(self.c_value)
         elif cudf.api.types.is_struct_dtype(self.dtype):
             result = _get_py_dict_from_struct(self.c_value)

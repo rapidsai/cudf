@@ -25,15 +25,15 @@ from .numerical_base import NumericalBaseColumn
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
-    """Base column for decimal64 and decimal32 columns"""
+    """Base column for decimal32, decimal64 or decimal128 columns"""
 
-    dtype: Union[Decimal32Dtype, Decimal64Dtype]
+    dtype: Union[Decimal32Dtype, Decimal64Dtype, Decimal128Dtype]
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> Union["DecimalBaseColumn"]:
         if (
-            isinstance(dtype, (Decimal64Dtype, Decimal32Dtype))
+            isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
         ):
             warn(
@@ -132,8 +132,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
             return cudf.Scalar(Decimal(other))
         elif isinstance(other, cudf.Scalar) and isinstance(
-            other.dtype,
-            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
+            other.dtype, cudf.core.dtypes.DecimalDtype,
         ):
             return other
         else:

@@ -207,10 +207,7 @@ def test_null_scalar(dtype):
     assert s.value is cudf.NA
     assert s.dtype == (
         cudf.dtype(dtype)
-        if not isinstance(
-            dtype,
-            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
-        )
+        if not isinstance(dtype, cudf.core.dtypes.DecimalDtype,)
         else dtype
     )
     assert s.is_valid() is False
