@@ -1123,7 +1123,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     for col_name in self._data:
                         self._data[col_name][mask] = value
             else:
-                if isinstance(value, DataFrame):
+                if isinstance(value, (cupy.ndarray, np.ndarray)):
+                    _setitem_with_dataframe(
+                        input_df=self,
+                        replace_df=cudf.DataFrame(value),
+                        input_cols=arg,
+                        mask=None,
+                        ignore_index=True,
+                    )
+                elif isinstance(value, DataFrame):
                     _setitem_with_dataframe(
                         input_df=self,
                         replace_df=value,
@@ -6393,6 +6401,7 @@ def _setitem_with_dataframe(
     replace_df: DataFrame,
     input_cols: Any = None,
     mask: Optional[cudf.core.column.ColumnBase] = None,
+    ignore_index: bool = False,
 ):
     """
     This function sets item dataframes relevant columns with replacement df
@@ -6400,6 +6409,7 @@ def _setitem_with_dataframe(
     :param replace_df: Replacement DataFrame to replace values with
     :param input_cols: columns to replace in the input dataframe
     :param mask: boolean mask in case of masked replacing
+    :param ignore_index: Whether to conduct index equality and reindex
     """
 
     if input_cols is None:
@@ -6410,7 +6420,11 @@ def _setitem_with_dataframe(
             "Number of Input Columns must be same replacement Dataframe"
         )
 
-    if len(input_df) != 0 and not input_df.index.equals(replace_df.index):
+    if (
+        not ignore_index
+        and len(input_df) != 0
+        and not input_df.index.equals(replace_df.index)
+    ):
         replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):
