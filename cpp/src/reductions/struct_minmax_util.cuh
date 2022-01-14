@@ -103,13 +103,14 @@ class comparison_binop_generator {
   {
     if (is_min_op) {
       null_orders = flattened_input.null_orders();
-      // Null structs are excluded from the operations, and that is equivalent to considering
-      // nulls as larger than all other non-null STRUCT elements (if finding for ARGMIN), or
-      // smaller than all other non-null STRUCT elements (if finding for ARGMAX).
-      // Thus, we need to set a separate null order for the top level structs column (which is
-      // stored at the first position in the null_orders array) to achieve this purpose.
-      null_orders.front() = cudf::null_order::AFTER;
-      null_orders_dvec    = cudf::detail::make_device_uvector_async(null_orders, stream);
+      // If the input column has nulls (at the top level), null structs are excluded from the
+      // operations, and that is equivalent to considering top-level nulls as larger than all other
+      // non-null STRUCT elements (if finding for ARGMIN), or smaller than all other non-null STRUCT
+      // elements (if finding for ARGMAX). Thus, we need to set a separate null order for the top
+      // level structs column (which is stored at the first position in the null_orders array) to
+      // achieve this purpose.
+      if (input.has_nulls()) { null_orders.front() = cudf::null_order::AFTER; }
+      null_orders_dvec = cudf::detail::make_device_uvector_async(null_orders, stream);
     }
     // else: Don't need to generate nulls order to copy to device memory if we have all null orders
     // are BEFORE (that happens when we have is_min_op == false).
