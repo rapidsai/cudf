@@ -1,5 +1,7 @@
+import contextlib
 import doctest
 import inspect
+import io
 import os
 
 import numpy as np
@@ -89,6 +91,12 @@ class TestDoctests:
         globals = dict(cudf=cudf, np=np,)
         docstring.globs = globals
 
-        runner.run(docstring)
-        results = runner.summarize()
-        assert not results.failed, results
+        # Capture stdout and include failing outputs in the traceback.
+        doctest_stdout = io.StringIO()
+        with contextlib.redirect_stdout(doctest_stdout):
+            runner.run(docstring)
+            results = runner.summarize()
+        assert not results.failed, (
+            f"{results.failed} of {results.attempted} doctests failed for "
+            f"{docstring.name}:\n{doctest_stdout.getvalue()}"
+        )
