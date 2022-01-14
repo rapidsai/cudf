@@ -388,7 +388,7 @@ class ColumnBase(Column, Serializable):
     ) -> ColumnBase:
         ...
 
-    def _fill(self, fill_value, begin, end, inplace):
+    def _fill(self, fill_value, begin, end, inplace=False):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
