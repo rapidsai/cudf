@@ -64,7 +64,7 @@ if len(entries) == 0:
 # utility converts a millisecond value to a colum width in pixels
 def time_to_width(value, end):
     # map a value from (0,end) to (0,1000)
-    r = float(value) / float(end) * 1000.0
+    r = (float(value) / float(end)) * 1000.0
     return int(r)
 
 
@@ -152,7 +152,7 @@ elif output_fmt == "html":
     white = "bgcolor='#FFFFFF'"
 
     # create the build-time chart
-    print("<table id='chart' width='1000px' bgcolor='#CCCCCC'>")
+    print("<table id='chart' width='1000px' bgcolor='#BBBBBB'>")
     for tid in range(len(threads)):
         names = chart_data[tid]
 
@@ -163,7 +163,12 @@ elif output_fmt == "html":
         # (this is an estimate and does not have to be exact)
         last_entry = entries[names[len(names) - 1]]
         last_time = time_to_width(last_entry[1], end_time)
-        print("<tr><td><table width='", last_time, "px'><tr>", sep="")
+        print(
+            "<tr><td><table width='",
+            last_time,
+            "px' border='0' cellspacing='1' cellpadding='0'><tr>",
+            sep="",
+        )
 
         # write out each entry into a single table row
         prev_end = 0
@@ -177,7 +182,7 @@ elif output_fmt == "html":
             if prev_end > 0 and start > prev_end:
                 size = time_to_width(start - prev_end, end_time)
                 print("<td width='", size, "px'></td>")
-            prev_end = end
+            prev_end = end + int(end_time / 500)
 
             # format the build-time
             build_time = end - start
@@ -202,9 +207,9 @@ elif output_fmt == "html":
                 summary["white"] += 1
 
             # output table column for this entry
-            size = max(time_to_width(build_time, end_time), 5)
+            size = max(time_to_width(build_time, end_time), 2)
             print(
-                "<td width='",
+                "<td height='20px' width='",
                 size,  # size based on build_time
                 "px' ",
                 color,
@@ -212,7 +217,7 @@ elif output_fmt == "html":
                 name,
                 "\n",
                 build_time_str,
-                "' align='center'><font size='-1'>",
+                "' align='center' nowrap><font size='-1' face='courier'>",
                 sep="",
                 end="",
             )
@@ -220,11 +225,9 @@ elif output_fmt == "html":
             # add file-name if it fits
             # otherwise, truncate the name
             file_name = os.path.basename(name)
-            if len(file_name) + 3 > size / 5:
-                abbr_size = int(size / 5) - 3
-                if abbr_size <= 1:
-                    print("&nbsp;", end="")
-                else:
+            if len(file_name) + 3 > size / 8:
+                abbr_size = int(size / 8) - 3
+                if abbr_size > 1:
                     print(file_name[:abbr_size], "...", sep="", end="")
             else:
                 print(file_name, end="")

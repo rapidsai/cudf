@@ -342,7 +342,7 @@ enum class hash_id {
  */
 static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
-static constexpr bool RECOMPILE_EVERYTHING = true;
+static constexpr bool RECOMPILE_EVERYTHING = false;
 
 /** @} */
 }  // namespace cudf
