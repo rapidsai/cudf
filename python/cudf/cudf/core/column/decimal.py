@@ -364,11 +364,11 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     else:
         raise NotImplementedError()
 
-    for decimal_type in [
+    for decimal_type in (
         cudf.Decimal32Dtype,
         cudf.Decimal64Dtype,
         cudf.Decimal128Dtype,
-    ]:
+    ):
         try:
             min_decimal_type = decimal_type(precision=precision, scale=scale)
         except ValueError:
