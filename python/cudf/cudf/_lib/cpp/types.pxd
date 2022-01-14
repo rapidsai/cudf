@@ -104,4 +104,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
 
+    # A Hack to let cython compile with __int128_t symbol
+    # https://stackoverflow.com/a/27609033
     ctypedef int int128 "__int128_t"
