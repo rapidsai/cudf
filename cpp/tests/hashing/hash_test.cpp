@@ -358,9 +358,9 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   fixed_width_column_wrapper<int32_t> const hash_bools_expected(
     {933211791, -559580957, -559580957, -559580957, 933211791});
   fixed_width_column_wrapper<int32_t> const hash_decimal128_expected(
-    {-783713497, -295670906, -893129661, -52622807, 2061608841});
+    {-783713497, -295670906, 1398487324, -52622807, 2061608841});
   fixed_width_column_wrapper<int32_t> const hash_combined_expected(
-    {401603227, 588162166, 2087912312, 1132537411, -1590333397});
+    {401603227, 588162166, 552160517, 1132537411, -1590333397});
 
   using double_limits = std::numeric_limits<double>;
   using long_limits   = std::numeric_limits<int64_t>;

@@ -345,24 +345,22 @@ struct SparkMurmurHash3_32 {
   result_type CUDA_DEVICE_CALLABLE compute_bytes(int8_t const* const data,
                                                  cudf::size_type const len) const
   {
-    int32_t const nblocks     = len / 4;
-    uint32_t h1               = m_seed;
-    constexpr uint32_t c1     = 0xcc9e2d51;
-    constexpr uint32_t c2     = 0x1b873593;
-    constexpr uint32_t c3     = 0xe6546b64;
-    constexpr uint32_t rot_c1 = 15;
-    constexpr uint32_t rot_c2 = 13;
+    int32_t const nblocks = len / 4;
+    uint32_t h1           = m_seed;
+    constexpr uint32_t c1 = 0xcc9e2d51;
+    constexpr uint32_t c2 = 0x1b873593;
+
     //----------
     // Process all four-byte chunks
     uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data);
     for (int i = 0; i < nblocks; i++) {
-      uint32_t k1 = blocks[i];
+      int32_t k1 = blocks[i];
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = rotl32(k1, 15);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
-      h1 = h1 * 5 + c3;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
     }
     //----------
     // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
@@ -370,11 +368,11 @@ struct SparkMurmurHash3_32 {
     for (int i = nblocks * 4; i < len; i++) {
       uint32_t k1 = data[i];
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = rotl32(k1, 15);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
-      h1 = h1 * 5 + c3;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
     }
     //----------
     // finalization
