@@ -88,21 +88,38 @@ if output_fmt == "xml":
 elif output_fmt == "html":
     # output results in HTML format
     print("<html><head><title>Sorted Ninja Build Times</title>")
-    print("<style>", "table, th, td { border:1px solid black; }", "</style>")
+    # Note: Jenkins does not support style defined in the html
+    # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
     print("</head><body>")
     if args.msg is not None:
         print("<p>", args.msg, "</p>")
     print("<table>")
     print(
         "<tr><th>File</th>",
-        "<th align='right'>Compile time (ms)</th>",
-        "<th align='right'>Size (bytes)</th><tr>",
+        "<th>Compile time<br/>(ms)</th>",
+        "<th>Size<br/>(bytes)</th><tr>",
         sep="",
     )
+    summary = {"red": 0, "yellow": 0, "green": 0}
+    red = "bgcolor='#FFBBD0'"
+    yellow = "bgcolor='#FFFF80'"
+    green = "bgcolor='#AAFFBD'"
     for key in sl:
         result = entries[key]
+        elapsed = result[0]
+        color = green
+        if elapsed > 300000:  # 5 minutes
+            color = red
+            summary["red"] += 1
+        elif elapsed > 120000:  # 2 minutes
+            color = yellow
+            summary["yellow"] += 1
+        else:
+            summary["green"] += 1
         print(
-            "<tr><td>",
+            "<tr ",
+            color,
+            "><td>",
             key,
             "</td><td align='right'>",
             result[0],
@@ -111,6 +128,14 @@ elif output_fmt == "html":
             "</td></tr>",
             sep="",
         )
+    print("</table><br/><table border='2'>")
+    # include summary table with color legend
+    print("<tr><td", red, ">time &gt; 5 minutes</td>")
+    print("<td align='right'>", summary["red"], "</td></tr>")
+    print("<tr><td", yellow, ">2 minutes &lt; time &lt; 5 minutes</td>")
+    print("<td align='right'>", summary["yellow"], "</td></tr>")
+    print("<tr><td", green, ">time &lt; 2 minutes</td>")
+    print("<td align='right'>", summary["green"], "</td></tr>")
     print("</table></body></html>")
 
 else:
