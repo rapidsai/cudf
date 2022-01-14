@@ -806,6 +806,16 @@ TYPED_TEST(MixedLeftSemiJoinTest, BasicEquality)
              {1});
 }
 
+TYPED_TEST(MixedLeftSemiJoinTest, BasicEqualityDuplicates)
+{
+  this->test({{0, 1, 2, 1}, {3, 4, 5, 6}, {10, 20, 30, 40}},
+             {{0, 1, 3, 1}, {5, 4, 5, 6}, {30, 40, 50, 40}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {1, 3});
+}
+
 TYPED_TEST(MixedLeftSemiJoinTest, BasicNullEqualityEqual)
 {
   this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},

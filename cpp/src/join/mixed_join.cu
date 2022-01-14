@@ -49,6 +49,19 @@ struct make_pair_function2 {
   }
 };
 
+/**
+ * @brief Equality comparator that always evaluates to false.
+ *
+ * Used to force all input rows to exist independently.
+ */
+struct false_comparator {
+  __device__ bool operator()([[maybe_unused]] size_type lhs_row_index,
+                             [[maybe_unused]] size_type rhs_row_index) const noexcept
+  {
+    return false;
+  }
+};
+
 }  // namespace
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -535,7 +548,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // won't be able to support AST conditions for those types anyway.
   auto const build_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
   row_hash const hash_build{build_nulls, *build_view};
-  row_equality equality_build{build_nulls, *build_view, *build_view, compare_nulls};
+  // Since we may see multiple rows that are identical in the equality tables
+  // but differ in the conditional tables, we must force insertion of all the
+  // rows from the equality table into the hash table. When probing, using the
+  // appropriate hash function will lead to a probe hit, at which point the
+  // probing equality comparator must perform the proper comparison to filter
+  // out non-matches.
+  false_comparator equality_build{};
   make_pair_function2 pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
@@ -765,7 +784,13 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // won't be able to support AST conditions for those types anyway.
   auto const build_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
   row_hash const hash_build{build_nulls, *build_view};
-  row_equality equality_build{build_nulls, *build_view, *build_view, compare_nulls};
+  // Since we may see multiple rows that are identical in the equality tables
+  // but differ in the conditional tables, we must force insertion of all the
+  // rows from the equality table into the hash table. When probing, using the
+  // appropriate hash function will lead to a probe hit, at which point the
+  // probing equality comparator must perform the proper comparison to filter
+  // out non-matches.
+  false_comparator equality_build{};
   make_pair_function2 pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
