@@ -88,6 +88,25 @@ std::unique_ptr<table> unordered_drop_duplicates(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @copydoc cudf::distinct_count(column_view const&, null_policy, nan_policy)
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
+ * @copydoc cudf::distinct_count(table_view const&, null_equality)
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal    = null_equality::EQUAL,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
  * @copydoc cudf::unordered_distinct_count(column_view const&, null_policy, nan_policy)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.

@@ -272,18 +272,48 @@ std::unique_ptr<table> unordered_drop_duplicates(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Count the number of consecutive groups of equivalent elements in a column.
+ *
+ * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
+ * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
+ * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in count.
+ *
+ * @param[in] input View of the input column
+ * @param[in] null_handling flag to include or ignore `null` while counting
+ * @param[in] nan_handling flag to consider `NaN==null` or not
+ *
+ * @return number of consecutive groups in the column
+ */
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling);
+
+/**
+ * @brief Count the number of consecutive groups of equivalent elements in a table.
+ *
+ *
+ * @param[in] input Table whose number of consecutive groups will be counted
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal
+ * nulls are not equal if null_equality::UNEQUAL
+ *
+ * @return number of consecutive groups in the table
+ */
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal = null_equality::EQUAL);
+
+/**
  * @brief Count the unique elements in the column_view.
  *
- * Given an input column_view, number of unique elements in this column_view is returned
+ * Given an input column_view, number of unique elements in this column_view is returned.
  *
  * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
  * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
  * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in unique
  * count.
  *
- * @param[in] input The column_view whose unique elements will be counted.
+ * @param[in] input The column_view whose unique elements will be counted
  * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not.
+ * @param[in] nan_handling flag to consider `NaN==null` or not
  *
  * @return number of unique elements
  */
@@ -295,7 +325,7 @@ cudf::size_type unordered_distinct_count(column_view const& input,
  * @brief Count the unique rows in a table.
  *
  *
- * @param[in] input Table whose unique rows will be counted.
+ * @param[in] input Table whose unique rows will be counted
  * @param[in] nulls_equal flag to denote if null elements should be considered equal
  * nulls are not equal if null_equality::UNEQUAL
  *

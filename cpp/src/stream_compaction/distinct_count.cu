@@ -39,6 +39,20 @@
 namespace cudf {
 namespace detail {
 
+cudf::size_type distinct_count(table_view const& keys,
+                               null_equality nulls_equal,
+                               rmm::cuda_stream_view stream)
+{
+  auto table_ptr = cudf::table_device_view::create(keys, stream);
+  row_equality_comparator comp(
+    nullate::DYNAMIC{cudf::has_nulls(keys)}, *table_ptr, *table_ptr, nulls_equal);
+  return thrust::count_if(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<cudf::size_type>(0),
+    thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
+    [comp] __device__(cudf::size_type i) { return (i == 0 || not comp(i, i - 1)); });
+}
+
 cudf::size_type unordered_distinct_count(table_view const& keys,
                                          null_equality nulls_equal,
                                          rmm::cuda_stream_view stream)
@@ -162,10 +176,11 @@ struct has_nans {
   }
 };
 
-cudf::size_type unordered_distinct_count(column_view const& input,
-                                         null_policy null_handling,
-                                         nan_policy nan_handling,
-                                         rmm::cuda_stream_view stream)
+template <bool unordered>
+cudf::size_type col_distinct_count(column_view const& input,
+                                   null_policy null_handling,
+                                   nan_policy nan_handling,
+                                   rmm::cuda_stream_view stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
 
@@ -181,7 +196,12 @@ cudf::size_type unordered_distinct_count(column_view const& input,
     has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
-  auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
+  auto count = [&]() {
+    if constexpr (unordered) {
+      return detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
+    }
+    return detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
+  }();
 
   // if nan is considered null and there are already null values
   if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and input.has_nulls()) --count;
@@ -192,7 +212,38 @@ cudf::size_type unordered_distinct_count(column_view const& input,
     return count;
 }
 
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling,
+                               rmm::cuda_stream_view stream)
+{
+  auto constexpr unordered = false;
+  return col_distinct_count<unordered>(input, null_handling, nan_handling, stream);
+}
+
+cudf::size_type unordered_distinct_count(column_view const& input,
+                                         null_policy null_handling,
+                                         nan_policy nan_handling,
+                                         rmm::cuda_stream_view stream)
+{
+  auto constexpr unordered = true;
+  return col_distinct_count<unordered>(input, null_handling, nan_handling, stream);
+}
 }  // namespace detail
+
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling)
+{
+  CUDF_FUNC_RANGE();
+  return detail::distinct_count(input, null_handling, nan_handling);
+}
+
+cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
+{
+  CUDF_FUNC_RANGE();
+  return detail::distinct_count(input, nulls_equal);
+}
 
 cudf::size_type unordered_distinct_count(column_view const& input,
                                          null_policy null_handling,
