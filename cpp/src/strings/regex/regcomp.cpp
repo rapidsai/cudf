@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,10 +258,10 @@ class regex_parser {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
       if (yy >= '0' && yy <= '7') {
         yy         = yy - '0';
-        char32_t c = *exprp++;
+        char32_t c = *exprp;
         while (c >= '0' && c <= '7') {
           yy = (yy << 3) | (c - '0');
-          c  = *exprp++;
+          c  = *(++exprp);
         }
         return CHAR;
       } else {
@@ -926,7 +926,7 @@ void reprog::optimize2()
   _startinst_ids.push_back(-1);  // terminator mark
 }
 
-#ifndef NDBUG
+#ifndef NDEBUG
 void reprog::print(regex_flags const flags)
 {
   printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
