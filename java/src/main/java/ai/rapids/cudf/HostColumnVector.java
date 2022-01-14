@@ -873,6 +873,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private long validCapacity = 0L;
     private boolean built = false;
     private List<ColumnBuilder> childBuilders = new ArrayList<>();
+    private Runnable nullHandler;
 
     private int currentIndex = 0;
     private long currentByteIndex = 0;
@@ -882,8 +883,49 @@ public final class HostColumnVector extends HostColumnVectorCore {
       this.nullable = type.isNullable();
       this.rows = 0;
       this.estimatedRows = estimatedRows;
+
+      // initialize the null handler according to the data type
+      this.setupNullHandler();
+
       for (int i = 0; i < type.getNumChildren(); i++) {
         childBuilders.add(new ColumnBuilder(type.getChild(i), estimatedRows));
+      }
+    }
+
+    private void setupNullHandler() {
+      if (this.type == DType.LIST) {
+        this.nullHandler = () -> {
+          this.growListBuffersAndRows();
+          this.growValidBuffer();
+          setNullAt(currentIndex++);
+          currentByteIndex += this.type.getSizeInBytes();
+          offsets.setInt((long) currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+        };
+      } else if (this.type == DType.STRING) {
+        this.nullHandler = () -> {
+          this.growStringBuffersAndRows(0);
+          this.growValidBuffer();
+          setNullAt(currentIndex++);
+          currentByteIndex += this.type.getSizeInBytes();
+          offsets.setInt((long) currentIndex * OFFSET_SIZE, (int) currentByteIndex);
+        };
+      } else if (this.type == DType.STRUCT) {
+        this.nullHandler = () -> {
+          this.growStructBuffersAndRows();
+          this.growValidBuffer();
+          setNullAt(currentIndex++);
+          currentByteIndex += this.type.getSizeInBytes();
+          for (ColumnBuilder childBuilder : childBuilders) {
+            childBuilder.appendNull();
+          }
+        };
+      } else {
+        this.nullHandler = () -> {
+          this.growFixedWidthBuffersAndRows();
+          this.growValidBuffer();
+          setNullAt(currentIndex++);
+          currentByteIndex += this.type.getSizeInBytes();
+        };
       }
     }
 
@@ -1048,17 +1090,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
     }
 
-    /**
-     * The Java substitution of native method `ColumnView.getNativeValidPointerSize`.
-     * Ideally, this method can speed up growValidBuffer by eliminating the JNI call.
-     */
-    private static long byteSizeOfNullMask(int numRows) {
-      // number of bytes required = Math.ceil(number of bits / 8)
-      int actualBytes = (numRows + 7) >> 3;
-      // padding to multiply of 64 bytes, just as cuDF default padding boundary
-      return ((actualBytes + 63) >> 6) << 6;
-    }
-
     private HostMemoryBuffer copyBuffer(HostMemoryBuffer targetBuffer, HostMemoryBuffer buffer) {
       try {
         targetBuffer.copyFromHostBuffer(0, buffer, 0, buffer.length);
@@ -1083,35 +1114,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder appendNull() {
-      // Increments row number. And update offsets and data buffer along with the valid buffer.
-      // NOTE: The growth of valid buffer must happen after rowCapacity updated.
-      if (type.typeId == DType.DTypeEnum.LIST) {
-        growListBuffersAndRows();
-      } else if (type.typeId == DType.DTypeEnum.STRING) {
-        growStringBuffersAndRows(0);
-      } else if (type.getSizeInBytes() > 0) {
-        growFixedWidthBuffersAndRows();
-      } else {
-        growStructBuffersAndRows();
-      }
-      growValidBuffer();
-
-      setNullAt(currentIndex);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
-      if (type.hasOffsets()) {
-        if (type.equals(DType.LIST)) {
-          offsets.setInt((long) currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
-        } else {
-          // It is a String
-          offsets.setInt((long) currentIndex * OFFSET_SIZE, (int) currentByteIndex);
-        }
-      } else if (type.equals(DType.STRUCT)) {
-        // structs propagate nulls to children and even further down if needed
-        for (ColumnBuilder childBuilder : childBuilders) {
-          childBuilder.appendNull();
-        }
-      }
+      nullHandler.run();
       return this;
     }
 
