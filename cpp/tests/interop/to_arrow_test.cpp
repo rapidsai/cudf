@@ -458,13 +458,13 @@ TEST_F(ToArrowTest, FixedPoint64TableNullsSimple)
   using namespace numeric;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data  = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 0, 0, 0, 0};
-    auto const nulls = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 0, 0, 0, 0};
+    auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col =
       fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const input = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, nulls, scale);
+    auto const arr = make_decimal128_arrow_array(data, validity, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -482,13 +482,13 @@ TEST_F(ToArrowTest, FixedPoint128TableNullsSimple)
   using namespace numeric;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data  = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
-    auto const nulls = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col =
       fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const input = cudf::table_view({col});
 
-    auto const arr = make_decimal128_arrow_array(data, nulls, scale);
+    auto const arr = make_decimal128_arrow_array(data, validity, scale);
 
     auto const field         = arrow::field("a", arr->type());
     auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -512,9 +512,9 @@ TEST_F(ToArrowTest, FixedPoint64TableNulls)
 
     auto const expect_data =
       std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9, 0, 10, 0};
-    auto const nulls = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
+    auto const validity = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
 
-    auto arr = make_decimal128_arrow_array(expect_data, nulls, scale);
+    auto arr = make_decimal128_arrow_array(expect_data, validity, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
@@ -537,9 +537,9 @@ TEST_F(ToArrowTest, FixedPoint128TableNulls)
     auto const input = cudf::table_view({col});
 
     auto const expect_data = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    auto const nulls       = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
+    auto const validity    = std::vector<int32_t>{1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
 
-    auto arr = make_decimal128_arrow_array(expect_data, nulls, scale);
+    auto arr = make_decimal128_arrow_array(expect_data, validity, scale);
 
     auto const field                = arrow::field("a", arr->type());
     auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
