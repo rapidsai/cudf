@@ -223,7 +223,7 @@ Limitations
  .. _describe: https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply
 
 
- Transform
+Transform
 ---------
 
 The ``.transform()`` method aggregates per group, and broadcasts the
