@@ -12,7 +12,7 @@ export GPUCI_RETRY_SLEEP=30
 export LABEL_OPTION=${LABEL_OPTION:-"--label main"}
 
 # Skip uploads unless BUILD_MODE == "branch"
-if [ ${BUILD_MODE} != "branch" ]; then
+if [ "${BUILD_MODE}" != "branch" ]; then
   echo "Skipping upload"
   return 0
 fi
