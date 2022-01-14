@@ -1,3 +1,5 @@
+.. _basics.groupby:
+
 GroupBy
 =======
 

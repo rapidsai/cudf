@@ -184,11 +184,25 @@ class GroupBy(Serializable):
         Parameters
         ----------
         func : str, callable, list or dict
+            Argument specifying the aggregation(s) to perform on the
+            groups. `func` can be any of the following types:
+
+              - string: the name of a supported aggregation
+              - callable: a function that accepts a Series/DataFrame and
+                performs a supported operation on it.
+              - list: a list of strings/callables specifying the
+                aggregations to perform on every column.
+              - dict: a mapping of column names to string/callable
+                specifying the aggregations to perform on those
+                columns.
+
+        See :ref:`the user guide <basics.groupby>` for supported
+        aggregations.
 
         Returns
         -------
         A Series or DataFrame containing the combined results of the
-        aggregation.
+        aggregation(s).
 
         Examples
         --------
