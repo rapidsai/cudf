@@ -47,6 +47,7 @@ with open(log_file, "r") as log:
             )
             start = int(entry[0])
             end = int(entry[1])
+            # logic based on ninjatracing
             if end < last:
                 files = {}
             last = end
@@ -149,7 +150,7 @@ def assign_entries_to_threads(entries):
 # output chart results in HTML format
 def output_html(entries, sorted_list, args):
     print("<html><head><title>Chart Ninja Build Times</title>")
-    # Note: Jenkins does not support style defined in the html
+    # Note: Jenkins does not support javascript nor style defined in the html
     # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
     print("</head><body>")
     if args.msg is not None:
@@ -170,8 +171,7 @@ def output_html(entries, sorted_list, args):
     print("<table id='chart' width='1000px' bgcolor='#BBBBBB'>")
     for tid in range(len(threads)):
         names = threads[tid]
-
-        # sort the names for this tid by start time
+        # sort the names for this thread by start time
         names = sorted(names, key=lambda k: entries[k][0])
 
         # use the last entry's end time as the total row size
@@ -185,8 +185,9 @@ def output_html(entries, sorted_list, args):
             sep="",
         )
 
-        prev_end = 0
-        # write out each entry into a single table row
+        prev_end = 0  # used for spacing between entries
+
+        # write out each entry for this thread as a column for a single row
         for name in names:
             entry = entries[name]
             start = entry[0]
@@ -224,18 +225,17 @@ def output_html(entries, sorted_list, args):
 
             # compute the pixel width based on build-time
             size = max(time_to_width(build_time, end_time), 2)
-            # output table column for this entry
+            # output the column for this entry
             print("<td height='20px' width='", size, "px' ", sep="", end="")
             # title text is shown as hover-text by most browsers
             print(color, "title='", end="")
             print(name, "\n", build_time_str, "' ", sep="", end="")
             # centers the name if it fits in the box
             print("align='center' nowrap>", end="")
-            # slightly smaller, fixed-width font
+            # use a slightly smaller, fixed-width font
             print("<font size='-1' face='courier'>", end="")
 
-            # add file-name to the box if it fits
-            # otherwise, truncate the name
+            # add the file-name if it fits, otherwise, truncate the name
             file_name = os.path.basename(name)
             if len(file_name) + 3 > size / 8:
                 abbr_size = int(size / 8) - 3
@@ -245,7 +245,7 @@ def output_html(entries, sorted_list, args):
                 print(file_name, end="")
             # done with this entry
             print("</font></td>")
-            # update entry with just the computed output info
+            # update the entry with just the computed output info
             entries[name] = (build_time_str, color, entry[2])
 
         # add a filler column at the end of each row
@@ -266,9 +266,9 @@ def output_html(entries, sorted_list, args):
         entry = entries[name]
         build_time_str = entry[0]
         color = entry[1]
+        file_size = entry[2]
 
         # format file size
-        file_size = entry[2]
         file_size_str = ""
         if file_size > 1000000:
             file_size_str = "{:.3f} MB".format(file_size / 1000000)
@@ -278,18 +278,10 @@ def output_html(entries, sorted_list, args):
             file_size_str = str(file_size) + " bytes"
 
         # output entry row
-        print(
-            "<tr ",
-            color,
-            "><td>",
-            name,
-            "</td><td align='right'>",
-            build_time_str,
-            "</td><td align='right'>",
-            file_size_str,
-            "</td></tr>",
-            sep="",
-        )
+        print("<tr ", color, "><td>", name, "</td>", sep="", end="")
+        print("<td align='right'>", build_time_str, "</td>", sep="", end="")
+        print("<td align='right'>", file_size_str, "</td></tr>", sep="")
+
     print("</table><br/>")
 
     # include summary table with color legend
