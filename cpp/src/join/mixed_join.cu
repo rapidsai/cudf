@@ -40,7 +40,7 @@ namespace {
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
  */
-struct make_pair_function2 {
+struct make_pair_function_semi {
   __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
   {
     // The value is irrelevant since we only ever use the hash map to check for
@@ -50,16 +50,24 @@ struct make_pair_function2 {
 };
 
 /**
- * @brief Equality comparator that always evaluates to false.
- *
- * Used to force all input rows to exist independently.
+ * @brief Equality comparator that composes two row_equality comparators.
  */
-struct false_comparator {
-  __device__ bool operator()([[maybe_unused]] size_type lhs_row_index,
-                             [[maybe_unused]] size_type rhs_row_index) const noexcept
+class double_row_equality {
+ public:
+  double_row_equality(row_equality equality_comparator, row_equality conditional_comparator)
+    : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
   {
-    return false;
   }
+
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  {
+    return _equality_comparator(lhs_row_index, rhs_row_index) &&
+           _conditional_comparator(lhs_row_index, rhs_row_index);
+  }
+
+ private:
+  row_equality _equality_comparator;
+  row_equality _conditional_comparator;
 };
 
 }  // namespace
@@ -529,10 +537,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto& probe     = swap_tables ? right_equality : left_equality;
-  auto& build     = swap_tables ? left_equality : right_equality;
-  auto probe_view = table_device_view::create(probe, stream);
-  auto build_view = table_device_view::create(build, stream);
+  auto& probe                  = swap_tables ? right_equality : left_equality;
+  auto& build                  = swap_tables ? left_equality : right_equality;
+  auto probe_view              = table_device_view::create(probe, stream);
+  auto build_view              = table_device_view::create(build, stream);
+  auto left_conditional_view   = table_device_view::create(left_conditional, stream);
+  auto right_conditional_view  = table_device_view::create(right_conditional, stream);
+  auto& build_conditional_view = swap_tables ? left_conditional_view : right_conditional_view;
   row_equality equality_probe{
     cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
@@ -549,13 +560,19 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const build_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
   row_hash const hash_build{build_nulls, *build_view};
   // Since we may see multiple rows that are identical in the equality tables
-  // but differ in the conditional tables, we must force insertion of all the
-  // rows from the equality table into the hash table. When probing, using the
-  // appropriate hash function will lead to a probe hit, at which point the
-  // probing equality comparator must perform the proper comparison to filter
-  // out non-matches.
-  false_comparator equality_build{};
-  make_pair_function2 pair_func_build{};
+  // but differ in the conditional tables, the equality comparator used for
+  // insertion must account for both sets of tables. An alternative solution
+  // would be to use a multimap, but that solution would store duplicates where
+  // equality and conditional rows are equal, so this approach is preferable.
+  // One way to make this solution even more efficient would be to only include
+  // the columns of the conditional table that are used by the expression, but
+  // that requires additional plumbing through the AST machinery and is out of
+  // scope for now.
+  row_equality equality_build_equality{build_nulls, *build_view, *build_view, compare_nulls};
+  row_equality equality_build_conditional{
+    build_nulls, *build_conditional_view, *build_conditional_view, compare_nulls};
+  double_row_equality equality_build{equality_build_equality, equality_build_conditional};
+  make_pair_function_semi pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
@@ -573,9 +590,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   }
 
   auto hash_table_view = hash_table.get_device_view();
-
-  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
-  auto right_conditional_view = table_device_view::create(right_conditional, stream);
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
@@ -765,10 +779,13 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto& probe     = swap_tables ? right_equality : left_equality;
-  auto& build     = swap_tables ? left_equality : right_equality;
-  auto probe_view = table_device_view::create(probe, stream);
-  auto build_view = table_device_view::create(build, stream);
+  auto& probe                  = swap_tables ? right_equality : left_equality;
+  auto& build                  = swap_tables ? left_equality : right_equality;
+  auto probe_view              = table_device_view::create(probe, stream);
+  auto build_view              = table_device_view::create(build, stream);
+  auto left_conditional_view   = table_device_view::create(left_conditional, stream);
+  auto right_conditional_view  = table_device_view::create(right_conditional, stream);
+  auto& build_conditional_view = swap_tables ? left_conditional_view : right_conditional_view;
   row_equality equality_probe{
     cudf::nullate::DYNAMIC{has_nulls}, *probe_view, *build_view, compare_nulls};
 
@@ -785,13 +802,19 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   auto const build_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(build)};
   row_hash const hash_build{build_nulls, *build_view};
   // Since we may see multiple rows that are identical in the equality tables
-  // but differ in the conditional tables, we must force insertion of all the
-  // rows from the equality table into the hash table. When probing, using the
-  // appropriate hash function will lead to a probe hit, at which point the
-  // probing equality comparator must perform the proper comparison to filter
-  // out non-matches.
-  false_comparator equality_build{};
-  make_pair_function2 pair_func_build{};
+  // but differ in the conditional tables, the equality comparator used for
+  // insertion must account for both sets of tables. An alternative solution
+  // would be to use a multimap, but that solution would store duplicates where
+  // equality and conditional rows are equal, so this approach is preferable.
+  // One way to make this solution even more efficient would be to only include
+  // the columns of the conditional table that are used by the expression, but
+  // that requires additional plumbing through the AST machinery and is out of
+  // scope for now.
+  row_equality equality_build_equality{build_nulls, *build_view, *build_view, compare_nulls};
+  row_equality equality_build_conditional{
+    build_nulls, *build_conditional_view, *build_conditional_view, compare_nulls};
+  double_row_equality equality_build{equality_build_equality, equality_build_conditional};
+  make_pair_function_semi pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
@@ -809,9 +832,6 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   }
 
   auto hash_table_view = hash_table.get_device_view();
-
-  auto left_conditional_view  = table_device_view::create(left_conditional, stream);
-  auto right_conditional_view = table_device_view::create(right_conditional, stream);
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
