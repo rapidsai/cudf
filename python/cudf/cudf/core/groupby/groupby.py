@@ -185,7 +185,7 @@ class GroupBy(Serializable):
         ----------
         func : str, callable, list or dict
             Argument specifying the aggregation(s) to perform on the
-            groups. `func` can be any of the following types:
+            groups. `func` can be any of the following:
 
               - string: the name of a supported aggregation
               - callable: a function that accepts a Series/DataFrame and
