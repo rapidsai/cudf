@@ -1548,7 +1548,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     cudf.core.index.as_index(out.index._values)
                 )
 
-        # Reassign precision for any decimal cols
+        # Reassign precision for any decimal & struct cols
         for name, col in out._data.items():
             if isinstance(
                 col,
