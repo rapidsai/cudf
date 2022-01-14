@@ -27,9 +27,14 @@
 
 class Compaction : public cudf::benchmark {
 };
+class HashCompaction : public cudf::benchmark {
+};
 
-template <typename Type>
-void BM_compaction(benchmark::State& state)
+enum class algorithm { SORT_BASED, HASH_BASED };
+
+template <typename Type, algorithm Algo>
+void BM_compaction(benchmark::State& state,
+                   cudf::duplicate_keep_option keep = cudf::duplicate_keep_option::KEEP_FIRST)
 {
   auto const n_rows = static_cast<cudf::size_type>(state.range(0));
 
@@ -45,26 +50,63 @@ void BM_compaction(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::unordered_drop_duplicates(input_table, {0});
+    auto const result = [&]() {
+      if constexpr (Algo == algorithm::HASH_BASED) {
+        return cudf::unordered_drop_duplicates(input_table, {0});
+      } else {
+        return cudf::drop_duplicates(input_table, {0}, keep);
+      }
+    }();
   }
 }
 
-// TYPE
-#define RBM_BENCHMARK_DEFINE(name, type)                                                           \
-  BENCHMARK_DEFINE_F(Compaction, name)(::benchmark::State & state) { BM_compaction<type>(state); } \
-  BENCHMARK_REGISTER_F(Compaction, name)                                                           \
-    ->UseManualTime()                                                                              \
-    ->Arg(10000)    /* 10k */                                                                      \
-    ->Arg(100000)   /* 100k */                                                                     \
-    ->Arg(1000000)  /* 1M */                                                                       \
+#define concat(a, b, c) a##b##c
+#define get_keep(op)    cudf::duplicate_keep_option::KEEP_##op
+
+// TYPE, OP
+#define SORT_BENCHMARK_DEFINE(name, type, keep)                        \
+  BENCHMARK_DEFINE_F(Compaction, name)(::benchmark::State & state)     \
+  {                                                                    \
+    BM_compaction<type, algorithm::SORT_BASED>(state, get_keep(keep)); \
+  }                                                                    \
+  BENCHMARK_REGISTER_F(Compaction, name)                               \
+    ->UseManualTime()                                                  \
+    ->Arg(10000)    /* 10k */                                          \
+    ->Arg(100000)   /* 100k */                                         \
+    ->Arg(1000000)  /* 1M */                                           \
     ->Arg(10000000) /* 10M */
 
-#define COMPACTION_BENCHMARK_DEFINE(type) RBM_BENCHMARK_DEFINE(type, type)
+#define COMPACTION_BENCHMARK_DEFINE(type, keep) \
+  SORT_BENCHMARK_DEFINE(concat(type, _, keep), type, keep)
 
-COMPACTION_BENCHMARK_DEFINE(bool);
-COMPACTION_BENCHMARK_DEFINE(int8_t);
-COMPACTION_BENCHMARK_DEFINE(int32_t);
-COMPACTION_BENCHMARK_DEFINE(int64_t);
+// TYPE
+#define HASH_BENCHMARK_DEFINE(type)                                    \
+  BENCHMARK_DEFINE_F(HashCompaction, type)(::benchmark::State & state) \
+  {                                                                    \
+    BM_compaction<type, algorithm::HASH_BASED>(state);                 \
+  }                                                                    \
+  BENCHMARK_REGISTER_F(HashCompaction, type)                           \
+    ->UseManualTime()                                                  \
+    ->Arg(10000)    /* 10k */                                          \
+    ->Arg(100000)   /* 100k */                                         \
+    ->Arg(1000000)  /* 1M */                                           \
+    ->Arg(10000000) /* 10M */
+
+#define HASH_COMPACTION_BENCHMARK_DEFINE(type) HASH_BENCHMARK_DEFINE(type)
+
 using cudf::timestamp_ms;
-COMPACTION_BENCHMARK_DEFINE(timestamp_ms);
-COMPACTION_BENCHMARK_DEFINE(float);
+
+COMPACTION_BENCHMARK_DEFINE(bool, NONE);
+COMPACTION_BENCHMARK_DEFINE(int8_t, NONE);
+COMPACTION_BENCHMARK_DEFINE(int32_t, NONE);
+COMPACTION_BENCHMARK_DEFINE(int32_t, FIRST);
+COMPACTION_BENCHMARK_DEFINE(int32_t, LAST);
+COMPACTION_BENCHMARK_DEFINE(timestamp_ms, NONE);
+COMPACTION_BENCHMARK_DEFINE(float, NONE);
+
+HASH_COMPACTION_BENCHMARK_DEFINE(bool);
+HASH_COMPACTION_BENCHMARK_DEFINE(int8_t);
+HASH_COMPACTION_BENCHMARK_DEFINE(int32_t);
+HASH_COMPACTION_BENCHMARK_DEFINE(int64_t);
+HASH_COMPACTION_BENCHMARK_DEFINE(timestamp_ms);
+HASH_COMPACTION_BENCHMARK_DEFINE(float);
