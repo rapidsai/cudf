@@ -178,9 +178,9 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   cudf::size_type length = 10000);
 
 template <typename T>
-auto make_decimal128_arrow_array(std::vector<T> const& data,
-                                 std::optional<std::vector<int>> const& nulls,
-                                 int32_t scale) -> std::shared_ptr<arrow::Array>
+[[nodiscard]] auto make_decimal128_arrow_array(std::vector<T> const& data,
+                                               std::optional<std::vector<int>> const& nulls,
+                                               int32_t scale) -> std::shared_ptr<arrow::Array>
 {
   auto constexpr SIZE_OF_INT128  = 16;
   auto constexpr BIT_WIDTH_RATIO = SIZE_OF_INT128 / sizeof(T);
