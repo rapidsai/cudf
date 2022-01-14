@@ -66,26 +66,14 @@ struct ProtobufWriter::ProtobufFieldWriter {
   }
 
   /**
-   * @brief Function to write a string to the internal buffer
-   */
-  void field_string(int field, const std::string& value)
-  {
-    size_t len = value.length();
-    struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
-    struct_size += p->put_uint(len) + len;
-    p->put_bytes(value);
-  }
-
-  /**
    * @brief Function to write a blob to the internal buffer
    */
   template <typename T>
-  void field_blob(int field, const std::vector<T>& value)
+  void field_blob(int field, T const& values)
   {
-    size_t len = value.size();
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
-    struct_size += p->put_uint(len) + len;
-    p->put_bytes(value);
+    struct_size += p->put_uint(values.size());
+    struct_size += p->put_bytes(values);
   }
 
   /**
@@ -110,7 +98,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   void field_repeated_string(int field, const std::vector<std::string>& value)
   {
     for (const auto& elem : value)
-      field_string(field, elem);
+      field_blob(field, elem);
   }
 
   /**
