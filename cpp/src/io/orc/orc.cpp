@@ -213,11 +213,11 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          ColStatsBlob const* stats)
 {
   size_t sz = 0, lpos;
-  put_byte(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
+  put_uint(encode_field_number(1, PB_TYPE_FIXEDLEN));  // 1:RowIndex.entry
   lpos = m_buf->size();
-  put_byte(0xcd);                      // sz+2
-  put_byte(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:positions[packed=true]
-  put_byte(0xcd);                      // sz
+  put_byte(0xcd);                                      // sz+2
+  put_uint(encode_field_number(1, PB_TYPE_FIXEDLEN));  // 1:positions[packed=true]
+  put_byte(0xcd);                                      // sz
   if (present_blk >= 0) sz += put_uint(present_blk);
   if (present_ofs >= 0) {
     sz += put_uint(present_ofs);
@@ -249,7 +249,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   m_buf->data()[lpos + 2] = (uint8_t)(sz);
 
   if (stats != nullptr) {
-    sz += put_uint(2 * 8 + PB_TYPE_FIXEDLEN);
+    sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
     sz += put_uint(stats->size());
     sz += put_bytes(*stats);
   }

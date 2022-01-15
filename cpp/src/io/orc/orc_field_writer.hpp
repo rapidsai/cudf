@@ -41,7 +41,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_uint(int field, const T& value)
   {
-    struct_size += p->put_uint(field * 8 + PB_TYPE_VARINT);
+    struct_size += p->put_uint(encode_field_number<T>(field));
     struct_size += p->put_uint(static_cast<uint64_t>(value));
   }
 
@@ -52,7 +52,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_packed_uint(int field, const std::vector<T>& value)
   {
-    struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(encode_field_number<std::vector<T>>(field));
     auto lpos = p->m_buf->size();
     p->put_byte(0);
     auto sz = std::accumulate(value.begin(), value.end(), 0, [p = this->p](size_t sum, auto val) {
@@ -71,7 +71,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_blob(int field, T const& values)
   {
-    struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(encode_field_number<T>(field));
     struct_size += p->put_uint(values.size());
     struct_size += p->put_bytes(values);
   }
@@ -82,7 +82,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_struct(int field, const T& value)
   {
-    struct_size += p->put_uint((field)*8 + PB_TYPE_FIXEDLEN);
+    struct_size += p->put_uint(encode_field_number(field, PB_TYPE_FIXEDLEN));
     auto lpos = p->m_buf->size();
     p->put_byte(0);
     auto sz = p->write(value);
