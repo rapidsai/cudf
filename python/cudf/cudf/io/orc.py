@@ -395,7 +395,7 @@ def to_orc(
     df,
     fname,
     compression=None,
-    enable_statistics=True,
+    enable_statistics="ROWGROUP",
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,

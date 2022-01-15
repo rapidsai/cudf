@@ -74,7 +74,7 @@ def orc_reader_stripes_test(input_tuple, columns, stripes):
     data_handle=OrcWriter,
     params={
         "compression": [None, "snappy"],
-        "enable_statistics": [True, False],
+        "enable_statistics": ["NONE", "ROWGROUP"]
     },
 )
 def orc_writer_test(pdf, compression, enable_statistics):
