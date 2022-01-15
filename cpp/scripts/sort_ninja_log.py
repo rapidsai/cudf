@@ -233,12 +233,12 @@ def output_html(entries, sorted_list, args):
             # centers the name if it fits in the box
             print("align='center' nowrap>", end="")
             # use a slightly smaller, fixed-width font
-            print("<font size='-1' face='courier'>", end="")
+            print("<font size='-2' face='courier'>", end="")
 
             # add the file-name if it fits, otherwise, truncate the name
             file_name = os.path.basename(name)
-            if len(file_name) + 3 > size / 8:
-                abbr_size = int(size / 8) - 3
+            if len(file_name) + 3 > size / 7:
+                abbr_size = int(size / 7) - 3
                 if abbr_size > 1:
                     print(file_name[:abbr_size], "...", sep="", end="")
             else:
