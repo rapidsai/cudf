@@ -68,6 +68,8 @@ struct check_for_nan {
   cudf::column_device_view _input;
 };
 
+#define UNUSED(x) (void)(x)
+
 /**
  * @brief A structure to be used along with type_dispatcher to check if a
  * `column_view` has `NAN`.
@@ -110,6 +112,8 @@ struct has_nans {
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
   bool operator()(column_view const& input, rmm::cuda_stream_view stream)
   {
+    UNUSED(input);
+    UNUSED(stream);
     return false;
   }
 };

@@ -50,18 +50,16 @@ TYPED_TEST(DistinctCountCommon, NoNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
 
-  cudf::size_type expected = std::set<T>(input.begin(), input.end()).size();
+  cudf::size_type expected = std::set<double>(input.begin(), input.end()).size();
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 
-  /*
-  std::vector<T> input_data;
+  std::vector<double> input_data;
   std::copy(input.begin(), input.end(), std::back_inserter(input_data));
   auto const new_end      = std::unique(input_data.begin(), input_data.end());
   auto const gold_ordered = new_end - input_data.begin();
   EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::INCLUDE));
-  */
 }
 
 TYPED_TEST(DistinctCountCommon, TableNoNull)
@@ -88,11 +86,9 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
   cudf::size_type expected = std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
   EXPECT_EQ(expected, cudf::unordered_distinct_count(input_table, null_equality::EQUAL));
 
-  /*
   auto const new_end      = std::unique(pair_input.begin(), pair_input.end());
   auto const gold_ordered = new_end - pair_input.begin();
   EXPECT_EQ(gold_ordered, cudf::distinct_count(input_table, null_equality::EQUAL));
-  */
 }
 
 struct DistinctCount : public cudf::test::BaseFixture {
@@ -113,6 +109,10 @@ TEST_F(DistinctCount, WithNull)
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+
+  auto const new_end      = std::unique(input.begin(), input.end());
+  auto const gold_ordered = new_end - input.begin() - 3;
+  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::EXCLUDE));
 }
 
 TEST_F(DistinctCount, IgnoringNull)
@@ -132,11 +132,9 @@ TEST_F(DistinctCount, IgnoringNull)
     expected - 2,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 
-  /*
   auto const new_end      = std::unique(input.begin(), input.end());
   auto const gold_ordered = new_end - input.begin() - 5;
   EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::EXCLUDE));
-  */
 }
 
 TEST_F(DistinctCount, WithNansAndNull)
@@ -169,6 +167,7 @@ TEST_F(DistinctCount, WithNansOnly)
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+  EXPECT_EQ(expected, cudf::distinct_count(input_col, null_policy::INCLUDE));
 }
 
 TEST_F(DistinctCount, NansAsNullWithNoNull)
@@ -226,6 +225,7 @@ TEST_F(DistinctCount, EmptyColumn)
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(expected, cudf::distinct_count(input_col, null_policy::EXCLUDE));
 }
 
 TEST_F(DistinctCount, StringColumnWithNull)
