@@ -339,11 +339,10 @@ struct SparkMurmurHash3_32 {
   template <typename TKey>
   result_type __device__ inline compute(TKey const& key) const
   {
-    return compute_bytes(reinterpret_cast<int8_t const*>(&key), sizeof(TKey));
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(TKey));
   }
 
-  result_type CUDA_DEVICE_CALLABLE compute_bytes(int8_t const* const data,
-                                                 cudf::size_type const len) const
+  result_type __device__ compute_bytes(std::byte const* const data, cudf::size_type const len) const
   {
     int32_t const nblocks = len / 4;
     uint32_t h1           = m_seed;
@@ -366,7 +365,7 @@ struct SparkMurmurHash3_32 {
     // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
     // (does not conform to normal MurmurHash3)
     for (int i = nblocks * 4; i < len; i++) {
-      uint32_t k1 = data[i];
+      uint32_t k1 = std::to_integer<int8_t>(data[i]);
       k1 *= c1;
       k1 = rotl32(k1, 15);
       k1 *= c2;
@@ -439,14 +438,14 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
   // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
   __int128_t const val     = key.value();
   cudf::size_type key_size = sizeof(__int128_t);
-  int8_t const* data       = reinterpret_cast<int8_t const*>(&val);
+  std::byte const* data    = reinterpret_cast<std::byte const*>(&val);
 
   // Extract the first bit of the key, which holds the sign.
-  int8_t const sign_bit = data[key_size - 1] & 0x80;
+  std::byte const sign_bit = data[key_size - 1] & static_cast<std::byte>(0x80);
 
   // Small negative values start with 0xff..., small positive values start with 0x00...
-  int8_t const zero_value = sign_bit ? 0xff : 0x00;
-
+  std::byte const zero_value = std::to_integer<uint8_t>(sign_bit) ? static_cast<std::byte>(0xff)
+                                                                  : static_cast<std::byte>(0x00);
   // Special cases for 0 and -1 which do not shorten correctly.
   if (val == 0) { return this->compute(static_cast<uint8_t>(0)); }
   if (val == static_cast<__int128>(-1)) { return this->compute(static_cast<uint8_t>(0xFF)); }
@@ -456,22 +455,25 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
   auto const reverse_begin = thrust::reverse_iterator(data + key_size);
   auto const reverse_end   = thrust::reverse_iterator(data);
   auto const first_nonzero_byte =
-    thrust::find_if_not(thrust::device, reverse_begin, reverse_end, [zero_value](int8_t const& v) {
-      return v == zero_value;
-    }).base();
+    thrust::find_if_not(thrust::device,
+                        reverse_begin,
+                        reverse_end,
+                        [zero_value](std::byte const& v) { return v == zero_value; })
+      .base();
   cudf::size_type length = thrust::distance(data, first_nonzero_byte);
 
   // Preserve the 2's complement sign bit by adding a byte back on if necessary
   // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign bit
   // 0x00007F would shorten to 0x7f -- no extra byte because the leftmost bit matches the sign bit
   // similarly for negative values 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80
-  if ((length < key_size) && (sign_bit ^ (data[length - 1] & static_cast<int8_t>(0x80)))) {
+  if ((length < key_size) &&
+      std::to_integer<uint8_t>(sign_bit ^ (data[length - 1] & static_cast<std::byte>(0x80)))) {
     ++length;
   }
 
   // Convert to big endian by reversing the range of nonzero bytes. Only those bytes are hashed.
   __int128_t big_endian_value = 0;
-  auto big_endian_data        = reinterpret_cast<int8_t*>(&big_endian_value);
+  auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
   thrust::reverse_copy(thrust::device, data, data + length, big_endian_data);
   return this->compute_bytes(big_endian_data, length);
 }
