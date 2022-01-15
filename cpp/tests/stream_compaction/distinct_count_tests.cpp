@@ -14,24 +14,27 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <cmath>
-#include <ctgmath>
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <algorithm>
+#include <cmath>
+#include <ctgmath>
+
 using cudf::nan_policy;
 using cudf::null_equality;
 using cudf::null_policy;
+
 template <typename T>
 struct DistinctCountCommon : public cudf::test::BaseFixture {
 };
@@ -47,10 +50,18 @@ TYPED_TEST(DistinctCountCommon, NoNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
 
-  cudf::size_type expected = std::set<double>(input.begin(), input.end()).size();
+  cudf::size_type expected = std::set<T>(input.begin(), input.end()).size();
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+
+  /*
+  std::vector<T> input_data;
+  std::copy(input.begin(), input.end(), std::back_inserter(input_data));
+  auto const new_end      = std::unique(input_data.begin(), input_data.end());
+  auto const gold_ordered = new_end - input_data.begin();
+  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::INCLUDE));
+  */
 }
 
 TYPED_TEST(DistinctCountCommon, TableNoNull)
@@ -58,9 +69,9 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
   using T = TypeParam;
 
   auto const input1 = cudf::test::make_type_param_vector<T>(
-    {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
+    {1, 3, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
   auto const input2 = cudf::test::make_type_param_vector<T>(
-    {3, 3, 4, 31, 1, 8, 5, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1});
+    {3, 3, 3, 4, 31, 1, 8, 5, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1});
 
   std::vector<std::pair<T, T>> pair_input;
   std::transform(
@@ -76,6 +87,12 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
 
   cudf::size_type expected = std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
   EXPECT_EQ(expected, cudf::unordered_distinct_count(input_table, null_equality::EQUAL));
+
+  /*
+  auto const new_end      = std::unique(pair_input.begin(), pair_input.end());
+  auto const gold_ordered = new_end - pair_input.begin();
+  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_table, null_equality::EQUAL));
+  */
 }
 
 struct DistinctCount : public cudf::test::BaseFixture {
@@ -86,8 +103,8 @@ TEST_F(DistinctCount, WithNull)
   using T = int32_t;
 
   // Considering 70 as null
-  std::vector<T> input = {1, 3, 3, 70, 31, 1, 8, 2, 0, 70, 1, 70, 10, 40, 31, 42, 0, 42, 8, 5, 70};
-  std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1,
+  std::vector<T> input = {1, 3, 3, 70, 31, 1, 8, 2, 0, 70, 70, 70, 10, 40, 31, 42, 0, 42, 8, 5, 70};
+  std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
@@ -114,6 +131,12 @@ TEST_F(DistinctCount, IgnoringNull)
   EXPECT_EQ(
     expected - 2,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
+
+  /*
+  auto const new_end      = std::unique(input.begin(), input.end());
+  auto const gold_ordered = new_end - input.begin() - 5;
+  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::EXCLUDE));
+  */
 }
 
 TEST_F(DistinctCount, WithNansAndNull)

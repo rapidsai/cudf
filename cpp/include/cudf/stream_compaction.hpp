@@ -280,13 +280,10 @@ std::unique_ptr<table> unordered_drop_duplicates(
  *
  * @param[in] input View of the input column
  * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not
  *
  * @return number of consecutive groups in the column
  */
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling);
+cudf::size_type distinct_count(column_view const& input, null_policy null_handling);
 
 /**
  * @brief Count the number of consecutive groups of equivalent elements in a table.

@@ -38,6 +38,82 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+/**
+ * @brief Functor to check for `NAN` at an index in a `column_device_view`.
+ *
+ * @tparam T The type of `column_device_view`
+ */
+template <typename T>
+struct check_for_nan {
+  /*
+   * @brief Construct from a column_device_view.
+   *
+   * @param[in] input The `column_device_view`
+   */
+  check_for_nan(cudf::column_device_view input) : _input{input} {}
+
+  /**
+   * @brief Operator to be called to check for `NAN` at `index` in `_input`
+   *
+   * @param[in] index The index at which the `NAN` needs to be checked in `input`
+   *
+   * @returns bool true if value at `index` is `NAN` and not null, else false
+   */
+  __device__ bool operator()(size_type index) const noexcept
+  {
+    return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
+  }
+
+  cudf::column_device_view _input;
+};
+
+/**
+ * @brief A structure to be used along with type_dispatcher to check if a
+ * `column_view` has `NAN`.
+ */
+struct has_nans {
+  /**
+   * @brief Checks if `input` has `NAN`
+   *
+   * @note This will be applicable only for floating point type columns.
+   *
+   * @param[in] input The `column_view` which will be checked for `NAN`
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @returns bool true if `input` has `NAN` else false
+   */
+  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
+  {
+    auto input_device_view = cudf::column_device_view::create(input, stream);
+    auto device_view       = *input_device_view;
+    auto count             = thrust::count_if(rmm::exec_policy(stream),
+                                  thrust::counting_iterator<cudf::size_type>(0),
+                                  thrust::counting_iterator<cudf::size_type>(input.size()),
+                                  check_for_nan<T>(device_view));
+    return count > 0;
+  }
+
+  /**
+   * @brief Checks if `input` has `NAN`
+   *
+   * @note This will be applicable only for non-floating point type columns. And
+   * non-floating point columns can never have `NAN`, so it will always return
+   * false
+   *
+   * @param[in] input The `column_view` which will be checked for `NAN`
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @returns bool Always false as non-floating point columns can't have `NAN`
+   */
+  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
+  {
+    return false;
+  }
+};
+}  // namespace
 
 cudf::size_type distinct_count(table_view const& keys,
                                null_equality nulls_equal,
@@ -100,91 +176,37 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
   return count;
 }
 
-/**
- * @brief Functor to check for `NAN` at an index in a `column_device_view`.
- *
- * @tparam T The type of `column_device_view`
- */
-template <typename T>
-struct check_for_nan {
-  /*
-   * @brief Construct from a column_device_view.
-   *
-   * @param[in] input The `column_device_view`
-   */
-  check_for_nan(cudf::column_device_view input) : _input{input} {}
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               rmm::cuda_stream_view stream)
+{
+  auto const num_rows = input.size();
 
-  /**
-   * @brief Operator to be called to check for `NAN` at `index` in `_input`
-   *
-   * @param[in] index The index at which the `NAN` needs to be checked in `input`
-   *
-   * @returns bool true if value at `index` is `NAN` and not null, else false
-   */
-  __device__ bool operator()(size_type index)
-  {
-    return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
-  }
+  if (0 == num_rows || input.null_count() == num_rows) { return 0; }
 
- protected:
-  cudf::column_device_view _input;
-};
+  auto input_device_view = cudf::column_device_view::create(input, stream);
+  auto device_view       = *input_device_view;
+  auto count_nulls       = null_handling == null_policy::INCLUDE;
+  auto t_view            = table_view{{input}};
+  auto table_ptr         = cudf::table_device_view::create(t_view, stream);
+  row_equality_comparator comp(
+    nullate::DYNAMIC{cudf::has_nulls(t_view)}, *table_ptr, *table_ptr, null_equality::EQUAL);
 
-/**
- * @brief A structure to be used along with type_dispatcher to check if a
- * `column_view` has `NAN`.
- */
-struct has_nans {
-  /**
-   * @brief Checks if `input` has `NAN`
-   *
-   * @note This will be applicable only for floating point type columns.
-   *
-   * @param[in] input The `column_view` which will be checked for `NAN`
-   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @returns bool true if `input` has `NAN` else false
-   */
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
-  {
-    auto input_device_view = cudf::column_device_view::create(input, stream);
-    auto device_view       = *input_device_view;
-    auto count             = thrust::count_if(rmm::exec_policy(stream),
-                                  thrust::counting_iterator<cudf::size_type>(0),
-                                  thrust::counting_iterator<cudf::size_type>(input.size()),
-                                  check_for_nan<T>(device_view));
-    return count > 0;
-  }
+  return thrust::count_if(rmm::exec_policy(stream),
+                          thrust::counting_iterator<cudf::size_type>(0),
+                          thrust::counting_iterator<cudf::size_type>(num_rows),
+                          [count_nulls, device_view, comp] __device__(cudf::size_type i) {
+                            if ((not count_nulls) and device_view.is_null(i)) { return false; }
+                            return (i == 0 || not comp(i, i - 1));
+                          });
+}
 
-  /**
-   * @brief Checks if `input` has `NAN`
-   *
-   * @note This will be applicable only for non-floating point type columns. And
-   * non-floating point columns can never have `NAN`, so it will always return
-   * false
-   *
-   * @param[in] input The `column_view` which will be checked for `NAN`
-   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @returns bool Always false as non-floating point columns can't have `NAN`
-   */
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
-  {
-    return false;
-  }
-};
-
-template <bool unordered>
-cudf::size_type col_distinct_count(column_view const& input,
-                                   null_policy null_handling,
-                                   nan_policy nan_handling,
-                                   rmm::cuda_stream_view stream)
+cudf::size_type unordered_distinct_count(column_view const& input,
+                                         null_policy null_handling,
+                                         nan_policy nan_handling,
+                                         rmm::cuda_stream_view stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
-
-  cudf::size_type nrows = input.size();
 
   bool has_nan = false;
   // Check for Nans
@@ -196,12 +218,7 @@ cudf::size_type col_distinct_count(column_view const& input,
     has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
-  auto count = [&]() {
-    if constexpr (unordered) {
-      return detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
-    }
-    return detail::distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
-  }();
+  auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // if nan is considered null and there are already null values
   if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and input.has_nulls()) --count;
@@ -211,32 +228,12 @@ cudf::size_type col_distinct_count(column_view const& input,
   else
     return count;
 }
-
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling,
-                               rmm::cuda_stream_view stream)
-{
-  auto constexpr unordered = false;
-  return col_distinct_count<unordered>(input, null_handling, nan_handling, stream);
-}
-
-cudf::size_type unordered_distinct_count(column_view const& input,
-                                         null_policy null_handling,
-                                         nan_policy nan_handling,
-                                         rmm::cuda_stream_view stream)
-{
-  auto constexpr unordered = true;
-  return col_distinct_count<unordered>(input, null_handling, nan_handling, stream);
-}
 }  // namespace detail
 
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling)
+cudf::size_type distinct_count(column_view const& input, null_policy null_handling)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, null_handling, nan_handling);
+  return detail::distinct_count(input, null_handling);
 }
 
 cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
