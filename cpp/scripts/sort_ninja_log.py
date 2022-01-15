@@ -149,7 +149,7 @@ def assign_entries_to_threads(entries):
 
 # output chart results in HTML format
 def output_html(entries, sorted_list, args):
-    print("<html><head><title>Chart Ninja Build Times</title>")
+    print("<html><head><title>Build Metrics Report</title>")
     # Note: Jenkins does not support javascript nor style defined in the html
     # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
     print("</head><body>")
