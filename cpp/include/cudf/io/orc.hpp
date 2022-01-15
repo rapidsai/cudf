@@ -839,11 +839,6 @@ class chunked_orc_writer_options {
   compression_type get_compression() const { return _compression; }
 
   /**
-   * @brief Whether writing column statistics is enabled/disabled.
-   */
-  bool is_enabled_statistics() const { return _stats_freq != statistics_freq::STATISTICS_NONE; }
-
-  /**
    * @brief Returns granularity of statistics collection.
    */
   statistics_freq get_statistics_freq() const { return _stats_freq; }
