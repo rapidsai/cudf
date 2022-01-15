@@ -20,6 +20,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/row_operator2.cuh>
+#include <cudf/table/row_operator3.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -60,8 +61,10 @@ std::unique_ptr<column> sorted_order2(
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto device_table     = table_device_view::create(input, stream);
-  auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
+  auto device_table = table_device_view::create(input, stream);
+  // auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
+  auto const comparator =
+    row_lexicographic_comparator3(nullate::DYNAMIC{true}, *device_table, *device_table);
 
   thrust::sort(rmm::exec_policy(stream),
                mutable_indices_view.begin<size_type>(),
