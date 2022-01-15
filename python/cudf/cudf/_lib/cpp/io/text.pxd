@@ -5,6 +5,12 @@ from libcpp.string cimport string
 
 from cudf._lib.cpp.column.column cimport column
 
+cdef extern from "cudf/io/text/byte_range_info.hpp" \
+        namespace "cudf::io::text" nogil:
+    
+    cdef cppclass byte_range_info:
+        byte_range_info() except +
+        byte_range_info(size_t offset, size_t size) except +
 
 cdef extern from "cudf/io/text/data_chunk_source.hpp" \
         namespace "cudf::io::text" nogil:
@@ -25,3 +31,7 @@ cdef extern from "cudf/io/text/multibyte_split.hpp" \
 
     unique_ptr[column] multibyte_split(data_chunk_source source,
                                        string delimiter) except +
+
+    unique_ptr[column] multibyte_split(data_chunk_source source,
+                                       string delimiter,
+                                       byte_range_info byte_range) except +

@@ -26,8 +26,12 @@ namespace io {
 namespace text {
 
 struct byte_range_info {
+ public:
   size_t offset;
   size_t size;
+
+  byte_range_info() : offset(0), size(0) {}
+  byte_range_info(size_t offset, size_t size) : offset(offset), size(size) {}
 
   static std::vector<byte_range_info> create_consecutive(size_t total_bytes, size_t range_count)
   {
@@ -44,10 +48,7 @@ struct byte_range_info {
     return ranges;
   }
 
-  static byte_range_info whole_source()
-  {
-    return {0, std::numeric_limits<size_t>::max()};
-  }
+  static byte_range_info whole_source() { return {0, std::numeric_limits<size_t>::max()}; }
 };
 
 }  // namespace text

@@ -777,4 +777,4 @@ def test_read_text(datadir):
 
     actual = cudf.read_text(chess_file, delimiter=delimiter)
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_index_type=False)
