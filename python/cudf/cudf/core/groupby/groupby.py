@@ -1190,7 +1190,7 @@ class GroupBy(Serializable):
 
         result = self.obj.__class__._from_data(
             *self._groupby.shift(
-                cudf.core.frame.Frame(value_columns), periods, fill_value
+                cudf.core.frame.Frame(value_columns._data), periods, fill_value
             )
         )
         result = self._mimic_pandas_order(result)
@@ -1256,9 +1256,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     --------
     >>> import cudf
     >>> import pandas as pd
-    >>> df = cudf.DataFrame({'Animal': ['Falcon', 'Falcon',
-    ...                               'Parrot', 'Parrot'],
-    ...                    'Max Speed': [380., 370., 24., 26.]})
+    >>> df = cudf.DataFrame({
+    ...     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+    ...     'Max Speed': [380., 370., 24., 26.],
+    ... })
     >>> df
        Animal  Max Speed
     0  Falcon      380.0
@@ -1272,10 +1273,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     Parrot       25.0
 
     >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
-    ... ['Captive', 'Wild', 'Captive', 'Wild']]
+    ...           ['Captive', 'Wild', 'Captive', 'Wild']]
     >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
     >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
-            index=index)
+    ...     index=index)
     >>> df
                     Max Speed
     Animal Type
@@ -1299,7 +1300,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            self.grouping, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
     def nunique(self):

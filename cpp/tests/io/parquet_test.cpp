@@ -2021,9 +2021,6 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   cudf_io::parquet_writer_options args =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, table);
 
-  // verify failure if no decimal precision given
-  EXPECT_THROW(cudf_io::write_parquet(args), cudf::logic_error);
-
   cudf_io::table_input_metadata expected_metadata(table);
 
   // verify failure if too small a precision is given

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -30,6 +30,10 @@ project(
 rapids_cmake_build_type(Release)
 
 # ##################################################################################################
+# * conda environment -----------------------------------------------------------------------------
+rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
+
+# ##################################################################################################
 # * Build options
 option(BUILD_TESTS "Build tests for libcudf_kafka" ON)
 
@@ -55,7 +59,7 @@ endif()
 
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
-add_library(cudf_kafka SHARED src/kafka_consumer.cpp)
+add_library(cudf_kafka SHARED src/kafka_consumer.cpp src/kafka_callback.cpp)
 
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
@@ -67,6 +71,11 @@ target_include_directories(
 # ##################################################################################################
 # * library paths ---------------------------------------------------------------------------------
 target_link_libraries(cudf_kafka PUBLIC cudf::cudf RDKAFKA::RDKAFKA)
+
+# Add Conda library, and include paths if specified
+if(TARGET conda_env)
+  target_link_libraries(cudf_kafka PRIVATE conda_env)
+endif()
 
 set_target_properties(
   cudf_kafka
