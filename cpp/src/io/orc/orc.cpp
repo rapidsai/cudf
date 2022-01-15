@@ -250,6 +250,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
 
   if (stats != nullptr) {
     sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
+    // Statistics field contains its length as varint and dtype specific data (encoded on the GPU)
     sz += put_uint(stats->size());
     sz += put_bytes(*stats);
   }
