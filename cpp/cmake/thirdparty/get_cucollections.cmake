@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -21,7 +21,7 @@ function(find_and_configure_cucollections)
     cuco 0.0
     GLOBAL_TARGETS cuco::cuco
     CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG 193de1aa74f5721717f991ca757dc610c852bb17
+    GIT_TAG 922a87856aac17742fb964eeaf1b9bbc5d7a916e
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
 
