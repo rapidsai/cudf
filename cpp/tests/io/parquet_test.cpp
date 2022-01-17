@@ -222,9 +222,8 @@ using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
-// TODO: debug truncation errors for `timestamp_ns` and overflow errors for `timestamp_s` , see
-// issue #9393.
-using SupportedTimestampTypes = cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us>;
+using SupportedTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests

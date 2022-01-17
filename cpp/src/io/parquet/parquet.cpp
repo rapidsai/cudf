@@ -198,7 +198,8 @@ bool CompactProtocolReader::read(TimestampType* t)
 bool CompactProtocolReader::read(TimeUnit* u)
 {
   auto op = std::make_tuple(ParquetFieldUnion(1, u->isset.MILLIS, u->MILLIS),
-                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS));
+                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS),
+                            ParquetFieldUnion(3, u->isset.NANOS, u->NANOS));
   return function_builder(this, op);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,16 +65,20 @@ struct MilliSeconds {
 };
 struct MicroSeconds {
 };
+struct NanoSeconds {
+};
 typedef struct TimeUnit_isset {
-  TimeUnit_isset() : MILLIS(false), MICROS(false) {}
+  TimeUnit_isset() : MILLIS(false), MICROS(false), NANOS(false) {}
   bool MILLIS;
   bool MICROS;
+  bool NANOS;
 } TimeUnit_isset;
 
 struct TimeUnit {
   TimeUnit_isset isset;
   MilliSeconds MILLIS;
   MicroSeconds MICROS;
+  NanoSeconds NANOS;
 };
 
 struct TimeType {
