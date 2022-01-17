@@ -102,7 +102,7 @@ class memory_stats_logger {
 
   ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
 
-  [[nodiscard]] [[nodiscard]] [[nodiscard]] [[nodiscard]] size_t peak_memory_usage() const noexcept
+  [[nodiscard]] size_t peak_memory_usage() const noexcept
   {
     return statistics_mr.get_bytes_counter().peak;
   }
