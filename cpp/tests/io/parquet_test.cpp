@@ -385,7 +385,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
     sequence, sequence + num_rows, validity);
   table_view expected({col});
 
-  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
   cudf_io::write_parquet(out_opts);
