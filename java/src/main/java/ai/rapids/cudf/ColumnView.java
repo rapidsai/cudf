@@ -3274,7 +3274,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
    * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
    */
-  public static long getValidityBufferSize(int numRows) {
+  static long getValidityBufferSize(int numRows) {
     // number of bytes required = Math.ceil(number of bits / 8)
     long actualBytes = ((long) numRows + 7) >> 3;
     // padding to the multiplies of the padding boundary(64 bytes)
@@ -3697,7 +3697,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method to find the first (or last) index of each search key in the specified column,
    * in each row of a list column.
    * @param nativeView the column view handle of the list
-   * @param scalarColumnHandle handle to the search key column
+   * @param keyColumnHandle handle to the search key column
    * @param isFindFirst Whether to find the first index of the key, or the last.
    * @return column handle of the resultant column of int32 indices
    */

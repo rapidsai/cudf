@@ -875,14 +875,21 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private List<ColumnBuilder> childBuilders = new ArrayList<>();
     private Runnable nullHandler;
 
-    private int currentIndex = 0;
-    private long currentByteIndex = 0;
+    // The value of currentIndex can't exceed Int32.Max. Storing currentIndex as a long is to
+    // adapt HostMemoryBuffer.setXXX, which requires a long offset.
+    private long currentIndex = 0;
+    // Only for Strings: pointer of the byte (data) buffer
+    private int currentStringByteIndex = 0;
+    // Use bit shift instead of multiply to transform row offset to byte offset
+    private int bitShiftBySize = 0;
+    private static final int bitShiftByOffset = (int)(Math.log(OFFSET_SIZE) / Math.log(2));
 
     public ColumnBuilder(HostColumnVector.DataType type, long estimatedRows) {
       this.type = type.getType();
       this.nullable = type.isNullable();
       this.rows = 0;
-      this.estimatedRows = estimatedRows;
+      this.estimatedRows = Math.max(estimatedRows, 1L);
+      this.bitShiftBySize = (int)(Math.log(this.type.getSizeInBytes()) / Math.log(2));
 
       // initialize the null handler according to the data type
       this.setupNullHandler();
@@ -898,23 +905,20 @@ public final class HostColumnVector extends HostColumnVectorCore {
           this.growListBuffersAndRows();
           this.growValidBuffer();
           setNullAt(currentIndex++);
-          currentByteIndex += this.type.getSizeInBytes();
-          offsets.setInt((long) currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+          offsets.setInt(currentIndex << bitShiftByOffset, childBuilders.get(0).getCurrentIndex());
         };
       } else if (this.type == DType.STRING) {
         this.nullHandler = () -> {
           this.growStringBuffersAndRows(0);
           this.growValidBuffer();
           setNullAt(currentIndex++);
-          currentByteIndex += this.type.getSizeInBytes();
-          offsets.setInt((long) currentIndex * OFFSET_SIZE, (int) currentByteIndex);
+          offsets.setInt(currentIndex << bitShiftByOffset, currentStringByteIndex);
         };
       } else if (this.type == DType.STRUCT) {
         this.nullHandler = () -> {
           this.growStructBuffersAndRows();
           this.growValidBuffer();
           setNullAt(currentIndex++);
-          currentByteIndex += this.type.getSizeInBytes();
           for (ColumnBuilder childBuilder : childBuilders) {
             childBuilder.appendNull();
           }
@@ -924,7 +928,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
           this.growFixedWidthBuffersAndRows();
           this.growValidBuffer();
           setNullAt(currentIndex++);
-          currentByteIndex += this.type.getSizeInBytes();
         };
       }
     }
@@ -1011,11 +1014,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
       rows++;
 
       if (data == null) {
-        data = HostMemoryBuffer.allocate(estimatedRows * type.getSizeInBytes());
+        data = HostMemoryBuffer.allocate(estimatedRows << bitShiftBySize);
         rowCapacity = estimatedRows;
       } else if (rows > rowCapacity) {
         long newCap = Math.min(rowCapacity * 2, Integer.MAX_VALUE - 1);
-        data = copyBuffer(HostMemoryBuffer.allocate(newCap * type.getSizeInBytes()), data);
+        data = copyBuffer(HostMemoryBuffer.allocate(newCap << bitShiftBySize), data);
         rowCapacity = newCap;
       }
     }
@@ -1029,12 +1032,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
       rows++;
 
       if (offsets == null) {
-        offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
+        offsets = HostMemoryBuffer.allocate((estimatedRows + 1) << bitShiftByOffset);
         offsets.setInt(0, 0);
         rowCapacity = estimatedRows;
       } else if (rows > rowCapacity) {
         long newCap = Math.min(rowCapacity * 2, Integer.MAX_VALUE - 2);
-        offsets = copyBuffer(HostMemoryBuffer.allocate((newCap + 1) * OFFSET_SIZE), offsets);
+        offsets = copyBuffer(HostMemoryBuffer.allocate((newCap + 1) << bitShiftByOffset), offsets);
         rowCapacity = newCap;
       }
     }
@@ -1052,7 +1055,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       if (offsets == null) {
         // Initialize data buffer with at least 1 byte in case the first appended value is null.
         data = HostMemoryBuffer.allocate(Math.max(1, stringLength));
-        offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
+        offsets = HostMemoryBuffer.allocate((estimatedRows + 1) << bitShiftByOffset);
         offsets.setInt(0, 0);
         rowCapacity = estimatedRows;
         return;
@@ -1060,11 +1063,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
       if (rows > rowCapacity) {
         long newCap = Math.min(rowCapacity * 2, Integer.MAX_VALUE - 2);
-        offsets = copyBuffer(HostMemoryBuffer.allocate((newCap + 1) * OFFSET_SIZE), offsets);
+        offsets = copyBuffer(HostMemoryBuffer.allocate((newCap + 1) << bitShiftByOffset), offsets);
         rowCapacity = newCap;
       }
 
-      long currentLength = currentByteIndex + stringLength;
+      long currentLength = currentStringByteIndex + stringLength;
       if (currentLength > data.length) {
         long requiredLength = data.length;
         do {
@@ -1108,7 +1111,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * Method that sets the null bit in the validity vector
      * @param index the row index at which the null is marked
      */
-    private void setNullAt(int index) {
+    private void setNullAt(long index) {
       assert index < rows : "Index for null value should fit the column with " + rows + " rows";
       nullCount += BitVectorHelper.setNullAt(valid, index);
     }
@@ -1173,8 +1176,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public ColumnBuilder endList() {
       assert type.equals(DType.LIST);
       growListBuffersAndRows();
-      currentIndex++;
-      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+      offsets.setInt(++currentIndex << bitShiftByOffset, childBuilders.get(0).getCurrentIndex());
       return this;
     }
 
@@ -1230,20 +1232,19 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public int getCurrentIndex() {
-      return currentIndex;
+      return (int) currentIndex;
     }
 
-    public long getCurrentByteIndex() {
-      return currentByteIndex;
+    @Deprecated
+    public int getCurrentByteIndex() {
+      return currentStringByteIndex;
     }
 
     public final ColumnBuilder append(byte value) {
       growFixedWidthBuffersAndRows();
       assert type.isBackedByByte();
       assert currentIndex < rows;
-      data.setByte(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setByte(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1251,9 +1252,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growFixedWidthBuffersAndRows();
       assert type.isBackedByShort();
       assert currentIndex < rows;
-      data.setShort(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setShort(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1261,9 +1260,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growFixedWidthBuffersAndRows();
       assert type.isBackedByInt();
       assert currentIndex < rows;
-      data.setInt(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setInt(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1271,9 +1268,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growFixedWidthBuffersAndRows();
       assert type.isBackedByLong();
       assert currentIndex < rows;
-      data.setLong(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setLong(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1281,9 +1276,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growFixedWidthBuffersAndRows();
       assert type.equals(DType.FLOAT32);
       assert currentIndex < rows;
-      data.setFloat(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setFloat(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1291,9 +1284,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growFixedWidthBuffersAndRows();
       assert type.equals(DType.FLOAT64);
       assert currentIndex < rows;
-      data.setDouble(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setDouble(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1301,9 +1292,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growFixedWidthBuffersAndRows();
       assert type.equals(DType.BOOL8);
       assert currentIndex < rows;
-      data.setBoolean(currentByteIndex, value);
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
+      data.setBoolean(currentIndex++ << bitShiftBySize, value);
       return this;
     }
 
@@ -1313,19 +1302,16 @@ public final class HostColumnVector extends HostColumnVectorCore {
       // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
       BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
-        data.setInt(currentByteIndex, unscaledVal.intValueExact());
+        data.setInt(currentIndex++ << 2, unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
-        data.setLong(currentByteIndex, unscaledVal.longValueExact());
+        data.setLong(currentIndex++ << 3, unscaledVal.longValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
-        assert currentIndex < rows;
         byte[] unscaledValueBytes = value.unscaledValue().toByteArray();
         byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
-        data.setBytes(currentByteIndex, result, 0, result.length);
-      }  else {
+        data.setBytes(currentIndex++ << 4, result, 0, result.length);
+      } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
       }
-      currentIndex++;
-      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -1344,14 +1330,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert length >= 0;
       assert value.length + srcOffset <= length;
       assert type.equals(DType.STRING) : " type " + type + " is not String";
-      currentIndex++;
       growStringBuffersAndRows(length);
-      assert currentIndex < rows + 1;
+      assert currentIndex < rows;
       if (length > 0) {
-        data.setBytes(currentByteIndex, value, srcOffset, length);
+        data.setBytes(currentStringByteIndex, value, srcOffset, length);
       }
-      currentByteIndex += length;
-      offsets.setInt((long) currentIndex * OFFSET_SIZE, (int) currentByteIndex);
+      currentStringByteIndex += length;
+      offsets.setInt(++currentIndex << bitShiftByOffset, currentStringByteIndex);
       return this;
     }
 
