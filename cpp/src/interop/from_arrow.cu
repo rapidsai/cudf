@@ -188,13 +188,13 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
 
   auto data_buffer    = array.data()->buffers[1];
   auto const num_rows = static_cast<size_type>(array.length());
-
-  rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
+  auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto mutable_column_view = col->mutable_view();
 
   CUDA_TRY(cudaMemcpyAsync(
-    reinterpret_cast<uint8_t*>(out_buf.data()),
+    mutable_column_view.data<DeviceType>(),
     reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
-    out_buf.size() * sizeof(DeviceType),
+    sizeof(DeviceType) * num_rows,
     cudaMemcpyDefault,
     stream.value()));
 
@@ -213,7 +213,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
     return rmm::device_buffer{};
   }();
 
-  return std::make_unique<cudf::column>(type, num_rows, out_buf.release(), std::move(null_mask));
+  col->set_null_mask(std::move(null_mask));
+  return col;
 }
 
 template <>
