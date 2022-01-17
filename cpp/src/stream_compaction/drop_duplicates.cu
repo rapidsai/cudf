@@ -101,6 +101,47 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 }
 }  // namespace
 
+std::unique_ptr<table> drop_duplicates(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option keep,
+                                       null_equality nulls_equal,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  auto const num_rows = input.num_rows();
+  if (0 == num_rows || 0 == input.num_columns() || 0 == keys.size()) { return empty_like(input); }
+
+  auto unique_indices =
+    make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto mutable_view     = mutable_column_device_view::create(*unique_indices, stream);
+  auto keys_view        = input.select(keys);
+  auto device_keys_view = cudf::table_device_view::create(keys_view, stream);
+  auto row_equal        = row_equality_comparator(nullate::DYNAMIC{cudf::has_nulls(keys_view)},
+                                           *device_keys_view,
+                                           *device_keys_view,
+                                           nulls_equal);
+
+  // get indices of unique rows
+  auto result_end = unique_copy(thrust::counting_iterator<size_type>(0),
+                                thrust::counting_iterator<size_type>(num_rows),
+                                mutable_view->begin<size_type>(),
+                                row_equal,
+                                keep,
+                                stream);
+  auto indices_view =
+    cudf::detail::slice(column_view(*unique_indices),
+                        0,
+                        thrust::distance(mutable_view->begin<size_type>(), result_end));
+
+  // gather unique rows and return
+  return detail::gather(input,
+                        indices_view,
+                        out_of_bounds_policy::DONT_CHECK,
+                        detail::negative_index_policy::NOT_ALLOWED,
+                        stream,
+                        mr);
+}
+
 std::unique_ptr<table> sort_and_drop_duplicates(table_view const& input,
                                                 std::vector<size_type> const& keys,
                                                 duplicate_keep_option keep,
@@ -190,6 +231,16 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
 }
 
 }  // namespace detail
+
+std::unique_ptr<table> drop_duplicates(table_view const& input,
+                                       std::vector<size_type> const& keys,
+                                       duplicate_keep_option const keep,
+                                       null_equality nulls_equal,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::drop_duplicates(input, keys, keep, nulls_equal, rmm::cuda_stream_default, mr);
+}
 
 std::unique_ptr<table> sort_and_drop_duplicates(table_view const& input,
                                                 std::vector<size_type> const& keys,
