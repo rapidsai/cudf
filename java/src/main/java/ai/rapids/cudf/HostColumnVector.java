@@ -1302,13 +1302,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
       // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
       BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
-        data.setInt(currentIndex++ << 2, unscaledVal.intValueExact());
+        data.setInt(currentIndex++ << bitShiftBySize, unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
-        data.setLong(currentIndex++ << 3, unscaledVal.longValueExact());
+        data.setLong(currentIndex++ << bitShiftBySize, unscaledVal.longValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
         byte[] unscaledValueBytes = value.unscaledValue().toByteArray();
         byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
-        data.setBytes(currentIndex++ << 4, result, 0, result.length);
+        data.setBytes(currentIndex++ << bitShiftBySize, result, 0, result.length);
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
       }
