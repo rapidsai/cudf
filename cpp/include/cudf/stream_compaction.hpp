@@ -237,7 +237,7 @@ enum class duplicate_keep_option {
  *
  * @return Table with sorted unique rows as per specified `keep`.
  */
-std::unique_ptr<table> drop_duplicates(
+std::unique_ptr<table> sort_and_drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,

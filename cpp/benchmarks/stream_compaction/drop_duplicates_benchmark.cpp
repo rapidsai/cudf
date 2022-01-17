@@ -54,7 +54,7 @@ void BM_compaction(benchmark::State& state,
       if constexpr (Algo == algorithm::HASH_BASED) {
         return cudf::unordered_drop_duplicates(input_table, {0});
       } else {
-        return cudf::drop_duplicates(input_table, {0}, keep);
+        return cudf::sort_and_drop_duplicates(input_table, {0}, keep);
       }
     }();
   }

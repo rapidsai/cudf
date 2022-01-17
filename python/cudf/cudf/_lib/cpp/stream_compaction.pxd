@@ -33,10 +33,11 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         column_view boolean_mask
     ) except +
 
-    cdef unique_ptr[table] drop_duplicates(table_view source_table,
-                                           vector[size_type] keys,
-                                           duplicate_keep_option keep,
-                                           null_equality nulls_equal) except +
+    cdef unique_ptr[table] sort_and_drop_duplicates(
+        table_view source_table,
+        vector[size_type] keys,
+        duplicate_keep_option keep,
+        null_equality nulls_equal) except +
 
     cdef size_type unordered_distinct_count(
         column_view source_table,

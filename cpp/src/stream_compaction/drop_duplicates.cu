@@ -101,13 +101,13 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 }
 }  // namespace
 
-std::unique_ptr<table> drop_duplicates(table_view const& input,
-                                       std::vector<size_type> const& keys,
-                                       duplicate_keep_option keep,
-                                       null_equality nulls_equal,
-                                       null_order null_precedence,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> sort_and_drop_duplicates(table_view const& input,
+                                                std::vector<size_type> const& keys,
+                                                duplicate_keep_option keep,
+                                                null_equality nulls_equal,
+                                                null_order null_precedence,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
     return empty_like(input);
@@ -132,6 +132,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                         stream,
                         mr);
 }
+
 std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
                                                  std::vector<size_type> const& keys,
                                                  null_equality nulls_equal,
@@ -143,8 +144,8 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
   }
 
   auto keys_view = input.select(keys);
-
   auto table_ptr = cudf::table_device_view::create(keys_view, stream);
+  auto has_null  = nullate::DYNAMIC{cudf::has_nulls(keys_view)};
   auto const num_rows{table_ptr->num_rows()};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
@@ -153,9 +154,8 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
-  compaction_hash hash_key{nullate::DYNAMIC{cudf::has_nulls(keys_view)}, *table_ptr};
-  row_equality_comparator row_equal(
-    nullate::DYNAMIC{cudf::has_nulls(keys_view)}, *table_ptr, *table_ptr, nulls_equal);
+  compaction_hash hash_key{has_null, *table_ptr};
+  row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
@@ -191,15 +191,15 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<table> drop_duplicates(table_view const& input,
-                                       std::vector<size_type> const& keys,
-                                       duplicate_keep_option const keep,
-                                       null_equality nulls_equal,
-                                       null_order null_precedence,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> sort_and_drop_duplicates(table_view const& input,
+                                                std::vector<size_type> const& keys,
+                                                duplicate_keep_option const keep,
+                                                null_equality nulls_equal,
+                                                null_order null_precedence,
+                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_duplicates(
+  return detail::sort_and_drop_duplicates(
     input, keys, keep, nulls_equal, null_precedence, rmm::cuda_stream_default, mr);
 }
 

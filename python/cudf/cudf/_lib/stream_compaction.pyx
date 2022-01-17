@@ -11,9 +11,9 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
-    drop_duplicates as cpp_drop_duplicates,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
+    sort_and_drop_duplicates as cpp_drop_duplicates,
     unordered_distinct_count as cpp_distinct_count,
 )
 from cudf._lib.cpp.table.table cimport table
