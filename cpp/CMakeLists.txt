@@ -34,6 +34,9 @@ project(
 # `Threads::Threads` is the same value in first run and subsequent runs.
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
+# this is needed for clang-tidy runs
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # ##################################################################################################
 # * build options ---------------------------------------------------------------------------------
 
