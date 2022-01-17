@@ -94,6 +94,7 @@ std::unique_ptr<table> unordered_drop_duplicates(
  */
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
+                               nan_policy nan_handling,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

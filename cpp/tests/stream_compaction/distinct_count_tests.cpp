@@ -50,7 +50,7 @@ TYPED_TEST(DistinctCountCommon, NoNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
 
-  cudf::size_type expected = std::set<double>(input.begin(), input.end()).size();
+  cudf::size_type const expected = std::set<double>(input.begin(), input.end()).size();
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
@@ -59,7 +59,8 @@ TYPED_TEST(DistinctCountCommon, NoNull)
   std::copy(input.begin(), input.end(), std::back_inserter(input_data));
   auto const new_end      = std::unique(input_data.begin(), input_data.end());
   auto const gold_ordered = new_end - input_data.begin();
-  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::INCLUDE));
+  EXPECT_EQ(gold_ordered,
+            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TYPED_TEST(DistinctCountCommon, TableNoNull)
@@ -83,7 +84,8 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
   std::vector<cudf::column_view> cols{input_col1, input_col2};
   cudf::table_view input_table(cols);
 
-  cudf::size_type expected = std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
+  cudf::size_type const expected =
+    std::set<std::pair<T, T>>(pair_input.begin(), pair_input.end()).size();
   EXPECT_EQ(expected, cudf::unordered_distinct_count(input_table, null_equality::EQUAL));
 
   auto const new_end      = std::unique(pair_input.begin(), pair_input.end());
@@ -105,14 +107,15 @@ TEST_F(DistinctCount, WithNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
-  cudf::size_type expected = std::set<double>(input.begin(), input.end()).size();
+  cudf::size_type const expected = std::set<double>(input.begin(), input.end()).size();
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 
   auto const new_end      = std::unique(input.begin(), input.end());
   auto const gold_ordered = new_end - input.begin() - 3;
-  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::EXCLUDE));
+  EXPECT_EQ(gold_ordered,
+            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, IgnoringNull)
@@ -126,7 +129,7 @@ TEST_F(DistinctCount, IgnoringNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
-  cudf::size_type expected = std::set<T>(input.begin(), input.end()).size();
+  cudf::size_type const expected = std::set<T>(input.begin(), input.end()).size();
   // Removing 2 from expected to remove count for 70 and 3
   EXPECT_EQ(
     expected - 2,
@@ -134,7 +137,8 @@ TEST_F(DistinctCount, IgnoringNull)
 
   auto const new_end      = std::unique(input.begin(), input.end());
   auto const gold_ordered = new_end - input.begin() - 5;
-  EXPECT_EQ(gold_ordered, cudf::distinct_count(input_col, null_policy::EXCLUDE));
+  EXPECT_EQ(gold_ordered,
+            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, WithNansAndNull)
@@ -143,15 +147,20 @@ TEST_F(DistinctCount, WithNansAndNull)
 
   std::vector<T> input               = {1,  3,  NAN, 70, 31,  1, 8,   2, 0, 70, 1,
                           70, 10, 40,  31, NAN, 0, NAN, 8, 5, 70};
-  std::vector<cudf::size_type> valid = {1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1,
+  std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
-  cudf::size_type expected = std::set<T>(input.begin(), input.end()).size();
+  cudf::size_type const expected = std::set<T>(input.begin(), input.end()).size();
   EXPECT_EQ(
-    expected,
+    expected + 1,  // +1 since `NAN` is not in std::set
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
+
+  auto const new_end      = std::unique(input.begin(), input.end());
+  auto const gold_ordered = new_end - input.begin();
+  EXPECT_EQ(gold_ordered,
+            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, WithNansOnly)
@@ -163,11 +172,12 @@ TEST_F(DistinctCount, WithNansOnly)
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
-  cudf::size_type expected = 5;
+  constexpr auto expected = 5;
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
-  EXPECT_EQ(expected, cudf::distinct_count(input_col, null_policy::INCLUDE));
+  EXPECT_EQ(expected,
+            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, NansAsNullWithNoNull)
@@ -179,10 +189,12 @@ TEST_F(DistinctCount, NansAsNullWithNoNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
-  cudf::size_type expected = 5;
+  constexpr auto expected = 5;
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(expected,
+            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, NansAsNullWithNull)
@@ -194,10 +206,12 @@ TEST_F(DistinctCount, NansAsNullWithNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
-  cudf::size_type expected = 4;
+  constexpr auto expected = 4;
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(expected,
+            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, NansAsNullWithIgnoreNull)
@@ -209,10 +223,12 @@ TEST_F(DistinctCount, NansAsNullWithIgnoreNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
-  cudf::size_type expected = 3;
+  constexpr auto expected = 3;
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
+  EXPECT_EQ(expected,
+            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, EmptyColumn)
@@ -221,11 +237,12 @@ TEST_F(DistinctCount, EmptyColumn)
 
   cudf::test::fixed_width_column_wrapper<T> input_col{};
 
-  cudf::size_type expected = 0;
+  constexpr auto expected = 0;
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
-  EXPECT_EQ(expected, cudf::distinct_count(input_col, null_policy::EXCLUDE));
+  EXPECT_EQ(expected,
+            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_NULL));
 }
 
 TEST_F(DistinctCount, StringColumnWithNull)
@@ -234,7 +251,7 @@ TEST_F(DistinctCount, StringColumnWithNull)
     {"", "this", "is", "this", "This", "a", "column", "of", "the", "strings"},
     {1, 1, 1, 1, 1, 1, 1, 1, 0, 1}};
 
-  cudf::size_type expected =
+  cudf::size_type const expected =
     (std::vector<std::string>{"", "this", "is", "This", "a", "column", "of", "strings"}).size();
   EXPECT_EQ(
     expected,
