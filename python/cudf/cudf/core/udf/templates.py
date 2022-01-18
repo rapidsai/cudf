@@ -5,7 +5,7 @@ unmasked_input_initializer_template = """\
 
 masked_input_initializer_template = """\
         d_{idx}, m_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i + offset_{idx}))
+        masked_{idx} = Masked(d_{idx}[i], _mask_get(m_{idx}, i + offset_{idx}))
 """
 
 row_initializer_template = """\
@@ -39,9 +39,9 @@ scalar_kernel_template = """
 def _kernel(retval, size, input_col_0, offset_0, {extra_args}):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
-    
+
     if i < size:
-        
+
 {masked_initializer}
 
         ret = f_(masked_0, {extra_args})

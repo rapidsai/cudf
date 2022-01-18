@@ -28,7 +28,7 @@ precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
-def get_udf_return_type(argty, func: Callable, args=()):
+def _get_udf_return_type(argty, func: Callable, args=()):
 
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -60,7 +60,7 @@ def get_udf_return_type(argty, func: Callable, args=()):
         else numba_output_type.value_type
     )
 
-    # get_udf_return_type will throw a TypingError if the user tries to use
+    # _get_udf_return_type will throw a TypingError if the user tries to use
     # a field in the row containing an unsupported dtype, except in the
     # edge case where all the function does is return that element:
 
@@ -82,7 +82,7 @@ def _is_jit_supported_type(dtype):
     return str(dtype) in JIT_SUPPORTED_TYPES
 
 
-def all_dtypes_from_frame(frame):
+def _all_dtypes_from_frame(frame):
     return {
         colname: col.dtype
         if _is_jit_supported_type(col.dtype)
@@ -91,7 +91,7 @@ def all_dtypes_from_frame(frame):
     }
 
 
-def supported_dtypes_from_frame(frame):
+def _supported_dtypes_from_frame(frame):
     return {
         colname: col.dtype
         for colname, col in frame._data.items()
@@ -99,7 +99,7 @@ def supported_dtypes_from_frame(frame):
     }
 
 
-def supported_cols_from_frame(frame):
+def _supported_cols_from_frame(frame):
     return {
         colname: col
         for colname, col in frame._data.items()
@@ -107,7 +107,7 @@ def supported_cols_from_frame(frame):
     }
 
 
-def masked_array_type_from_col(col):
+def _masked_array_type_from_col(col):
     """
     Return a type representing a tuple of arrays,
     the first element an array of the numba type
@@ -121,7 +121,7 @@ def masked_array_type_from_col(col):
         return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
 
-def construct_signature(frame, return_type, args):
+def _construct_signature(frame, return_type, args):
     """
     Build the signature of numba types that will be used to
     actually JIT the kernel itself later, accounting for types
@@ -132,8 +132,8 @@ def construct_signature(frame, return_type, args):
     return_type = Tuple((return_type[::1], boolean[::1]))
     offsets = []
     sig = [return_type, int64]
-    for col in supported_cols_from_frame(frame).values():
-        sig.append(masked_array_type_from_col(col))
+    for col in _supported_cols_from_frame(frame).values():
+        sig.append(_masked_array_type_from_col(col))
         offsets.append(int64)
 
     # return_type, size, data, masks, offsets, extra args
@@ -143,11 +143,11 @@ def construct_signature(frame, return_type, args):
 
 
 @cuda.jit(device=True)
-def mask_get(mask, pos):
+def _mask_get(mask, pos):
     return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1
 
 
-def generate_cache_key(frame, func: Callable):
+def _generate_cache_key(frame, func: Callable):
     """Create a cache key that uniquely identifies a compilation.
 
     A new compilation is needed any time any of the following things change:
@@ -156,14 +156,16 @@ def generate_cache_key(frame, func: Callable):
     - The existence of the input columns masks
     """
     return (
-        *cudautils.make_cache_key(func, all_dtypes_from_frame(frame).values()),
+        *cudautils.make_cache_key(
+            func, _all_dtypes_from_frame(frame).values()
+        ),
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),
     )
 
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
-def compile_or_get(frame, func, args, kernel_getter=None):
+def _compile_or_get(frame, func, args, kernel_getter=None):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
@@ -186,7 +188,7 @@ def compile_or_get(frame, func, args, kernel_getter=None):
     """
 
     # check to see if we already compiled this function
-    cache_key = generate_cache_key(frame, func)
+    cache_key = _generate_cache_key(frame, func)
     if precompiled.get(cache_key) is not None:
         kernel, masked_or_scalar = precompiled[cache_key]
         return kernel, masked_or_scalar

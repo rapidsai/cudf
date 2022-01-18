@@ -14,16 +14,16 @@ from cudf.core.udf.templates import (
 )
 from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
-    all_dtypes_from_frame,
-    construct_signature,
-    get_udf_return_type,
-    mask_get,
-    supported_cols_from_frame,
-    supported_dtypes_from_frame,
+    _all_dtypes_from_frame,
+    _construct_signature,
+    _get_udf_return_type,
+    _mask_get,
+    _supported_cols_from_frame,
+    _supported_dtypes_from_frame,
 )
 
 
-def get_frame_row_type(dtype):
+def _get_frame_row_type(dtype):
     """
     Get the numba `Record` type corresponding to a frame.
     Models each column and its mask as a MaskedType and
@@ -71,7 +71,7 @@ def get_frame_row_type(dtype):
     return Record(fields, offset, _is_aligned_struct)
 
 
-def row_kernel_from_template(frame, row_type, args):
+def _row_kernel_from_template(frame, row_type, args):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -84,9 +84,9 @@ def row_kernel_from_template(frame, row_type, args):
             row = rows[0]
 
             d_0, m_0 = input_col_0
-            masked_0 = Masked(d_0[i], mask_get(m_0, i + offset_0))
+            masked_0 = Masked(d_0[i], _mask_get(m_0, i + offset_0))
             d_1, m_1 = input_col_1
-            masked_1 = Masked(d_1[i], mask_get(m_1, i + offset_1))
+            masked_1 = Masked(d_1[i], _mask_get(m_1, i + offset_1))
 
             row["a"] = masked_0
             row["b"] = masked_1
@@ -105,7 +105,7 @@ def row_kernel_from_template(frame, row_type, args):
     functions dynamically at runtime and define them using `exec`.
     """
     # Create argument list for kernel
-    frame = supported_cols_from_frame(frame)
+    frame = _supported_cols_from_frame(frame)
 
     input_columns = ", ".join([f"input_col_{i}" for i in range(len(frame))])
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(frame))])
@@ -143,19 +143,21 @@ def row_kernel_from_template(frame, row_type, args):
     return row_kernel_template.format(**d)
 
 
-def get_row_kernel(frame, func, args):
-    row_type = get_frame_row_type(
-        np.dtype(list(all_dtypes_from_frame(frame).items()))
+def _get_row_kernel(frame, func, args):
+    row_type = _get_frame_row_type(
+        np.dtype(list(_all_dtypes_from_frame(frame).items()))
     )
-    scalar_return_type = get_udf_return_type(row_type, func, args)
+    scalar_return_type = _get_udf_return_type(row_type, func, args)
 
     # this is the signature for the final full kernel compilation
-    sig = construct_signature(frame, scalar_return_type, args)
+    sig = _construct_signature(frame, scalar_return_type, args)
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    np_field_types = np.dtype(list(supported_dtypes_from_frame(frame).items()))
-    row_type = get_frame_row_type(np_field_types)
+    np_field_types = np.dtype(
+        list(_supported_dtypes_from_frame(frame).items())
+    )
+    row_type = _get_frame_row_type(np_field_types)
 
     f_ = cuda.jit(device=True)(func)
     # Dict of 'local' variables into which `_kernel` is defined
@@ -164,12 +166,12 @@ def get_row_kernel(frame, func, args):
         "f_": f_,
         "cuda": cuda,
         "Masked": Masked,
-        "mask_get": mask_get,
+        "_mask_get": _mask_get,
         "pack_return": pack_return,
         "row_type": row_type,
     }
 
-    kernel_string = row_kernel_from_template(frame, row_type, args)
+    kernel_string = _row_kernel_from_template(frame, row_type, args)
     exec(kernel_string, global_exec_context, local_exec_context)
     # The python function definition representing the kernel
     _kernel = local_exec_context["_kernel"]

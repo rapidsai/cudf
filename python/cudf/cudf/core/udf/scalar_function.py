@@ -3,19 +3,19 @@ from numba.np import numpy_support
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.templates import (
-    scalar_kernel_template,
     masked_input_initializer_template,
+    scalar_kernel_template,
     unmasked_input_initializer_template,
 )
 from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
-    construct_signature,
-    get_udf_return_type,
-    mask_get,
+    _construct_signature,
+    _get_udf_return_type,
+    _mask_get,
 )
 
 
-def scalar_kernel_from_template(sr, args):
+def _scalar_kernel_from_template(sr, args):
     """
     Function to write numba kernels for `Series.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -42,7 +42,7 @@ def scalar_kernel_from_template(sr, args):
 
         if i < size:
             d_0, m_0 = input_col_0
-            masked_0 = Masked(d_0[i], mask_get(m_0, i + offset_0)
+            masked_0 = Masked(d_0[i], _mask_get(m_0, i + offset_0)
 
             ret = f_(masked_0, extra_arg_0, extra_arg_1)
 
@@ -64,22 +64,22 @@ def scalar_kernel_from_template(sr, args):
     )
 
 
-def get_scalar_kernel(sr, func, args):
+def _get_scalar_kernel(sr, func, args):
     sr_type = MaskedType(numpy_support.from_dtype(sr.dtype))
-    scalar_return_type = get_udf_return_type(sr_type, func, args)
+    scalar_return_type = _get_udf_return_type(sr_type, func, args)
 
-    sig = construct_signature(sr, scalar_return_type, args=args)
+    sig = _construct_signature(sr, scalar_return_type, args=args)
     f_ = cuda.jit(device=True)(func)
     local_exec_context = {}
     global_exec_context = {
         "f_": f_,
         "cuda": cuda,
         "Masked": Masked,
-        "mask_get": mask_get,
+        "_mask_get": _mask_get,
         "pack_return": pack_return,
     }
     exec(
-        scalar_kernel_from_template(sr, args=args),
+        _scalar_kernel_from_template(sr, args=args),
         global_exec_context,
         local_exec_context,
     )

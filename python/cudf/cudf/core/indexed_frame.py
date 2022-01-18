@@ -28,7 +28,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.utils import compile_or_get, supported_cols_from_frame
+from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 doc_reset_index_template = """
@@ -770,7 +770,7 @@ class IndexedFrame(Frame):
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        kernel, retty = compile_or_get(
+        kernel, retty = _compile_or_get(
             self, func, args, kernel_getter=kernel_getter
         )
 
@@ -780,9 +780,9 @@ class IndexedFrame(Frame):
         launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []
 
-        # if compile_or_get succeeds, it is safe to create a kernel that only
+        # if _compile_or_get succeeds, it is safe to create a kernel that only
         # consumes the columns that are of supported dtype
-        for col in supported_cols_from_frame(self).values():
+        for col in _supported_cols_from_frame(self).values():
             data = col.data
             mask = col.mask
             if mask is None:
