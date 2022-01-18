@@ -237,6 +237,19 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
   }
 }
 
+TEST_F(StringsContainsTests, OctalTest)
+{
+  cudf::test::strings_column_wrapper strings({"AZ", "B", "CDAZEY", ""});
+  auto strings_view = cudf::strings_column_view(strings);
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 0});
+  auto results = cudf::strings::contains_re(strings_view, "\\101");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::contains_re(strings_view, "\\101Z");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::contains_re(strings_view, "D*\\101\\132");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsContainsTests, EmbeddedNullCharacter)
 {
   std::vector<std::string> data(10);

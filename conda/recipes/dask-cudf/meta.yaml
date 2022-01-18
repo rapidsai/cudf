@@ -27,19 +27,21 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask>=2021.11.1,<=2021.11.2
-    - distributed>=2021.11.1,<=2021.11.2
+    - dask>=2021.11.1
+    - distributed>=2021.11.1
     - cudatoolkit {{ cuda_version }}
   run:
     - python
     - cudf {{ version }}
-    - dask>=2021.11.1,<=2021.11.2
-    - distributed>=2021.11.1,<=2021.11.2
+    - dask>=2021.11.1
+    - distributed>=2021.11.1
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - dask_cudf                         # [linux64]
 
 
 about:

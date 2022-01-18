@@ -35,6 +35,7 @@ from cudf._lib.null_mask import (
 )
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
+    apply_boolean_mask,
     distinct_count as cpp_distinct_count,
     drop_duplicates,
     drop_nulls,
@@ -997,9 +998,12 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
-        mask = as_column(mask, dtype="bool")
-        return (
-            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        mask = as_column(mask)
+        if not is_bool_dtype(mask.dtype):
+            raise ValueError("boolean_mask is not boolean type.")
+
+        return apply_boolean_mask([self], mask)[0]._with_type_metadata(
+            self.dtype
         )
 
     def argsort(
@@ -1234,6 +1238,13 @@ class ColumnBase(Column, Serializable):
                 f"default to 0."
             )
         return result_col
+
+    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+        """
+        Determine the correct dtype to pass to libcudf based on
+        the input dtype, data dtype, and specific reduction op
+        """
+        return self.dtype
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         """
@@ -1652,6 +1663,27 @@ def build_struct_column(
     return cast("cudf.core.column.StructColumn", result)
 
 
+def _make_copy_replacing_NaT_with_null(column):
+    """Return a copy with NaT values replaced with nulls."""
+    if np.issubdtype(column.dtype, np.timedelta64):
+        na_value = np.timedelta64("NaT", column.time_unit)
+    elif np.issubdtype(column.dtype, np.datetime64):
+        na_value = np.datetime64("NaT", column.time_unit)
+    else:
+        raise ValueError("This type does not support replacing NaT with null.")
+
+    null = column_empty_like(column, masked=True, newsize=1)
+    out_col = cudf._lib.replace.replace(
+        column,
+        build_column(
+            Buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
+            dtype=column.dtype,
+        ),
+        null,
+    )
+    return out_col
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: bool = None,
@@ -1753,9 +1785,7 @@ def as_column(
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                # Ignore typing error since this method is only defined for
-                # DatetimeColumn, not the ColumnBase class.
-                col = col._make_copy_with_na_as_null()  # type: ignore
+                col = _make_copy_replacing_NaT_with_null(col)
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -1886,7 +1916,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -1904,7 +1934,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(

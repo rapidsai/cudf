@@ -79,12 +79,12 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 }  // namespace
 
-struct aggregate_metadata {
-  aggregate_metadata(std::vector<partition_info> const& partitions,
-                     size_type num_columns,
-                     std::vector<SchemaElement> schema,
-                     statistics_freq stats_granularity,
-                     std::vector<std::map<std::string, std::string>> const& kv_md)
+struct aggregate_writer_metadata {
+  aggregate_writer_metadata(std::vector<partition_info> const& partitions,
+                            size_type num_columns,
+                            std::vector<SchemaElement> schema,
+                            statistics_freq stats_granularity,
+                            std::vector<std::map<std::string, std::string>> const& kv_md)
     : version(1), schema(std::move(schema)), files(partitions.size())
   {
     for (size_t i = 0; i < partitions.size(); ++i) {
@@ -447,25 +447,28 @@ struct leaf_schema_fn {
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
     if (std::is_same_v<T, numeric::decimal32>) {
-      col_schema.type        = Type::INT32;
-      col_schema.stats_dtype = statistics_dtype::dtype_int32;
+      col_schema.type              = Type::INT32;
+      col_schema.stats_dtype       = statistics_dtype::dtype_int32;
+      col_schema.decimal_precision = 9;
     } else if (std::is_same_v<T, numeric::decimal64>) {
-      col_schema.type        = Type::INT64;
-      col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
+      col_schema.type              = Type::INT64;
+      col_schema.stats_dtype       = statistics_dtype::dtype_decimal64;
+      col_schema.decimal_precision = 18;
     } else if (std::is_same_v<T, numeric::decimal128>) {
-      col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
-      col_schema.type_length = sizeof(__int128_t);
-      col_schema.stats_dtype = statistics_dtype::dtype_decimal128;
+      col_schema.type              = Type::FIXED_LEN_BYTE_ARRAY;
+      col_schema.type_length       = sizeof(__int128_t);
+      col_schema.stats_dtype       = statistics_dtype::dtype_decimal128;
+      col_schema.decimal_precision = 38;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
     col_schema.converted_type = ConvertedType::DECIMAL;
     col_schema.decimal_scale = -col->type().scale();  // parquet and cudf disagree about scale signs
-    CUDF_EXPECTS(col_meta.is_decimal_precision_set(),
-                 "Precision must be specified for decimal columns");
-    CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
-                 "Precision must be equal to or greater than scale!");
-    col_schema.decimal_precision = col_meta.get_decimal_precision();
+    if (col_meta.is_decimal_precision_set()) {
+      CUDF_EXPECTS(col_meta.get_decimal_precision() >= col_schema.decimal_scale,
+                   "Precision must be equal to or greater than scale!");
+      col_schema.decimal_precision = col_meta.get_decimal_precision();
+    }
   }
 
   template <typename T>
@@ -1226,7 +1229,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
 
   if (!md) {
-    md = std::make_unique<aggregate_metadata>(
+    md = std::make_unique<aggregate_writer_metadata>(
       partitions, num_columns, std::move(this_table_schema), stats_granularity_, kv_md);
   } else {
     // verify the user isn't passing mismatched tables
