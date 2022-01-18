@@ -319,6 +319,7 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
+    use_python_file_object=True,
     categorical_partitions=True,
     open_file_options=None,
     *args,
@@ -326,21 +327,15 @@ def read_parquet(
 ):
     """{docstring}"""
 
-    # Since use_python_file_object=False is not longer
-    # supported, throw a deprecation warning if the
-    # parameter is used
-    use_python_file_object = kwargs.pop("use_python_file_object", None)
-    if use_python_file_object is not None:
-        py_obj_msg = (
-            "The use_python_file_object argument is now "
-            "deprecated in cudf.read_parquet. "
-            "use_python_file_object=True is now the "
-            "required behavior."
-        )
-        if not use_python_file_object:
-            raise ValueError(py_obj_msg)
-        else:
-            warnings.warn(py_obj_msg, FutureWarning)
+    # Do not allow the user to set file-opening options
+    # when `use_python_file_object=False` is specified
+    if use_python_file_object is False:
+        if open_file_options:
+            raise ValueError(
+                "open_file_options is not currently supported when "
+                "use_python_file_object is set to False."
+            )
+        open_file_options = {}
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -388,15 +383,16 @@ def read_parquet(
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
     filepaths_or_buffers = []
-    open_file_options = _default_open_file_options(
-        open_file_options, columns, row_groups
-    )
+    if use_python_file_object:
+        open_file_options = _default_open_file_options(
+            open_file_options, columns, row_groups
+        )
     for i, source in enumerate(filepath_or_buffer):
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
-            use_python_file_object=True,
+            use_python_file_object=use_python_file_object,
             open_file_options=open_file_options,
             **kwargs,
         )

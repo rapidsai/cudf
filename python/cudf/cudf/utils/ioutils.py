@@ -162,6 +162,11 @@ categorical_partitions : boolean, default True
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. Setting this argument to `False`
+    will require the entire file to be copied to host memory, and is highly
+    discouraged.
 open_file_options : dict, optional
     Dictionary of key-value pairs to pass to the function used to open remote
     files. By default, this will be `fsspec.parquet.open_parquet_file`. To
