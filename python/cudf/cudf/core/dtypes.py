@@ -356,6 +356,29 @@ class StructDtype(_BaseDtype):
 
 
 class DecimalDtype(_BaseDtype):
+    """
+    Parameters
+    ----------
+    precision : int
+        The total number of digits in each value of this dtype
+    scale : int, optional
+        The scale of the dtype. See Notes below.
+
+    Notes
+    -----
+        When the scale is positive:
+            - numbers with fractional parts (e.g., 0.0042) can be represented
+            - the scale is the total number of digits to the right of the
+            decimal point
+        When the scale is negative:
+            - only multiples of powers of 10 (including 10**0) can be
+            represented (e.g., 1729, 4200, 1000000)
+            - the scale represents the number of trailing zeros in the value.
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
+    """
+
     _metadata = ("precision", "scale")
 
     def __init__(self, precision, scale=0):
@@ -378,6 +401,10 @@ class DecimalDtype(_BaseDtype):
     @property
     def scale(self):
         return self._typ.scale
+
+    @property
+    def itemsize(self):
+        return self.ITEMSIZE
 
     @property
     def type(self):
@@ -442,90 +469,21 @@ class DecimalDtype(_BaseDtype):
 
 
 class Decimal32Dtype(DecimalDtype):
-    """
-    Parameters
-    ----------
-    precision : int
-        The total number of digits in each value of this dtype
-    scale : int, optional
-        The scale of the Decimal32Dtype. See Notes below.
-
-    Notes
-    -----
-        When the scale is positive:
-            - numbers with fractional parts (e.g., 0.0042) can be represented
-            - the scale is the total number of digits to the right of the
-            decimal point
-        When the scale is negative:
-            - only multiples of powers of 10 (including 10**0) can be
-            represented (e.g., 1729, 4200, 1000000)
-            - the scale represents the number of trailing zeros in the value.
-        For example, 42 is representable with precision=2 and scale=0.
-        13.0051 is representable with precision=6 and scale=4,
-        and *not* representable with precision<6 or scale<4.
-    """
-
     name = "decimal32"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
-    itemsize = 4
+    ITEMSIZE = 4
 
 
 class Decimal64Dtype(DecimalDtype):
-    """
-    Parameters
-    ----------
-    precision : int
-        The total number of digits in each value of this dtype
-    scale : int, optional
-        The scale of the Decimal64Dtype. See Notes below.
-
-    Notes
-    -----
-        When the scale is positive:
-          - numbers with fractional parts (e.g., 0.0042) can be represented
-          - the scale is the total number of digits to the right of the
-            decimal point
-        When the scale is negative:
-          - only multiples of powers of 10 (including 10**0) can be
-            represented (e.g., 1729, 4200, 1000000)
-          - the scale represents the number of trailing zeros in the value.
-        For example, 42 is representable with precision=2 and scale=0.
-        13.0051 is representable with precision=6 and scale=4,
-        and *not* representable with precision<6 or scale<4.
-    """
-
     name = "decimal64"
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
-    itemsize = 8
+    ITEMSIZE = 8
 
 
 class Decimal128Dtype(DecimalDtype):
-    """
-    Parameters
-    ----------
-    precision : int
-        The total number of digits in each value of this dtype
-    scale : int, optional
-        The scale of the Decimal128Dtype. See Notes below.
-
-    Notes
-    -----
-        When the scale is positive:
-            - numbers with fractional parts (e.g., 0.0042) can be represented
-            - the scale is the total number of digits to the right of the
-            decimal point
-        When the scale is negative:
-            - only multiples of powers of 10 (including 10**0) can be
-            represented (e.g., 1729, 4200, 1000000)
-            - the scale represents the number of trailing zeros in the value.
-        For example, 42 is representable with precision=2 and scale=0.
-        13.0051 is representable with precision=6 and scale=4,
-        and *not* representable with precision<6 or scale<4.
-    """
-
     name = "decimal128"
     MAX_PRECISION = 38
-    itemsize = 16
+    ITEMSIZE = 16
 
 
 class IntervalDtype(StructDtype):
