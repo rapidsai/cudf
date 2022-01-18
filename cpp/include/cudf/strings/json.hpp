@@ -48,7 +48,7 @@ class get_json_object_options {
    * @brief Returns true/false depending on whether single-quotes for representing strings
    * are allowed.
    */
-  [[nodiscard]] CUDF_HOST_DEVICE [[nodiscard]] inline bool get_allow_single_quotes() const
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool get_allow_single_quotes() const
   {
     return allow_single_quotes;
   }
@@ -75,8 +75,7 @@ class get_json_object_options {
    *
    * @endcode
    */
-  [[nodiscard]] CUDF_HOST_DEVICE [[nodiscard]] inline bool get_strip_quotes_from_single_strings()
-    const
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool get_strip_quotes_from_single_strings() const
   {
     return strip_quotes_from_single_strings;
   }

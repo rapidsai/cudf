@@ -96,8 +96,8 @@ class string_view {
     __device__ inline bool operator>(const const_iterator&) const;
     __device__ inline bool operator>=(const const_iterator&) const;
     __device__ inline char_utf8 operator*() const;
-    [[nodiscard]] __device__ [[nodiscard]] inline size_type position() const;
-    [[nodiscard]] __device__ [[nodiscard]] inline size_type byte_offset() const;
+    [[nodiscard]] __device__ inline size_type position() const;
+    [[nodiscard]] __device__ inline size_type byte_offset() const;
 
    private:
     const char* p{};

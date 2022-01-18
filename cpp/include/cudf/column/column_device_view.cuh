@@ -139,12 +139,12 @@ class alignas(16) column_device_view_base {
   /**
    * @brief Returns the number of elements in the column.
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] size_type size() const noexcept { return _size; }
+  [[nodiscard]] __host__ __device__ size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the element type
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] data_type type() const noexcept { return _type; }
+  [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates whether the column can contain null elements, i.e., if it
@@ -155,10 +155,7 @@ class alignas(16) column_device_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] bool nullable() const noexcept
-  {
-    return nullptr != _null_mask;
-  }
+  [[nodiscard]] __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -167,7 +164,7 @@ class alignas(16) column_device_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] bitmask_type const* null_mask() const noexcept
+  [[nodiscard]] __host__ __device__ bitmask_type const* null_mask() const noexcept
   {
     return _null_mask;
   }
@@ -176,10 +173,7 @@ class alignas(16) column_device_view_base {
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] size_type offset() const noexcept
-  {
-    return _offset;
-  }
+  [[nodiscard]] __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**
    * @brief Returns whether the specified element holds a valid value (i.e., not
@@ -195,7 +189,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  [[nodiscard]] __device__ [[nodiscard]] bool is_valid(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid(size_type element_index) const noexcept
   {
     return not nullable() or is_valid_nocheck(element_index);
   }
@@ -212,8 +206,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  [[nodiscard]] __device__ [[nodiscard]] bool is_valid_nocheck(
-    size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_type element_index) const noexcept
   {
     return bit_is_set(_null_mask, offset() + element_index);
   }
@@ -231,7 +224,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  [[nodiscard]] __device__ [[nodiscard]] bool is_null(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null(size_type element_index) const noexcept
   {
     return not is_valid(element_index);
   }
@@ -247,8 +240,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  [[nodiscard]] __device__ [[nodiscard]] bool is_null_nocheck(
-    size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null_nocheck(size_type element_index) const noexcept
   {
     return not is_valid_nocheck(element_index);
   }
@@ -262,8 +254,7 @@ class alignas(16) column_device_view_base {
    * @param word_index The index of the word to get
    * @return bitmask word for the given word_index
    */
-  [[nodiscard]] __device__ [[nodiscard]] bitmask_type get_mask_word(
-    size_type word_index) const noexcept
+  [[nodiscard]] __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
   {
     return null_mask()[word_index];
   }
@@ -755,8 +746,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  [[nodiscard]] __device__ [[nodiscard]] column_device_view child(
-    size_type child_index) const noexcept
+  [[nodiscard]] __device__ column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }
@@ -764,8 +754,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Returns a span containing the children of this column
    */
-  [[nodiscard]] __device__ [[nodiscard]] device_span<column_device_view const> children()
-    const noexcept
+  [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
   {
     return device_span<column_device_view const>(d_children, _num_children);
   }
@@ -775,7 +764,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @return The number of child columns
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] size_type num_child_columns() const noexcept
+  [[nodiscard]] __host__ __device__ size_type num_child_columns() const noexcept
   {
     return _num_children;
   }
@@ -924,7 +913,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  [[nodiscard]] __host__ __device__ [[nodiscard]] bitmask_type* null_mask() const noexcept
+  [[nodiscard]] __host__ __device__ bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
@@ -974,8 +963,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  [[nodiscard]] __device__ [[nodiscard]] mutable_column_device_view child(
-    size_type child_index) const noexcept
+  [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }
