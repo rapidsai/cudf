@@ -20,6 +20,7 @@
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
@@ -57,7 +58,8 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  */
 class make_pair_function {
  public:
-  make_pair_function(row_hash const& hash, hash_value_type const empty_key_sentinel)
+  CUDF_HOST_DEVICE make_pair_function(row_hash const& hash,
+                                      hash_value_type const empty_key_sentinel)
     : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
   {
   }
@@ -143,6 +145,46 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
 
+/**
+ * @brief Builds the hash table based on the given `build_table`.
+ *
+ * @tparam MultimapType The type of the hash table
+ *
+ * @param build Table of columns used to build join hash.
+ * @param hash_table Build hash table.
+ * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ */
+template <typename MultimapType>
+void build_join_hash_table(cudf::table_view const& build,
+                           MultimapType& hash_table,
+                           null_equality compare_nulls,
+                           rmm::cuda_stream_view stream)
+{
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+
+  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+
+  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+  size_type const build_table_num_rows{build_table_ptr->num_rows()};
+  if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
+    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    thrust::counting_iterator<size_type> stencil(0);
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+    // insert valid rows
+    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+  }
+}
 }  // namespace detail
 
 struct hash_join::hash_join_impl {

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
@@ -51,6 +52,7 @@ from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
     Decimal32Dtype,
+    Decimal128Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
