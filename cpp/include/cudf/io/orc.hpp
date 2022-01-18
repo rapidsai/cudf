@@ -566,6 +566,11 @@ class orc_writer_options {
   /**
    * @brief Choose granularity of statistics collection.
    *
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
+   *
    * @param val Frequency of statistics collection.
    */
   void enable_statistics(statistics_freq val) { _stats_freq = val; }
@@ -662,6 +667,11 @@ class orc_writer_options_builder {
 
   /**
    * @brief Choose granularity of column statistics to be written
+   *
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
    *
    * @param val Level of statistics collection.
    * @return this for chaining.
@@ -884,6 +894,11 @@ class chunked_orc_writer_options {
   /**
    * @brief Choose granularity of statistics collection
    *
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
+   *
    * @param val Frequency of statistics collection.
    */
   void enable_statistics(statistics_freq val) { _stats_freq = val; }
@@ -970,6 +985,11 @@ class chunked_orc_writer_options_builder {
 
   /**
    * @brief Choose granularity of statistics collection
+   *
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
    *
    * @param val Frequency of statistics collection.
    * @return this for chaining.

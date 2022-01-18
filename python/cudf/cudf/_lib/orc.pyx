@@ -159,7 +159,7 @@ cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
     elif statistics == "ROWGROUP":
         return cudf_io_types.statistics_freq.STATISTICS_PAGE
     else:
-        raise ValueError("Unsupported `statistics_freq` type")
+        raise ValueError("Unsupported `statistics_freq` type {statistics}")
 
 
 cpdef write_orc(table,
