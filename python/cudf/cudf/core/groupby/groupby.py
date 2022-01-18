@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import collections
 import itertools
@@ -1003,7 +1003,9 @@ class GroupBy(Serializable):
             cudf.core.frame.Frame(value_columns._data)
         )
         grouped = self.obj.__class__._from_data(data, index)
-        grouped = self._mimic_pandas_order(grouped)
+        grouped = self._mimic_pandas_order(grouped)._copy_type_metadata(
+            value_columns
+        )
 
         result = grouped - self.shift(periods=periods)
         return result._copy_type_metadata(value_columns)
