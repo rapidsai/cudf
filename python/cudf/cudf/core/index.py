@@ -1535,9 +1535,11 @@ class DatetimeIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.DatetimeIndex([1, 2, 3, 4], name="a")
-    DatetimeIndex(['1970-01-01 00:00:00.001000', '1970-01-01 00:00:00.002000',
-                   '1970-01-01 00:00:00.003000', '1970-01-01 00:00:00.004000'],
-                  dtype='datetime64[ms]', name='a')
+    DatetimeIndex(['1970-01-01 00:00:00.000000001',
+                   '1970-01-01 00:00:00.000000002',
+                   '1970-01-01 00:00:00.000000003',
+                   '1970-01-01 00:00:00.000000004'],
+                  dtype='datetime64[ns]', name='a')
     """
 
     def __init__(
@@ -1899,12 +1901,13 @@ class DatetimeIndex(GenericIndex):
         Examples
         --------
         >>> import cudf
-        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
-        ... "1999-12-31 18:40:00"])
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:05:42",
+        ...     "1999-12-31 18:40:30",
+        ... ])
         >>> gIndex.ceil("T")
-        DatetimeIndex(['2020-05-31 08:00:00', '1999-12-31 18:40:00'],
-        dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.ceil(freq)
 
         return self.__class__._from_data({self.name: out_column})
@@ -1930,12 +1933,13 @@ class DatetimeIndex(GenericIndex):
         Examples
         --------
         >>> import cudf
-        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:59:59"
-        ... ,"1999-12-31 18:44:59"])
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:59:59",
+        ...     "1999-12-31 18:44:59",
+        ... ])
         >>> gIndex.floor("T")
-        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'],
-        dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.floor(freq)
 
         return self.__class__._from_data({self.name: out_column})
@@ -1967,21 +1971,14 @@ class DatetimeIndex(GenericIndex):
         ...     "2001-01-01 00:05:04",
         ... ], dtype="datetime64[ns]")
         >>> dt_idx
-        DatetimeIndex(['2001-01-01 00:04:45',
-                '2001-01-01 00:05:04',
-                '2001-01-01 00:04:58'],
-                dtype='datetime64[ns]', freq=None)
+        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:04:58',
+                       '2001-01-01 00:05:04'],
+                      dtype='datetime64[ns]')
         >>> dt_idx.round('H')
-        DatetimeIndex(['2001-01-01',
-                    '2001-01-01',
-                    '2001-01-01'],
-                    dtype='datetime64[ns]', freq=None)
+        DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
         >>> dt_idx.round('T')
-        DatetimeIndex(['2001-01-01 00:05:00',
-                    '2001-01-01 00:05:00',
-                    '2001-01-01 00:05:00'],
-                    dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.round(freq)
 
         return self.__class__._from_data({self.name: out_column})
@@ -2018,14 +2015,15 @@ class TimedeltaIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.TimedeltaIndex([1132223, 2023232, 342234324, 4234324],
-    ...     dtype='timedelta64[ns]')
-    TimedeltaIndex(['00:00:00.001132', '00:00:00.002023', '00:00:00.342234',
-                    '00:00:00.004234'],
-                dtype='timedelta64[ns]')
-    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype='timedelta64[s]',
+    ...     dtype="timedelta64[ns]")
+    TimedeltaIndex(['0 days 00:00:00.001132223', '0 days 00:00:00.002023232',
+                    '0 days 00:00:00.342234324', '0 days 00:00:00.004234324'],
+                  dtype='timedelta64[ns]')
+    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype="timedelta64[s]",
     ...     name="delta-index")
-    TimedeltaIndex(['00:00:01', '00:00:02', '00:00:03', '00:00:04'],
-                dtype='timedelta64[s]', name='delta-index')
+    TimedeltaIndex(['0 days 00:00:01', '0 days 00:00:02', '0 days 00:00:03',
+                    '0 days 00:00:04'],
+                  dtype='timedelta64[s]', name='delta-index')
     """
 
     def __init__(
@@ -2154,11 +2152,11 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """  # noqa: E501
 
     def __init__(
@@ -2449,9 +2447,7 @@ class IntervalIndex(GenericIndex):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]],
-                    closed='right',
-                    dtype='interval[int64]')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
