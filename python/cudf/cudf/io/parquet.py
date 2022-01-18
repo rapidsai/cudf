@@ -5,9 +5,11 @@ import json
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
+from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import fsspec
+import numpy as np
 import pyarrow as pa
 from pyarrow import dataset as ds, parquet as pq
 
@@ -126,32 +128,21 @@ def write_to_dataset(
 
     if partition_cols is not None and len(partition_cols) > 0:
 
-        data_cols = df.columns.drop(partition_cols)
-        if len(data_cols) == 0:
-            raise ValueError("No data left to save outside partition columns")
-
-        part_names, part_offsets, _, grouped_df = df.groupby(
-            partition_cols
-        )._grouped()
-        if not preserve_index:
-            grouped_df.reset_index(drop=True, inplace=True)
-        grouped_df.drop(columns=partition_cols, inplace=True)
-        # Copy the entire keys df in one operation rather than using iloc
-        part_names = part_names.to_pandas().to_frame(index=False)
-
-        full_paths = []
-        metadata_file_paths = []
-        for keys in part_names.itertuples(index=False):
-            subdir = fs.sep.join(
-                [f"{name}={val}" for name, val in zip(partition_cols, keys)]
-            )
-            prefix = fs.sep.join([root_path, subdir])
-            fs.mkdirs(prefix, exist_ok=True)
-            filename = filename or uuid4().hex + ".parquet"
-            full_path = fs.sep.join([prefix, filename])
-            full_paths.append(full_path)
-            if return_metadata:
-                metadata_file_paths.append(fs.sep.join([subdir, filename]))
+        (
+            full_paths,
+            metadata_file_paths,
+            grouped_df,
+            part_offsets,
+            _,
+        ) = _get_partitioned(
+            df,
+            root_path,
+            partition_cols,
+            filename,
+            fs,
+            preserve_index,
+            **kwargs,
+        )
 
         if return_metadata:
             kwargs["metadata_file_path"] = metadata_file_paths
@@ -164,7 +155,7 @@ def write_to_dataset(
         )
 
     else:
-        filename = filename or uuid4().hex + ".parquet"
+        filename = filename or _generate_filename()
         full_path = fs.sep.join([root_path, filename])
         if return_metadata:
             kwargs["metadata_file_path"] = filename
@@ -737,13 +728,12 @@ def to_parquet(
             )
 
         if partition_offsets:
-            kwargs["partitions_info"] = [
-                (
-                    partition_offsets[i],
-                    partition_offsets[i + 1] - partition_offsets[i],
+            kwargs["partitions_info"] = list(
+                zip(
+                    partition_offsets,
+                    np.roll(partition_offsets, -1) - partition_offsets,
                 )
-                for i in range(0, len(partition_offsets) - 1)
-            ]
+            )[:-1]
 
         return _write_parquet(
             df,
@@ -790,7 +780,208 @@ def merge_parquet_filemetadata(filemetadata_list):
     return libparquet.merge_filemetadata(filemetadata_list)
 
 
+def _generate_filename():
+    return uuid4().hex + ".parquet"
+
+
+def _get_partitioned(
+    df,
+    root_path,
+    partition_cols,
+    filename=None,
+    fs=None,
+    preserve_index=False,
+    **kwargs,
+):
+    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
+    fs.mkdirs(root_path, exist_ok=True)
+    if not (set(df._data) - set(partition_cols)):
+        raise ValueError("No data left to save outside partition columns")
+
+    part_names, part_offsets, _, grouped_df = df.groupby(
+        partition_cols
+    )._grouped()
+    if not preserve_index:
+        grouped_df.reset_index(drop=True, inplace=True)
+    grouped_df.drop(columns=partition_cols, inplace=True)
+    # Copy the entire keys df in one operation rather than using iloc
+    part_names = part_names.to_pandas().to_frame(index=False)
+
+    full_paths = []
+    metadata_file_paths = []
+    for keys in part_names.itertuples(index=False):
+        subdir = fs.sep.join(
+            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+        )
+        prefix = fs.sep.join([root_path, subdir])
+        fs.mkdirs(prefix, exist_ok=True)
+        filename = filename or _generate_filename()
+        full_path = fs.sep.join([prefix, filename])
+        full_paths.append(full_path)
+        metadata_file_paths.append(fs.sep.join([subdir, filename]))
+
+    return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
+
+
 ParquetWriter = libparquet.ParquetWriter
+
+
+class ParquetDatasetWriter:
+    def __init__(
+        self,
+        path,
+        partition_cols,
+        index=None,
+        compression=None,
+        statistics="ROWGROUP",
+    ) -> None:
+        """
+        Write a parquet file or dataset incrementally
+
+        Parameters
+        ----------
+        path : str
+            File path or Root Directory path. Will be used as Root Directory
+            path while writing a partitioned dataset.
+        partition_cols : list
+            Column names by which to partition the dataset
+            Columns are partitioned in the order they are given
+        index : bool, default None
+            If ``True``, include the dataframe’s index(es) in the file output.
+            If ``False``, they will not be written to the file. If ``None``,
+            index(es) other than RangeIndex will be saved as columns.
+        compression : {'snappy', None}, default 'snappy'
+            Name of the compression to use. Use ``None`` for no compression.
+        statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+            Level at which column statistics should be included in file.
+
+
+        Examples
+        ________
+        Using a context
+
+        >>> df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
+        >>> df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
+        >>> with ParquetDatasetWriter("./dataset", partition_cols=["a"]) as cw:
+        ...     cw.write_table(df1)
+        ...     cw.write_table(df2)
+
+        By manually calling ``close()``
+
+        >>> cw = ParquetDatasetWriter("./dataset", partition_cols=["a"])
+        >>> cw.write_table(df1)
+        >>> cw.write_table(df2)
+        >>> cw.close()
+
+        Both the methods will generate the same directory structure
+
+        .. code-block:: bash
+
+            dataset/
+                a=1
+                    <filename>.parquet
+                a=2
+                    <filename>.parquet
+                a=3
+                    <filename>.parquet
+
+        """
+        self.path = path
+        self.common_args = {
+            "index": index,
+            "compression": compression,
+            "statistics": statistics,
+        }
+        self.partition_cols = partition_cols
+        # Collection of `ParquetWriter`s, and the corresponding
+        # partition_col values they're responsible for
+        self._chunked_writers: List[
+            Tuple[libparquet.ParquetWriter, List[str], str]
+        ] = []
+        # Map of partition_col values to their ParquetWriter's index
+        # in self._chunked_writers for reverse lookup
+        self.path_cw_map: Dict[str, int] = {}
+        self.filename = None
+
+    def write_table(self, df):
+        """
+        Write a dataframe to the file/dataset
+        """
+        (
+            paths,
+            metadata_file_paths,
+            grouped_df,
+            offsets,
+            self.filename,
+        ) = _get_partitioned(
+            df,
+            self.path,
+            self.partition_cols,
+            preserve_index=self.common_args["index"],
+            filename=self.filename,
+        )
+
+        existing_cw_batch = defaultdict(dict)
+        new_cw_paths = []
+
+        for path, part_info, meta_path in zip(
+            paths,
+            zip(offsets, np.roll(offsets, -1) - offsets),
+            metadata_file_paths,
+        ):
+            if path in self.path_cw_map:  # path is a currently open file
+                cw_idx = self.path_cw_map[path]
+                existing_cw_batch[cw_idx][path] = part_info
+            else:  # path not currently handled by any chunked writer
+                new_cw_paths.append((path, part_info, meta_path))
+
+        # Write out the parts of grouped_df currently handled by existing cw's
+        for cw_idx, path_to_part_info_map in existing_cw_batch.items():
+            cw = self._chunked_writers[cw_idx][0]
+            # match found paths with this cw's paths and nullify partition info
+            # for partition_col values not in this batch
+            this_cw_part_info = [
+                path_to_part_info_map.get(path, (0, 0))
+                for path in self._chunked_writers[cw_idx][1]
+            ]
+            cw.write_table(grouped_df, this_cw_part_info)
+
+        # Create new cw for unhandled paths encountered in this write_table
+        new_paths, part_info, meta_paths = zip(*new_cw_paths)
+        self._chunked_writers.append(
+            (
+                ParquetWriter(new_paths, **self.common_args),
+                new_paths,
+                meta_paths,
+            )
+        )
+        new_cw_idx = len(self._chunked_writers) - 1
+        self.path_cw_map.update({k: new_cw_idx for k in new_paths})
+        self._chunked_writers[-1][0].write_table(grouped_df, part_info)
+
+    def close(self, return_metadata=False):
+        """
+        Close all open files and optionally return footer metadata as a binary
+        blob
+        """
+
+        metadata = [
+            cw.close(metadata_file_path=meta_path if return_metadata else None)
+            for cw, _, meta_path in self._chunked_writers
+        ]
+
+        if return_metadata:
+            return (
+                merge_parquet_filemetadata(metadata)
+                if len(metadata) > 1
+                else metadata[0]
+            )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
 
 def _check_decimal128_type(arrow_type):
