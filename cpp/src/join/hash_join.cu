@@ -19,7 +19,6 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -34,54 +33,12 @@
 namespace cudf {
 namespace detail {
 
-namespace {
-
-}  // anonymous namespace
-
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
   table_view const& probe, table_view const& build)
 {
   std::unique_ptr<table> empty_probe = empty_like(probe);
   std::unique_ptr<table> empty_build = empty_like(build);
   return std::make_pair(std::move(empty_probe), std::move(empty_build));
-}
-
-/**
- * @brief Builds the hash table based on the given `build_table`.
- *
- * @param build Table of columns used to build join hash.
- * @param hash_table Build hash table.
- * @param compare_nulls Controls whether null join-key values should match or not.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- */
-void build_join_hash_table(cudf::table_view const& build,
-                           multimap_type& hash_table,
-                           null_equality compare_nulls,
-                           rmm::cuda_stream_view stream)
-{
-  auto build_table_ptr = cudf::table_device_view::create(build, stream);
-
-  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
-
-  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
-  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_build, empty_key_sentinel};
-
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
-
-  size_type const build_table_num_rows{build_table_ptr->num_rows()};
-  if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
-    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
-  } else {
-    thrust::counting_iterator<size_type> stencil(0);
-    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
-    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-    // insert valid rows
-    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
-  }
 }
 
 /**

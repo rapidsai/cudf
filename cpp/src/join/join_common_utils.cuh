@@ -45,6 +45,17 @@ class row_is_valid {
 
 /**
  * @brief Device functor to determine if two pairs are identical.
+ *
+ * This equality comparator is designed for use with cuco::static_multimap's
+ * pair* APIs, which will compare equality based on comparing (key, value)
+ * pairs. In the context of joins, these pairs are of the form
+ * (row_hash, row_id). A hash probe hit indicates that hash of a probe row's hash is
+ * equal to the hash of the hash of some row in the multimap, at which point we need an
+ * equality comparator that will check whether the contents of the rows are
+ * identical. This comparator does so by verifying key equality (i.e. that
+ * probe_row_hash == build_row_hash) and then using a row_equality_comparator
+ * to compare the contents of the row indices that are stored as the payload in
+ * the hash map.
  */
 class pair_equality {
  public:

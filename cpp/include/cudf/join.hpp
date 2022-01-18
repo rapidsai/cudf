@@ -19,6 +19,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -701,7 +702,7 @@ conditional_inner_join(
  * The first returned vector contains all the row indices from the left
  * table (in unspecified order). The corresponding value in the
  * second returned vector is either (1) the row index of the matched row
- * from the right table, if there is a match  or  (2) an unspecified
+ * from the right table, if there is a match or (2) an unspecified
  * out-of-bounds value.
  *
  * If the provided predicate returns NULL for a pair of rows
@@ -857,6 +858,270 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   ast::expression const& binary_predicate,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a pair of row index vectors corresponding to all pairs of
+ * rows between the specified tables where the columns of the equality table
+ * are equal and the predicate evaluates to true on the conditional tables.
+ *
+ * The first returned vector contains the row indices from the left
+ * table that have a match in the right table (in unspecified order).
+ * The corresponding values in the second returned vector are
+ * the matched row indices from the right table.
+ *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output. It is the user's
+ * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * null-safe operators in the expression.
+ *
+ * If the provided output size or per-row counts are incorrect, behavior is undefined.
+ *
+ * @code{.pseudo}
+ * left_equality: {{0, 1, 2}}
+ * right_equality: {{1, 2, 3}}
+ * left_conditional: {{4, 4, 4}}
+ * right_conditional: {{3, 4, 5}}
+ * Expression: Left.Column_0 > Right.Column_0
+ * Result: {{1}, {0}}
+ * @endcode
+ *
+ * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
+ * match.
+ * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
+ * match.
+ *
+ * @param left_equality The left table used for the equality join.
+ * @param right_equality The right table used for the equality join.
+ * @param left_conditional The left table used for the conditional join.
+ * @param right_conditional The right table used for the conditional join.
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether or not null values join to each other or not.
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_inner_join_size API).
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
+ * the result of performing a mixed inner join between the four input tables.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_inner_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a pair of row index vectors corresponding to all pairs of
+ * rows between the specified tables where the columns of the equality table
+ * are equal and the predicate evaluates to true on the conditional tables,
+ * or null matches for rows in left that have no match in right.
+ *
+ * The first returned vector contains the row indices from the left
+ * tables that have a match in the right tables (in unspecified order).
+ * The corresponding value in the second returned vector is either (1)
+ * the row index of the matched row from the right tables, or (2) an
+ * unspecified out-of-bounds value.
+ *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output. It is the user's
+ * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * null-safe operators in the expression.
+ *
+ * If the provided output size or per-row counts are incorrect, behavior is undefined.
+ *
+ * @code{.pseudo}
+ * left_equality: {{0, 1, 2}}
+ * right_equality: {{1, 2, 3}}
+ * left_conditional: {{4, 4, 4}}
+ * right_conditional: {{3, 4, 5}}
+ * Expression: Left.Column_0 > Right.Column_0
+ * Result: {{0, 1, 2}, {None, 0, None}}
+ * @endcode
+ *
+ * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
+ * match.
+ * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
+ * match.
+ *
+ * @param left_equality The left table used for the equality join.
+ * @param right_equality The right table used for the equality join.
+ * @param left_conditional The left table used for the conditional join.
+ * @param right_conditional The right table used for the conditional join.
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether or not null values join to each other or not.
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_left_join_size API).
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
+ * the result of performing a mixed left join between the four input tables.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_left_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a pair of row index vectors corresponding to all pairs of
+ * rows between the specified tables where the columns of the equality table
+ * are equal and the predicate evaluates to true on the conditional tables,
+ * or null matches for rows in either pair of tables that have no matches in
+ * the other pair.
+ *
+ * Taken pairwise, the values from the returned vectors are one of:
+ * (1) row indices corresponding to matching rows from the left and
+ * right tables, (2) a row index and an unspecified out-of-bounds value,
+ * representing a row from one table without a match in the other.
+ *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output. It is the user's
+ * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * null-safe operators in the expression.
+ *
+ * If the provided output size or per-row counts are incorrect, behavior is undefined.
+ *
+ * @code{.pseudo}
+ * left_equality: {{0, 1, 2}}
+ * right_equality: {{1, 2, 3}}
+ * left_conditional: {{4, 4, 4}}
+ * right_conditional: {{3, 4, 5}}
+ * Expression: Left.Column_0 > Right.Column_0
+ * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
+ * @endcode
+ *
+ * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
+ * match.
+ * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
+ * match.
+ *
+ * @param left_equality The left table used for the equality join.
+ * @param right_equality The right table used for the equality join.
+ * @param left_conditional The left table used for the conditional join.
+ * @param right_conditional The right table used for the conditional join.
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether or not null values join to each other or not.
+ * @param output_size_data An optional pair of values indicating the exact output size and the
+ * number of matches for each row in the larger of the two input tables, left or right (may be
+ * precomputed using the corresponding mixed_full_join_size API).
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
+ * the result of performing a mixed full join between the four input tables.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_full_join(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
+  std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the exact number of matches (rows) when performing a
+ * mixed inner join between the specified tables where the columns of the
+ * equality table are equal and the predicate evaluates to true on the
+ * conditional tables.
+ *
+ * If the provided predicate returns NULL for a pair of rows (left, right),
+ * that pair is not included in the output. It is the user's responsiblity to
+ * choose a suitable compare_nulls value AND use appropriate null-safe
+ * operators in the expression.
+ *
+ * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
+ * match.
+ * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
+ * match.
+ *
+ * @param left_equality The left table used for the equality join.
+ * @param right_equality The right table used for the equality join.
+ * @param left_conditional The left table used for the conditional join.
+ * @param right_conditional The right table used for the conditional join.
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether or not null values join to each other or not.
+ * @param output_size An optional pair of values indicating the exact output size and the number of
+ * matches for each row in the larger of the two input tables, left or right (may be precomputed
+ * using the corresponding mixed_inner_join_size API).
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair containing the size that would result from performing the
+ * requested join and the number of matches for each row in one of the two
+ * tables. Which of the two tables is an implementation detail and should not
+ * be relied upon, simply passed to the corresponding `mixed_inner_join` API as
+ * is.
+ */
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the exact number of matches (rows) when performing a
+ * mixed left join between the specified tables where the columns of the
+ * equality table are equal and the predicate evaluates to true on the
+ * conditional tables.
+ *
+ * If the provided predicate returns NULL for a pair of rows (left, right),
+ * that pair is not included in the output. It is the user's responsiblity to
+ * choose a suitable compare_nulls value AND use appropriate null-safe
+ * operators in the expression.
+ *
+ * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
+ * match.
+ * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
+ * match.
+ *
+ * @param left_equality The left table used for the equality join.
+ * @param right_equality The right table used for the equality join.
+ * @param left_conditional The left table used for the conditional join.
+ * @param right_conditional The right table used for the conditional join.
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether or not null values join to each other or not.
+ * @param output_size An optional pair of values indicating the exact output size and the number of
+ * matches for each row in the larger of the two input tables, left or right (may be precomputed
+ * using the corresponding mixed_inner_join_size API).
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair containing the size that would result from performing the
+ * requested join and the number of matches for each row in one of the two
+ * tables. Which of the two tables is an implementation detail and should not
+ * be relied upon, simply passed to the corresponding `mixed_left_join` API as
+ * is.
+ */
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
