@@ -119,8 +119,8 @@ std::unique_ptr<column> replace_re(
   // compile regex into device object
   auto prog =
     reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
-  auto d_prog            = *prog;
-  auto const regex_insts = d_prog.insts_counts();
+  auto d_prog = *prog;
+  // auto const regex_insts = d_prog.insts_counts();
 
   // copy null mask
   auto null_mask        = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
@@ -131,19 +131,19 @@ std::unique_ptr<column> replace_re(
   auto children = [&] {
     // Each invocation is predicated on the stack size which is dependent on the number of regex
     // instructions
-    if (regex_insts <= RX_SMALL_INSTS) {
-      replace_regex_fn<RX_STACK_SMALL> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    } else if (regex_insts <= RX_MEDIUM_INSTS) {
-      replace_regex_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    } else if (regex_insts <= RX_LARGE_INSTS) {
-      replace_regex_fn<RX_STACK_LARGE> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    } else {
-      replace_regex_fn<RX_STACK_ANY> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    }
+    // if (regex_insts <= RX_SMALL_INSTS) {
+    //   replace_regex_fn<RX_STACK_SMALL> fn{d_strings, d_prog, d_repl, maxrepl};
+    //   return make_strings_children(fn, strings_count, stream, mr);
+    // } else if (regex_insts <= RX_MEDIUM_INSTS) {
+    //   replace_regex_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog, d_repl, maxrepl};
+    //   return make_strings_children(fn, strings_count, stream, mr);
+    // } else if (regex_insts <= RX_LARGE_INSTS) {
+    //   replace_regex_fn<RX_STACK_LARGE> fn{d_strings, d_prog, d_repl, maxrepl};
+    //   return make_strings_children(fn, strings_count, stream, mr);
+    // } else {
+    replace_regex_fn<RX_STACK_ANY> fn{d_strings, d_prog, d_repl, maxrepl};
+    return make_strings_children(fn, strings_count, stream, mr);
+    // }
   }();
 
   return make_strings_column(strings_count,

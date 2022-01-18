@@ -120,36 +120,36 @@ std::unique_ptr<table> findall_re(
 
   auto const d_flags = detail::get_character_flags_table();
   // compile regex into device object
-  auto const d_prog      = reprog_device::create(pattern, d_flags, strings_count, stream);
-  auto const regex_insts = d_prog->insts_counts();
+  auto const d_prog = reprog_device::create(pattern, d_flags, strings_count, stream);
+  // auto const regex_insts = d_prog->insts_counts();
 
   rmm::device_uvector<size_type> find_counts(strings_count, stream);
   auto d_find_counts = find_counts.data();
 
-  if (regex_insts <= RX_SMALL_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_find_counts,
-                      findall_count_fn<RX_STACK_SMALL>{*d_strings, *d_prog});
-  else if (regex_insts <= RX_MEDIUM_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_find_counts,
-                      findall_count_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog});
-  else if (regex_insts <= RX_LARGE_INSTS)
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_find_counts,
-                      findall_count_fn<RX_STACK_LARGE>{*d_strings, *d_prog});
-  else
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_count),
-                      d_find_counts,
-                      findall_count_fn<RX_STACK_ANY>{*d_strings, *d_prog});
+  // if (regex_insts <= RX_SMALL_INSTS)
+  //   thrust::transform(rmm::exec_policy(stream),
+  //                     thrust::make_counting_iterator<size_type>(0),
+  //                     thrust::make_counting_iterator<size_type>(strings_count),
+  //                     d_find_counts,
+  //                     findall_count_fn<RX_STACK_SMALL>{*d_strings, *d_prog});
+  // else if (regex_insts <= RX_MEDIUM_INSTS)
+  //   thrust::transform(rmm::exec_policy(stream),
+  //                     thrust::make_counting_iterator<size_type>(0),
+  //                     thrust::make_counting_iterator<size_type>(strings_count),
+  //                     d_find_counts,
+  //                     findall_count_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog});
+  // else if (regex_insts <= RX_LARGE_INSTS)
+  //   thrust::transform(rmm::exec_policy(stream),
+  //                     thrust::make_counting_iterator<size_type>(0),
+  //                     thrust::make_counting_iterator<size_type>(strings_count),
+  //                     d_find_counts,
+  //                     findall_count_fn<RX_STACK_LARGE>{*d_strings, *d_prog});
+  // else
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
+                    d_find_counts,
+                    findall_count_fn<RX_STACK_ANY>{*d_strings, *d_prog});
 
   std::vector<std::unique_ptr<column>> results;
 
@@ -167,33 +167,33 @@ std::unique_ptr<table> findall_re(
   for (int32_t column_index = 0; column_index < columns; ++column_index) {
     rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
-    if (regex_insts <= RX_SMALL_INSTS)
-      thrust::transform(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count),
-        indices.begin(),
-        findall_fn<RX_STACK_SMALL>{*d_strings, *d_prog, column_index, d_find_counts});
-    else if (regex_insts <= RX_MEDIUM_INSTS)
-      thrust::transform(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count),
-        indices.begin(),
-        findall_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog, column_index, d_find_counts});
-    else if (regex_insts <= RX_LARGE_INSTS)
-      thrust::transform(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count),
-        indices.begin(),
-        findall_fn<RX_STACK_LARGE>{*d_strings, *d_prog, column_index, d_find_counts});
-    else
-      thrust::transform(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(strings_count),
-                        indices.begin(),
-                        findall_fn<RX_STACK_ANY>{*d_strings, *d_prog, column_index, d_find_counts});
+    // if (regex_insts <= RX_SMALL_INSTS)
+    //   thrust::transform(
+    //     rmm::exec_policy(stream),
+    //     thrust::make_counting_iterator<size_type>(0),
+    //     thrust::make_counting_iterator<size_type>(strings_count),
+    //     indices.begin(),
+    //     findall_fn<RX_STACK_SMALL>{*d_strings, *d_prog, column_index, d_find_counts});
+    // else if (regex_insts <= RX_MEDIUM_INSTS)
+    //   thrust::transform(
+    //     rmm::exec_policy(stream),
+    //     thrust::make_counting_iterator<size_type>(0),
+    //     thrust::make_counting_iterator<size_type>(strings_count),
+    //     indices.begin(),
+    //     findall_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog, column_index, d_find_counts});
+    // else if (regex_insts <= RX_LARGE_INSTS)
+    //   thrust::transform(
+    //     rmm::exec_policy(stream),
+    //     thrust::make_counting_iterator<size_type>(0),
+    //     thrust::make_counting_iterator<size_type>(strings_count),
+    //     indices.begin(),
+    //     findall_fn<RX_STACK_LARGE>{*d_strings, *d_prog, column_index, d_find_counts});
+    // else
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(strings_count),
+                      indices.begin(),
+                      findall_fn<RX_STACK_ANY>{*d_strings, *d_prog, column_index, d_find_counts});
 
     //
     results.emplace_back(make_strings_column(indices.begin(), indices.end(), stream, mr));

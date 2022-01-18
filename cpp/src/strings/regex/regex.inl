@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,14 +60,15 @@ struct alignas(8) relist {
 
   __host__ __device__ inline relist() {}
 
-  __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr) : listsize(insts)
+  __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr, u_char* sdata = nullptr)
+    : listsize(insts)
   {
     auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
     ranges   = reinterpret_cast<int2*>(ptr);
     ptr += listsize * sizeof(ranges[0]);
     inst_ids = reinterpret_cast<int16_t*>(ptr);
     ptr += listsize * sizeof(inst_ids[0]);
-    mask = ptr;
+    mask = sdata ? sdata : ptr;
     reset();
   }
 
@@ -246,9 +247,9 @@ __device__ inline int32_t reprog_device::regexec(
       expanded = false;
 
       for (int16_t i = 0; i < jnk.list1->size; i++) {
-        int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
+        auto const inst_id  = static_cast<int32_t>(jnk.list1->inst_ids[i]);
         int2& range         = jnk.list1->ranges[i];
-        const reinst* inst  = get_inst(inst_id);
+        reinst const* inst  = get_inst(inst_id);
         int32_t id_activate = -1;
 
         switch (inst->type) {
@@ -270,7 +271,7 @@ __device__ inline int32_t reprog_device::regexec(
             break;
           case BOL:
             if ((pos == 0) ||
-                ((inst->u1.c == '^') && (dstr[pos - 1] == static_cast<char_utf8>('\n')))) {
+                ((inst->u1.c == '^') && (*(itr - 1) == static_cast<char_utf8>('\n')))) {
               id_activate = inst->u2.next_id;
               expanded    = true;
             }
@@ -281,27 +282,17 @@ __device__ inline int32_t reprog_device::regexec(
               expanded    = true;
             }
             break;
-          case BOW: {
-            auto codept           = utf8_to_codepoint(c);
-            char32_t last_c       = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
-            auto last_codept      = utf8_to_codepoint(last_c);
-            bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool last_alphaNumeric =
-              (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if (cur_alphaNumeric != last_alphaNumeric) {
-              id_activate = inst->u2.next_id;
-              expanded    = true;
-            }
-            break;
-          }
+          case BOW:
           case NBOW: {
-            auto codept           = utf8_to_codepoint(c);
-            char32_t last_c       = static_cast<char32_t>(pos ? dstr[pos - 1] : 0);
-            auto last_codept      = utf8_to_codepoint(last_c);
-            bool cur_alphaNumeric = (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool last_alphaNumeric =
+            auto const codept      = utf8_to_codepoint(c);
+            auto const last_c      = static_cast<char32_t>(pos ? *(itr - 1) : 0);
+            auto const last_codept = utf8_to_codepoint(last_c);
+
+            bool const cur_alphaNumeric =
+              (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
+            bool const last_alphaNumeric =
               (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if (cur_alphaNumeric == last_alphaNumeric) {
+            if ((cur_alphaNumeric == last_alphaNumeric) != (inst->type == BOW)) {
               id_activate = inst->u2.next_id;
               expanded    = true;
             }
@@ -323,9 +314,9 @@ __device__ inline int32_t reprog_device::regexec(
     bool continue_execute = true;
     jnk.list2->reset();
     for (int16_t i = 0; continue_execute && i < jnk.list1->size; i++) {
-      int32_t inst_id     = static_cast<int32_t>(jnk.list1->inst_ids[i]);
+      auto const inst_id  = static_cast<int32_t>(jnk.list1->inst_ids[i]);
       int2& range         = jnk.list1->ranges[i];
-      const reinst* inst  = get_inst(inst_id);
+      reinst const* inst  = get_inst(inst_id);
       int32_t id_activate = -1;
 
       switch (inst->type) {
@@ -336,14 +327,12 @@ __device__ inline int32_t reprog_device::regexec(
           if (c != '\n') id_activate = inst->u2.next_id;
           break;
         case ANYNL: id_activate = inst->u2.next_id; break;
-        case CCLASS: {
-          reclass_device cls = get_class(inst->u1.cls_id);
-          if (cls.is_match(c, _codepoint_flags)) id_activate = inst->u2.next_id;
-          break;
-        }
+        case CCLASS:
         case NCCLASS: {
           reclass_device cls = get_class(inst->u1.cls_id);
-          if (!cls.is_match(c, _codepoint_flags)) id_activate = inst->u2.next_id;
+          if (cls.is_match(c, _codepoint_flags) != (inst->type == NCCLASS)) {
+            id_activate = inst->u2.next_id;
+          }
           break;
         }
         case END:
@@ -396,12 +385,16 @@ __device__ inline int32_t reprog_device::call_regexec(
   int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
 {
   u_char data1[stack_size], data2[stack_size];
+  __shared__ u_char sd[(256 / 8) * 2 * (stack_size / 10)];
 
   auto const stype = get_inst(_startinst_id)->type;
   auto const schar = get_inst(_startinst_id)->u1.c;
 
-  relist list1(static_cast<int16_t>(_insts_count), data1);
-  relist list2(static_cast<int16_t>(_insts_count), data2);
+  auto mask1 = &sd[threadIdx.x * ((_insts_count + 7) / 8)];
+  auto mask2 = mask1 + (sizeof(sd) / 2);
+
+  relist list1(static_cast<int16_t>(_insts_count), data1, mask1);
+  relist list2(static_cast<int16_t>(_insts_count), data2, mask2);
 
   reljunk jnk(&list1, &list2, stype, schar);
   return regexec(dstr, jnk, begin, end, group_id);
@@ -414,9 +407,9 @@ __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
   auto const stype = get_inst(_startinst_id)->type;
   auto const schar = get_inst(_startinst_id)->u1.c;
 
-  auto const relists_size = relist::alloc_size(_insts_count);
+  auto const relists_size = static_cast<std::size_t>(relist::alloc_size(_insts_count));
   u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
-  listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
+  listmem += (idx * relists_size * 2L);                               // two relist ptrs in reljunk:
 
   relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
   relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));

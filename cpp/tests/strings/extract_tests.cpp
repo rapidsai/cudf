@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
                                               "a23-44-13-2.deploy.static.akamaitechnologies.com"});
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::string pattern = "([\\w]+[\\.].*[^/]|[\\-\\w]+[\\.].*[^/])";
+  std::string pattern = "([\\w]+[\\.].*[^/]|[\\-\\w]+[\\.].*[^/])";  // 16 regex instructions
   auto results        = cudf::strings::extract(strings_view, pattern);
 
   cudf::test::strings_column_wrapper expected1({
@@ -118,12 +118,12 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
 
 TEST_F(StringsExtractTests, ExtractEventTest)
 {
-  std::vector<std::string> patterns({"(^[0-9]+\\.?[0-9]*),",
-                                     "search_name=\"([0-9A-Za-z\\s\\-\\(\\)]+)",
-                                     "message.ip=\"([\\w\\.]+)",
-                                     "message.hostname=\"([\\w\\.]+)",
-                                     "message.user_name=\"([\\w\\.\\@]+)",
-                                     "message\\.description=\"([\\w\\.\\s]+)"});
+  std::vector<std::string> patterns({"(^[0-9]+\\.?[0-9]*),",                      // 11 instructions
+                                     "search_name=\"([0-9A-Za-z\\s\\-\\(\\)]+)",  // 18
+                                     "message.ip=\"([\\w\\.]+)",                  // 17
+                                     "message.hostname=\"([\\w\\.]+)",            // 23
+                                     "message.user_name=\"([\\w\\.\\@]+)",        // 24
+                                     "message\\.description=\"([\\w\\.\\s]+)"});  // 26
 
   cudf::test::strings_column_wrapper strings(
     {"15162388.26, search_name=\"Test Search Name\", orig_time=\"1516238826\", "
@@ -171,7 +171,7 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
 
 TEST_F(StringsExtractTests, MediumRegex)
 {
-  // This results in 95 regex instructions and falls in the 'medium' range.
+  // This results in 97 regex instructions and falls in the 'medium' range.
   std::string medium_regex =
     "hello @abc @def (world) The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com";
@@ -200,7 +200,7 @@ TEST_F(StringsExtractTests, MediumRegex)
 
 TEST_F(StringsExtractTests, LargeRegex)
 {
-  // This results in 115 regex instructions and falls in the 'large' range.
+  // This results in 117 regex instructions and falls in the 'large' range.
   std::string large_regex =
     "hello @abc @def world The (quick) brown @fox jumps over the lazy @dog hello "
     "http://www.world.com I'm here @home zzzz";

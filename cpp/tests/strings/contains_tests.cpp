@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
                                               "5.79.97.178",
                                               "127.0.0.1"});
   auto strings_view = cudf::strings_column_view(strings);
-  {  // is_ip
+  {  // is_ip: 58 instructions
     std::string pattern =
       "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
       "$";
@@ -215,7 +215,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
       {true, true, false, false, false, false, true, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
-  {  // is_loopback
+  {  // is_loopback: 72 instructions
     std::string pattern =
       "^127\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
       "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
@@ -225,7 +225,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
       {false, false, false, false, false, false, false, false, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
-  {  // is_multicast
+  {  // is_multicast: 79 instructions
     std::string pattern =
       "^(2(2[4-9]|3[0-9]))\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
       "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
@@ -461,7 +461,7 @@ TEST_F(StringsContainsTests, LargeRegex)
 
 TEST_F(StringsContainsTests, ExtraLargeRegex)
 {
-  // This results in ~950 regex instructions which is above the 'large' range.
+  // This results in 951 regex instructions which is above the 'large' range.
   std::string data(950, '0');
   cudf::test::strings_column_wrapper strings({data, data, data, data, data, "00"});
   std::string pattern = data;

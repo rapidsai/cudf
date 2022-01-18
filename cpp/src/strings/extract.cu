@@ -100,28 +100,28 @@ std::unique_ptr<table> extract(
   rmm::device_uvector<string_index_pair> indices(strings_count * groups, stream);
   cudf::detail::device_2dspan<string_index_pair> d_indices(indices.data(), strings_count, groups);
 
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_SMALL>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_LARGE>{d_prog, d_strings, d_indices});
-  } else {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_ANY>{d_prog, d_strings, d_indices});
-  }
+  // auto const regex_insts = d_prog.insts_counts();
+  // if (regex_insts <= RX_SMALL_INSTS) {
+  //   thrust::for_each_n(rmm::exec_policy(stream),
+  //                      thrust::make_counting_iterator<size_type>(0),
+  //                      strings_count,
+  //                      extract_fn<RX_STACK_SMALL>{d_prog, d_strings, d_indices});
+  // } else if (regex_insts <= RX_MEDIUM_INSTS) {
+  //   thrust::for_each_n(rmm::exec_policy(stream),
+  //                      thrust::make_counting_iterator<size_type>(0),
+  //                      strings_count,
+  //                      extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, d_indices});
+  // } else if (regex_insts <= RX_LARGE_INSTS) {
+  //   thrust::for_each_n(rmm::exec_policy(stream),
+  //                      thrust::make_counting_iterator<size_type>(0),
+  //                      strings_count,
+  //                      extract_fn<RX_STACK_LARGE>{d_prog, d_strings, d_indices});
+  // } else {
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     strings_count,
+                     extract_fn<RX_STACK_ANY>{d_prog, d_strings, d_indices});
+  // }
 
   // build a result column for each group
   std::vector<std::unique_ptr<column>> results(groups);

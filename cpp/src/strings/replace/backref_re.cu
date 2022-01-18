@@ -115,7 +115,7 @@ std::unique_ptr<column> replace_with_backrefs(
   // compile regex into device object
   auto d_prog =
     reprog_device::create(pattern, flags, get_character_flags_table(), strings.size(), stream);
-  auto const regex_insts = d_prog->insts_counts();
+  // auto const regex_insts = d_prog->insts_counts();
 
   // parse the repl string for back-ref indicators
   auto const parse_result = parse_backrefs(replacement);
@@ -128,35 +128,35 @@ std::unique_ptr<column> replace_with_backrefs(
 
   // create child columns
   auto [offsets, chars] = [&] {
-    if (regex_insts <= RX_SMALL_INSTS) {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    } else if (regex_insts <= RX_MEDIUM_INSTS) {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_MEDIUM>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    } else if (regex_insts <= RX_LARGE_INSTS) {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_LARGE>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    } else {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_ANY>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    }
+    // if (regex_insts <= RX_SMALL_INSTS) {
+    //   return make_strings_children(
+    //     backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
+    //       *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+    //     strings.size(),
+    //     stream,
+    //     mr);
+    // } else if (regex_insts <= RX_MEDIUM_INSTS) {
+    //   return make_strings_children(
+    //     backrefs_fn<BackRefIterator, RX_STACK_MEDIUM>{
+    //       *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+    //     strings.size(),
+    //     stream,
+    //     mr);
+    // } else if (regex_insts <= RX_LARGE_INSTS) {
+    //   return make_strings_children(
+    //     backrefs_fn<BackRefIterator, RX_STACK_LARGE>{
+    //       *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+    //     strings.size(),
+    //     stream,
+    //     mr);
+    // } else {
+    return make_strings_children(
+      backrefs_fn<BackRefIterator, RX_STACK_ANY>{
+        *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+      strings.size(),
+      stream,
+      mr);
+    //}
   }();
 
   return make_strings_column(strings.size(),

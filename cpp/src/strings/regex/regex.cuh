@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,10 +42,10 @@ class reprog;
 using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
-constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
-constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
-constexpr int32_t RX_STACK_LARGE  = 10128;  ///< fast stack size
-constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
+constexpr int32_t RX_STACK_SMALL  = 120;   ///< fastest stack size 112
+constexpr int32_t RX_STACK_MEDIUM = 1000;  ///< faster stack size  1104
+constexpr int32_t RX_STACK_LARGE  = 2560;  ///< fast stack size    10128
+constexpr int32_t RX_STACK_ANY    = 8;     ///< slowest: uses global memory for everything
 
 /**
  * @brief Mapping the number of instructions to device code stack memory size.
@@ -56,9 +56,9 @@ constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
  * Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
  * ```
  */
-constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
-constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
-constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
+constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 10);   // 10
+constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 10);  // 100
+constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 10);   // 920
 
 /**
  * @brief Regex class stored on the device and executed by reprog_device.

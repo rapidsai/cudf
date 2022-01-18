@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -278,6 +278,30 @@ TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexErrorTest)
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", "\\123"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "", "\\1"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", ""), cudf::logic_error);
+}
+
+TEST_F(StringsReplaceRegexTest, BackrefLarge)
+{
+  int n_count = 1000;
+
+  std::string str = "2021-12-15 01:02:03.456789";
+  auto h_input    = thrust::make_constant_iterator<std::string>(str);
+  cudf::test::strings_column_wrapper input(h_input, h_input + n_count);
+  std::string replacement = "\\2/\\3/\\1";  //"\\2\\3\\1";
+
+  std::string pattern =
+    "^([0-9]{4}-[0-9]{2}-[0-9]{2} "
+    "[0-9]{2}:[0-9]{2}:[0-9]{2})(.[1-9]*(?:0)?[1-9]+)?(.0*[1-9]+)?(?:.0*)?$";  // 46 instructions
+  auto results =
+    cudf::strings::replace_with_backrefs(cudf::strings_column_view(input), pattern, replacement);
+  // cudf::test::print(results->view());
+  pattern = "(\\d+)-(\\d+)-(\\d+)";  // 15 instructions
+  results =
+    cudf::strings::replace_with_backrefs(cudf::strings_column_view(input), pattern, replacement);
+  std::string str_exp = "12/15/2021 01:02:03.456789";  //".4567892021-12-15 01:02:03";
+  auto h_expected     = thrust::make_constant_iterator<std::string>(str_exp);
+  cudf::test::strings_column_wrapper expected(h_expected, h_expected + n_count);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_F(StringsReplaceRegexTest, MediumReplaceRegex)
