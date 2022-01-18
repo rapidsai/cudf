@@ -57,8 +57,7 @@ def lambda_kernel_from_template(sr, args):
         masked_input_initializer_template
         if sr._column.mask
         else unmasked_input_initializer_template
-    )
-    masked_initializer = masked_initializer.format(idx=0)
+    ).format(idx=0)
 
     return lambda_kernel_template.format(
         extra_args=extra_args, masked_initializer=masked_initializer
