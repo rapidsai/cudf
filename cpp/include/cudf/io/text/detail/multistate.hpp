@@ -37,7 +37,7 @@ struct multistate {
      * @brief Creates a segment which represents (0, 0]
      */
 
-    constexpr multistate_segment() {}
+    constexpr multistate_segment() = default;
     /**
      * @brief Creates a segment which represents (head, tail]
      *
