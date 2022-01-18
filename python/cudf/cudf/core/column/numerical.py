@@ -641,6 +641,17 @@ class NumericalColumn(NumericalBaseColumn):
             pd_series.index = index
         return pd_series
 
+    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+        col_dtype = self.dtype
+        if reduction_op in {"sum", "product"}:
+            col_dtype = (
+                col_dtype if col_dtype.kind == "f" else np.dtype("int64")
+            )
+        elif reduction_op == "sum_of_squares":
+            col_dtype = np.find_common_type([col_dtype], [np.dtype("uint64")])
+
+        return col_dtype
+
 
 def _normalize_find_and_replace_input(
     input_column_dtype: DtypeObj, col_to_normalize: Union[ColumnBase, list]
