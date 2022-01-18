@@ -2373,3 +2373,21 @@ def test_parquet_writer_row_group_size(
         math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)
     )
     assert expected_num_rows == row_groups
+
+
+def test_parquet_reader_decimal_columns():
+    df = cudf.DataFrame(
+        {
+            "col1": cudf.Series([1, 2, 3], dtype=cudf.Decimal64Dtype(10, 2)),
+            "col2": [10, 11, 12],
+            "col3": [12, 13, 14],
+            "col4": ["a", "b", "c"],
+        }
+    )
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+
+    actual = cudf.read_parquet(buffer, columns=["col3", "col2", "col1"])
+    expected = pd.read_parquet(buffer, columns=["col3", "col2", "col1"])
+
+    assert_eq(actual, expected)
