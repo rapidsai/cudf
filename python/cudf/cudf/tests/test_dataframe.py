@@ -9062,8 +9062,8 @@ def test_dataframe_add_suffix():
 @pytest.mark.parametrize(
     "data",
     [
-        np.random.randint(-50, 50, (25, 30)),
-        np.random.random_sample((4, 4)),
+        # np.random.seed(-50, 50, (25, 30)),
+        # np.random.random_sample.seed((4, 4)),
         np.array([1.123, 2.343, 5.890, 0.0]),
         [np.nan, None, np.nan, None],
         [True, False, True, False, False],

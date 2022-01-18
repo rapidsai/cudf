@@ -2607,8 +2607,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def diff(self, periods=1, axis=0):
         """
-        Calculates the difference of a Dataframe element compared with
-        another element in the Dataframe, treating each column independently
+        First discrete difference of element.
+
+        Calculates the difference of a Dataframe element compared with another
+        element in the Dataframe (default is element in previous row).
 
         Parameters
         ----------
@@ -2626,7 +2628,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Notes
         -----
-        Diff currently only supports numeric dtype columns
+        Diff currently only supports numeric dtype columns.
 
         Examples
         --------
@@ -2635,7 +2637,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                                   'b': [1, 1, 2, 3, 5, 8],
                                   'c': [1, 4, 9, 16, 25, 36]})
         >>> gdf
-        a  b   c
+           a  b   c
         0  1  1   1
         1  2  1   4
         2  3  2   9
@@ -2643,7 +2645,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4  5  5  25
         5  6  8  36
         >>> gdf.diff(periods=2)
-            a     b     c
+              a     b     c
         0  <NA>  <NA>  <NA>
         1  <NA>  <NA>  <NA>
         2     2     1     8
