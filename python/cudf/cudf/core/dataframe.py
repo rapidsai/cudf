@@ -58,6 +58,7 @@ from cudf.core.indexed_frame import (
     _FrameIndexer,
     _get_label_range_or_mask,
     _indices_from_labels,
+    doc_reset_index_template,
 )
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
@@ -462,12 +463,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
     ... })
     >>> df
-        id                datetimes
-    0    0  2018-10-07T12:00:00.000
-    1    1  2018-10-07T12:00:01.000
-    2    2  2018-10-07T12:00:02.000
-    3    3  2018-10-07T12:00:03.000
-    4    4  2018-10-07T12:00:04.000
+        id            datetimes
+    0    0  2018-10-07 12:00:00
+    1    1  2018-10-07 12:00:01
+    2    2  2018-10-07 12:00:02
+    3    3  2018-10-07 12:00:03
+    4    4  2018-10-07 12:00:04
 
     Build DataFrame via list of rows as tuples:
 
@@ -983,23 +984,34 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
-        >>> df[:4]    # get first 4 rows of all columns
+        >>> df = cudf.DataFrame({
+        ...     'a': list(range(10)),
+        ...     'b': list(range(10)),
+        ...     'c': list(range(10)),
+        ... })
+
+        Get first 4 rows of all columns.
+
+        >>> df[:4]
            a  b  c
         0  0  0  0
         1  1  1  1
         2  2  2  2
         3  3  3  3
-        >>> df[-5:]  # get last 5 rows of all columns
-             a   b   c
-        15  15  15  15
-        16  16  16  16
-        17  17  17  17
-        18  18  18  18
-        19  19  19  19
-        >>> df[['a', 'c']] # get columns a and c
+
+        Get last 5 rows of all columns.
+
+        >>> df[-5:]
+           a  b  c
+        5  5  5  5
+        6  6  6  6
+        7  7  7  7
+        8  8  8  8
+        9  9  9  9
+
+        Get columns a and c.
+
+        >>> df[['a', 'c']]
            a  c
         0  0  0
         1  1  1
@@ -1011,8 +1023,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         7  7  7
         8  8  8
         9  9  9
-        >>> df[[True, False, True, False]] # mask the entire dataframe,
-        # returning the rows specified in the boolean mask
+
+        Return the rows specified in the boolean mask.
+
+        >>> df[[True, False, True, False, True,
+        ...     False, True, False, True, False]]
+           a  b  c
+        0  0  0  0
+        2  2  2  2
+        4  4  4  4
+        6  6  6  6
+        8  8  8  8
         """
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             return self._get_columns_by_label(arg, downcast=True)
@@ -1122,7 +1143,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     for col_name in self._data:
                         self._data[col_name][mask] = value
             else:
-                if isinstance(value, DataFrame):
+                if isinstance(value, (cupy.ndarray, np.ndarray)):
+                    _setitem_with_dataframe(
+                        input_df=self,
+                        replace_df=cudf.DataFrame(value),
+                        input_cols=arg,
+                        mask=None,
+                        ignore_index=True,
+                    )
+                elif isinstance(value, DataFrame):
                     _setitem_with_dataframe(
                         input_df=self,
                         replace_df=value,
@@ -1252,10 +1281,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         object     40000
         bool        5000
         dtype: int64
+
         Use a Categorical for efficient storage of an object-dtype column with
         many repeated values.
+
         >>> df['object'].astype('category').memory_usage(deep=True)
-        5048
+        5008
         """
         if deep:
             warnings.warn(
@@ -1547,10 +1578,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     cudf.core.index.as_index(out.index._values)
                 )
 
-        # Reassign precision for any decimal cols
+        # Reassign precision for decimal cols & type schema for struct cols
         for name, col in out._data.items():
-            if isinstance(col, cudf.core.column.Decimal64Column):
-                col = col._with_type_metadata(tables[0]._data[name].dtype)
+            if isinstance(
+                col,
+                (
+                    cudf.core.column.Decimal64Column,
+                    cudf.core.column.StructColumn,
+                ),
+            ):
+                out._data[name] = col._with_type_metadata(
+                    tables[0]._data[name].dtype
+                )
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -2208,11 +2247,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3    3  13.0
         4    4  14.0
         >>> df_new
-           key   val  sum
-        0    0  10.0  NaN
-        3    3  13.0  NaN
-        4    4  14.0  NaN
-        5   -1   NaN  NaN
+           key   val   sum
+        0     0  10.0  <NA>
+        3     3  13.0  <NA>
+        4     4  14.0  <NA>
+        5  <NA>  <NA>  <NA>
         """
 
         if labels is None and index is None and columns is None:
@@ -2429,29 +2468,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
-    def reset_index(
-        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
-    ):
-        """
-        Reset the index.
-
-        Reset the index of the DataFrame, and use the default one instead.
-
-        Parameters
-        ----------
-        drop : bool, default False
-            Do not try to insert index into dataframe columns. This resets
-            the index to the default integer index.
-        inplace : bool, default False
-            Modify the DataFrame in place (do not create a new object).
-
-        Returns
-        -------
-        DataFrame or None
-            DataFrame with the new index or None if ``inplace=True``.
-
-        Examples
-        --------
+    @docutils.doc_apply(
+        doc_reset_index_template.format(
+            klass="DataFrame",
+            argument="",
+            return_type="DataFrame or None",
+            return_doc="",
+            example="""
         >>> df = cudf.DataFrame([('bird', 389.0),
         ...                    ('bird', 24.0),
         ...                    ('mammal', 80.5),
@@ -2476,45 +2499,51 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1    bird      24.0
         2  mammal      80.5
         3  mammal      <NA>
-        """
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
 
-        if col_level != 0:
-            raise NotImplementedError(
-                "col_level parameter is not supported yet."
-            )
+        You can also use ``reset_index`` with MultiIndex.
 
-        if col_fill != "":
-            raise NotImplementedError(
-                "col_fill parameter is not supported yet."
-            )
-
-        result = self if inplace else self.copy()
-
-        if not drop:
-            if isinstance(self.index, MultiIndex):
-                names = tuple(
-                    name if name is not None else f"level_{i}"
-                    for i, name in enumerate(self.index.names)
+        >>> index = cudf.MultiIndex.from_tuples([('bird', 'falcon'),
+        ...                                     ('bird', 'parrot'),
+        ...                                     ('mammal', 'lion'),
+        ...                                     ('mammal', 'monkey')],
+        ...                                     names=['class', 'name'])
+        >>> df = cudf.DataFrame([(389.0, 'fly'),
+        ...                      ( 24.0, 'fly'),
+        ...                      ( 80.5, 'run'),
+        ...                      (np.nan, 'jump')],
+        ...                      index=index,
+        ...                      columns=('speed', 'type'))
+        >>> df
+                       speed  type
+        class  name
+        bird   falcon  389.0   fly
+               parrot   24.0   fly
+        mammal lion     80.5   run
+               monkey   <NA>  jump
+        >>> df.reset_index(level='class')
+                 class  speed  type
+        name
+        falcon    bird  389.0   fly
+        parrot    bird   24.0   fly
+        lion    mammal   80.5   run
+        monkey  mammal   <NA>  jump
+        """,
+        )
+    )
+    def reset_index(
+        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+    ):
+        return self._mimic_inplace(
+            DataFrame._from_data(
+                *self._reset_index(
+                    level=level,
+                    drop=drop,
+                    col_level=col_level,
+                    col_fill=col_fill,
                 )
-            else:
-                if self.index.name is None:
-                    if "index" in self._data.names:
-                        names = ("level_0",)
-                    else:
-                        names = ("index",)
-                else:
-                    names = (self.index.name,)
-
-            index_columns = self.index._data.columns
-            for name, index_column in zip(
-                reversed(names), reversed(index_columns)
-            ):
-                result.insert(0, name, index_column)
-        result.index = RangeIndex(len(self))
-        if not inplace:
-            return result
+            ),
+            inplace=inplace,
+        )
 
     def take(self, indices, axis=0, keep_index=None):
         axis = self._get_axis_from_axis_arg(axis)
@@ -3109,78 +3138,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
-    def one_hot_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype="float64"
-    ):
-        """
-        Expand a column with one-hot-encoding.
-
-        Parameters
-        ----------
-
-        column : str
-            the source column with binary encoding for the data.
-        prefix : str
-            the new column name prefix.
-        cats : sequence of ints
-            the sequence of categories as integers.
-        prefix_sep : str
-            the separator between the prefix and the category.
-        dtype :
-            the dtype for the outputs; defaults to float64.
-
-        Returns
-        -------
-
-        a new dataframe with new columns append for each category.
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> import cudf
-        >>> pet_owner = [1, 2, 3, 4, 5]
-        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
-        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
-        >>> df.pet_type = df.pet_type.astype('category')
-
-        Create a column with numerically encoded category values
-
-        >>> df['pet_codes'] = df.pet_type.cat.codes
-        >>> gdf = cudf.from_pandas(df)
-
-        Create the list of category codes to use in the encoding
-
-        >>> codes = gdf.pet_codes.unique()
-        >>> gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head()
-          pet_owner  pet_type  pet_codes  pet_dummy_0  pet_dummy_1  pet_dummy_2
-        0         1      fish          2          0.0          0.0          1.0
-        1         2       dog          1          0.0          1.0          0.0
-        2         3      fish          2          0.0          0.0          1.0
-        3         4      bird          0          1.0          0.0          0.0
-        4         5      fish          2          0.0          0.0          1.0
-        """
-
-        warnings.warn(
-            "DataFrame.one_hot_encoding is deprecated and will be removed in "
-            "future, use `get_dummies` instead.",
-            FutureWarning,
-        )
-
-        if hasattr(cats, "to_arrow"):
-            cats = cats.to_arrow().to_pylist()
-        else:
-            cats = pd.Series(cats, dtype="object")
-
-        newnames = [
-            prefix_sep.join([prefix, "null" if cat is None else str(cat)])
-            for cat in cats
-        ]
-        newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
-        outdf = self.copy()
-        for name, col in zip(newnames, newcols):
-            outdf.insert(len(outdf._data), name, col)
-        return outdf
-
     def label_encoding(
         self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
     ):
@@ -3577,7 +3534,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        method=None,
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -3629,9 +3585,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
-        method :
-            This parameter is unused. It is deprecated and will be removed in a
-            future version.
 
         Returns
         -------
@@ -3693,13 +3646,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             lsuffix, rsuffix = suffixes
 
-        if method is not None:
-            warnings.warn(
-                "The 'method' argument is deprecated and will be removed "
-                "in a future version of cudf.",
-                FutureWarning,
-            )
-
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -3717,14 +3663,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("JOIN", color="blue", domain="cudf_python")
     def join(
-        self,
-        other,
-        on=None,
-        how="left",
-        lsuffix="",
-        rsuffix="",
-        sort=False,
-        method=None,
+        self, other, on=None, how="left", lsuffix="", rsuffix="", sort=False,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -3738,9 +3677,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
-        method :
-            This parameter is unused. It is deprecated and will be removed in a
-            future version.
 
         Returns
         -------
@@ -3753,13 +3689,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-
-        if method is not None:
-            warnings.warn(
-                "The 'method' argument is deprecated and will be removed "
-                "in a future version of cudf.",
-                FutureWarning,
-            )
 
         df = self.merge(
             other,
@@ -3852,10 +3781,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        >>> import cudf
-        >>> a = ('a', [1, 2, 2])
-        >>> b = ('b', [3, 4, 5])
-        >>> df = cudf.DataFrame([a, b])
+        >>> df = cudf.DataFrame({
+        ...     "a": [1, 2, 2],
+        ...     "b": [3, 4, 5],
+        ... })
         >>> expr = "(a == 2 and b == 4) or (b == 3)"
         >>> df.query(expr)
            a  b
@@ -3871,8 +3800,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['datetimes'] = data
         >>> search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
         >>> df.query('datetimes==@search_date')
-                        datetimes
-        1 2018-10-08T00:00:00.000
+           datetimes
+        1 2018-10-08
 
         Using local_dict:
 
@@ -3883,9 +3812,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['datetimes'] = data
         >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
         >>> df.query('datetimes==@search_date',
-        ...         local_dict={'search_date':search_date2})
-                        datetimes
-        1 2018-10-08T00:00:00.000
+        ...          local_dict={'search_date': search_date2})
+           datetimes
+        1 2018-10-08
         """
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
@@ -4208,45 +4137,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in each row.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
-        >>> df
-             a     b
-        0   10  0.00
-        1  120  0.25
-        2   30  0.50
-        >>> df.hash_values(method="murmur3")
-        0    -330519225
-        1    -397962448
-        2   -1345834934
-        dtype: int32
-        >>> df.hash_values(method="md5")
-        0    57ce879751b5169c525907d5c563fae1
-        1    948d6221a7c4963d4be411bcead7e32b
-        2    fe061786ea286a515b772d91b0dfcd70
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
-
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
@@ -4270,7 +4160,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else self._index._num_columns
         )
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
+
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
+            self, key_indices, nparts, keep_index
+        )
+        outdf = self.__class__._from_data(output_data, output_index)
+        outdf._copy_type_metadata(self, include_index=keep_index)
+
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -4373,18 +4269,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtypes: float64(1), int64(1), object(1)
         memory usage: 130.0+ bytes
 
-        Pipe output of DataFrame.info to buffer instead of sys.stdout,
-        get buffer content and writes to a text file:
+        Pipe output of DataFrame.info to a buffer instead of sys.stdout and
+        print buffer contents:
 
         >>> import io
         >>> buffer = io.StringIO()
         >>> df.info(buf=buffer)
-        >>> s = buffer.getvalue()
-        >>> with open("df_info.txt", "w",
-        ...           encoding="utf-8") as f:
-        ...     f.write(s)
-        ...
-        369
+        >>> print(buffer.getvalue())
+        <class 'cudf.core.dataframe.DataFrame'>
+        RangeIndex: 5 entries, 0 to 4
+        Data columns (total 3 columns):
+         #   Column     Non-Null Count  Dtype
+        ---  ------     --------------  -----
+         0   int_col    5 non-null      int64
+         1   text_col   5 non-null      object
+         2   float_col  5 non-null      float64
+        dtypes: float64(1), int64(1), object(1)
+        memory usage: 130.0+ bytes
 
         The `memory_usage` parameter allows deep introspection mode, specially
         useful for big DataFrames and fine-tune memory optimization:
@@ -5945,7 +5846,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> df = cudf.DataFrame({'a':[0,1,3], 'b':[1,2,4]})
+        >>> df = cudf.DataFrame({'a': [0, 1, 3], 'b': [1, 2, 4]})
         >>> df.stack()
         0  a    0
            b    1
@@ -6268,8 +6169,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> cudf.DataFrame(
-                {"a": [[1, 2, 3], [], None, [4, 5]], "b": [11, 22, 33, 44]})
+        >>> df = cudf.DataFrame({
+        ...     "a": [[1, 2, 3], [], None, [4, 5]],
+        ...     "b": [11, 22, 33, 44],
+        ... })
+        >>> df
                    a   b
         0  [1, 2, 3]  11
         1         []  22
@@ -6593,6 +6497,7 @@ def _setitem_with_dataframe(
     replace_df: DataFrame,
     input_cols: Any = None,
     mask: Optional[cudf.core.column.ColumnBase] = None,
+    ignore_index: bool = False,
 ):
     """
     This function sets item dataframes relevant columns with replacement df
@@ -6600,6 +6505,7 @@ def _setitem_with_dataframe(
     :param replace_df: Replacement DataFrame to replace values with
     :param input_cols: columns to replace in the input dataframe
     :param mask: boolean mask in case of masked replacing
+    :param ignore_index: Whether to conduct index equality and reindex
     """
 
     if input_cols is None:
@@ -6610,7 +6516,11 @@ def _setitem_with_dataframe(
             "Number of Input Columns must be same replacement Dataframe"
         )
 
-    if len(input_df) != 0 and not input_df.index.equals(replace_df.index):
+    if (
+        not ignore_index
+        and len(input_df) != 0
+        and not input_df.index.equals(replace_df.index)
+    ):
         replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):

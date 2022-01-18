@@ -261,7 +261,7 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
  */
 struct bit_to_word_index {
   bit_to_word_index(bool inclusive) : inclusive(inclusive) {}
-  CUDA_DEVICE_CALLABLE size_type operator()(const size_type& bit_index) const
+  __device__ inline size_type operator()(const size_type& bit_index) const
   {
     return word_index(bit_index) + ((inclusive || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
@@ -269,7 +269,7 @@ struct bit_to_word_index {
 };
 
 struct popc {
-  CUDA_DEVICE_CALLABLE size_type operator()(bitmask_type word) const { return __popc(word); }
+  __device__ inline size_type operator()(bitmask_type word) const { return __popc(word); }
 };
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
@@ -377,7 +377,7 @@ size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator 
 }
 
 struct index_alternator {
-  CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
+  __device__ inline size_type operator()(const size_type& i) const
   {
     return *(d_indices + 2 * i + (is_end ? 1 : 0));
   }
