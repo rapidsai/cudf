@@ -130,17 +130,14 @@ def _row_kernel_from_template(frame, row_type, args):
         )
         row_initializers.append(row_initializer)
 
-    # Incorporate all of the above into the kernel code template
-    d = {
-        "input_columns": input_columns,
-        "input_offsets": input_offsets,
-        "extra_args": extra_args,
-        "masked_input_initializers": "\n".join(initializers),
-        "row_initializers": "\n".join(row_initializers),
-        "numba_rectype": row_type,  # from global
-    }
-
-    return row_kernel_template.format(**d)
+    return row_kernel_template.format(
+        input_columns=input_columns,
+        input_offsets=input_offsets,
+        extra_args=extra_args,
+        masked_input_initializers="\n".join(initializers),
+        row_initializers="\n".join(row_initializers),
+        numba_rectype=row_type,
+    )
 
 
 def _get_row_kernel(frame, func, args):

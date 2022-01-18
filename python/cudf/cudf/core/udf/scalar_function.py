@@ -84,7 +84,7 @@ def _get_scalar_kernel(sr, func, args):
         local_exec_context,
     )
 
-    kernel_string = local_exec_context["_kernel"]
-    kernel = cuda.jit(sig)(kernel_string)
+    _kernel = local_exec_context["_kernel"]
+    kernel = cuda.jit(sig)(_kernel)
 
     return kernel, scalar_return_type
