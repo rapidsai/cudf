@@ -23,13 +23,12 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
-
 from cudf.core.column import arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.utils import supported_cols_from_frame
+from cudf.core.udf.utils import compile_or_get, supported_cols_from_frame
 from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 doc_reset_index_template = """
@@ -763,10 +762,17 @@ class IndexedFrame(Frame):
         )
 
     @annotate("APPLY", color="purple", domain="cudf_python")
-    def _apply(self, kernel, retty, *args):
+    def _apply(self, func, kernel_getter, *args, **kwargs):
         """
         Apply `func` across the rows of the frame.
         """
+
+        if kwargs:
+            raise ValueError("UDFs using **kwargs are not yet supported.")
+
+        kernel, retty = compile_or_get(
+            self, func, args, kernel_getter=kernel_getter
+        )
 
         # Mask and data column preallocated
         ans_col = cp.empty(len(self), dtype=retty)

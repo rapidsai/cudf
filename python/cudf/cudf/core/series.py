@@ -67,7 +67,6 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.lambda_function import get_lambda_kernel
-from cudf.core.udf.utils import compile_or_get
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -2477,15 +2476,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
         """
-        if kwargs:
-            raise ValueError("UDFs using **kwargs are not yet supported.")
-
-        kernel, retty = compile_or_get(
-            self, func, args, kernel_getter=get_lambda_kernel
-        )
-        result = self._apply(kernel, retty, *args)
-
-        return result
+        return self._apply(func, get_lambda_kernel, *args, **kwargs)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
