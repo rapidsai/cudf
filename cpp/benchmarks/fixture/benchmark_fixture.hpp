@@ -31,9 +31,9 @@ inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>
 
 inline auto make_pool()
 {
-  static std::shared_ptr<rmm::mr::device_memory_resource> mr;
-  if (!mr) { mr = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda()); }
-  return mr;
+  static rmm::mr::cuda_memory_resource cuda_mr;
+  static rmm::mr::pool_memory_resource pool_mr{&cuda_mr};
+  return &pool_mr;
 }
 }  // namespace
 
