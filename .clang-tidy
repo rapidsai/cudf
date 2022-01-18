@@ -16,8 +16,6 @@ CheckOptions:
    value:           '16'
  - key:             modernize-loop-convert.MinConfidence
    value:           reasonable
- - key:             modernize-loop-convert.NamingStyle
-   value:           CamelCase
  - key:             modernize-pass-by-value.IncludeStyle
    value:           llvm
  - key:             modernize-replace-auto-ptr.IncludeStyle
