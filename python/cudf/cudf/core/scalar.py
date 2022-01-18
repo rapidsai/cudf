@@ -32,7 +32,7 @@ class Scalar(object):
     >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
     Scalar(63, dtype=int64)
     >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-    >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
+    >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
     >>> x - y
     Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
     >>> cudf.Series([1,2,3]) + cudf.Scalar(1)

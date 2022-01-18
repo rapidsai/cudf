@@ -512,13 +512,26 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property
     def dt(self):
         """
-        Accessor object for datetimelike properties of the Series values.
+        Accessor object for datetime-like properties of the Series values.
 
         Examples
         --------
+        >>> s = cudf.Series(cudf.date_range(
+        ...   start='2001-02-03 12:00:00',
+        ...   end='2001-02-03 14:00:00',
+        ...   freq='1H'))
         >>> s.dt.hour
+        0    12
+        1    13
+        dtype: int16
         >>> s.dt.second
+        0    0
+        1    0
+        dtype: int16
         >>> s.dt.day
+        0    3
+        1    3
+        dtype: int16
 
         Returns
         -------
@@ -674,10 +687,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
            y    3
         2  x    4
            y    5
+        dtype: int64
         >>> s.drop(labels='y', level=1)
         0  x    0
         1  x    2
         2  x    4
+        Name: 2, dtype: int64
         """
         if labels is not None:
             if index is not None or columns is not None:
@@ -1032,7 +1047,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         --------
         >>> s = cudf.Series(range(3), index=['a','b','c'])
         >>> s.memory_usage()
-        48
+        43
 
         Not including the index gives the size of the rest of the data, which
         is necessarily smaller:
@@ -1448,10 +1463,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.Decimal64Column):
-            col = col._with_type_metadata(objs[0]._column.dtype)
-
-        if isinstance(col, cudf.core.column.StructColumn):
+        # Reassign precision for decimal cols & type schema for struct cols
+        if isinstance(
+            col,
+            (cudf.core.column.Decimal64Column, cudf.core.column.StructColumn),
+        ):
             col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
@@ -1538,7 +1554,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser
         0       1
         1       2
-        2    null
+        2    <NA>
         dtype: int64
 
         Drop null values from a Series.
@@ -1799,7 +1815,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         dtype: int64
         >>> series.data
-        <cudf.core.buffer.Buffer object at 0x7f23c192d110>
+        <cudf.core.buffer.Buffer object at 0x...>
         >>> series.data.to_host_array()
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
@@ -1823,14 +1839,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import cudf
         >>> s = cudf.Series([True, False, True])
         >>> s.as_mask()
-        <cudf.core.buffer.Buffer object at 0x7f23c3eed0d0>
-        >>> s.as_mask().to_host_array()
-        array([  5,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,
-                 0,   0,   0,   2,   0,   0,   0,   0,   0,   0,   0, 181, 164,
-               188,   1,   0,   0,   0,   0, 255, 255, 255, 255, 255, 255, 255,
-               127, 253, 214,  62, 241,   1,   0,   0,   0,   0,   0,   0,   0,
-                 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
-             dtype=uint8)
+        <cudf.core.buffer.Buffer object at 0x...>
         """
         if not is_bool_dtype(self.dtype):
             raise TypeError(
@@ -2804,11 +2813,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05, 0.17])
         >>> s.autocorr()
-        0.10355263309024071
+        0.1438853844...
         >>> s.autocorr(lag=2)
-        -0.9999999999999999
+        -0.9647548490...
         """
         return self.corr(self.shift(lag))
 
@@ -3583,7 +3592,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         >>> sr.keys()
-        RangeIndex(start=0, stop=6)
+        RangeIndex(start=0, stop=6, step=1)
         >>> sr = cudf.Series(['a', 'b', 'c'])
         >>> sr
         0    a
@@ -3591,7 +3600,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    c
         dtype: object
         >>> sr.keys()
-        RangeIndex(start=0, stop=3)
+        RangeIndex(start=0, stop=3, step=1)
         >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
         >>> sr
         a    1
