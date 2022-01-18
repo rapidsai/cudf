@@ -54,7 +54,7 @@ class span_base {
 
   static constexpr std::size_t extent = Extent;
 
-  constexpr span_base() noexcept : _data(nullptr) {}
+  constexpr span_base() noexcept {}
   constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
   // constexpr span_base(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
   constexpr span_base(span_base const& other) noexcept = default;
@@ -98,7 +98,7 @@ class span_base {
   }
 
  private:
-  pointer _data;
+  pointer _data{nullptr};
   size_type _size{0};
 };
 
