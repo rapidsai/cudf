@@ -303,7 +303,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   //   .add("decimal64", DecimalType(18,7)).add("longs",LongType).add("floats",FloatType)
   //   .add("dates",DateType).add("decimal32", DecimalType(9,3)).add("ints",IntegerType)
   //   .add("shorts",ShortType).add("bytes",ByteType).add("bools",BooleanType)
-  //   .add("decimal128", DecimalType(27,11))
+  //   .add("decimal128", DecimalType(38,11))
   // val data = Seq(
   // Row(Row(0, "a", Row(0f, 0L)), "", 0.toDouble, DateTimeUtils.toJavaTimestamp(0), BigDecimal(0),
   //     0.toLong, 0.toFloat, DateTimeUtils.toJavaDate(0), BigDecimal(0), 0, 0.toShort, 0.toByte,
@@ -327,7 +327,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   //     DateTimeUtils.toJavaTimestamp(Long.MaxValue/1000000), BigDecimal("99999999999.9999999"),
   //     Long.MaxValue, Float.MaxValue, DateTimeUtils.toJavaDate(Int.MaxValue/100),
   //     BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false,
-  //     BigDecimal("9999999999999999.99999999999")))
+  //     BigDecimal("99999999999999999999999999.99999999999")))
   // val df = spark.createDataFrame(sc.parallelize(data), schema)
   // df.columns.foreach(c => println(s"$c => ${df.select(hash(col(c))).collect.mkString(",")}"))
   // df.select(hash(col("*"))).collect
@@ -358,9 +358,9 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   fixed_width_column_wrapper<int32_t> const hash_bools_expected(
     {933211791, -559580957, -559580957, -559580957, 933211791});
   fixed_width_column_wrapper<int32_t> const hash_decimal128_expected(
-    {-783713497, -295670906, 1398487324, -52622807, 2061608841});
+    {-783713497, -295670906, 1398487324, -52622807, -1359749815});
   fixed_width_column_wrapper<int32_t> const hash_combined_expected(
-    {401603227, 588162166, 552160517, 1132537411, -1590333397});
+    {401603227, 588162166, 552160517, 1132537411, -326043017});
 
   using double_limits = std::numeric_limits<double>;
   using long_limits   = std::numeric_limits<int64_t>;
@@ -405,7 +405,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
      static_cast<__int128>(100),
      static_cast<__int128>(-1),
      (static_cast<__int128>(0xFFFFFFFFFCC4D1C3u) << 64 | 0x602F7FC318000001u),
-     (static_cast<__int128>(0x00000000033B2E3Cu) << 64 | 0x9FD0803CE7FFFFFFu)},
+     (static_cast<__int128>(0x0785EE10D5DA46D9u) << 64 | 0x00F4369FFFFFFFFFu)},
     numeric::scale_type{-11});
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;

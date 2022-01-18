@@ -450,8 +450,8 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
   if (val == 0) { return this->compute(static_cast<uint8_t>(0)); }
   if (val == static_cast<__int128>(-1)) { return this->compute(static_cast<uint8_t>(0xFF)); }
 
-  // Searching from the big end, find the first non-zero byte in the unscaled little endian value.
-  // The zero bytes that precede that byte are not hashed.
+  // Searching from the big-byte end, find the first non-zero byte in the unscaled little endian
+  // value. The preceding zero bytes that are bigger-bytes in the endian value are not hashed.
   auto const reverse_begin = thrust::reverse_iterator(data + key_size);
   auto const reverse_end   = thrust::reverse_iterator(data);
   auto const first_nonzero_byte =
@@ -462,10 +462,12 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
       .base();
   cudf::size_type length = thrust::distance(data, first_nonzero_byte);
 
-  // Preserve the 2's complement sign bit by adding a byte back on if necessary
-  // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign bit
-  // 0x00007F would shorten to 0x7f -- no extra byte because the leftmost bit matches the sign bit
-  // similarly for negative values 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80
+  // Preserve the 2's complement sign bit by adding a byte back on if necessary.
+  // e.g. 0x0000FF would shorten to 0x00FF. The 0x00 byte is retained to
+  // preserve the sign bit, rather than leaving an "F" at the front which would
+  // change the sign bit. However, 0x00007F would shorten to 0x7F. No extra byte
+  // is needed because the leftmost bit matches the sign bit. Similarly for
+  // negative values: 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80.
   if ((length < key_size) &&
       std::to_integer<uint8_t>(sign_bit ^ (data[length - 1] & static_cast<std::byte>(0x80)))) {
     ++length;
