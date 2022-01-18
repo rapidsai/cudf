@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -133,11 +133,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (
-                    cudf.Decimal64Dtype,
-                    cudf.Decimal32Dtype,
-                    cudf.CategoricalDtype,
-                ),
+                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
@@ -1466,7 +1462,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         # Reassign precision for decimal cols & type schema for struct cols
         if isinstance(
             col,
-            (cudf.core.column.Decimal64Column, cudf.core.column.StructColumn),
+            (
+                cudf.core.column.DecimalBaseColumn,
+                cudf.core.column.StructColumn,
+            ),
         ):
             col = col._with_type_metadata(objs[0].dtype)
 

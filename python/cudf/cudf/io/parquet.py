@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import io
 import json
@@ -10,7 +10,6 @@ from uuid import uuid4
 
 import fsspec
 import numpy as np
-import pyarrow as pa
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -627,34 +626,6 @@ def _read_parquet(
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
-        # Temporary error to probe a parquet file
-        # and raise decimal128 support error.
-        if len(filepaths_or_buffers) > 0:
-            try:
-                metadata = pq.read_metadata(filepaths_or_buffers[0])
-            except TypeError:
-                # pq.read_metadata only supports reading metadata from
-                # certain types of file inputs, like str-filepath or file-like
-                # objects, and errors for the rest of inputs. Hence this is
-                # to avoid failing on other types of file inputs.
-                pass
-            else:
-                arrow_schema = metadata.schema.to_arrow_schema()
-                check_cols = arrow_schema.names if columns is None else columns
-                for col_name, arrow_type in zip(
-                    arrow_schema.names, arrow_schema.types
-                ):
-                    if col_name not in check_cols:
-                        continue
-                    if isinstance(arrow_type, pa.ListType):
-                        val_field_types = arrow_type.value_field.flatten()
-                        for val_field_type in val_field_types:
-                            _check_decimal128_type(val_field_type.type)
-                    elif isinstance(arrow_type, pa.StructType):
-                        _ = cudf.StructDtype.from_arrow(arrow_type)
-                    else:
-                        _check_decimal128_type(arrow_type)
-
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
@@ -982,11 +953,3 @@ class ParquetDatasetWriter:
 
     def __exit__(self, *args):
         self.close()
-
-
-def _check_decimal128_type(arrow_type):
-    if isinstance(arrow_type, pa.Decimal128Type):
-        if arrow_type.precision > cudf.Decimal64Dtype.MAX_PRECISION:
-            raise NotImplementedError(
-                "Decimal type greater than Decimal64 is not yet supported"
-            )
