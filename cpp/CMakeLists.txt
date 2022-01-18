@@ -322,6 +322,7 @@ add_library(
   src/jit/parser.cpp
   src/jit/type.cpp
   src/join/conditional_join.cu
+  src/join/mixed_join.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
   src/join/join.cu
