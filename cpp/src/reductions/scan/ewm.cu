@@ -61,6 +61,35 @@ class ewma_noadjust_nonull_functor {
   __device__ pair_type<T> operator()(T input) { return {this->beta, input}; }
 };
 
+template <typename T>
+class ewma_noadjust_null_functor {
+ private:
+  T beta;
+
+ public:
+  ewma_noadjust_null_functor(T beta) : beta{beta} {}
+
+  __device__ pair_type<T> operator()(thrust::tuple<bool, int, T> const data)
+  {
+    bool const valid = thrust::get<0>(data);
+    int const exp    = thrust::get<1>(data);
+    T const input    = thrust::get<2>(data);
+    T const beta     = this->beta;
+    if (valid and (exp != 0)) {
+      // The value is non-null, but nulls preceeded it
+      // must adjust the second element of the pair
+
+      return {beta * (pow(beta, exp)), input};
+    } else if (!valid) {
+      // the value is null, carry the previous value forward
+      // "identity operator" is used
+      return {1.0, 0.0};
+    } else {
+      return {beta, input};
+    }
+  }
+};
+
 /**
 * @brief Return an array whose values y_i are the number of null entries
 * in between the last valid entry of the input and the current index.
@@ -107,29 +136,13 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     auto data =
       thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
 
-    thrust::transform(rmm::exec_policy(stream),
-                      data,
-                      data + input.size(),
-                      pairs.begin(),
-                      [beta] __device__(thrust::tuple<bool, int, T> const data) -> pair_type<T> {
-                        bool const valid = thrust::get<0>(data);
-                        int const exp    = thrust::get<1>(data);
-                        T const input    = thrust::get<2>(data);
-                        if (valid and (exp != 0)) {
-                          // The value is non-null, but nulls preceeded it
-                          // must adjust the second element of the pair
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+                                     data,
+                                     data + input.size(),
+                                     pairs.begin(),
+                                     ewma_noadjust_null_functor{beta},
+                                     recurrence_functor<T>{});
 
-                          return {beta * (pow(beta, exp)), input};
-                        } else if (!valid) {
-                          // the value is null, carry the previous value forward
-                          // "identity operator" is used
-                          return {1.0, 0.0};
-                        } else {
-                          return {beta, input};
-                        }
-                      });
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
   } else {
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      input.begin<T>(),
