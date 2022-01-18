@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import math
@@ -633,29 +633,19 @@ def test_parquet_reader_spark_timestamps(datadir):
 def test_parquet_reader_spark_decimals(datadir):
     fname = datadir / "spark_decimal.parquet"
 
-    # expect = pd.read_parquet(fname)
-    with pytest.raises(
-        NotImplementedError,
-        match="Decimal type greater than Decimal64 is not yet supported",
-    ):
-        cudf.read_parquet(fname)
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
 
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    # expect = expect.apply(pd.to_numeric)
-
-    # np.testing.assert_allclose(expect, got)
-    # assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("columns", [["a"], ["b", "a"], None])
-def test_parquet_reader_decimal128_error_validation(datadir, columns):
+def test_parquet_reader_decimal128(datadir, columns):
     fname = datadir / "nested_decimal128_file.parquet"
-    with pytest.raises(
-        NotImplementedError,
-        match="Decimal type greater than Decimal64 is not yet supported",
-    ):
-        cudf.read_parquet(fname, columns=columns)
+    got = cudf.read_parquet(fname, columns=columns)
+    expect = cudf.read_parquet(fname, columns=columns)
+
+    assert_eq(expect, got)
 
 
 def test_parquet_reader_microsecond_timestamps(datadir):
@@ -2264,12 +2254,15 @@ def test_parquet_writer_nested(tmpdir, data):
     assert_eq(expect, got)
 
 
-def test_parquet_writer_decimal(tmpdir):
-    from cudf.core.dtypes import Decimal64Dtype
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_parquet_writer_decimal(tmpdir, decimal_type):
 
     gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
 
-    gdf["dec_val"] = gdf["val"].astype(Decimal64Dtype(7, 2))
+    gdf["dec_val"] = gdf["val"].astype(decimal_type(7, 2))
 
     fname = tmpdir.join("test_parquet_writer_decimal.parquet")
     gdf.to_parquet(fname)
@@ -2313,10 +2306,12 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     assert_eq(gdf.to_pandas(nullable=nullable), got)
 
 
-def test_parquet_decimal_precision(tmpdir):
-    df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(
-        cudf.Decimal64Dtype(5, 2)
-    )
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_parquet_decimal_precision(tmpdir, decimal_type):
+    df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(decimal_type(5, 2))
     assert df.val.dtype.precision == 5
 
     fname = tmpdir.join("decimal_test.parquet")
