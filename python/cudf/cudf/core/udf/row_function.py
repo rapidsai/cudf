@@ -16,6 +16,7 @@ from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     _all_dtypes_from_frame,
     _construct_signature,
+    _get_kernel,
     _get_udf_return_type,
     _mask_get,
     _supported_cols_from_frame,
@@ -156,22 +157,15 @@ def _get_row_kernel(frame, func, args):
     )
     row_type = _get_frame_row_type(np_field_types)
 
-    f_ = cuda.jit(device=True)(func)
     # Dict of 'local' variables into which `_kernel` is defined
-    local_exec_context = {}
     global_exec_context = {
-        "f_": f_,
         "cuda": cuda,
         "Masked": Masked,
         "_mask_get": _mask_get,
         "pack_return": pack_return,
         "row_type": row_type,
     }
-
     kernel_string = _row_kernel_from_template(frame, row_type, args)
-    exec(kernel_string, global_exec_context, local_exec_context)
-    # The python function definition representing the kernel
-    _kernel = local_exec_context["_kernel"]
-    kernel = cuda.jit(sig)(_kernel)
+    kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
 
     return kernel, scalar_return_type

@@ -10,6 +10,7 @@ from cudf.core.udf.templates import (
 from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     _construct_signature,
+    _get_kernel,
     _get_udf_return_type,
     _mask_get,
 )
@@ -70,7 +71,6 @@ def _get_scalar_kernel(sr, func, args):
 
     sig = _construct_signature(sr, scalar_return_type, args=args)
     f_ = cuda.jit(device=True)(func)
-    local_exec_context = {}
     global_exec_context = {
         "f_": f_,
         "cuda": cuda,
@@ -78,13 +78,7 @@ def _get_scalar_kernel(sr, func, args):
         "_mask_get": _mask_get,
         "pack_return": pack_return,
     }
-    exec(
-        _scalar_kernel_from_template(sr, args=args),
-        global_exec_context,
-        local_exec_context,
-    )
-
-    _kernel = local_exec_context["_kernel"]
-    kernel = cuda.jit(sig)(_kernel)
+    kernel_string = _scalar_kernel_from_template(sr, args=args)
+    kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
 
     return kernel, scalar_return_type

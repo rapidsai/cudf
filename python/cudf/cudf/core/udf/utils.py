@@ -202,3 +202,15 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
+
+
+def _get_kernel(kernel_string, globals_, sig, func):
+    """template kernel compilation helper function"""
+    f_ = cuda.jit(device=True)(func)
+    globals_["f_"] = f_
+    locals_ = {}
+    exec(kernel_string, globals_, locals_)
+    _kernel = locals_["_kernel"]
+    kernel = cuda.jit(sig)(_kernel)
+
+    return kernel
