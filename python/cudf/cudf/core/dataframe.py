@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations, division
 
@@ -1583,7 +1583,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(
                 col,
                 (
-                    cudf.core.column.Decimal64Column,
+                    cudf.core.column.DecimalBaseColumn,
                     cudf.core.column.StructColumn,
                 ),
             ):
