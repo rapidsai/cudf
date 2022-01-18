@@ -66,7 +66,7 @@ from cudf.core.indexed_frame import (
     doc_reset_index_template,
 )
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.core.udf.lambda_function import get_lambda_kernel
+from cudf.core.udf.scalar_function import get_scalar_kernel
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -2476,7 +2476,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
         """
-        return self._apply(func, get_lambda_kernel, *args, **kwargs)
+        return self._apply(func, get_scalar_kernel, *args, **kwargs)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.

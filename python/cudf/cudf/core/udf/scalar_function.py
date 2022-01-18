@@ -3,7 +3,7 @@ from numba.np import numpy_support
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.templates import (
-    lambda_kernel_template,
+    scalar_kernel_template,
     masked_input_initializer_template,
     unmasked_input_initializer_template,
 )
@@ -15,7 +15,7 @@ from cudf.core.udf.utils import (
 )
 
 
-def lambda_kernel_from_template(sr, args):
+def scalar_kernel_from_template(sr, args):
     """
     Function to write numba kernels for `Series.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -59,12 +59,12 @@ def lambda_kernel_from_template(sr, args):
         else unmasked_input_initializer_template
     ).format(idx=0)
 
-    return lambda_kernel_template.format(
+    return scalar_kernel_template.format(
         extra_args=extra_args, masked_initializer=masked_initializer
     )
 
 
-def get_lambda_kernel(sr, func, args):
+def get_scalar_kernel(sr, func, args):
     sr_type = MaskedType(numpy_support.from_dtype(sr.dtype))
     scalar_return_type = get_udf_return_type(sr_type, func, args)
 
@@ -79,7 +79,7 @@ def get_lambda_kernel(sr, func, args):
         "pack_return": pack_return,
     }
     exec(
-        lambda_kernel_from_template(sr, args=args),
+        scalar_kernel_from_template(sr, args=args),
         global_exec_context,
         local_exec_context,
     )
