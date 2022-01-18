@@ -370,7 +370,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs
     ) -> ColumnBase:
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact

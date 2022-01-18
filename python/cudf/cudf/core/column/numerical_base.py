@@ -85,7 +85,7 @@ class NumericalBaseColumn(ColumnBase, Reducible):
         return skew
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs
     ) -> NumericalBaseColumn:
         if isinstance(q, Number) or cudf.api.types.is_list_like(q):
             np_array_q = np.asarray(q)

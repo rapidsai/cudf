@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ class Reducible:
     def median(self, *args, **kwargs):
         ...
 
-    def quantile(self, q: Union[float, Sequence[float]], interpolation: str, *args, **kwargs):
+    def quantile(self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs):
         ...
 
     def argmax(self, *args, **kwargs):
