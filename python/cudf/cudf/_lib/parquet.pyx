@@ -204,9 +204,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         # Book keep each column metadata as the order
         # of `meta["columns"]` and `column_names` are not
         # guaranteed to be deterministic and same always.
-        meta_data_per_column = {}
-        for col_meta in meta["columns"]:
-            meta_data_per_column[col_meta['name']] = col_meta
+        meta_data_per_column = {
+            col_meta['name']: col_meta for col_meta in meta["columns"]
+        }
 
         # update the decimal precision of each column
         for col in column_names:
