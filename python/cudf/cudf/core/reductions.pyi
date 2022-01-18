@@ -27,9 +27,6 @@ class Reducible:
     def count(self, *args, **kwargs):
         ...
 
-    def size(self, *args, **kwargs):
-        ...
-
     def any(self, *args, **kwargs):
         ...
 

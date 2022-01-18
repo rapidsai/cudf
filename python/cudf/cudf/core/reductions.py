@@ -41,7 +41,6 @@ class Reducible:
         "min",
         "max",
         "count",
-        "size",
         "any",
         "all",
         "sum_of_squares",
