@@ -31,6 +31,7 @@
 
 #include <future>
 #include <memory>
+#include <optional>
 #include <random>
 #include <thread>
 #include <vector>

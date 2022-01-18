@@ -59,7 +59,7 @@ public:
     check_for_eof(sizeof(T));
     // use memcpy since data may be misaligned
     T result;
-    memcpy(&result, data_ptr, sizeof(T));
+    memcpy(reinterpret_cast<jbyte *>(&result), data_ptr, sizeof(T));
     data_ptr += sizeof(T);
     return result;
   }
