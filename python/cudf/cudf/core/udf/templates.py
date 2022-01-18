@@ -35,7 +35,7 @@ def _kernel(retval, size, {input_columns}, {input_offsets}, {extra_args}):
         ret_mask_arr[i] = ret_masked.valid
 """
 
-lambda_kernel_template = """
+scalar_kernel_template = """
 def _kernel(retval, size, input_col_0, offset_0, {extra_args}):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
