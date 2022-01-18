@@ -429,7 +429,7 @@ struct expression_evaluator {
   __device__ __forceinline__ void evaluate(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage)
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage);
   }
@@ -452,7 +452,7 @@ struct expression_evaluator {
     cudf::size_type const left_row_index,
     cudf::size_type const right_row_index,
     cudf::size_type const output_row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage)
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
