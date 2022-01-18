@@ -29,11 +29,11 @@ namespace {
 // memory resource factory helpers
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
-inline auto make_pool()
+inline auto benchmark_pool_instance()
 {
   static rmm::mr::cuda_memory_resource cuda_mr;
   static rmm::mr::pool_memory_resource pool_mr{&cuda_mr};
-  return &pool_mr;
+  return std::shared_ptr<rmm::mr::device_memory_resource>(&pool_mr);
 }
 }  // namespace
 
@@ -78,7 +78,7 @@ class benchmark : public ::benchmark::Fixture {
 
   virtual void SetUp(const ::benchmark::State& state)
   {
-    mr = make_pool();
+    mr = benchmark_pool_instance();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
