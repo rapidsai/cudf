@@ -171,7 +171,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
-      for (const size_t stripe_idx : user_specified_stripes[src_file_idx]) {
+      for (const size_t& stripe_idx : user_specified_stripes[src_file_idx]) {
         CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
                      "Invalid stripe index");
         stripe_infos.push_back(
