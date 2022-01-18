@@ -495,7 +495,7 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> index = cudf.Index([1, 2, None, 4])
         >>> index
-        Int64Index([1, 2, null, 4], dtype='int64')
+        Int64Index([1, 2, <NA>, 4], dtype='int64')
         >>> index.fillna(3)
         Int64Index([1, 2, 3, 4], dtype='int64')
         """
@@ -553,7 +553,7 @@ class BaseIndex(Serializable):
         >>> type(idx.to_pandas())
         <class 'pandas.core.indexes.numeric.Int64Index'>
         >>> type(idx)
-        <class 'cudf.core.index.GenericIndex'>
+        <class 'cudf.core.index.Int64Index'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
 
@@ -942,6 +942,7 @@ class BaseIndex(Serializable):
         Examples
         --------
         >>> import cudf
+        >>> import pandas as pd
         >>> idx = cudf.from_pandas(
         ...     pd.Index([pd.Interval(left=0, right=5),
         ...               pd.Interval(left=5, right=10)])
@@ -1105,15 +1106,16 @@ class BaseIndex(Serializable):
         Examples
         --------
         >>> import cudf
-        >>> lhs = cudf.DataFrame(
-        ...     {"a":[2, 3, 1], "b":[3, 4, 2]}).set_index(['a', 'b']
-        ... ).index
+        >>> lhs = cudf.DataFrame({
+        ...     "a": [2, 3, 1],
+        ...     "b": [3, 4, 2],
+        ... }).set_index(['a', 'b']).index
         >>> lhs
         MultiIndex([(2, 3),
                     (3, 4),
                     (1, 2)],
                    names=['a', 'b'])
-        >>> rhs = cudf.DataFrame({"a":[1, 4, 3]}).set_index('a').index
+        >>> rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index('a').index
         >>> rhs
         Int64Index([1, 4, 3], dtype='int64', name='a')
         >>> lhs.join(rhs, how='inner')

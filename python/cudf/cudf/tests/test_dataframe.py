@@ -746,18 +746,31 @@ def test_index_astype(nelem):
     np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
 
 
-def test_dataframe_to_string():
-    pd.options.display.max_rows = 5
-    pd.options.display.max_columns = 8
-    # Test basic
+def test_dataframe_to_string_with_skipped_rows():
+    # Test skipped rows
     df = cudf.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
     )
-    string = str(df)
 
-    assert string.splitlines()[-1] == "[6 rows x 2 columns]"
+    with pd.option_context("display.max_rows", 5):
+        got = df.to_string()
 
-    # Test skipped columns
+    expect = textwrap.dedent(
+        """\
+            a   b
+        0   1  11
+        1   2  12
+        .. ..  ..
+        4   5  15
+        5   6  16
+
+        [6 rows x 2 columns]"""
+    )
+    assert got == expect
+
+
+def test_dataframe_to_string_with_skipped_rows_and_columns():
+    # Test skipped rows and skipped columns
     df = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6],
@@ -766,11 +779,26 @@ def test_dataframe_to_string():
             "d": [11, 12, 13, 14, 15, 16],
         }
     )
-    string = df.to_string()
 
-    assert string.splitlines()[-1] == "[6 rows x 4 columns]"
+    with pd.option_context("display.max_rows", 5, "display.max_columns", 3):
+        got = df.to_string()
 
-    # Test masked
+    expect = textwrap.dedent(
+        """\
+            a  ...   d
+        0   1  ...  11
+        1   2  ...  12
+        .. ..  ...  ..
+        4   5  ...  15
+        5   6  ...  16
+
+        [6 rows x 4 columns]"""
+    )
+    assert got == expect
+
+
+def test_dataframe_to_string_with_masked_data():
+    # Test masked data
     df = cudf.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
     )
@@ -783,34 +811,33 @@ def test_dataframe_to_string():
     assert masked.null_count == 2
     df["c"] = masked
 
-    # check data
+    # Check data
     values = masked.copy()
     validids = [0, 2, 3, 5]
     densearray = masked.dropna().to_numpy()
     np.testing.assert_equal(data[validids], densearray)
-    # valid position is correct
-
+    # Valid position is correct
     for i in validids:
         assert data[i] == values[i]
-    # null position is correct
+    # Null position is correct
     for i in range(len(values)):
         if i not in validids:
             assert values[i] is cudf.NA
 
-    pd.options.display.max_rows = 10
-    got = df.to_string()
+    with pd.option_context("display.max_rows", 10):
+        got = df.to_string()
 
-    expect = """
-a b  c
-0 1 11 0
-1 2 12 <NA>
-2 3 13 2
-3 4 14 3
-4 5 15 <NA>
-5 6 16 5
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a   b     c
+        0  1  11     0
+        1  2  12  <NA>
+        2  3  13     2
+        3  4  14     3
+        4  5  15  <NA>
+        5  6  16     5"""
+    )
+    assert got == expect
 
 
 def test_dataframe_to_string_wide(monkeypatch):
@@ -9030,3 +9057,14 @@ def test_dataframe_add_suffix():
     expected = pdf.add_suffix("_item")
 
     assert_eq(got, expected)
+
+
+def test_dataframe_assign_cp_np_array():
+    m, n = 5, 3
+    cp_ndarray = cupy.random.randn(m, n)
+    pdf = pd.DataFrame({f"f_{i}": range(m) for i in range(n)})
+    gdf = cudf.DataFrame({f"f_{i}": range(m) for i in range(n)})
+    pdf[[f"f_{i}" for i in range(n)]] = cupy.asnumpy(cp_ndarray)
+    gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
+
+    assert_eq(pdf, gdf)
