@@ -594,6 +594,7 @@ def test_masked_udf_scalar_args_binops_multiple(data, op):
 
     run_masked_udf_test(func, data, args=(1, 2), check_dtype=False)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -605,11 +606,12 @@ def test_masked_udf_scalar_args_binops_multiple(data, op):
 @pytest.mark.parametrize("op", arith_ops + comparison_ops)
 def test_mask_udf_scalar_args_binops_series(data, op):
     data = cudf.Series(data)
-    
+
     def func(x, c):
         return x + c
 
-    run_masked_udf_series(func, data, args=(1, ), check_dtype=False)
+    run_masked_udf_series(func, data, args=(1,), check_dtype=False)
+
 
 @pytest.mark.parametrize(
     "data",
@@ -629,6 +631,7 @@ def test_masked_udf_scalar_args_binops_multiple_series(data, op):
         return y
 
     run_masked_udf_series(func, data, args=(1, 2), check_dtype=False)
+
 
 def test_masked_udf_caching():
     # Make sure similar functions that differ

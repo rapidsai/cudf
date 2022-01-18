@@ -763,10 +763,7 @@ class IndexedFrame(Frame):
 
     @annotate("APPLY", color="purple", domain="cudf_python")
     def _apply(self, func, kernel_getter, *args, **kwargs):
-        """
-        Apply `func` across the rows of the frame.
-        """
-
+        """Apply `func` across the rows of the frame."""
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
 
