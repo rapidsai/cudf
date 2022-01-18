@@ -74,8 +74,8 @@ struct replace_regex_fn {
     int32_t end        = -1;  // matches final word-boundary if at the end of the string
 
     // copy input to output replacing strings as we go
-    while (mxn-- > 0)  // maximum number of replaces
-    {
+    while (mxn-- > 0) {  // maximum number of replaces
+
       if (prog.is_empty() || prog.find<stack_size>(idx, d_str, begin, end) <= 0) {
         break;  // no more matches
       }
@@ -84,8 +84,8 @@ struct replace_regex_fn {
       auto const end_pos   = d_str.byte_offset(end);          // character position values
       nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // and compute new size
 
-      if (out_ptr)                                           // replace:
-      {                                                      // i:bbbbsssseeee
+      if (out_ptr) {                                         // replace:
+                                                             // i:bbbbsssseeee
         out_ptr = copy_and_increment(out_ptr,                //   ^
                                      in_ptr + last_pos,      // o:bbbb
                                      start_pos - last_pos);  //       ^
