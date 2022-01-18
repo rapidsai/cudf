@@ -193,7 +193,6 @@ mixed_join(
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
-    CHECK_CUDA(stream.value());
 
     matches_per_row =
       rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
@@ -430,7 +429,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
-  CHECK_CUDA(stream.value());
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
@@ -611,7 +609,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
-    CHECK_CUDA(stream.value());
 
     matches_per_row =
       rmm::device_uvector<size_type>{static_cast<std::size_t>(outer_num_rows), stream, mr};
@@ -840,7 +837,6 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
-  CHECK_CUDA(stream.value());
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.

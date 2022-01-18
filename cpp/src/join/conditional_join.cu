@@ -110,7 +110,6 @@ conditional_join(table_view const& left,
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
-    CHECK_CUDA(stream.value());
     if (has_nulls) {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -260,7 +259,6 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
-  CHECK_CUDA(stream.value());
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
