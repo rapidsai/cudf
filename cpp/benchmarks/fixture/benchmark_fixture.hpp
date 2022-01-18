@@ -73,7 +73,7 @@ class benchmark : public ::benchmark::Fixture {
   benchmark() : ::benchmark::Fixture()
   {
     const char* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
-    if (env_iterations) this->Iterations(std::max(0L, atol(env_iterations)));
+    if (env_iterations != nullptr) { this->Iterations(std::max(0L, atol(env_iterations))); }
   }
 
   virtual void SetUp(const ::benchmark::State& state)
