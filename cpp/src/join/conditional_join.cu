@@ -97,9 +97,11 @@ conditional_join(table_view const& left,
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
   auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(swap_tables ? right_num_rows : left_num_rows,
+                               DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-  join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
+  join_kind const kernel_join_type =
+    join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
   // If the join size was not provided as an input, compute it here.
   std::size_t join_size;
@@ -197,6 +199,13 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
+  // Until we add logic to handle the number of non-matches in the right table,
+  // full joins are not supported in this function. Note that this does not
+  // prevent actually performing full joins since we do that by calculating the
+  // left join and then concatenating the complementary right indices.
+  CUDF_EXPECTS(join_type != join_kind::FULL_JOIN,
+               "Size estimation is not available for full joins.");
+
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
@@ -232,8 +241,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // If none of the input columns actually contain nulls, we can still use the
   // non-nullable version of the expression evaluation code path for
   // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
-  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
+  auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
@@ -246,10 +254,9 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
   auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(swap_tables ? right_num_rows : left_num_rows,
+                               DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-
-  assert(join_type != join_kind::FULL_JOIN);
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
