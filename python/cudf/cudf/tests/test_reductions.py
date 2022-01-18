@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import division, print_function
 
@@ -12,7 +12,7 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
 
@@ -53,10 +53,17 @@ def test_sum_string():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+    [
+        Decimal64Dtype(6, 3),
+        Decimal64Dtype(10, 6),
+        Decimal64Dtype(16, 7),
+        Decimal32Dtype(6, 3),
+        Decimal128Dtype(20, 7),
+    ],
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_sum_decimal(dtype, nelem):
+    np.random.seed(0)
     data = [str(x) for x in gen_rand("int64", nelem) / 100]
 
     expected = pd.Series([Decimal(x) for x in data]).sum()
@@ -89,9 +96,16 @@ def test_product(dtype, nelem):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(6, 2), Decimal64Dtype(8, 4), Decimal64Dtype(10, 5)],
+    [
+        Decimal64Dtype(6, 2),
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(10, 5),
+        Decimal32Dtype(6, 2),
+        Decimal128Dtype(20, 5),
+    ],
 )
 def test_product_decimal(dtype):
+    np.random.seed(0)
     data = [str(x) for x in gen_rand("int8", 3) / 10]
 
     expected = pd.Series([Decimal(x) for x in data]).product()
@@ -131,9 +145,16 @@ def test_sum_of_squares(dtype, nelem):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(6, 2), Decimal64Dtype(8, 4), Decimal64Dtype(10, 5)],
+    [
+        Decimal64Dtype(6, 2),
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(10, 5),
+        Decimal128Dtype(20, 7),
+        Decimal32Dtype(6, 2),
+    ],
 )
 def test_sum_of_squares_decimal(dtype):
+    np.random.seed(0)
     data = [str(x) for x in gen_rand("int8", 3) / 10]
 
     expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
@@ -156,10 +177,17 @@ def test_min(dtype, nelem):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+    [
+        Decimal64Dtype(6, 3),
+        Decimal64Dtype(10, 6),
+        Decimal64Dtype(16, 7),
+        Decimal32Dtype(6, 3),
+        Decimal128Dtype(20, 7),
+    ],
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_min_decimal(dtype, nelem):
+    np.random.seed(0)
     data = [str(x) for x in gen_rand("int64", nelem) / 100]
 
     expected = pd.Series([Decimal(x) for x in data]).min()
@@ -182,10 +210,17 @@ def test_max(dtype, nelem):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+    [
+        Decimal64Dtype(6, 3),
+        Decimal64Dtype(10, 6),
+        Decimal64Dtype(16, 7),
+        Decimal32Dtype(6, 3),
+        Decimal128Dtype(20, 7),
+    ],
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_max_decimal(dtype, nelem):
+    np.random.seed(0)
     data = [str(x) for x in gen_rand("int64", nelem) / 100]
 
     expected = pd.Series([Decimal(x) for x in data]).max()
