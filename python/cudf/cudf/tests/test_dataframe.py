@@ -7661,9 +7661,14 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     actual = cudf.DataFrame(gd_data, columns=columns)
 
     if ignore_dtype:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_index_type=True,
+        )
     else:
-        assert_eq(expected, actual)
+        assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(

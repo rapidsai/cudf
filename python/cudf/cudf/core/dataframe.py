@@ -6519,7 +6519,7 @@ def _get_union_of_series_names(series_list):
         else:
             names_list.append(series.name)
     if unnamed_count == len(series_list):
-        names_list = [*range(len(series_list))]
+        names_list = range(len(series_list))
 
     return names_list
 
