@@ -390,22 +390,43 @@ TEST_F(groupby_min_struct_test, null_keys_and_values)
 TEST_F(groupby_min_struct_test, values_with_null_child)
 {
   constexpr int32_t null{0};
-  auto const keys = fixed_width_column_wrapper<int32_t>{1, 1};
-  auto const vals = [] {
-    auto child1 = fixed_width_column_wrapper<int32_t>{1, 1};
-    auto child2 = fixed_width_column_wrapper<int32_t>{{-1, null}, null_at(1)};
-    return structs_column_wrapper{child1, child2};
-  }();
+  {
+    auto const keys = fixed_width_column_wrapper<int32_t>{1, 1};
+    auto const vals = [] {
+      auto child1 = fixed_width_column_wrapper<int32_t>{1, 1};
+      auto child2 = fixed_width_column_wrapper<int32_t>{{-1, null}, null_at(1)};
+      return structs_column_wrapper{child1, child2};
+    }();
 
-  auto const expect_keys = fixed_width_column_wrapper<int32_t>{1};
-  auto const expect_vals = [] {
-    auto child1 = fixed_width_column_wrapper<int32_t>{1};
-    auto child2 = fixed_width_column_wrapper<int32_t>{{null}, null_at(0)};
-    return structs_column_wrapper{child1, child2};
-  }();
+    auto const expect_keys = fixed_width_column_wrapper<int32_t>{1};
+    auto const expect_vals = [] {
+      auto child1 = fixed_width_column_wrapper<int32_t>{1};
+      auto child2 = fixed_width_column_wrapper<int32_t>{{null}, null_at(0)};
+      return structs_column_wrapper{child1, child2};
+    }();
 
-  auto agg = cudf::make_min_aggregation<groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    auto agg = cudf::make_min_aggregation<groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  }
+
+  {
+    auto const keys = fixed_width_column_wrapper<int32_t>{1, 1};
+    auto const vals = [] {
+      auto child1 = fixed_width_column_wrapper<int32_t>{{-1, null}, null_at(1)};
+      auto child2 = fixed_width_column_wrapper<int32_t>{{null, null}, nulls_at({0, 1})};
+      return structs_column_wrapper{child1, child2};
+    }();
+
+    auto const expect_keys = fixed_width_column_wrapper<int32_t>{1};
+    auto const expect_vals = [] {
+      auto child1 = fixed_width_column_wrapper<int32_t>{{null}, null_at(0)};
+      auto child2 = fixed_width_column_wrapper<int32_t>{{null}, null_at(0)};
+      return structs_column_wrapper{child1, child2};
+    }();
+
+    auto agg = cudf::make_min_aggregation<groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  }
 }
 
 }  // namespace test
