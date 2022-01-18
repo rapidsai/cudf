@@ -120,6 +120,6 @@ BENCHMARK_DEFINE_F(OrcWrite, writer_options)
 BENCHMARK_REGISTER_F(OrcWrite, writer_options)
   ->ArgsProduct({{int32_t(cudf::io::compression_type::NONE),
                   int32_t(cudf::io::compression_type::SNAPPY)},
-                 {0, 1}})
+                 {0, 1, 2}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
