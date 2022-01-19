@@ -30,10 +30,8 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_integer_dtype,
     is_scalar,
     issubdtype,
 )
@@ -52,7 +50,6 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
-from cudf.utils.utils import _gather_map_is_valid
 
 T = TypeVar("T", bound="Frame")
 
@@ -72,6 +69,7 @@ class Frame:
     # TODO: Once all dependence on Frame having an index is removed, this
     # attribute should be moved to IndexedFrame.
     _index: Optional[cudf.core.index.BaseIndex]
+    _names: Optional[List]
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -532,37 +530,6 @@ class Frame:
         return self.__class__(
             data, columns=data.to_pandas_index(), index=self.index
         )
-
-    def _gather(
-        self, gather_map, keep_index=True, nullify=False, check_bounds=True
-    ):
-        """Gather rows of frame specified by indices in `gather_map`.
-
-        Skip bounds checking if check_bounds is False.
-        Set rows to null for all out of bound indices if nullify is `True`.
-        """
-        # TODO: `keep_index` argument is to be removed.
-        gather_map = cudf.core.column.as_column(gather_map)
-
-        # TODO: For performance, the check and conversion of gather map should
-        # be done by the caller. This check will be removed in future release.
-        if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
-
-        if not _gather_map_is_valid(
-            gather_map, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
-
-        result = self.__class__._from_columns(
-            libcudf.copying.gather(
-                list(self._columns), gather_map, nullify=nullify,
-            ),
-            self._column_names,
-        )
-
-        result._copy_type_metadata(self)
-        return result
 
     def _as_column(self):
         """
@@ -1110,120 +1077,6 @@ class Frame:
 
         return result
 
-    def dropna(
-        self, axis=0, how="any", thresh=None, subset=None, inplace=False
-    ):
-        """
-        Drops rows (or columns) containing nulls from a Column.
-
-        Parameters
-        ----------
-        axis : {0, 1}, optional
-            Whether to drop rows (axis=0, default) or columns (axis=1)
-            containing nulls.
-        how : {"any", "all"}, optional
-            Specifies how to decide whether to drop a row (or column).
-            any (default) drops rows (or columns) containing at least
-            one null value. all drops only rows (or columns) containing
-            *all* null values.
-        thresh: int, optional
-            If specified, then drops every row (or column) containing
-            less than `thresh` non-null values
-        subset : list, optional
-            List of columns to consider when dropping rows (all columns
-            are considered by default). Alternatively, when dropping
-            columns, subset is a list of rows to consider.
-        inplace : bool, default False
-            If True, do operation inplace and return None.
-
-        Returns
-        -------
-        Copy of the DataFrame with rows/columns containing nulls dropped.
-
-        See also
-        --------
-        cudf.DataFrame.isna
-            Indicate null values.
-
-        cudf.DataFrame.notna
-            Indicate non-null values.
-
-        cudf.DataFrame.fillna
-            Replace null values.
-
-        cudf.Series.dropna
-            Drop null values.
-
-        cudf.Index.dropna
-            Drop null indices.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"name": ['Alfred', 'Batman', 'Catwoman'],
-        ...                    "toy": ['Batmobile', None, 'Bullwhip'],
-        ...                    "born": [np.datetime64("1940-04-25"),
-        ...                             np.datetime64("NaT"),
-        ...                             np.datetime64("NaT")]})
-        >>> df
-               name        toy                 born
-        0    Alfred  Batmobile  1940-04-25 00:00:00
-        1    Batman       <NA>                 <NA>
-        2  Catwoman   Bullwhip                 <NA>
-
-        Drop the rows where at least one element is null.
-
-        >>> df.dropna()
-             name        toy       born
-        0  Alfred  Batmobile 1940-04-25
-
-        Drop the columns where at least one element is null.
-
-        >>> df.dropna(axis='columns')
-               name
-        0    Alfred
-        1    Batman
-        2  Catwoman
-
-        Drop the rows where all elements are null.
-
-        >>> df.dropna(how='all')
-               name        toy                 born
-        0    Alfred  Batmobile  1940-04-25 00:00:00
-        1    Batman       <NA>                 <NA>
-        2  Catwoman   Bullwhip                 <NA>
-
-        Keep only the rows with at least 2 non-null values.
-
-        >>> df.dropna(thresh=2)
-               name        toy                 born
-        0    Alfred  Batmobile  1940-04-25 00:00:00
-        2  Catwoman   Bullwhip                 <NA>
-
-        Define in which columns to look for null values.
-
-        >>> df.dropna(subset=['name', 'born'])
-             name        toy       born
-        0  Alfred  Batmobile 1940-04-25
-
-        Keep the DataFrame with valid entries in the same variable.
-
-        >>> df.dropna(inplace=True)
-        >>> df
-             name        toy       born
-        0  Alfred  Batmobile 1940-04-25
-        """
-        if axis == 0:
-            result = self._drop_na_rows(
-                how=how, subset=subset, thresh=thresh, drop_nan=True
-            )
-        else:
-            result = self._drop_na_columns(
-                how=how, subset=subset, thresh=thresh
-            )
-
-        return self._mimic_inplace(result, inplace=inplace)
-
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
@@ -1369,70 +1222,6 @@ class Frame:
         result = self._from_data(copy_data, self._index)
 
         return self._mimic_inplace(result, inplace=inplace)
-
-    def ffill(self):
-        return self.fillna(method="ffill")
-
-    def bfill(self):
-        return self.fillna(method="bfill")
-
-    def _drop_na_rows(
-        self, how="any", subset=None, thresh=None, drop_nan=False
-    ):
-        """
-        Drops null rows from `self`.
-
-        how : {"any", "all"}, optional
-            Specifies how to decide whether to drop a row.
-            any (default) drops rows containing at least
-            one null value. all drops only rows containing
-            *all* null values.
-        subset : list, optional
-            List of columns to consider when dropping rows.
-        thresh: int, optional
-            If specified, then drops every row containing
-            less than `thresh` non-null values.
-        """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
-
-        if len(subset) == 0:
-            return self.copy(deep=True)
-
-        frame = self.copy(deep=False)
-        if drop_nan:
-            for name, col in frame._data.items():
-                if name in subset and isinstance(
-                    col, cudf.core.column.NumericalColumn
-                ):
-                    frame._data[name] = col.nans_to_nulls()
-                else:
-                    frame._data[name] = col
-
-        result = self.__class__._from_columns(
-            libcudf.stream_compaction.drop_nulls(
-                list(self._index._data.columns + frame._columns),
-                how=how,
-                keys=self._positions_from_column_names(
-                    subset, offset_by_index_columns=True
-                ),
-                thresh=thresh,
-            ),
-            self._column_names,
-            self._index.names,
-        )
-        result._copy_type_metadata(frame)
-        return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
@@ -2128,34 +1917,6 @@ class Frame:
         return pa.Table.from_pydict(
             {name: col.to_arrow() for name, col in self._data.items()}
         )
-
-    def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
-    ):
-        """
-        Drop duplicate rows in frame.
-
-        keep : ["first", "last", False], default "first"
-            "first" will keep the first duplicate entry, "last" will keep the
-            last duplicate entry, and False will drop all duplicates.
-        nulls_are_equal: bool, default True
-            Null elements are considered equal to other null elements.
-        """
-
-        result = self.__class__._from_columns(
-            libcudf.stream_compaction.drop_duplicates(
-                list(self._columns),
-                keys=range(len(self._columns)),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
-            self._column_names,
-        )
-        # TODO: _copy_type_metadata is a common pattern to apply after the
-        # roundtrip from libcudf. We should build this into a factory function
-        # to increase reusability.
-        result._copy_type_metadata(self)
-        return result
 
     def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
@@ -2872,74 +2633,6 @@ class Frame:
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
-    def take(self, indices, keep_index=None):
-        """Return a new object containing the rows specified by *positions*
-
-        Parameters
-        ----------
-        indices : array-like
-            Array of ints indicating which positions to take.
-        keep_index : bool, default True
-            Whether to retain the index in result or not.
-
-        Returns
-        -------
-        out : Series or DataFrame or Index
-            New object with desired subset of rows.
-
-        Examples
-        --------
-        **Series**
-        >>> s = cudf.Series(['a', 'b', 'c', 'd', 'e'])
-        >>> s.take([2, 0, 4, 3])
-        2    c
-        0    a
-        4    e
-        3    d
-        dtype: object
-
-        **DataFrame**
-
-        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-        ...                    'b': cudf.Series(['a', 'b', 'c'])})
-        >>> a.take([0, 2, 2])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        2  3.0  c
-        >>> a.take([True, False, True])
-             a  b
-        0  1.0  a
-        2  3.0  c
-
-        **Index**
-
-        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
-        >>> idx.take([2, 0, 4, 3])
-        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
-        """
-        # TODO: When we remove keep_index we should introduce the axis
-        # parameter. We could also introduce is_copy, but that's already
-        # deprecated in pandas so it's probably unnecessary. We also need to
-        # introduce Index.take's allow_fill and fill_value parameters.
-        if keep_index is not None:
-            warnings.warn(
-                "keep_index is deprecated and will be removed in the future.",
-                FutureWarning,
-            )
-        else:
-            keep_index = True
-
-        indices = as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
-        return self._gather(indices, keep_index=keep_index)
-
     def sin(self):
         """
         Get Trigonometric sine, element-wise.
@@ -3629,6 +3322,8 @@ class Frame:
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
+        # TODO: the two isinstance checks below indicates that `_merge` should
+        # not be defined in `Frame`, but in `IndexedFrame`.
         return merge_cls(
             lhs,
             rhs,
@@ -3637,6 +3332,8 @@ class Frame:
             right_on=right_on,
             left_index=left_index,
             right_index=right_index,
+            lhs_is_index=isinstance(lhs, cudf.core._base_index.BaseIndex),
+            rhs_is_index=isinstance(rhs, cudf.core._base_index.BaseIndex),
             how=how,
             sort=sort,
             indicator=indicator,
