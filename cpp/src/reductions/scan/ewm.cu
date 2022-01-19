@@ -51,18 +51,23 @@ class recurrence_functor {
 };
 
 template <typename T>
-class ewma_adjust_numerator_nonull_functor {
+class ewma_functor_base {
+ public:
+  pair_type<T> IDENTITY = {1.0, 0.0};
+};
+
+template <typename T>
+class ewma_adjust_numerator_nonull_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
  public:
   ewma_adjust_numerator_nonull_functor(T beta) : beta{beta} {}
-
   __device__ pair_type<T> operator()(T input) { return {this->beta, input}; }
 };
 
 template <typename T>
-class ewma_adjust_numerator_null_functor {
+class ewma_adjust_numerator_null_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
@@ -83,7 +88,7 @@ class ewma_adjust_numerator_null_functor {
     } else if (!valid) {
       // the value is null, carry the previous value forward
       // "identity operator" is used
-      return {1.0, 0.0};
+      return this->IDENTITY;
     } else {
       return {beta, input};
     }
@@ -91,7 +96,7 @@ class ewma_adjust_numerator_null_functor {
 };
 
 template <typename T>
-class ewma_adjust_denominator_null_functor {
+class ewma_adjust_denominator_null_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
@@ -113,7 +118,7 @@ class ewma_adjust_denominator_null_functor {
     } else if (!valid) {
       // the value is null, carry the previous value forward
       // "identity operator" is used
-      return {1.0, 0.0};
+      return this->IDENTITY;
     } else {
       return {beta, 1.0};
     }
@@ -121,7 +126,7 @@ class ewma_adjust_denominator_null_functor {
 };
 
 template <typename T>
-class ewma_adjust_denominator_nonull_functor {
+class ewma_adjust_denominator_nonull_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
@@ -132,7 +137,7 @@ class ewma_adjust_denominator_nonull_functor {
 };
 
 template <typename T>
-class ewma_noadjust_nonull_functor {
+class ewma_noadjust_nonull_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
@@ -153,7 +158,7 @@ class ewma_noadjust_nonull_functor {
 };
 
 template <typename T>
-class ewma_noadjust_null_functor {
+class ewma_noadjust_null_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
@@ -181,7 +186,7 @@ class ewma_noadjust_null_functor {
         return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
       } else {
         // value is not valid
-        return {1.0, 0.0};
+        return this->IDENTITY;
       }
     }
   }
@@ -356,9 +361,13 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
+  auto ewma_agg = (dynamic_cast<ewma_aggregation*>(agg.get()));
+  if (ewma_agg == NULL) { CUDF_FAIL("Expected an EWMA aggregation."); }
   CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Column must be floating point type");
-  cudf::ewm_history history = (dynamic_cast<ewma_aggregation*>(agg.get()))->history;
-  T com                     = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
+
+  cudf::ewm_history history = ewma_agg->history;
+  T com                     = ewma_agg->com;
+
   // center of mass is easier for the user, but the recurrences are
   // better expressed in terms of the derived parameter `beta`
   T beta = com / (com + 1.0);
