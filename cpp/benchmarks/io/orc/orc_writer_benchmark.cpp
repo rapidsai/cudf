@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/types.hpp"
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
@@ -119,6 +120,8 @@ BENCHMARK_DEFINE_F(OrcWrite, writer_options)
 BENCHMARK_REGISTER_F(OrcWrite, writer_options)
   ->ArgsProduct({{int32_t(cudf::io::compression_type::NONE),
                   int32_t(cudf::io::compression_type::SNAPPY)},
-                 {0, 1, 2}})
+                 {int32_t{cudf::io::STATISTICS_NONE},
+                  int32_t{cudf::io::ORC_STATISTICS_STRIPE},
+                  int32_t{cudf::io::ORC_STATISTICS_ROW_GROUP}}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
