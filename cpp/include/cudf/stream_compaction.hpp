@@ -189,7 +189,7 @@ std::unique_ptr<table> drop_nans(
  * @note if @p input.num_rows() is zero, there is no error, and an empty table
  * is returned.
  *
- * @throws cudf::logic_error if The `input` size  and `boolean_mask` size mismatches.
+ * @throws cudf::logic_error if `input.num_rows() != boolean_mask.size()`.
  * @throws cudf::logic_error if `boolean_mask` is not `type_id::BOOL8` type.
  *
  * @param[in] input The input table_view to filter
@@ -223,17 +223,17 @@ enum class duplicate_keep_option {
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
- * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
+ * @throws cudf::logic_error if `input.num_rows() != keys.size()`.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
+ * @param[in] keep            keep first row, last row, or no rows of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] mr              Device memory resource used to allocate the returned table's device
- * memory
+ *                            memory
  *
- * @return Table with unique rows from each sequence of equivalent rows as per specified `keep`.
+ * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`.
  */
 std::unique_ptr<table> drop_duplicates(
   table_view const& input,
@@ -245,7 +245,8 @@ std::unique_ptr<table> drop_duplicates(
 /**
  * @brief Create a new table without duplicate rows.
  *
- * The output table is sorted according to the lexicographic ordering of the `keys` rows.
+ * The output table is sorted according to the lexicographic ordering of the data in the columns
+ * indexed by `keys`.
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
  * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
@@ -253,18 +254,18 @@ std::unique_ptr<table> drop_duplicates(
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
- * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
+ * @throws cudf::logic_error if `input.num_rows() != keys.size()`.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
+ * @param[in] keep            keep first row, last row, or no rows of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] null_precedence flag to denote nulls should appear before or after non-null items
  * @param[in] mr              Device memory resource used to allocate the returned table's device
- * memory
+ *                            memory
  *
- * @return Table with sorted unique rows as per specified `keep`.
+ * @return Table with sorted unique rows as specified by `keep`.
  */
 std::unique_ptr<table> sort_and_drop_duplicates(
   table_view const& input,
@@ -281,16 +282,14 @@ std::unique_ptr<table> sort_and_drop_duplicates(
  * row of `keys` columns is unique. If duplicate rows are present, it is unspecified which
  * row is copied.
  *
- * Elements in the output table are in a random order.
- *
- * @throws cudf::logic_error if The `input` row size mismatches with `keys`.
+ * The order of elements in the output table is not specified.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] mr              Device memory resource used to allocate the returned table's device
- * memory
+ *                            memory
  *
  * @return Table with unique rows in an unspecified order.
  */
@@ -309,11 +308,11 @@ std::unique_ptr<table> unordered_drop_duplicates(
  *
  * `null`s are handled as equal.
  *
- * @param[in] input View of the input column
+ * @param[in] input The column_view whose number of distinct consecutive groups will be counted
  * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_handling flag to consider `NaN==null` or not
  *
- * @return number of consecutive groups in the column
+ * @return number of distinct consecutive groups in the column
  */
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
@@ -322,18 +321,19 @@ cudf::size_type distinct_count(column_view const& input,
 /**
  * @brief Count the number of consecutive groups of equivalent elements in a table.
  *
- *
- * @param[in] input Table whose number of consecutive groups will be counted
+ * @param[in] input Table whose number of distinct consecutive groups will be counted
  * @param[in] nulls_equal flag to denote if null elements should be considered equal
  * nulls are not equal if null_equality::UNEQUAL
  *
- * @return number of consecutive groups in the table
+ * @return number of distinct consecutive groups in the table
  */
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal = null_equality::EQUAL);
 
 /**
  * @brief Count the unique elements in the column_view.
+ *
+ * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are unique.
  *
  * Given an input column_view, number of unique elements in this column_view is returned.
  *
@@ -356,7 +356,6 @@ cudf::size_type unordered_distinct_count(column_view const& input,
 
 /**
  * @brief Count the unique rows in a table.
- *
  *
  * @param[in] input Table whose unique rows will be counted
  * @param[in] nulls_equal flag to denote if null elements should be considered equal

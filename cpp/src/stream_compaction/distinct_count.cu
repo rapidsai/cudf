@@ -40,7 +40,7 @@ namespace cudf {
 namespace detail {
 namespace {
 /**
- * @brief Functor to check for `NAN` at an index in a `column_device_view`.
+ * @brief Functor to check for `NaN` at an index in a `column_device_view`.
  *
  * @tparam T The type of `column_device_view`
  */
@@ -54,11 +54,11 @@ struct check_for_nan {
   check_for_nan(cudf::column_device_view input) : _input{input} {}
 
   /**
-   * @brief Operator to be called to check for `NAN` at `index` in `_input`
+   * @brief Operator to be called to check for `NaN` at `index` in `_input`
    *
-   * @param[in] index The index at which the `NAN` needs to be checked in `input`
+   * @param[in] index The index at which the `NaN` needs to be checked in `input`
    *
-   * @returns bool true if value at `index` is `NAN` and not null, else false
+   * @returns bool true if value at `index` is `NaN` and not null, else false
    */
   __device__ bool operator()(size_type index) const noexcept
   {
@@ -70,18 +70,18 @@ struct check_for_nan {
 
 /**
  * @brief A structure to be used along with type_dispatcher to check if a
- * `column_view` has `NAN`.
+ * `column_view` has `NaN`.
  */
 struct has_nans {
   /**
-   * @brief Checks if `input` has `NAN`
+   * @brief Checks if `input` has `NaN`
    *
    * @note This will be applicable only for floating point type columns.
    *
-   * @param[in] input The `column_view` which will be checked for `NAN`
+   * @param[in] input The `column_view` which will be checked for `NaN`
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @returns bool true if `input` has `NAN` else false
+   * @returns bool true if `input` has `NaN` else false
    */
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   bool operator()(column_view const& input, rmm::cuda_stream_view stream)
@@ -96,16 +96,16 @@ struct has_nans {
   }
 
   /**
-   * @brief Checks if `input` has `NAN`
+   * @brief Checks if `input` has `NaN`
    *
    * @note This will be applicable only for non-floating point type columns. And
-   * non-floating point columns can never have `NAN`, so it will always return
+   * non-floating point columns can never have `NaN`, so it will always return
    * false
    *
-   * @param[in] input The `column_view` which will be checked for `NAN`
+   * @param[in] input The `column_view` which will be checked for `NaN`
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
-   * @returns bool Always false as non-floating point columns can't have `NAN`
+   * @returns bool Always false as non-floating point columns can't have `NaN`
    */
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
   bool operator()(column_view const&, rmm::cuda_stream_view)
@@ -115,19 +115,19 @@ struct has_nans {
 };
 
 /**
- * @brief A structure to be used along with device type_dispatcher to check if
- * the row `index` of `column_device_view` is `NAN`.
+ * @brief A functor to be used along with device type_dispatcher to check if
+ * the row `index` of `column_device_view` is `NaN`.
  */
 struct check_nan {
   /**
-   * @brief Checks if the row `index` of `input` is `NAN`.
+   * @brief Checks if the row `index` of `input` is `NaN`.
    *
    * @note This will be applicable only for floating point type columns.
    *
-   * @param[in] input The `column_device_view` which will be checked for `NAN`
-   * @param[in] index The index at which the `NAN` needs to be checked in `input`
+   * @param[in] input The `column_device_view` which will be checked for `NaN`
+   * @param[in] index The index at which the `NaN` needs to be checked in `input`
    *
-   * @returns bool true if value at `index` is `NAN`, else false
+   * @returns bool true if value at `index` is `NaN`, else false
    */
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   __device__ bool operator()(column_device_view const& input, size_type index)
@@ -135,16 +135,16 @@ struct check_nan {
     return std::isnan(input.data<T>()[index]);
   }
   /**
-   * @brief Checks if the row `index` of `input` is `NAN`.
+   * @brief Checks if the row `index` of `input` is `NaN`.
    *
    * @note This will be applicable for non-floating point type columns. And
-   * non-floating point columns can never have `NAN`, so it will always return
+   * non-floating point columns can never have `NaN`, so it will always return
    * false.
    *
-   * @param[in] input The `column_device_view` which will be checked for `NAN`
-   * @param[in] index The index at which the `NAN` needs to be checked in `input`
+   * @param[in] input The `column_device_view` which will be checked for `NaN`
+   * @param[in] index The index at which the `NaN` needs to be checked in `input`
    *
-   * @returns bool true if value at `index` is `NAN`, else false
+   * @returns bool true if value at `index` is `NaN`, else false
    */
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
   __device__ bool operator()(column_device_view const&, size_type)
@@ -213,7 +213,7 @@ cudf::size_type distinct_count(column_view const& input,
   if (0 == num_rows || input.null_count() == num_rows) { return 0; }
 
   auto const count_nulls = null_handling == null_policy::INCLUDE;
-  auto const nan_is_null = nan_handling == nan_policy::NAN_IS_NULL;
+  auto const nan_is_null = nan_handling == nan_policy::NaN_IS_NULL;
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto device_view       = *input_device_view;
   auto t_view            = table_view{{input}};
@@ -252,17 +252,17 @@ cudf::size_type unordered_distinct_count(column_view const& input,
   bool has_nan = false;
   // Check for Nans
   // Checking for nulls in input and flag nan_handling, as the count will
-  // only get affected if these two conditions are true. NAN will only be
-  // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
+  // only get affected if these two conditions are true. NaN will only be
+  // be an extra if nan_handling was NaN_IS_NULL and input also had null, which
   // will increase the count by 1.
-  if (has_null and nan_handling == nan_policy::NAN_IS_NULL) {
+  if (has_null and nan_handling == nan_policy::NaN_IS_NULL) {
     has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
   auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // if nan is considered null and there are already null values
-  if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and has_null) --count;
+  if (nan_handling == nan_policy::NaN_IS_NULL and has_nan and has_null) --count;
 
   if (null_handling == null_policy::EXCLUDE and has_null)
     return --count;
