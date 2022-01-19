@@ -34,9 +34,9 @@
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  auto stream() -> rmm::cuda_stream_view { return rmm::cuda_stream_default; }
-  auto size() -> cudf::size_type { return cudf::size_type(100); }
-  auto type() -> cudf::data_type { return cudf::data_type{cudf::type_to_id<T>()}; }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  cudf::size_type size() { return cudf::size_type(100); }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 template <typename ChronoT>
@@ -112,7 +112,7 @@ struct compare_chrono_elements {
   {
   }
 
-  __host__ __device__ auto operator()(const int32_t element_index) -> bool
+  __host__ __device__ bool operator()(const int32_t element_index)
   {
     auto lhs_elt = lhs.element<ChronoT>(element_index);
     auto rhs_elt = rhs.element<ChronoT>(element_index);

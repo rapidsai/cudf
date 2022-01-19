@@ -31,7 +31,7 @@
 #include <random>
 
 template <typename T>
-auto random_int(T min, T max) -> T
+T random_int(T min, T max)
 {
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
@@ -158,8 +158,7 @@ void BM_iterator(benchmark::State& state)
 
 // operator+ defined for pair iterator reduction
 template <typename T>
-__device__ auto operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs)
-  -> thrust::pair<T, bool>
+__device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs)
 {
   return thrust::pair<T, bool>{lhs.first * lhs.second + rhs.first * rhs.second,
                                lhs.second + rhs.second};

@@ -46,8 +46,8 @@ TEST_F(TableTest, EmptyColumnedTable)
 {
   std::vector<column_view> cols{};
 
-  auto input    = TView(cols);
-  auto expected = cudf::size_type{0};
+  TView input(cols);
+  cudf::size_type expected = 0;
 
   EXPECT_EQ(input.num_columns(), expected);
 }
@@ -61,8 +61,9 @@ TEST_F(TableTest, ValidateConstructorTableViewToTable)
   cols.push_back(col1.release());
   cols.push_back(col2.release());
 
-  auto input_table = Table(std::move(cols));
-  auto out_table   = Table(input_table.view());
+  Table input_table(std::move(cols));
+
+  Table out_table(input_table.view());
 
   EXPECT_EQ(input_table.num_columns(), out_table.num_columns());
   EXPECT_EQ(input_table.num_rows(), out_table.num_rows());
@@ -81,7 +82,7 @@ TEST_F(TableTest, GetTableWithSelectedColumns)
   cols.push_back(col3.release());
   cols.push_back(col4.release());
 
-  auto t = Table(std::move(cols));
+  Table t(std::move(cols));
 
   cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{2, 3});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(t.view().column(2), selected_tview.column(0));
@@ -97,7 +98,7 @@ TEST_F(TableTest, SelectingOutOfBounds)
   cols.push_back(col1.release());
   cols.push_back(col2.release());
 
-  auto t = Table(std::move(cols));
+  Table t(std::move(cols));
 
   EXPECT_THROW(t.select(std::vector<cudf::size_type>{0, 1, 2}), std::out_of_range);
 }
@@ -110,7 +111,7 @@ TEST_F(TableTest, SelectingNoColumns)
   CVector cols;
   cols.push_back(col1.release());
   cols.push_back(col2.release());
-  auto t               = Table(std::move(cols));
+  Table t(std::move(cols));
   TView selected_table = t.select(std::vector<cudf::size_type>{});
 
   EXPECT_EQ(selected_table.num_columns(), 0);

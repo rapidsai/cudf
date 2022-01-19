@@ -157,7 +157,7 @@ struct mark_special_tokens {
    * @brief Check given code-point array to the list of known
    * special tokens.
    */
-  __device__ auto is_special_token(uint32_t const* token, cudf::size_type size) const -> bool
+  __device__ bool is_special_token(uint32_t const* token, cudf::size_type size) const
   {
     if (size < MIN_ST_WIDTH || size > MAX_ST_WIDTH) return false;
     char str_token[MAX_ST_WIDTH];
@@ -416,14 +416,11 @@ uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
 }
 
 struct copy_if_fn {  // inline lambda not allowed in private or protected member function
-  __device__ auto operator()(uint32_t cp) -> bool
-  {
-    return cp != std::numeric_limits<uint32_t>::max();
-  }
+  __device__ bool operator()(uint32_t cp) { return cp != std::numeric_limits<uint32_t>::max(); }
 };
 
 struct tranform_fn {  // just converting uint8 value to uint32
-  __device__ auto operator()(uint8_t count) -> uint32_t { return count; }
+  __device__ uint32_t operator()(uint8_t count) { return count; }
 };
 
 void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stream_view stream)

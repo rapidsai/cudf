@@ -37,7 +37,7 @@ enum FunctorType { BANDWIDTH_BOUND, COMPUTE_BOUND };
 
 template <class NotFloat, FunctorType ft, class DisableNotFloat = void>
 struct Functor {
-  static __device__ auto f(NotFloat x) -> NotFloat { return x; }
+  static __device__ NotFloat f(NotFloat x) { return x; }
 };
 
 template <class Float, FunctorType ft>

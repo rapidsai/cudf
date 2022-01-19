@@ -88,7 +88,7 @@ struct sequences_dispatcher {
 };
 
 template <typename T>
-static constexpr auto is_supported() -> bool
+static constexpr bool is_supported()
 {
   return (cudf::is_numeric<T>() && !cudf::is_boolean<T>()) || cudf::is_duration<T>();
 }

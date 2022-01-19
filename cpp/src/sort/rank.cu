@@ -44,7 +44,7 @@ struct unique_comparator {
       permute(sorted_order)
   {
   }
-  __device__ auto operator()(size_type index) const noexcept -> ReturnType
+  __device__ ReturnType operator()(size_type index) const noexcept
   {
     return index == 0 || not comparator(permute[index], permute[index - 1]);
   };
@@ -55,9 +55,9 @@ struct unique_comparator {
 };
 
 // Assign rank from 1 to n unique values. Equal values get same rank value.
-auto sorted_dense_rank(column_view input_col,
-                       column_view sorted_order_view,
-                       rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
+rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
+                                                 column_view sorted_order_view,
+                                                 rmm::cuda_stream_view stream)
 {
   auto device_table     = table_device_view::create(table_view{{input_col}}, stream);
   auto const input_size = input_col.size();
@@ -189,7 +189,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
 // Returns index, count
 template <typename T>
 struct index_counter {
-  __device__ auto operator()(size_type i) -> T { return T{i, 1}; }
+  __device__ T operator()(size_type i) { return T{i, 1}; }
 };
 
 void rank_average(cudf::device_span<size_type const> group_keys,

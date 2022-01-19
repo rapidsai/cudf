@@ -101,7 +101,7 @@ struct hash_circular_buffer {
     available_space = space_to_leave;
   }
 
-  __device__ inline auto operator[](int idx) const -> const uint8_t& { return storage[idx]; }
+  __device__ inline const uint8_t& operator[](int idx) const { return storage[idx]; }
 };
 
 // Get a uint8_t pointer to a column element and its size as a pair.
@@ -149,9 +149,9 @@ struct MD5Hasher {
   }
 
   MD5Hasher(const MD5Hasher&) = delete;
-  auto operator=(const MD5Hasher&) -> MD5Hasher& = delete;
-  MD5Hasher(MD5Hasher&&)                         = delete;
-  auto operator=(MD5Hasher&&) -> MD5Hasher& = delete;
+  MD5Hasher& operator=(const MD5Hasher&) = delete;
+  MD5Hasher(MD5Hasher&&)                 = delete;
+  MD5Hasher& operator=(MD5Hasher&&) = delete;
 
   template <typename Element>
   void __device__ inline process(Element const& element)
@@ -271,7 +271,7 @@ struct ListHasherDispatcher {
 };
 
 // MD5 supported leaf data type check
-constexpr inline auto md5_leaf_type_check(data_type dt) -> bool
+constexpr inline bool md5_leaf_type_check(data_type dt)
 {
   return (is_fixed_width(dt) && !is_chrono(dt)) || (dt.id() == type_id::STRING);
 }

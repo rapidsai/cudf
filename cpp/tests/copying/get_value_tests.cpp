@@ -533,10 +533,10 @@ struct ListGetStructValueTest : public BaseFixture {
    * @brief Create a structs column that contains 3 fields: int, string, List<int>
    */
   template <typename MaskIterator>
-  auto make_test_structs_column(fixed_width_column_wrapper<T> field1,
-                                strings_column_wrapper field2,
-                                lists_column_wrapper<T, int32_t> field3,
-                                MaskIterator mask) -> SCW
+  SCW make_test_structs_column(fixed_width_column_wrapper<T> field1,
+                               strings_column_wrapper field2,
+                               lists_column_wrapper<T, int32_t> field3,
+                               MaskIterator mask)
   {
     return SCW{{field1, field2, field3}, mask};
   }
@@ -544,7 +544,7 @@ struct ListGetStructValueTest : public BaseFixture {
   /**
    * @brief Create a 0-length structs column
    */
-  auto zero_length_struct() -> SCW { return SCW{}; }
+  SCW zero_length_struct() { return SCW{}; }
 
   /**
    * @brief Concatenate structs columns, allow specifying inputs in `initializer_list`
@@ -560,7 +560,7 @@ struct ListGetStructValueTest : public BaseFixture {
   /**
    * @brief Test data setup: row 0 of structs column
    */
-  auto row0() -> SCW
+  SCW row0()
   {
     // {int: 1, string: NULL, list: NULL}
     return this->make_test_structs_column({{1}, {1}},
@@ -572,7 +572,7 @@ struct ListGetStructValueTest : public BaseFixture {
   /**
    * @brief Test data setup: row 1 of structs column
    */
-  auto row1() -> SCW
+  SCW row1()
   {
     // NULL
     return this->make_test_structs_column({-1}, {""}, LCWinner_t{-1}, all_nulls());
@@ -581,7 +581,7 @@ struct ListGetStructValueTest : public BaseFixture {
   /**
    * @brief Test data setup: row 2 of structs column
    */
-  auto row2() -> SCW
+  SCW row2()
   {
     // {int: 3, string: "xyz", list: [3, 8, 4]}
     return this->make_test_structs_column({{3}, {1}},
@@ -908,7 +908,7 @@ TEST_F(StructGetValueTest, multi_level_nested)
                               create_null_mask(1, mask_state::UNALLOCATED));
   std::vector<std::unique_ptr<column>> l0_fields;
   l0_fields.emplace_back(std::move(l1));
-  auto l0 = structs_column_wrapper(std::move(l0_fields));
+  structs_column_wrapper l0(std::move(l0_fields));
 
   size_type index = 0;
   auto s          = get_element(l0, index);

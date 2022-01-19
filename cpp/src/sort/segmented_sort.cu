@@ -36,9 +36,9 @@ enum class sort_method { STABLE, UNSTABLE };
 
 // returns segment indices for each element for all segments.
 // first segment begin index = 0, last segment end index = num_rows.
-auto get_segment_indices(size_type num_rows,
-                         column_view const& offsets,
-                         rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
+rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
+                                                   column_view const& offsets,
+                                                   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<size_type> segment_ids(num_rows, stream);
 

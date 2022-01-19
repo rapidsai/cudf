@@ -124,7 +124,7 @@ struct zip_archive_s {
   const zip_cdfh_s* cdfh;    // start of central directory file headers
 };
 
-auto ParseGZArchive(gz_archive_s* dst, const uint8_t* raw, size_t len) -> bool
+bool ParseGZArchive(gz_archive_s* dst, const uint8_t* raw, size_t len)
 {
   const gz_file_header_s* fhdr;
 
@@ -188,7 +188,7 @@ auto ParseGZArchive(gz_archive_s* dst, const uint8_t* raw, size_t len) -> bool
   return (fhdr->comp_mthd == 8 && len > 0);
 }
 
-auto OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len) -> bool
+bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
 {
   memset(dst, 0, sizeof(zip_archive_s));
   // Find the end of central directory
@@ -216,8 +216,7 @@ auto OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len) -> bool
   return (dst->eocd && dst->cdfh);
 }
 
-auto cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data, size_t comp_len)
-  -> int
+int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data, size_t comp_len)
 {
   int zerr;
   z_stream strm;
@@ -472,8 +471,10 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
   HostDecompressor_SNAPPY() {}
-  auto Decompress(uint8_t* dstBytes, size_t dstLen, const uint8_t* srcBytes, size_t srcLen)
-    -> size_t override
+  size_t Decompress(uint8_t* dstBytes,
+                    size_t dstLen,
+                    const uint8_t* srcBytes,
+                    size_t srcLen) override
   {
     uint32_t uncompressed_size, bytes_left, dst_pos;
     const uint8_t* cur = srcBytes;

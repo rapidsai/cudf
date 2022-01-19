@@ -60,7 +60,7 @@ struct filter_fn {
    * @param ch Character to check
    * @return True if character should be removed.
    */
-  __device__ auto remove_char(char_utf8 ch) -> bool
+  __device__ bool remove_char(char_utf8 ch)
   {
     auto const entry =
       thrust::find_if(thrust::seq, table_begin, table_end, [ch] __device__(auto const& range) {

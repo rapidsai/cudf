@@ -183,7 +183,7 @@ struct compute_size_and_repeat_separately_fn {
   // If d_chars != nullptr: only repeat strings.
   char* d_chars{nullptr};
 
-  __device__ auto operator()(size_type const idx) const noexcept -> int64_t
+  __device__ int64_t operator()(size_type const idx) const noexcept
   {
     auto const string_is_valid = !strings_has_nulls || strings_dv.is_valid_nocheck(idx);
     auto const rtimes_is_valid = !rtimes_has_nulls || repeat_times_dv.is_valid_nocheck(idx);

@@ -397,7 +397,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_structs_of_structs);
 }
 
-auto slice_off_first_and_last_rows(cudf::column_view const& col) -> cudf::column_view
+cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
 {
   return cudf::slice(col, {1, col.size() - 1})[0];
 }

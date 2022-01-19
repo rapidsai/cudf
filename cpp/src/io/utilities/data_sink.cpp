@@ -47,7 +47,7 @@ class file_sink : public data_sink {
 
   void flush() override { _output_stream.flush(); }
 
-  auto bytes_written() -> size_t override { return _bytes_written; }
+  size_t bytes_written() override { return _bytes_written; }
 
   [[nodiscard]] bool supports_device_write() const override { return _cufile_out != nullptr; }
 
@@ -98,7 +98,7 @@ class host_buffer_sink : public data_sink {
 
   void flush() override {}
 
-  auto bytes_written() -> size_t override { return buffer_->size(); }
+  size_t bytes_written() override { return buffer_->size(); }
 
  private:
   std::vector<char>* buffer_;
@@ -132,7 +132,7 @@ class void_sink : public data_sink {
 
   void flush() override {}
 
-  auto bytes_written() -> size_t override { return _bytes_written; }
+  size_t bytes_written() override { return _bytes_written; }
 
  private:
   size_t _bytes_written;
@@ -169,7 +169,7 @@ class user_sink_wrapper : public data_sink {
 
   void flush() override { user_sink->flush(); }
 
-  auto bytes_written() -> size_t override { return user_sink->bytes_written(); }
+  size_t bytes_written() override { return user_sink->bytes_written(); }
 
  private:
   cudf::io::data_sink* const user_sink;

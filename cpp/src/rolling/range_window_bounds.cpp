@@ -64,12 +64,12 @@ range_window_bounds::range_window_bounds(bool is_unbounded_, std::unique_ptr<sca
                "Bounded Range window scalar must be valid.");
 }
 
-auto range_window_bounds::unbounded(data_type type) -> range_window_bounds
+range_window_bounds range_window_bounds::unbounded(data_type type)
 {
   return range_window_bounds(true, make_default_constructed_scalar(type));
 }
 
-auto range_window_bounds::get(scalar const& boundary) -> range_window_bounds
+range_window_bounds range_window_bounds::get(scalar const& boundary)
 {
   return range_window_bounds{
     false, cudf::type_dispatcher(boundary.type(), range_scalar_constructor{}, boundary)};

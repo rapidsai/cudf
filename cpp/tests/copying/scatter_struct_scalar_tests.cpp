@@ -39,7 +39,7 @@ struct TypedStructScalarScatterTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_SUITE(TypedStructScalarScatterTest, FixedWidthTypes);
 
-auto scatter_single_scalar(scalar const& slr, column_view scatter_map, column_view target) -> column
+column scatter_single_scalar(scalar const& slr, column_view scatter_map, column_view target)
 {
   auto result = scatter({slr}, scatter_map, table_view{{target}}, false);
   return result->get_column(0);

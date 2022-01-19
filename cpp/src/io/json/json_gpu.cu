@@ -109,9 +109,9 @@ __device__ std::pair<char const*, char const*> get_next_key(char const* begin,
  * @return The parsed numeric value
  */
 template <typename T, int base>
-__inline__ __device__ auto decode_value(const char* begin,
-                                        uint64_t end,
-                                        parse_options_view const& opts) -> T
+__inline__ __device__ T decode_value(const char* begin,
+                                     uint64_t end,
+                                     parse_options_view const& opts)
 {
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
@@ -127,74 +127,79 @@ __inline__ __device__ auto decode_value(const char* begin,
  */
 template <typename T,
           std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ auto decode_value(const char* begin,
-                                        const char* end,
-                                        parse_options_view const& opts) -> T
+__inline__ __device__ T decode_value(const char* begin,
+                                     const char* end,
+                                     parse_options_view const& opts)
 {
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-__inline__ __device__ auto decode_value(char const* begin,
-                                        char const* end,
-                                        parse_options_view const& opts) -> T
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
 {
   return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ auto decode_value(char const* begin,
-                                        char const* end,
-                                        parse_options_view const&) -> T
+__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
 {
   return to_duration<T>(begin, end);
 }
 
 // The purpose of these is merely to allow compilation ONLY
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> cudf::string_view
+__inline__ __device__ cudf::string_view decode_value(const char*,
+                                                     const char*,
+                                                     parse_options_view const&)
 {
   return cudf::string_view{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> cudf::dictionary32
+__inline__ __device__ cudf::dictionary32 decode_value(const char*,
+                                                      const char*,
+                                                      parse_options_view const&)
 {
   return cudf::dictionary32{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> cudf::list_view
+__inline__ __device__ cudf::list_view decode_value(const char*,
+                                                   const char*,
+                                                   parse_options_view const&)
 {
   return cudf::list_view{};
 }
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> cudf::struct_view
+__inline__ __device__ cudf::struct_view decode_value(const char*,
+                                                     const char*,
+                                                     parse_options_view const&)
 {
   return cudf::struct_view{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> numeric::decimal32
+__inline__ __device__ numeric::decimal32 decode_value(const char*,
+                                                      const char*,
+                                                      parse_options_view const&)
 {
   return numeric::decimal32{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> numeric::decimal64
+__inline__ __device__ numeric::decimal64 decode_value(const char*,
+                                                      const char*,
+                                                      parse_options_view const&)
 {
   return numeric::decimal64{};
 }
 
 template <>
-__inline__ __device__ auto decode_value(const char*, const char*, parse_options_view const&)
-  -> numeric::decimal128
+__inline__ __device__ numeric::decimal128 decode_value(const char*,
+                                                       const char*,
+                                                       parse_options_view const&)
 {
   return numeric::decimal128{};
 }
@@ -276,7 +281,7 @@ struct ConvertFunctor {
  *
  * @return `true` if it is digit-like, `false` otherwise
  */
-__device__ __inline__ auto is_digit(char c, bool is_hex = false) -> bool
+__device__ __inline__ bool is_digit(char c, bool is_hex = false)
 {
   if (c >= '0' && c <= '9') return true;
 
@@ -293,8 +298,8 @@ __device__ __inline__ auto is_digit(char c, bool is_hex = false) -> bool
  * False positives are possible because positions are not taken into account.
  * For example, field "e.123-" would match the pattern.
  */
-__device__ __inline__ auto is_like_float(
-  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) -> bool
+__device__ __inline__ bool is_like_float(
+  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt)
 {
   // Can't have more than one exponent and one decimal point
   if (decimal_cnt > 1) return false;
@@ -334,11 +339,11 @@ struct field_descriptor {
  * nullptr is passed when the input file does not consist of objects.
  * @return Descriptor of the parsed field
  */
-__device__ auto next_field_descriptor(const char* begin,
-                                      const char* end,
-                                      parse_options_view const& opts,
-                                      cudf::size_type field_idx,
-                                      col_map_type col_map) -> field_descriptor
+__device__ field_descriptor next_field_descriptor(const char* begin,
+                                                  const char* end,
+                                                  parse_options_view const& opts,
+                                                  cudf::size_type field_idx,
+                                                  col_map_type col_map)
 {
   auto const desc_pre_trim =
     col_map.capacity() == 0
@@ -610,9 +615,9 @@ struct key_value_range {
 /**
  * @brief Parse the next field in key:value format and return ranges of its parts.
  */
-__device__ auto get_next_key_value_range(char const* begin,
-                                         char const* end,
-                                         parse_options_view const& opts) -> key_value_range
+__device__ key_value_range get_next_key_value_range(char const* begin,
+                                                    char const* end,
+                                                    parse_options_view const& opts)
 {
   auto const key_range = get_next_key(begin, end, opts.quotechar);
 

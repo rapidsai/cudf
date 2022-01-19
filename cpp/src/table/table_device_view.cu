@@ -57,7 +57,7 @@ template class table_device_view_base<mutable_column_device_view, mutable_table_
 namespace {
 struct is_relationally_comparable_functor {
   template <typename T>
-  constexpr auto operator()() -> bool
+  constexpr bool operator()()
   {
     return cudf::is_relationally_comparable<T, T>();
   }
@@ -65,7 +65,7 @@ struct is_relationally_comparable_functor {
 }  // namespace
 
 template <typename TableView>
-auto is_relationally_comparable(TableView const& lhs, TableView const& rhs) -> bool
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
 {
   return thrust::all_of(thrust::counting_iterator<size_type>(0),
                         thrust::counting_iterator<size_type>(lhs.num_columns()),

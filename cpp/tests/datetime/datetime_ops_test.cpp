@@ -33,7 +33,7 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
-  auto type() -> cudf::data_type { return cudf::data_type{cudf::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 using NonTimestampTypes =
@@ -148,7 +148,7 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
 template <typename T>
 struct TypedDatetimeOpsTest : public cudf::test::BaseFixture {
   cudf::size_type size() { return cudf::size_type(10); }
-  auto type() -> cudf::data_type { return cudf::data_type{cudf::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
 TYPED_TEST_SUITE(TypedDatetimeOpsTest, cudf::test::TimestampTypes);

@@ -85,7 +85,7 @@ struct test_case {
 // interpolate_center
 
 template <typename T>
-auto interpolate_center() -> test_case<T>
+test_case<T> interpolate_center()
 {
   auto low     = std::numeric_limits<T>::lowest();
   auto max     = std::numeric_limits<T>::max();
@@ -109,7 +109,7 @@ auto interpolate_center() -> test_case<T>
 }
 
 template <>
-auto interpolate_center() -> test_case<bool>
+test_case<bool> interpolate_center()
 {
   auto low   = std::numeric_limits<bool>::lowest();
   auto max   = std::numeric_limits<bool>::max();
@@ -123,7 +123,7 @@ auto interpolate_center() -> test_case<bool>
 // interpolate_extrema_high
 
 template <typename T>
-auto interpolate_extrema_high() -> test_case<T>
+test_case<T> interpolate_extrema_high()
 {
   T max        = std::numeric_limits<T>::max();
   T low        = max - 2;
@@ -135,7 +135,7 @@ auto interpolate_extrema_high() -> test_case<T>
 }
 
 template <>
-auto interpolate_extrema_high<bool>() -> test_case<bool>
+test_case<bool> interpolate_extrema_high<bool>()
 {
   return interpolate_center<bool>();
 }
@@ -143,7 +143,7 @@ auto interpolate_extrema_high<bool>() -> test_case<bool>
 // interpolate_extrema_low
 
 template <typename T>
-auto interpolate_extrema_low() -> test_case<T>
+test_case<T> interpolate_extrema_low()
 {
   T lowest     = std::numeric_limits<T>::lowest();
   T a          = lowest;
@@ -156,7 +156,7 @@ auto interpolate_extrema_low() -> test_case<T>
 }
 
 template <>
-auto interpolate_extrema_low<bool>() -> test_case<bool>
+test_case<bool> interpolate_extrema_low<bool>()
 {
   return interpolate_center<bool>();
 }

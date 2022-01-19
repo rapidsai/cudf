@@ -73,7 +73,7 @@ struct ScanTest : public BaseScanTest<T> {
     }
   }
 
-  auto params_supported(std::unique_ptr<aggregation> const& agg, scan_type inclusive) -> bool
+  bool params_supported(std::unique_ptr<aggregation> const& agg, scan_type inclusive)
   {
     bool supported = [&] {
       switch (agg->kind) {

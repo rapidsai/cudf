@@ -54,7 +54,7 @@ struct has_negative_nans_fn {
 
   has_negative_nans_fn(column_device_view const& d_view) : d_view(d_view) {}
 
-  __device__ auto operator()(size_type idx) const noexcept -> Type
+  __device__ Type operator()(size_type idx) const noexcept
   {
     if (d_view.is_null(idx)) { return false; }
 
@@ -73,7 +73,7 @@ struct has_negative_nans_fn {
  */
 struct has_negative_nans_dispatch {
   template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
-  auto operator()(column_view const& input, rmm::cuda_stream_view stream) const noexcept -> bool
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream) const noexcept
   {
     auto const d_entries_ptr = column_device_view::create(input, stream);
     return thrust::count_if(rmm::exec_policy(stream),
@@ -166,10 +166,10 @@ struct replace_negative_nans_dispatch {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return An array containing 1-based list indices corresponding to each list entry.
  */
-auto generate_entry_list_indices(size_type num_lists,
-                                 size_type num_entries,
-                                 offset_type const* offsets_begin,
-                                 rmm::cuda_stream_view stream) -> rmm::device_uvector<size_type>
+rmm::device_uvector<size_type> generate_entry_list_indices(size_type num_lists,
+                                                           size_type num_entries,
+                                                           offset_type const* offsets_begin,
+                                                           rmm::cuda_stream_view stream)
 {
   auto entry_list_indices = rmm::device_uvector<size_type>(num_entries, stream);
 
@@ -222,13 +222,13 @@ struct column_row_comparator_fn {
   }
 
   template <typename T = Type, std::enable_if_t<!cuda::std::is_floating_point_v<T>>* = nullptr>
-  auto __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept -> bool
+  bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
   {
     return lhs_val == rhs_val;
   }
 
   template <typename T = Type, std::enable_if_t<cuda::std::is_floating_point_v<T>>* = nullptr>
-  auto __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept -> bool
+  bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
   {
     // If both element(i) and element(j) are NaNs and NaNs are considered as equal value then this
     // comparison will return `true`. This is the desired behavior in Pandas.
@@ -239,7 +239,7 @@ struct column_row_comparator_fn {
     return lhs_val == rhs_val;
   }
 
-  auto __device__ operator()(size_type i, size_type j) const noexcept -> bool
+  bool __device__ operator()(size_type i, size_type j) const noexcept
   {
     // Two entries are not considered for equality if they belong to different lists.
     if (list_indices[i] != list_indices[j]) { return false; }
@@ -285,14 +285,14 @@ struct column_row_comparator_dispatch {
   }
 
   template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
-  auto __device__ operator()(size_type i, size_type j) const noexcept -> bool
+  bool __device__ operator()(size_type i, size_type j) const noexcept
   {
     return column_row_comparator_fn<Type>{
       list_indices, lhs, rhs, nulls_equal, has_nulls, nans_equal}(i, j);
   }
 
   template <class Type, std::enable_if_t<!cudf::is_equality_comparable<Type, Type>()>* = nullptr>
-  auto operator()(size_type, size_type) const -> bool
+  bool operator()(size_type, size_type) const
   {
     CUDF_FAIL(
       "column_row_comparator_dispatch cannot operate on types that are not equally comparable.");
@@ -326,7 +326,7 @@ struct table_row_comparator_fn {
   {
   }
 
-  auto __device__ operator()(size_type i, size_type j) const -> bool
+  bool __device__ operator()(size_type i, size_type j) const
   {
     auto column_comp = [=](column_device_view const& lhs, column_device_view const& rhs) {
       return type_dispatcher(

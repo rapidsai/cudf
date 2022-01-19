@@ -104,30 +104,27 @@ struct orcenc_state_s {
   } lengths;
 };
 
-static inline __device__ auto zigzag(uint32_t v) -> uint32_t { return v; }
-static inline __device__ auto zigzag(int32_t v) -> uint32_t
+static inline __device__ uint32_t zigzag(uint32_t v) { return v; }
+static inline __device__ uint32_t zigzag(int32_t v)
 {
   int32_t s = (v >> 31);
   return ((v ^ s) * 2) - s;
 }
-static inline __device__ auto zigzag(uint64_t v) -> uint64_t { return v; }
-static inline __device__ auto zigzag(int64_t v) -> uint64_t
+static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
+static inline __device__ uint64_t zigzag(int64_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
 }
 
-static inline __device__ auto zigzag(__int128_t v) -> __uint128_t
+static inline __device__ __uint128_t zigzag(__int128_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
 }
 
-static inline __device__ auto CountLeadingBytes32(uint32_t v) -> uint32_t { return __clz(v) >> 3; }
-static inline __device__ auto CountLeadingBytes64(uint64_t v) -> uint32_t
-{
-  return __clzll(v) >> 3;
-}
+static inline __device__ uint32_t CountLeadingBytes32(uint32_t v) { return __clz(v) >> 3; }
+static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clzll(v) >> 3; }
 
 /**
  * @brief Raw data output
@@ -173,9 +170,8 @@ static __device__ void StoreBytes(
  * @return number of input values encoded
  */
 template <StreamIndexType cid, uint32_t inmask>
-static __device__ auto ByteRLE(
+static __device__ uint32_t ByteRLE(
   orcenc_state_s* s, const uint8_t* inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
-  -> uint32_t
 {
   uint8_t* dst     = s->stream.data_ptrs[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
@@ -289,7 +285,7 @@ static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
 /**
  * @brief Encode a varint value, return the number of bytes written
  */
-static inline __device__ auto StoreVarint(uint8_t* dst, __uint128_t v) -> uint32_t
+static inline __device__ uint32_t StoreVarint(uint8_t* dst, __uint128_t v)
 {
   uint32_t bytecnt = 0;
   for (;;) {
@@ -360,9 +356,8 @@ template <StreamIndexType cid,
           uint32_t inmask,
           int block_size,
           typename Storage>
-static __device__ auto IntegerRLE(
+static __device__ uint32_t IntegerRLE(
   orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
-  -> uint32_t
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];

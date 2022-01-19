@@ -27,27 +27,27 @@ dictionary_column_view::dictionary_column_view(column_view const& dictionary_col
   if (size() > 0) CUDF_EXPECTS(num_children() == 2, "dictionary column has no children");
 }
 
-auto dictionary_column_view::parent() const noexcept -> column_view
+column_view dictionary_column_view::parent() const noexcept
 {
   return static_cast<column_view>(*this);
 }
 
-auto dictionary_column_view::indices() const noexcept -> column_view { return child(0); }
+column_view dictionary_column_view::indices() const noexcept { return child(0); }
 
-auto dictionary_column_view::get_indices_annotated() const noexcept -> column_view
+column_view dictionary_column_view::get_indices_annotated() const noexcept
 {
   return column_view(
     indices().type(), size(), indices().head(), null_mask(), null_count(), offset());
 }
 
-auto dictionary_column_view::keys() const noexcept -> column_view { return child(1); }
+column_view dictionary_column_view::keys() const noexcept { return child(1); }
 
 size_type dictionary_column_view::keys_size() const noexcept
 {
   return (size() == 0) ? 0 : keys().size();
 }
 
-auto dictionary_column_view::keys_type() const noexcept -> data_type
+data_type dictionary_column_view::keys_type() const noexcept
 {
   return (size() == 0) ? data_type{type_id::EMPTY} : keys().type();
 }

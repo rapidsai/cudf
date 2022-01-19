@@ -44,7 +44,7 @@ __global__ void gpu_atomic_test(T* result, T* data, size_t size)
 }
 
 template <typename T, typename BinaryOp>
-constexpr inline auto is_timestamp_sum() -> bool
+constexpr inline bool is_timestamp_sum()
 {
   return cudf::is_timestamp<T>() && std::is_same_v<BinaryOp, cudf::DeviceSum>;
 }

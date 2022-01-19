@@ -52,7 +52,7 @@ struct token_counter_fn {
   string_view const d_delimiter;       // delimiter for split
   size_type const max_tokens = std::numeric_limits<size_type>::max();
 
-  __device__ auto operator()(size_type idx) const -> size_type
+  __device__ size_type operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return 0; }
 
@@ -79,10 +79,10 @@ struct token_reader_fn {
   int32_t* d_token_offsets{};          // for locating tokens in d_tokens
   string_index_pair* d_tokens{};
 
-  __device__ auto resolve_token(string_view const& d_str,
-                                size_type start_pos,
-                                size_type end_pos,
-                                size_type delimiter_pos) const -> string_index_pair
+  __device__ string_index_pair resolve_token(string_view const& d_str,
+                                             size_type start_pos,
+                                             size_type end_pos,
+                                             size_type delimiter_pos) const
   {
     if (dir == Dir::FORWARD) {
       auto const byte_offset = d_str.byte_offset(start_pos);
@@ -145,7 +145,7 @@ struct whitespace_token_counter_fn {
   column_device_view const d_strings;  // strings to split
   size_type const max_tokens = std::numeric_limits<size_type>::max();
 
-  __device__ auto operator()(size_type idx) const -> size_type
+  __device__ size_type operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return 0; }
 

@@ -1110,7 +1110,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
 
   void flush() override { outfile_.flush(); }
 
-  auto bytes_written() -> size_t override { return outfile_.tellp(); }
+  size_t bytes_written() override { return outfile_.tellp(); }
 
  private:
   std::ofstream outfile_;
@@ -1418,13 +1418,13 @@ TEST_F(ParquetChunkedWriterTest, Strings)
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
   cols.push_back(strings1.release());
-  auto tbl1 = cudf::table(std::move(cols));
+  cudf::table tbl1(std::move(cols));
 
   bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
   cols.push_back(strings2.release());
-  auto tbl2 = cudf::table(std::move(cols));
+  cudf::table tbl2(std::move(cols));
 
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
@@ -2065,7 +2065,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
-  auto tbl1 = cudf::table(std::move(cols));
+  cudf::table tbl1(std::move(cols));
 
   T c2a[num_els];
   std::fill(c2a, c2a + num_els, static_cast<T>(8));
@@ -2075,7 +2075,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
   cols.push_back(c2b_w.release());
-  auto tbl2 = cudf::table(std::move(cols));
+  cudf::table tbl2(std::move(cols));
 
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
@@ -2113,7 +2113,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
   cols.push_back(c1a_w.release());
   cols.push_back(c1b_w.release());
-  auto tbl1 = cudf::table(std::move(cols));
+  cudf::table tbl1(std::move(cols));
 
   T c2a[num_els];
   std::fill(c2a, c2a + num_els, static_cast<T>(8));
@@ -2123,7 +2123,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
   cols.push_back(c2a_w.release());
   cols.push_back(c2b_w.release());
-  auto tbl2 = cudf::table(std::move(cols));
+  cudf::table tbl2(std::move(cols));
 
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
 
@@ -2175,7 +2175,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   void flush() override { mm_writer->flush(); }
 
-  auto bytes_written() -> size_t override { return mm_writer->bytes_written(); }
+  size_t bytes_written() override { return mm_writer->bytes_written(); }
 
  private:
   std::unique_ptr<data_sink> mm_writer;
@@ -3156,7 +3156,7 @@ TEST_F(ParquetReaderTest, EmptyOutput)
   struct_children.push_back(sc0.release());
   struct_children.push_back(sc1.release());
   struct_children.push_back(cudf::empty_like(_sc2));
-  auto c4 = cudf::test::structs_column_wrapper(std::move(struct_children));
+  cudf::test::structs_column_wrapper c4(std::move(struct_children));
 
   table_view expected({c0, c1, c2, *c3, c4});
 

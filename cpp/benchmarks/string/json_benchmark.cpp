@@ -28,9 +28,9 @@
 class JsonPath : public cudf::benchmark {
 };
 
-auto frand() -> float { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); }
+float frand() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); }
 
-auto rand_range(int min, int max) -> int { return min + static_cast<int>(frand() * (max - min)); }
+int rand_range(int min, int max) { return min + static_cast<int>(frand() * (max - min)); }
 
 std::vector<std::string> Books{
   "{\n\"category\": \"reference\",\n\"author\": \"Nigel Rees\",\n\"title\": \"Sayings of the "

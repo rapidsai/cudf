@@ -254,9 +254,9 @@ TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedColumns)
     std::vector<std::unique_ptr<cudf::column>> cols;
     cols.push_back(std::move(col0));
     cols.push_back(col1.release());
-    auto struct_col = cudf::test::structs_column_wrapper(std::move(cols));
-    auto lhs        = cudf::empty_like(struct_col);
-    auto rhs        = cudf::empty_like(struct_col);
+    cudf::test::structs_column_wrapper struct_col(std::move(cols));
+    auto lhs = cudf::empty_like(struct_col);
+    auto rhs = cudf::empty_like(struct_col);
 
     cudf::test::fixed_width_column_wrapper<bool> mask{};
 
@@ -295,7 +295,7 @@ TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedScalars)
     std::vector<std::unique_ptr<cudf::column>> cols;
     cols.push_back(col0.release());
     cols.push_back(col1.release());
-    auto struct_col = cudf::test::structs_column_wrapper(std::move(cols));
+    cudf::test::structs_column_wrapper struct_col(std::move(cols));
 
     cudf::test::fixed_width_column_wrapper<bool> mask{};
 

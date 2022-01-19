@@ -31,7 +31,7 @@ struct dlpack_deleter {
 using unique_managed_tensor = std::unique_ptr<DLManagedTensor, dlpack_deleter>;
 
 template <typename T>
-auto get_dtype() -> DLDataType
+DLDataType get_dtype()
 {
   uint8_t const bits{sizeof(T) * 8};
   uint16_t const lanes{1};
@@ -270,7 +270,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
     return static_cast<cudf::column_view>(col);
   });
 
-  auto input = cudf::table_view(col_views);
+  cudf::table_view input(col_views);
   unique_managed_tensor result(cudf::to_dlpack(input));
 
   auto const& tensor = result->dl_tensor;
@@ -323,7 +323,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpack2D)
     return static_cast<cudf::column_view>(col);
   });
 
-  auto input = cudf::table_view(col_views);
+  cudf::table_view input(col_views);
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
   // Verify that from_dlpack(to_dlpack(input)) == input

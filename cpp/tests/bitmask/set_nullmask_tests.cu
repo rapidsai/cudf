@@ -30,7 +30,7 @@
 
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;
-  __device__ auto operator()(cudf::size_type element_index) const noexcept -> bool
+  __device__ bool operator()(cudf::size_type element_index) const noexcept
   {
     return cudf::bit_is_set(_null_mask, element_index);
   }

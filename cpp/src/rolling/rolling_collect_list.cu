@@ -82,9 +82,9 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
 /**
  * @see cudf::detail::count_child_nulls
  */
-auto count_child_nulls(column_view const& input,
-                       std::unique_ptr<column> const& gather_map,
-                       rmm::cuda_stream_view stream) -> size_type
+size_type count_child_nulls(column_view const& input,
+                            std::unique_ptr<column> const& gather_map,
+                            rmm::cuda_stream_view stream)
 {
   auto input_device_view = column_device_view::create(input, stream);
 

@@ -120,7 +120,7 @@ TEST(DebugAssert, cudf_assert_true)
 // These tests don't use CUDF_TEST_PROGRAM_MAIN because :
 // 1.) They don't need the RMM Pool
 // 2.) The RMM Pool interferes with the death test
-auto main(int argc, char** argv) -> int
+int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -85,7 +85,7 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
 struct HashValue {
   std::size_t hash;
   explicit HashValue(std::size_t h) : hash{h} {}
-  auto operator^(HashValue const& other) const -> HashValue
+  HashValue operator^(HashValue const& other) const
   {
     return HashValue{hash_combine(hash, other.hash)};
   }
@@ -113,9 +113,9 @@ std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false
 
 std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl(input); }
 
-auto shallow_equivalent_impl(column_view const& lhs,
+bool shallow_equivalent_impl(column_view const& lhs,
                              column_view const& rhs,
-                             bool is_parent_empty = false) -> bool
+                             bool is_parent_empty = false)
 {
   bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
   return (lhs.type() == rhs.type()) and
@@ -129,7 +129,7 @@ auto shallow_equivalent_impl(column_view const& lhs,
                       return shallow_equivalent_impl(lhs_child, rhs_child, is_empty);
                     });
 }
-auto is_shallow_equivalent(column_view const& lhs, column_view const& rhs) -> bool
+bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 {
   return shallow_equivalent_impl(lhs, rhs);
 }
@@ -189,7 +189,7 @@ size_type count_descendants(column_view parent)
   return std::accumulate(begin, begin + parent.num_children(), size_type{parent.num_children()});
 }
 
-auto bit_cast(column_view const& input, data_type type) -> column_view
+column_view bit_cast(column_view const& input, data_type type)
 {
   CUDF_EXPECTS(is_bit_castable(input._type, type), "types are not bit-castable");
   return column_view{type,
@@ -201,7 +201,7 @@ auto bit_cast(column_view const& input, data_type type) -> column_view
                      input._children};
 }
 
-auto bit_cast(mutable_column_view const& input, data_type type) -> mutable_column_view
+mutable_column_view bit_cast(mutable_column_view const& input, data_type type)
 {
   CUDF_EXPECTS(is_bit_castable(input._type, type), "types are not bit-castable");
   return mutable_column_view{type,

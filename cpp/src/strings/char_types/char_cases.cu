@@ -119,7 +119,7 @@ constexpr std::array<uint16_t, 269> primes = {
 };
 
 // find a prime number that generates no collisions for all possible input data
-auto find_collision_proof_prime() -> uint16_t
+uint16_t find_collision_proof_prime()
 {
   for (auto const& prime : primes) {
     std::unordered_set<uint16_t> keys;

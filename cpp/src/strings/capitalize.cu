@@ -72,7 +72,7 @@ struct base_fn {
   {
   }
 
-  __device__ auto convert_char(char_info const& info, char* d_buffer) const -> int32_t
+  __device__ int32_t convert_char(char_info const& info, char* d_buffer) const
   {
     auto const code_point = info.first;
     auto const flag       = info.second;
@@ -153,7 +153,7 @@ struct capitalize_fn : base_fn<capitalize_fn> {
   {
   }
 
-  __device__ auto capitalize_next(char_utf8 const chr, character_flags_table_type const) -> bool
+  __device__ bool capitalize_next(char_utf8 const chr, character_flags_table_type const)
   {
     return !d_delimiters.empty() && (d_delimiters.find(chr) >= 0);
   }
@@ -175,7 +175,7 @@ struct title_fn : base_fn<title_fn> {
   {
   }
 
-  __device__ auto capitalize_next(char_utf8 const, character_flags_table_type const flag) -> bool
+  __device__ bool capitalize_next(char_utf8 const, character_flags_table_type const flag)
   {
     return (flag & sequence_type) == 0;
   };
@@ -192,7 +192,7 @@ struct is_title_fn {
   character_flags_table_type const* d_flags;
   column_device_view const d_column;
 
-  __device__ auto operator()(size_type idx) -> bool
+  __device__ bool operator()(size_type idx)
   {
     if (d_column.is_null(idx)) { return false; }
     auto const d_str = d_column.element<string_view>(idx);

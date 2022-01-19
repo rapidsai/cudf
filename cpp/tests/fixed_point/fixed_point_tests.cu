@@ -75,7 +75,7 @@ TYPED_TEST(FixedPointTestAllReps, DecimalXXThrust)
 
 struct cast_to_int32_fn {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
-  auto __host__ __device__ operator()(decimal32 fp) -> int32_t { return static_cast<int32_t>(fp); }
+  int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
 
 TEST_F(FixedPointTest, DecimalXXThrustOnDevice)

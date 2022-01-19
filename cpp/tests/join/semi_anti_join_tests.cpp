@@ -124,7 +124,7 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -156,7 +156,7 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNullsNotEqual)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -189,7 +189,7 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNulls)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -223,7 +223,7 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsNotEqual)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);

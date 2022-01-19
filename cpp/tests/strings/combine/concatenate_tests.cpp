@@ -50,7 +50,7 @@ TEST_F(StringsCombineTest, Concatenate)
   strings_columns.push_back(strings1);
   strings_columns.push_back(strings2);
 
-  auto table = cudf::table_view(strings_columns);
+  cudf::table_view table(strings_columns);
 
   {
     std::vector<const char*> h_expected{"eeexyz", "bbabc", nullptr, "éa", "aa", nullptr, "éééf"};
@@ -156,7 +156,7 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
-  auto table   = cudf::table_view(strings_columns);
+  cudf::table_view table(strings_columns);
   auto results = cudf::strings::concatenate(table);
   cudf::test::expect_strings_empty(results->view());
 }

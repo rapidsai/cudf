@@ -25,7 +25,7 @@ namespace io {
 /**
  * @copydoc cudf::io:convert_string_to_dtype
  */
-auto convert_string_to_dtype(const std::string& dtype_in) -> data_type
+data_type convert_string_to_dtype(const std::string& dtype_in)
 {
   // TODO: This function should be cleanup to take only libcudf type instances.
   std::string dtype = dtype_in;

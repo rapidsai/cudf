@@ -384,7 +384,7 @@ TEST_F(SliceStringTableTest, StringWithNulls)
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
-  auto src_table = cudf::table(std::move(scols));
+  cudf::table src_table(std::move(scols));
 
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
 
@@ -489,7 +489,7 @@ TEST_F(SliceTableCornerCases, MiscOffset)
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
   std::vector<cudf::size_type> indices{19, 38};
   std::vector<cudf::column_view> result = cudf::slice(col2, indices);
-  auto result_column                    = cudf::column(result[0]);
+  cudf::column result_column(result[0]);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col3, result_column);
 }

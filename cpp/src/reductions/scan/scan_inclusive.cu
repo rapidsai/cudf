@@ -37,10 +37,10 @@ namespace cudf {
 namespace detail {
 
 // logical-and scan of the null mask of the input view
-auto mask_scan(column_view const& input_view,
-               scan_type inclusive,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
+rmm::device_buffer mask_scan(column_view const& input_view,
+                             scan_type inclusive,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   rmm::device_buffer mask =
     detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
@@ -88,7 +88,7 @@ struct min_max_scan_operator {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  __device__ inline auto operator()(size_type lhs, size_type rhs) const -> size_type
+  __device__ inline size_type operator()(size_type lhs, size_type rhs) const
   {
     // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;
     // in these cases the return value does not matter since the result is not used
@@ -204,7 +204,7 @@ template <typename Op>
 struct scan_dispatcher {
  private:
   template <typename T>
-  static constexpr auto is_supported() -> bool
+  static constexpr bool is_supported()
   {
     if constexpr (std::is_same_v<T, cudf::struct_view>) {
       return std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>;

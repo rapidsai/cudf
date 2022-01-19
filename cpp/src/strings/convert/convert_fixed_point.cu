@@ -61,7 +61,7 @@ struct string_to_decimal_fn {
   {
   }
 
-  __device__ auto operator()(size_type idx) const -> DecimalType
+  __device__ DecimalType operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return 0; }
     auto const d_str = d_strings.element<string_view>(idx);
@@ -90,7 +90,7 @@ struct string_to_decimal_check_fn {
   {
   }
 
-  __device__ auto operator()(size_type idx) const -> bool
+  __device__ bool operator()(size_type idx) const
   {
     if (d_strings.is_null(idx)) { return false; }
     auto const d_str = d_strings.element<string_view>(idx);
@@ -201,7 +201,7 @@ template <typename DecimalType>
 struct decimal_to_string_size_fn {
   column_device_view const d_column;
 
-  __device__ auto operator()(size_type idx) const -> int32_t
+  __device__ int32_t operator()(size_type idx) const
   {
     if (d_column.is_null(idx)) return 0;
     auto const value = d_column.element<DecimalType>(idx);

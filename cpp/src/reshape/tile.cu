@@ -34,7 +34,7 @@ namespace cudf {
 namespace {
 struct tile_functor {
   size_type count;
-  auto __device__ operator()(size_type i) -> size_type { return i % count; }
+  size_type __device__ operator()(size_type i) { return i % count; }
 };
 
 }  // anonymous namespace

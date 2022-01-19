@@ -45,7 +45,7 @@ struct snap_state_s {
 /**
  * @brief 12-bit hash from four consecutive bytes
  */
-static inline __device__ auto snap_hash(uint32_t v) -> uint32_t
+static inline __device__ uint32_t snap_hash(uint32_t v)
 {
   return (v * ((1 << 20) + (0x2a00) + (0x6a) + 1)) >> (32 - hash_bits);
 }
@@ -53,7 +53,7 @@ static inline __device__ auto snap_hash(uint32_t v) -> uint32_t
 /**
  * @brief Fetches four consecutive bytes
  */
-static inline __device__ auto fetch4(const uint8_t* src) -> uint32_t
+static inline __device__ uint32_t fetch4(const uint8_t* src)
 {
   uint32_t src_align = 3 & reinterpret_cast<uintptr_t>(src);
   const auto* src32  = reinterpret_cast<const uint32_t*>(src - src_align);
@@ -72,8 +72,8 @@ static inline __device__ auto fetch4(const uint8_t* src) -> uint32_t
  *
  * @return Updated pointer to compressed byte stream
  */
-static __device__ auto StoreLiterals(
-  uint8_t* dst, uint8_t* end, const uint8_t* src, uint32_t len_minus1, uint32_t t) -> uint8_t*
+static __device__ uint8_t* StoreLiterals(
+  uint8_t* dst, uint8_t* end, const uint8_t* src, uint32_t len_minus1, uint32_t t)
 {
   if (len_minus1 < 60) {
     if (!t && dst < end) dst[0] = (len_minus1 << 2);
@@ -125,8 +125,10 @@ static __device__ auto StoreLiterals(
  *
  * @return Updated pointer to compressed byte stream
  */
-static __device__ auto StoreCopy(uint8_t* dst, uint8_t* end, uint32_t copy_len, uint32_t distance)
-  -> uint8_t*
+static __device__ uint8_t* StoreCopy(uint8_t* dst,
+                                     uint8_t* end,
+                                     uint32_t copy_len,
+                                     uint32_t distance)
 {
   if (copy_len < 12 && distance < 2048) {
     // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
@@ -150,7 +152,7 @@ static __device__ auto StoreCopy(uint8_t* dst, uint8_t* end, uint32_t copy_len, 
  * @brief Returns mask of any thread in the warp that has a hash value
  * equal to that of the calling thread
  */
-static inline __device__ auto HashMatchAny(uint32_t v, uint32_t t) -> uint32_t
+static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 {
 #if (__CUDA_ARCH__ >= 700)
   return __match_any_sync(~0, v);
@@ -176,10 +178,10 @@ static inline __device__ auto HashMatchAny(uint32_t v, uint32_t t) -> uint32_t
  *
  * @return Number of bytes before first match (literal length)
  */
-static __device__ auto FindFourByteMatch(snap_state_s* s,
-                                         const uint8_t* src,
-                                         uint32_t pos0,
-                                         uint32_t t) -> uint32_t
+static __device__ uint32_t FindFourByteMatch(snap_state_s* s,
+                                             const uint8_t* src,
+                                             uint32_t pos0,
+                                             uint32_t t)
 {
   constexpr int max_literal_length = 256;
   // Matches encoder limit as described in snappy format description
@@ -231,8 +233,10 @@ static __device__ auto FindFourByteMatch(snap_state_s* s,
 }
 
 /// @brief Returns the number of matching bytes for two byte sequences up to 63 bytes
-static __device__ auto Match60(const uint8_t* src1, const uint8_t* src2, uint32_t len, uint32_t t)
-  -> uint32_t
+static __device__ uint32_t Match60(const uint8_t* src1,
+                                   const uint8_t* src2,
+                                   uint32_t len,
+                                   uint32_t t)
 {
   uint32_t mismatch = ballot(t >= len || src1[t] != src2[t]);
   if (mismatch == 0) {
@@ -337,10 +341,10 @@ __global__ void __launch_bounds__(128)
   }
 }
 
-auto __host__ gpu_snap(gpu_inflate_input_s* inputs,
-                       gpu_inflate_status_s* outputs,
-                       int count,
-                       rmm::cuda_stream_view stream) -> cudaError_t
+cudaError_t __host__ gpu_snap(gpu_inflate_input_s* inputs,
+                              gpu_inflate_status_s* outputs,
+                              int count,
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count, 1);

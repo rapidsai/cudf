@@ -268,7 +268,7 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
   columns.emplace_back(std::move(cudf::dictionary::encode(col)));
 
-  auto expected_table = cudf::table(std::move(columns));
+  cudf::table expected_table(std::move(columns));
 
   auto got_cudf_table = cudf::from_arrow(*arrow_table);
 

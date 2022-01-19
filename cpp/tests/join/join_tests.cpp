@@ -110,8 +110,8 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::left_join(t0, t1, {0}, {0});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -130,7 +130,7 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -156,8 +156,8 @@ TEST_F(JoinTest, FullJoinNoNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::full_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -180,7 +180,7 @@ TEST_F(JoinTest, FullJoinNoNulls)
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
 
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -205,8 +205,8 @@ TEST_F(JoinTest, FullJoinWithNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::full_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -229,7 +229,7 @@ TEST_F(JoinTest, FullJoinWithNulls)
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
 
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -257,8 +257,8 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::full_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -291,7 +291,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
 
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -362,8 +362,8 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::left_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -382,7 +382,7 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -407,8 +407,8 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::left_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -428,7 +428,7 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -471,8 +471,8 @@ TEST_F(JoinTest, LeftJoinWithStructsAndNulls)
   cols1.push_back(col1_2.release());
   cols1.push_back(col1_3.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::left_join(t0, t1, {3}, {3});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -519,7 +519,7 @@ TEST_F(JoinTest, LeftJoinWithStructsAndNulls)
   cols_gold.push_back(col_gold_5.release());
   cols_gold.push_back(col_gold_6.release());
   cols_gold.push_back(col_gold_7.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -547,8 +547,8 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::left_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -582,7 +582,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -650,8 +650,8 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -670,7 +670,7 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -695,8 +695,8 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -715,7 +715,7 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -763,8 +763,8 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   cols1.push_back(col1_2.release());
   cols1.push_back(col1_3.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::inner_join(t0, t1, {0, 1, 3}, {0, 1, 3});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -800,7 +800,7 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   cols_gold.push_back(col_gold_5.release());
   cols_gold.push_back(col_gold_6.release());
   cols_gold.push_back(col_gold_7.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -829,8 +829,8 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::inner_join(t0, t1, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -852,7 +852,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
 
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -883,7 +883,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   cols_gold_sql.push_back(col_gold_3.release());
   cols_gold_sql.push_back(col_gold_4.release());
   cols_gold_sql.push_back(col_gold_5.release());
-  auto gold_sql = Table(std::move(cols_gold_sql));
+  Table gold_sql(std::move(cols_gold_sql));
 
   gold_sort_order = cudf::sorted_order(gold_sql.view());
   sorted_gold     = cudf::gather(gold_sql.view(), *gold_sort_order);
@@ -905,8 +905,8 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto empty0 = Table(std::move(cols0));
-  auto t1     = Table(std::move(cols1));
+  Table empty0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result = cudf::inner_join(empty0, t1, {0, 1}, {0, 1});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty0, *result);
@@ -926,8 +926,8 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto empty0 = Table(std::move(cols0));
-  auto t1     = Table(std::move(cols1));
+  Table empty0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result = cudf::left_join(empty0, t1, {0, 1}, {0, 1});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty0, *result);
@@ -947,8 +947,8 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto lhs = Table(std::move(cols0));
-  auto rhs = Table(std::move(cols1));
+  Table lhs(std::move(cols0));
+  Table rhs(std::move(cols1));
 
   auto result            = cudf::full_join(lhs, rhs, {0, 1}, {0, 1});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -964,7 +964,7 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -987,8 +987,8 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0     = Table(std::move(cols0));
-  auto empty1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
 
   {
     auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1});
@@ -1026,8 +1026,8 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0     = Table(std::move(cols0));
-  auto empty1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
 
   {
     auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1});
@@ -1065,8 +1065,8 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0     = Table(std::move(cols0));
-  auto empty1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
 
   {
     auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1});
@@ -1105,8 +1105,8 @@ TEST_F(JoinTest, BothEmptyInnerJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0     = Table(std::move(cols0));
-  auto empty1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
 
   auto result = cudf::inner_join(t0, empty1, {0, 1}, {0, 1});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
@@ -1126,8 +1126,8 @@ TEST_F(JoinTest, BothEmptyLeftJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0     = Table(std::move(cols0));
-  auto empty1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
 
   auto result = cudf::left_join(t0, empty1, {0, 1}, {0, 1});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
@@ -1147,8 +1147,8 @@ TEST_F(JoinTest, BothEmptyFullJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0     = Table(std::move(cols0));
-  auto empty1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table empty1(std::move(cols1));
 
   auto result = cudf::full_join(t0, empty1, {0, 1}, {0, 1});
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
@@ -1170,8 +1170,8 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result = cudf::inner_join(t0, t1, {0, 1}, {0, 1});
 
@@ -1186,7 +1186,7 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
 
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(gold, *result);
 }
@@ -1205,8 +1205,8 @@ TEST_F(JoinTest, EqualValuesLeftJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result = cudf::left_join(t0, t1, {0, 1}, {0, 1});
 
@@ -1220,7 +1220,7 @@ TEST_F(JoinTest, EqualValuesLeftJoin)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(gold, *result);
 }
@@ -1239,8 +1239,8 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result = cudf::full_join(t0, t1, {0, 1}, {0, 1});
 
@@ -1254,7 +1254,7 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(gold, *result);
 }
@@ -1268,8 +1268,8 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   cols0.push_back(col0_0.release());
   cols1.push_back(col1_0.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::inner_join(t0, t1, {0}, {0});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -1280,7 +1280,7 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
@@ -1293,7 +1293,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
   cols1.emplace_back(column_wrapper<int32_t>{{2, 2, 0, 4, 3}}.release());
   cols1.emplace_back(strcol_wrapper{{"s1", "s0", "s1", "s2", "s1"}}.release());
 
-  auto t1 = Table(std::move(cols1));
+  Table t1(std::move(cols1));
 
   cudf::hash_join hash_join(t1, cudf::null_equality::EQUAL);
 
@@ -1302,7 +1302,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
     cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
 
-    auto t0 = Table(std::move(cols0));
+    Table t0(std::move(cols0));
 
     auto output_size                         = hash_join.full_join_size(t0);
     std::optional<std::size_t> optional_size = output_size;
@@ -1322,7 +1322,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
     cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
 
-    auto t0 = Table(std::move(cols0));
+    Table t0(std::move(cols0));
 
     auto output_size                         = hash_join.left_join_size(t0);
     std::optional<std::size_t> optional_size = output_size;
@@ -1342,7 +1342,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 2}}.release());
     cols0.emplace_back(strcol_wrapper({"s1", "s1", "s0", "s4", "s0"}).release());
 
-    auto t0 = Table(std::move(cols0));
+    Table t0(std::move(cols0));
 
     auto output_size                         = hash_join.inner_join_size(t0);
     std::optional<std::size_t> optional_size = output_size;
@@ -1382,8 +1382,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   cols0.push_back(col0.release());
   cols1.push_back(col1.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto hash_join = cudf::hash_join(t1, cudf::null_equality::EQUAL);
 
@@ -1702,8 +1702,8 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   cols1.push_back(col1_2.release());
   cols1.push_back(col1_3.release());
 
-  auto t0 = Table(std::move(cols0));
-  auto t1 = Table(std::move(cols1));
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
 
   auto result            = cudf::full_join(t0, t1, {0, 1, 3}, {0, 1, 3});
   auto result_sort_order = cudf::sorted_order(result->view());
@@ -1773,7 +1773,7 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   cols_gold.push_back(col_gold_6.release());
   cols_gold.push_back(col_gold_7.release());
 
-  auto gold = Table(std::move(cols_gold));
+  Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);

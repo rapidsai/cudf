@@ -1894,7 +1894,7 @@ class TestSource : public cudf::io::datasource {
     return std::make_unique<non_owning_buffer>((uint8_t*)str.data() + offset, size);
   }
 
-  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const read_size = std::min(size, str.size() - offset);
     memcpy(dst, str.data() + offset, size);

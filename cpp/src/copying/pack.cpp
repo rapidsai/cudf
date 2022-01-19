@@ -72,9 +72,9 @@ struct serialized_column {
  * were serialized into
  * @return Fully formed column_view
  */
-auto deserialize_column(serialized_column serial_column,
-                        std::vector<column_view> const& children,
-                        uint8_t const* base_ptr) -> column_view
+column_view deserialize_column(serialized_column serial_column,
+                               std::vector<column_view> const& children,
+                               uint8_t const* base_ptr)
 {
   auto const data_ptr =
     serial_column.data_offset != -1 ? base_ptr + serial_column.data_offset : nullptr;
@@ -138,9 +138,9 @@ void build_column_metadata(std::vector<serialized_column>& metadata,
 /**
  * @copydoc cudf::detail::pack
  */
-auto pack(cudf::table_view const& input,
-          rmm::cuda_stream_view stream,
-          rmm::mr::device_memory_resource* mr) -> packed_columns
+packed_columns pack(cudf::table_view const& input,
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr)
 {
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
@@ -149,10 +149,10 @@ auto pack(cudf::table_view const& input,
 }
 
 template <typename ColumnIter>
-auto pack_metadata(ColumnIter begin,
-                   ColumnIter end,
-                   uint8_t const* contiguous_buffer,
-                   size_t buffer_size) -> packed_columns::metadata
+packed_columns::metadata pack_metadata(ColumnIter begin,
+                                       ColumnIter end,
+                                       uint8_t const* contiguous_buffer,
+                                       size_t buffer_size)
 {
   std::vector<serialized_column> metadata;
 
@@ -182,7 +182,7 @@ auto pack_metadata(ColumnIter begin,
 /**
  * @copydoc cudf::detail::unpack
  */
-auto unpack(uint8_t const* metadata, uint8_t const* gpu_data) -> table_view
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   // gpu data can be null if everything is empty but the metadata must always be valid
   CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
@@ -215,7 +215,7 @@ auto unpack(uint8_t const* metadata, uint8_t const* gpu_data) -> table_view
 /**
  * @copydoc cudf::pack
  */
-auto pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr) -> packed_columns
+packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::pack(input, rmm::cuda_stream_default, mr);
@@ -224,8 +224,9 @@ auto pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr) ->
 /**
  * @copydoc cudf::pack_metadata
  */
-auto pack_metadata(table_view const& table, uint8_t const* contiguous_buffer, size_t buffer_size)
-  -> packed_columns::metadata
+packed_columns::metadata pack_metadata(table_view const& table,
+                                       uint8_t const* contiguous_buffer,
+                                       size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
   return table.is_empty()
@@ -236,7 +237,7 @@ auto pack_metadata(table_view const& table, uint8_t const* contiguous_buffer, si
 /**
  * @copydoc cudf::unpack
  */
-auto unpack(packed_columns const& input) -> table_view
+table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
   return input.metadata_->size() == 0
@@ -248,7 +249,7 @@ auto unpack(packed_columns const& input) -> table_view
 /**
  * @copydoc cudf::unpack(uint8_t const*, uint8_t const* )
  */
-auto unpack(uint8_t const* metadata, uint8_t const* gpu_data) -> table_view
+table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   CUDF_FUNC_RANGE();
   return detail::unpack(metadata, gpu_data);

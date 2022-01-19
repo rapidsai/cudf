@@ -35,8 +35,9 @@
 namespace cudf {
 namespace detail {
 
-auto distinct_count(table_view const& keys, null_equality nulls_equal, rmm::cuda_stream_view stream)
-  -> cudf::size_type
+cudf::size_type distinct_count(table_view const& keys,
+                               null_equality nulls_equal,
+                               rmm::cuda_stream_view stream)
 {
   // sort only indices
   auto sorted_indices = sorted_order(keys,
@@ -81,7 +82,7 @@ struct check_for_nan {
    *
    * @returns bool true if value at `index` is `NAN` and not null, else false
    */
-  __device__ auto operator()(size_type index) -> bool
+  __device__ bool operator()(size_type index)
   {
     return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
   }
@@ -136,10 +137,10 @@ struct has_nans {
   }
 };
 
-auto distinct_count(column_view const& input,
-                    null_policy null_handling,
-                    nan_policy nan_handling,
-                    rmm::cuda_stream_view stream) -> cudf::size_type
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling,
+                               rmm::cuda_stream_view stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
 
@@ -168,14 +169,15 @@ auto distinct_count(column_view const& input,
 
 }  // namespace detail
 
-auto distinct_count(column_view const& input, null_policy null_handling, nan_policy nan_handling)
-  -> cudf::size_type
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling)
 {
   CUDF_FUNC_RANGE();
   return detail::distinct_count(input, null_handling, nan_handling);
 }
 
-auto distinct_count(table_view const& input, null_equality nulls_equal) -> cudf::size_type
+cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
 {
   CUDF_FUNC_RANGE();
   return detail::distinct_count(input, nulls_equal);

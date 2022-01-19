@@ -31,7 +31,7 @@ namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
   string_view_to_pair(string_view n) : null_placeholder(n) {}
-  __device__ auto operator()(const string_view& i) -> thrust::pair<const char*, size_type>
+  __device__ thrust::pair<const char*, size_type> operator()(const string_view& i)
   {
     return (i.data() == null_placeholder.data())
              ? thrust::pair<const char*, size_type>{nullptr, 0}

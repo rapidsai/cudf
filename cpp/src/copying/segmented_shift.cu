@@ -42,7 +42,7 @@ struct segmented_shift_filter {
   device_span<size_type const> const segment_offsets;
   size_type const offset;
 
-  __device__ auto operator()(size_type const i) const -> bool
+  __device__ bool operator()(size_type const i) const
   {
     auto const segment_bound_idx =
       thrust::upper_bound(thrust::seq, segment_offsets.begin(), segment_offsets.end(), i) -

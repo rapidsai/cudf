@@ -51,7 +51,7 @@ struct contains_fn {
   column_device_view d_strings;
   bool bmatch{false};  // do not make this a template parameter to keep compile times down
 
-  __device__ auto operator()(size_type idx) -> bool
+  __device__ bool operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return false;
     string_view d_str = d_strings.element<string_view>(idx);
@@ -174,7 +174,7 @@ struct count_fn {
   reprog_device prog;
   column_device_view d_strings;
 
-  __device__ auto operator()(unsigned int idx) -> int32_t
+  __device__ int32_t operator()(unsigned int idx)
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);

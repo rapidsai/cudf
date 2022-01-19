@@ -94,7 +94,7 @@ struct ngram_builder_fn {
   int32_t const* d_ngram_offsets{};          // offsets for sizes of each string's ngrams
   int32_t* d_ngram_sizes{};                  // write ngram sizes to here
 
-  __device__ auto operator()(cudf::size_type idx) -> cudf::size_type
+  __device__ cudf::size_type operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
     cudf::string_view d_str     = d_strings.element<cudf::string_view>(idx);

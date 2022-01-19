@@ -28,15 +28,14 @@ namespace {
 
 struct columns_equal_fn {
   template <typename T>
-  auto operator()(column_view const&, column_view const&) -> bool
+  bool operator()(column_view const&, column_view const&)
   {
     return true;
   }
 };
 
 template <>
-auto columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_view const& rhs)
-  -> bool
+bool columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_view const& rhs)
 {
   auto const kidx = dictionary_column_view::keys_column_index;
   return lhs.num_children() > 0 and rhs.num_children() > 0
@@ -45,15 +44,14 @@ auto columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_v
 }
 
 template <>
-auto columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view const& rhs) -> bool
+bool columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view const& rhs)
 {
   auto const& ci = lists_column_view::child_column_index;
   return column_types_equal(lhs.child(ci), rhs.child(ci));
 }
 
 template <>
-auto columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_view const& rhs)
-  -> bool
+bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_view const& rhs)
 {
   return lhs.num_children() == rhs.num_children() and
          std::all_of(thrust::make_counting_iterator(0),
@@ -65,7 +63,7 @@ auto columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_vi
 
 // Implementation note: avoid using double dispatch for this function
 // as it increases code paths to NxN for N types.
-auto column_types_equal(column_view const& lhs, column_view const& rhs) -> bool
+bool column_types_equal(column_view const& lhs, column_view const& rhs)
 {
   if (lhs.type() != rhs.type()) { return false; }
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);

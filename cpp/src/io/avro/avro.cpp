@@ -23,7 +23,7 @@ namespace io {
 namespace avro {
 
 template <>
-auto container::get_encoded() -> uint64_t
+uint64_t container::get_encoded()
 {
   uint64_t val = 0;
   for (uint64_t len = 0; len < 64; len += 7) {
@@ -35,7 +35,7 @@ auto container::get_encoded() -> uint64_t
 }
 
 template <>
-auto container::get_encoded() -> int64_t
+int64_t container::get_encoded()
 {
   auto const uval = get_encoded<uint64_t>();
   return (int64_t)((uval >> 1u) ^ -(int64_t)(uval & 1));
@@ -63,7 +63,7 @@ std::string container::get_encoded()
  *
  * @returns true if successful, false if error
  */
-auto container::parse(file_metadata* md, size_t max_num_rows, size_t first_row) -> bool
+bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
 {
   constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
   uint32_t sig4, max_block_size;

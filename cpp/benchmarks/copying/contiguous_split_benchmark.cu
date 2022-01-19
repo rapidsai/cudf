@@ -107,7 +107,7 @@ void BM_contiguous_split(benchmark::State& state)
 class ContiguousSplitStrings : public cudf::benchmark {
 };
 
-auto rand_range(int r) -> int
+int rand_range(int r)
 {
   return static_cast<int>((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) *
                           (float)(r - 1));

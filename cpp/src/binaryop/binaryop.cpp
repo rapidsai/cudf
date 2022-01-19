@@ -51,10 +51,10 @@ namespace binops {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-auto scalar_col_valid_mask_and(column_view const& col,
-                               scalar const& s,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr) -> rmm::device_buffer
+rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
+                                             scalar const& s,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
 
@@ -71,7 +71,7 @@ auto scalar_col_valid_mask_and(column_view const& col,
  * @brief Does the binop need to know if an operand is null/invalid to perform special
  * processing?
  */
-inline auto is_null_dependent(binary_operator op) -> bool
+inline bool is_null_dependent(binary_operator op)
 {
   return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
          op == binary_operator::NULL_MAX;
@@ -80,7 +80,7 @@ inline auto is_null_dependent(binary_operator op) -> bool
 /**
  * @brief Returns `true` if `binary_operator` `op` is a basic arithmetic binary operation
  */
-auto is_basic_arithmetic_binop(binary_operator op) -> bool
+bool is_basic_arithmetic_binop(binary_operator op)
 {
   return op == binary_operator::ADD or       // operator +
          op == binary_operator::SUB or       // operator -
@@ -93,7 +93,7 @@ auto is_basic_arithmetic_binop(binary_operator op) -> bool
 /**
  * @brief Returns `true` if `binary_operator` `op` is a comparison binary operation
  */
-auto is_comparison_binop(binary_operator op) -> bool
+bool is_comparison_binop(binary_operator op)
 {
   return op == binary_operator::EQUAL or          // operator ==
          op == binary_operator::NOT_EQUAL or      // operator !=
@@ -107,7 +107,7 @@ auto is_comparison_binop(binary_operator op) -> bool
 /**
  * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
  */
-auto is_supported_fixed_point_binop(binary_operator op) -> bool
+bool is_supported_fixed_point_binop(binary_operator op)
 {
   return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
@@ -119,7 +119,7 @@ auto is_supported_fixed_point_binop(binary_operator op) -> bool
  * @return true `op` requires scales of lhs and rhs to be the same
  * @return false `op` does not require scales of lhs and rhs to be the same
  */
-auto is_same_scale_necessary(binary_operator op) -> bool
+bool is_same_scale_necessary(binary_operator op)
 {
   return op != binary_operator::MUL && op != binary_operator::DIV;
 }
@@ -371,8 +371,9 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 }
 }  // namespace detail
 
-auto binary_operation_fixed_point_scale(binary_operator op, int32_t left_scale, int32_t right_scale)
-  -> int32_t
+int32_t binary_operation_fixed_point_scale(binary_operator op,
+                                           int32_t left_scale,
+                                           int32_t right_scale)
 {
   CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
                "Unsupported fixed_point binary operation.");
@@ -381,9 +382,9 @@ auto binary_operation_fixed_point_scale(binary_operator op, int32_t left_scale, 
   return std::min(left_scale, right_scale);
 }
 
-auto binary_operation_fixed_point_output_type(binary_operator op,
-                                              cudf::data_type const& lhs,
-                                              cudf::data_type const& rhs) -> cudf::data_type
+cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
+                                                         cudf::data_type const& lhs,
+                                                         cudf::data_type const& rhs)
 {
   cudf::binops::compiled::fixed_point_binary_operation_validation(op, lhs, rhs);
 

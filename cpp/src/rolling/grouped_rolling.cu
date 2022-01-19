@@ -216,7 +216,7 @@ namespace {
  * @brief Add `delta` to value, and cap at numeric_limits::max(), for signed types.
  */
 template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ auto add_safe(T const& value, T const& delta) -> T
+__device__ T add_safe(T const& value, T const& delta)
 {
   // delta >= 0.
   return (value < 0 || (std::numeric_limits<T>::max() - value) >= delta)
@@ -228,7 +228,7 @@ __device__ auto add_safe(T const& value, T const& delta) -> T
  * @brief Add `delta` to value, and cap at numeric_limits::max(), for unsigned types.
  */
 template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ auto add_safe(T const& value, T const& delta) -> T
+__device__ T add_safe(T const& value, T const& delta)
 {
   // delta >= 0.
   return ((std::numeric_limits<T>::max() - value) >= delta) ? (value + delta)
@@ -239,7 +239,7 @@ __device__ auto add_safe(T const& value, T const& delta) -> T
  * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for signed types.
  */
 template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ auto subtract_safe(T const& value, T const& delta) -> T
+__device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
   return (value >= 0 || (value - std::numeric_limits<T>::min()) >= delta)
@@ -251,7 +251,7 @@ __device__ auto subtract_safe(T const& value, T const& delta) -> T
  * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for unsigned types.
  */
 template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ auto subtract_safe(T const& value, T const& delta) -> T
+__device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
   return ((value - std::numeric_limits<T>::min()) >= delta) ? (value - delta)

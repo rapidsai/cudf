@@ -63,7 +63,7 @@ enum class rounding_function {
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>
-  __device__ inline auto operator()(Timestamp const ts) const -> int16_t
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -121,7 +121,7 @@ struct RoundingDispatcher {
   }
 
   template <typename Timestamp>
-  __device__ inline auto operator()(Timestamp const ts) const -> Timestamp
+  __device__ inline Timestamp operator()(Timestamp const ts) const
   {
     switch (component) {
       case rounding_frequency::DAY:
@@ -175,7 +175,7 @@ struct extract_last_day_of_month {
 // an integer while the other returns a timestamp.
 struct days_in_month_op {
   template <typename Timestamp>
-  __device__ inline auto operator()(Timestamp const ts) const -> int16_t
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
     auto const date = year_month_day(floor<days>(ts));
@@ -187,7 +187,7 @@ struct days_in_month_op {
 // Extract the day number of the year present in the timestamp
 struct extract_day_num_of_year {
   template <typename Timestamp>
-  __device__ inline auto operator()(Timestamp const ts) const -> int16_t
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -203,7 +203,7 @@ struct extract_day_num_of_year {
 // Extract the the quarter to which the timestamp belongs to
 struct extract_quarter_op {
   template <typename Timestamp>
-  __device__ inline auto operator()(Timestamp const ts) const -> int16_t
+  __device__ inline int16_t operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
 
@@ -220,7 +220,7 @@ struct extract_quarter_op {
 // Returns true if the year is a leap year
 struct is_leap_year_op {
   template <typename Timestamp>
-  __device__ inline auto operator()(Timestamp const ts) const -> bool
+  __device__ inline bool operator()(Timestamp const ts) const
   {
     using namespace cuda::std::chrono;
     auto const days_since_epoch = floor<days>(ts);

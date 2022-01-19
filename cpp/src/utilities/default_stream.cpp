@@ -23,7 +23,7 @@ namespace cudf {
  *
  * @return true if PTDS is enabled, false otherwise.
  */
-auto is_ptds_enabled() -> bool
+bool is_ptds_enabled()
 {
 #ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
   return true;

@@ -57,8 +57,10 @@ class file_source : public datasource {
     return _cufile_in->read(offset, read_size, stream);
   }
 
-  auto device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
-    -> size_t override
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
@@ -116,7 +118,7 @@ class memory_mapped_source : public file_source {
       static_cast<uint8_t*>(_map_addr) + (offset - _map_offset), read_size);
   }
 
-  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
 
@@ -174,7 +176,7 @@ class direct_read_source : public file_source {
     return buffer::create(std::move(v));
   }
 
-  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     lseek(_file.desc(), offset, SEEK_SET);
 
@@ -198,7 +200,7 @@ class user_datasource_wrapper : public datasource {
  public:
   explicit user_datasource_wrapper(datasource* const source) : source(source) {}
 
-  auto host_read(size_t offset, size_t size, uint8_t* dst) -> size_t override
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     return source->host_read(offset, size, dst);
   }
@@ -213,8 +215,10 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
-  auto device_read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
-    -> size_t override
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
   {
     return source->device_read(offset, size, dst, stream);
   }

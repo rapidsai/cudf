@@ -48,7 +48,7 @@ using Table       = cudf::table;
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  auto type() -> cudf::data_type { return cudf::data_type{cudf::type_to_id<T>()}; }
+  cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
     : data{_num_elements * cudf::size_of(type()), stream},
@@ -67,7 +67,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
     stream.synchronize();
   }
 
-  auto num_elements() -> cudf::size_type { return _num_elements; }
+  cudf::size_type num_elements() { return _num_elements; }
 
   std::random_device r;
   std::default_random_engine generator{r()};
@@ -207,7 +207,7 @@ TEST_F(TableTest, ConcatenateTables)
   cols_gold.push_back(col1_gold.release());
   cols_gold.push_back(col2_gold.release());
   cols_gold.push_back(col3_gold.release());
-  auto gold_table = Table(std::move(cols_gold));
+  Table gold_table(std::move(cols_gold));
 
   CVector cols_table1;
   column_wrapper<int8_t> col1_table1{{1, 2, 3, 4}};
@@ -216,7 +216,7 @@ TEST_F(TableTest, ConcatenateTables)
   cols_table1.push_back(col1_table1.release());
   cols_table1.push_back(col2_table1.release());
   cols_table1.push_back(col3_table1.release());
-  auto t1 = Table(std::move(cols_table1));
+  Table t1(std::move(cols_table1));
 
   CVector cols_table2;
   column_wrapper<int8_t> col1_table2{{5, 6, 7, 8}};
@@ -225,7 +225,7 @@ TEST_F(TableTest, ConcatenateTables)
   cols_table2.push_back(col1_table2.release());
   cols_table2.push_back(col2_table2.release());
   cols_table2.push_back(col3_table2.release());
-  auto t2 = Table(std::move(cols_table2));
+  Table t2(std::move(cols_table2));
 
   auto concat_table = cudf::concatenate(std::vector<TView>({t1, t2}));
 

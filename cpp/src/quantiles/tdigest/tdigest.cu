@@ -36,7 +36,7 @@ namespace tdigest {
 
 // https://developer.nvidia.com/blog/lerp-faster-cuda/
 template <typename T>
-__device__ inline auto lerp(T v0, T v1, T t) -> T
+__device__ inline T lerp(T v0, T v1, T t)
 {
   return fma(t, v1, fma(-t, v0, v0));
 }
@@ -49,7 +49,7 @@ struct centroid {
 struct make_centroid {
   double const* means;
   double const* weights;
-  __device__ auto operator()(size_type i) -> centroid { return {means[i], weights[i]}; }
+  __device__ centroid operator()(size_type i) { return {means[i], weights[i]}; }
 };
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.

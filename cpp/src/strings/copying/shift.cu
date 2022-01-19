@@ -36,7 +36,7 @@ struct adjust_offsets_fn {
   string_view const d_filler;
   size_type const offset;
 
-  __device__ auto operator()(size_type idx) -> offset_type
+  __device__ offset_type operator()(size_type idx)
   {
     if (offset < 0) {
       auto const first      = d_column.element<offset_type>(-offset);
@@ -63,7 +63,7 @@ struct shift_chars_fn {
   string_view const d_filler;
   size_type const offset;
 
-  __device__ auto operator()(size_type idx) -> char
+  __device__ char operator()(size_type idx)
   {
     if (offset < 0) {
       auto const last_index = -offset;

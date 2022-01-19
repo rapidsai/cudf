@@ -154,7 +154,7 @@ constexpr inline auto is_supported_cast()
 
 template <typename From, typename To>
 struct device_cast {
-  __device__ auto operator()(From element) -> To { return static_cast<To>(element); }
+  __device__ To operator()(From element) { return static_cast<To>(element); }
 };
 
 /**

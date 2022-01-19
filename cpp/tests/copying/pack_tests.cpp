@@ -293,7 +293,7 @@ TEST_F(PackUnpackTest, Lists)
       cols.end(),
       std::back_inserter(col_views),
       [](std::unique_ptr<column> const& col) { return static_cast<column_view>(*col); });
-    auto src_table = cudf::table_view(col_views);
+    cudf::table_view src_table(col_views);
     this->run_test(src_table);
   }
 
@@ -306,7 +306,7 @@ TEST_F(PackUnpackTest, Lists)
       cols.end(),
       std::back_inserter(col_views),
       [](std::unique_ptr<column> const& col) { return static_cast<column_view>(*col); });
-    auto src_table = cudf::table_view(col_views);
+    cudf::table_view src_table(col_views);
     this->run_test(src_table);
   }
 }
@@ -322,7 +322,7 @@ TEST_F(PackUnpackTest, Structs)
       cols.end(),
       std::back_inserter(col_views),
       [](std::unique_ptr<column> const& col) { return static_cast<column_view>(*col); });
-    auto src_table = cudf::table_view(col_views);
+    cudf::table_view src_table(col_views);
     this->run_test(src_table);
   }
 
@@ -335,7 +335,7 @@ TEST_F(PackUnpackTest, Structs)
       cols.end(),
       std::back_inserter(col_views),
       [](std::unique_ptr<column> const& col) { return static_cast<column_view>(*col); });
-    auto src_table = cudf::table_view(col_views);
+    cudf::table_view src_table(col_views);
     this->run_test(src_table);
   }
 }
@@ -369,7 +369,7 @@ TEST_F(PackUnpackTest, NestedTypes)
                  std::back_inserter(col_views),
                  [](std::unique_ptr<column> const& col) { return static_cast<column_view>(*col); });
 
-  auto src_table = cudf::table_view(col_views);
+  cudf::table_view src_table(col_views);
   this->run_test(src_table);
 }
 

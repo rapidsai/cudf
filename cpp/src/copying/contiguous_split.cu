@@ -303,7 +303,7 @@ __global__ void copy_partitions(uint8_t const** src_bufs,
 /**
  * @brief Returns whether or not the specified type is a column that contains offsets.
  */
-auto is_offset_type(type_id id) -> bool { return (id == type_id::STRING or id == type_id::LIST); }
+bool is_offset_type(type_id id) { return (id == type_id::STRING or id == type_id::LIST); }
 
 /**
  * @brief Compute total device memory stack size needed to process nested
@@ -350,7 +350,7 @@ std::size_t compute_offset_stack_size(InputIter begin, InputIter end, int offset
  * @returns next output buffer iterator
  */
 template <typename InputIter, typename OutputIter>
-auto setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf) -> OutputIter
+OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf)
 {
   std::for_each(begin, end, [&out_buf](column_view const& col) {
     if (col.nullable()) {
@@ -384,7 +384,7 @@ auto setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf) -> O
  * @returns total number of source buffers for this range of columns
  */
 template <typename InputIter>
-auto count_src_bufs(InputIter begin, InputIter end) -> size_type
+size_type count_src_bufs(InputIter begin, InputIter end)
 {
   auto buf_iter = thrust::make_transform_iterator(begin, [](column_view const& col) {
     return 1 + (col.nullable() ? 1 : 0) + count_src_bufs(col.child_begin(), col.child_end());
@@ -659,11 +659,11 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
  * @returns new dst_buf_info iterator after processing this range of input columns
  */
 template <typename InputIter, typename BufInfo, typename Output>
-auto build_output_columns(InputIter begin,
-                          InputIter end,
-                          BufInfo info_begin,
-                          Output out_begin,
-                          uint8_t const* const base_ptr) -> BufInfo
+BufInfo build_output_columns(InputIter begin,
+                             InputIter end,
+                             BufInfo info_begin,
+                             Output out_begin,
+                             uint8_t const* const base_ptr)
 {
   auto current_info = info_begin;
   std::transform(begin, end, out_begin, [&current_info, base_ptr](column_view const& src) {
@@ -935,10 +935,10 @@ void copy_data(int num_bufs,
 
 namespace detail {
 
-auto contiguous_split(cudf::table_view const& input,
-                      std::vector<size_type> const& splits,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr) -> std::vector<packed_table>
+std::vector<packed_table> contiguous_split(cudf::table_view const& input,
+                                           std::vector<size_type> const& splits,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0) { return {}; }
   if (splits.size() > 0) {
@@ -974,7 +974,7 @@ auto contiguous_split(cudf::table_view const& input,
                    empty_columns.end(),
                    std::back_inserter(empty_column_views),
                    [](std::unique_ptr<column> const& col) { return col->view(); });
-    auto empty_inputs = table_view(empty_column_views);
+    table_view empty_inputs(empty_column_views);
 
     // build the empty results
     std::vector<packed_table> result;

@@ -50,31 +50,28 @@ tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(c
   CUDF_EXPECTS(weight.type().id() == type_id::FLOAT64, "Encountered invalid tdigest weight column");
 }
 
-auto tdigest_column_view::centroids() const -> lists_column_view
-{
-  return child(centroid_column_index);
-}
+lists_column_view tdigest_column_view::centroids() const { return child(centroid_column_index); }
 
-auto tdigest_column_view::means() const -> column_view
+column_view tdigest_column_view::means() const
 {
   auto c = centroids();
   structs_column_view inner(c.parent().child(lists_column_view::child_column_index));
   return inner.child(mean_column_index);
 }
 
-auto tdigest_column_view::weights() const -> column_view
+column_view tdigest_column_view::weights() const
 {
   auto c = centroids();
   structs_column_view inner(c.parent().child(lists_column_view::child_column_index));
   return inner.child(weight_column_index);
 }
 
-auto tdigest_column_view::min_begin() const -> double const*
+double const* tdigest_column_view::min_begin() const
 {
   return child(min_column_index).begin<double>();
 }
 
-auto tdigest_column_view::max_begin() const -> double const*
+double const* tdigest_column_view::max_begin() const
 {
   return child(max_column_index).begin<double>();
 }

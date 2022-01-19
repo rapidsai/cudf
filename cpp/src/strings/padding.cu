@@ -38,7 +38,7 @@ struct compute_pad_output_length_fn {
   size_type width;
   size_type fill_char_size;
 
-  __device__ auto operator()(size_type idx) -> size_type
+  __device__ size_type operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);

@@ -54,7 +54,7 @@ struct hex_to_integer_fn {
    *
    * Overflow of the int64 type is not detected.
    */
-  __device__ auto string_to_integer(string_view const& d_str) -> int64_t
+  __device__ int64_t string_to_integer(string_view const& d_str)
   {
     int64_t result = 0, base = 1;
     const char* str = d_str.data();
@@ -75,7 +75,7 @@ struct hex_to_integer_fn {
     return result;
   }
 
-  __device__ auto operator()(size_type idx) -> IntegerType
+  __device__ IntegerType operator()(size_type idx)
   {
     if (strings_column.is_null(idx)) return static_cast<IntegerType>(0);
     // the cast to IntegerType will create predictable results

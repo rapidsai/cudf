@@ -45,7 +45,7 @@ TYPED_TEST_SUITE(TDigestAllTypes, cudf::test::NumericTypes);
 
 template <typename T>
 struct column_min {
-  __device__ auto operator()(device_span<T const> vals) -> double
+  __device__ double operator()(device_span<T const> vals)
   {
     return static_cast<double>(*thrust::min_element(thrust::seq, vals.begin(), vals.end()));
   }
@@ -53,7 +53,7 @@ struct column_min {
 
 template <typename T>
 struct column_max {
-  __device__ auto operator()(device_span<T const> vals) -> double
+  __device__ double operator()(device_span<T const> vals)
   {
     return static_cast<double>(*thrust::max_element(thrust::seq, vals.begin(), vals.end()));
   }
@@ -716,7 +716,7 @@ TEST_F(TDigestMergeTest, Simple)
 }
 
 struct key_groups {
-  __device__ auto operator()(size_type i) -> size_type { return i < 250000 ? 0 : 1; }
+  __device__ size_type operator()(size_type i) { return i < 250000 ? 0 : 1; }
 };
 TEST_F(TDigestMergeTest, Grouped)
 {

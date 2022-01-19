@@ -41,7 +41,7 @@ namespace {
 struct get_codepoint_metadata_init {
   rmm::cuda_stream_view stream;
 
-  auto operator()() const -> rmm::device_uvector<codepoint_metadata_type>*
+  rmm::device_uvector<codepoint_metadata_type>* operator()() const
   {
     auto table_vector =
       new rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
@@ -68,7 +68,7 @@ struct get_codepoint_metadata_init {
 struct get_aux_codepoint_data_init {
   rmm::cuda_stream_view stream;
 
-  auto operator()() const -> rmm::device_uvector<aux_codepoint_data_type>*
+  rmm::device_uvector<aux_codepoint_data_type>* operator()() const
   {
     auto table_vector =
       new rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
@@ -111,7 +111,7 @@ struct get_aux_codepoint_data_init {
  * Build the code point metadata table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
-auto get_codepoint_metadata(rmm::cuda_stream_view stream) -> const codepoint_metadata_type*
+const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stream)
 {
   static cudf::strings::detail::thread_safe_per_context_cache<
     rmm::device_uvector<codepoint_metadata_type>>
@@ -126,7 +126,7 @@ auto get_codepoint_metadata(rmm::cuda_stream_view stream) -> const codepoint_met
  * Build the aux code point data table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
-auto get_aux_codepoint_data(rmm::cuda_stream_view stream) -> const aux_codepoint_data_type*
+const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stream)
 {
   static cudf::strings::detail::thread_safe_per_context_cache<
     rmm::device_uvector<aux_codepoint_data_type>>
@@ -142,7 +142,7 @@ namespace {
  * This just wraps the std::stoi but provides a nice error message
  * in case the hash file format is incorrect.
  */
-auto str_to_uint32(std::string const& str, uint64_t line_no) -> uint32_t
+uint32_t str_to_uint32(std::string const& str, uint64_t line_no)
 {
   try {
     return std::stoi(str);  // there is no std::stoui
@@ -164,7 +164,7 @@ auto str_to_uint32(std::string const& str, uint64_t line_no) -> uint32_t
  * This just wraps the std::stoul but provides a nice error message
  * in case the hash file format is incorrect.
  */
-auto str_to_uint64(std::string const& str, uint64_t line_no) -> uint64_t
+uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
 {
   try {
     return std::stoul(str);

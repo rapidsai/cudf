@@ -26,7 +26,7 @@
 namespace cudf {
 namespace detail {
 
-auto is_trivial_join(table_view const& left, table_view const& right, join_kind join_type) -> bool
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
 {
   // If there is nothing to join, then send empty table with all columns
   if (left.is_empty() || right.is_empty()) { return true; }

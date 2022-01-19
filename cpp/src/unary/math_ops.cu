@@ -36,7 +36,7 @@ namespace {
 
 struct DeviceSin {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::sin(data);
   }
@@ -44,7 +44,7 @@ struct DeviceSin {
 
 struct DeviceCos {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::cos(data);
   }
@@ -52,7 +52,7 @@ struct DeviceCos {
 
 struct DeviceTan {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::tan(data);
   }
@@ -60,7 +60,7 @@ struct DeviceTan {
 
 struct DeviceArcSin {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::asin(data);
   }
@@ -68,7 +68,7 @@ struct DeviceArcSin {
 
 struct DeviceArcCos {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::acos(data);
   }
@@ -76,7 +76,7 @@ struct DeviceArcCos {
 
 struct DeviceArcTan {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::atan(data);
   }
@@ -84,7 +84,7 @@ struct DeviceArcTan {
 
 struct DeviceSinH {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::sinh(data);
   }
@@ -92,7 +92,7 @@ struct DeviceSinH {
 
 struct DeviceCosH {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::cosh(data);
   }
@@ -100,7 +100,7 @@ struct DeviceCosH {
 
 struct DeviceTanH {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::tanh(data);
   }
@@ -108,7 +108,7 @@ struct DeviceTanH {
 
 struct DeviceArcSinH {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::asinh(data);
   }
@@ -116,7 +116,7 @@ struct DeviceArcSinH {
 
 struct DeviceArcCosH {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::acosh(data);
   }
@@ -124,7 +124,7 @@ struct DeviceArcCosH {
 
 struct DeviceArcTanH {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::atanh(data);
   }
@@ -134,7 +134,7 @@ struct DeviceArcTanH {
 
 struct DeviceExp {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::exp(data);
   }
@@ -142,7 +142,7 @@ struct DeviceExp {
 
 struct DeviceLog {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::log(data);
   }
@@ -150,7 +150,7 @@ struct DeviceLog {
 
 struct DeviceSqrt {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::sqrt(data);
   }
@@ -158,7 +158,7 @@ struct DeviceSqrt {
 
 struct DeviceCbrt {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::cbrt(data);
   }
@@ -168,7 +168,7 @@ struct DeviceCbrt {
 
 struct DeviceCeil {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::ceil(data);
   }
@@ -176,7 +176,7 @@ struct DeviceCeil {
 
 struct DeviceFloor {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return std::floor(data);
   }
@@ -214,7 +214,7 @@ struct DeviceRInt {
 
 struct DeviceInvert {
   template <typename T>
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     return ~data;
   }
@@ -224,7 +224,7 @@ struct DeviceInvert {
 
 struct DeviceNot {
   template <typename T>
-  __device__ auto operator()(T data) -> bool
+  __device__ bool operator()(T data)
   {
     return !data;
   }
@@ -243,7 +243,7 @@ struct DeviceNot {
 template <typename T>
 struct fixed_point_ceil {
   T n;  // 10^-scale (value required to determine integer part of fixed_point number)
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     T const a = (data / n) * n;                  // result of integer division
     return a + (data > 0 && a != data ? n : 0);  // add 1 if positive and not round number
@@ -261,7 +261,7 @@ struct fixed_point_ceil {
 template <typename T>
 struct fixed_point_floor {
   T n;  // 10^-scale (value required to determine integer part of fixed_point number)
-  __device__ auto operator()(T data) -> T
+  __device__ T operator()(T data)
   {
     T const a = (data / n) * n;                  // result of integer division
     return a - (data < 0 && a != data ? n : 0);  // subtract 1 if negative and not round number
@@ -271,7 +271,7 @@ struct fixed_point_floor {
 template <typename T>
 struct fixed_point_abs {
   T n;
-  __device__ auto operator()(T data) -> T { return numeric::detail::abs(data); }
+  __device__ T operator()(T data) { return numeric::detail::abs(data); }
 };
 
 template <typename T, template <typename> typename FixedPointFunctor>
@@ -458,7 +458,7 @@ template <typename UFN>
 struct LogicalOpDispatcher {
  private:
   template <typename T>
-  static constexpr auto is_supported() -> bool
+  static constexpr bool is_supported()
   {
     return std::is_arithmetic<T>::value || std::is_same_v<T, bool>;
   }

@@ -32,15 +32,12 @@
 constexpr int block_size           = 128;
 constexpr int non_zero_buffer_size = block_size * 2;
 
-inline __device__ auto rotl32(uint32_t x, uint32_t r) -> uint32_t
+inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
 {
   return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
 }
 
-inline __device__ auto rolling_index(int index) -> int
-{
-  return index & (non_zero_buffer_size - 1);
-}
+inline __device__ int rolling_index(int index) { return index & (non_zero_buffer_size - 1); }
 
 namespace cudf {
 namespace io {
@@ -103,7 +100,7 @@ struct page_state_s {
  *
  * @return The hash value
  */
-__device__ auto device_str2hash32(const char* key, size_t len, uint32_t seed = 33) -> uint32_t
+__device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed = 33)
 {
   const auto* p     = reinterpret_cast<const uint8_t*>(key);
   uint32_t h1       = seed, k1;
@@ -152,7 +149,7 @@ __device__ auto device_str2hash32(const char* key, size_t len, uint32_t seed = 3
  *
  * @return The 32-bit value read
  */
-inline __device__ auto get_vlq32(const uint8_t*& cur, const uint8_t* end) -> uint32_t
+inline __device__ uint32_t get_vlq32(const uint8_t*& cur, const uint8_t* end)
 {
   uint32_t v = *cur++;
   if (v >= 0x80 && cur < end) {
@@ -181,10 +178,10 @@ inline __device__ auto get_vlq32(const uint8_t*& cur, const uint8_t* end) -> uin
  *
  * @return The length of the section
  */
-__device__ auto InitLevelSection(page_state_s* s,
-                                 const uint8_t* cur,
-                                 const uint8_t* end,
-                                 level_type lvl) -> uint32_t
+__device__ uint32_t InitLevelSection(page_state_s* s,
+                                     const uint8_t* cur,
+                                     const uint8_t* end,
+                                     level_type lvl)
 {
   int32_t len;
   int level_bits    = s->col.level_bits[lvl];
@@ -330,7 +327,7 @@ __device__ void gpuDecodeStream(
  *
  * @return The new output position
  */
-__device__ auto gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_pos, int t) -> int
+__device__ int gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_pos, int t)
 {
   const uint8_t* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -416,7 +413,7 @@ __device__ auto gpuDecodeDictionaryIndices(volatile page_state_s* s, int target_
  *
  * @return The new output position
  */
-__device__ auto gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, int t) -> int
+__device__ int gpuDecodeRleBooleans(volatile page_state_s* s, int target_pos, int t)
 {
   const uint8_t* end = s->data_end;
   int pos            = s->dict_pos;
@@ -866,12 +863,12 @@ static __device__ void gpuOutputGeneric(volatile page_state_s* s,
  * @param[in] min_row crop all rows below min_row
  * @param[in] num_chunk Number of column chunks
  */
-static __device__ auto setupLocalPageInfo(page_state_s* const s,
+static __device__ bool setupLocalPageInfo(page_state_s* const s,
                                           PageInfo* p,
                                           ColumnChunkDesc const* chunks,
                                           size_t min_row,
                                           size_t num_rows,
-                                          int32_t num_chunks) -> bool
+                                          int32_t num_chunks)
 {
   int t = threadIdx.x;
   int chunk_idx;
@@ -1748,15 +1745,15 @@ struct chunk_row_output_iter {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ auto operator+(int i) -> chunk_row_output_iter
+  __host__ __device__ chunk_row_output_iter operator+(int i)
   {
     return chunk_row_output_iter{p + i};
   }
 
   __host__ __device__ void operator++() { p++; }
 
-  __device__ auto operator[](int i) -> reference { return p[i].chunk_row; }
-  __device__ auto operator*() -> reference { return p->chunk_row; }
+  __device__ reference operator[](int i) { return p[i].chunk_row; }
+  __device__ reference operator*() { return p->chunk_row; }
   __device__ void operator=(value_type v) { p->chunk_row = v; }
 };
 
@@ -1773,7 +1770,7 @@ struct start_offset_output_iterator {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ auto operator+(int i) -> start_offset_output_iterator
+  __host__ __device__ start_offset_output_iterator operator+(int i)
   {
     return start_offset_output_iterator{
       pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
@@ -1781,11 +1778,11 @@ struct start_offset_output_iterator {
 
   __host__ __device__ void operator++() { cur_index++; }
 
-  __device__ auto operator[](int i) -> reference { return dereference(cur_index + i); }
-  __device__ auto operator*() -> reference { return dereference(cur_index); }
+  __device__ reference operator[](int i) { return dereference(cur_index + i); }
+  __device__ reference operator*() { return dereference(cur_index); }
 
  private:
-  __device__ auto dereference(int index) -> reference
+  __device__ reference dereference(int index)
   {
     PageInfo const& p = pages[page_indices[index]];
     if (p.src_col_schema != src_col_schema || p.flags & PAGEINFO_FLAGS_DICTIONARY) { return empty; }

@@ -76,7 +76,7 @@ struct page_enc_state_s {
 /**
  * @brief Returns the size of the type in the Parquet file.
  */
-auto __device__ physical_type_len(Type physical_type, type_id id) -> uint32_t
+uint32_t __device__ physical_type_len(Type physical_type, type_id id)
 {
   if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) {
     return sizeof(__int128_t);
@@ -93,7 +93,7 @@ auto __device__ physical_type_len(Type physical_type, type_id id) -> uint32_t
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ auto hash_string(const string_view& val) -> uint32_t
+inline __device__ uint32_t hash_string(const string_view& val)
 {
   char const* ptr = val.data();
   uint32_t len    = val.size_bytes();
@@ -104,12 +104,12 @@ inline __device__ auto hash_string(const string_view& val) -> uint32_t
   }
 }
 
-inline __device__ auto uint32_init_hash(uint32_t v) -> uint32_t
+inline __device__ uint32_t uint32_init_hash(uint32_t v)
 {
   return (v + (v >> 11) + (v >> 22)) & ((1 << init_hash_bits) - 1);
 }
 
-inline __device__ auto uint64_init_hash(uint64_t v) -> uint32_t
+inline __device__ uint32_t uint64_init_hash(uint64_t v)
 {
   return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
@@ -434,7 +434,7 @@ static __device__ __constant__ uint32_t kRleRunMask[16] = {
 /**
  * @brief Variable-length encode an integer
  */
-inline __device__ auto VlqEncode(uint8_t* p, uint32_t v) -> uint8_t*
+inline __device__ uint8_t* VlqEncode(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
     *p++ = (v | 0x80);
@@ -1146,7 +1146,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
 /**
  * Minimal thrift compact protocol support
  */
-inline __device__ auto cpw_put_uint32(uint8_t* p, uint32_t v) -> uint8_t*
+inline __device__ uint8_t* cpw_put_uint32(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
     *p++ = v | 0x80;
@@ -1156,7 +1156,7 @@ inline __device__ auto cpw_put_uint32(uint8_t* p, uint32_t v) -> uint8_t*
   return p;
 }
 
-inline __device__ auto cpw_put_uint64(uint8_t* p, uint64_t v) -> uint8_t*
+inline __device__ uint8_t* cpw_put_uint64(uint8_t* p, uint64_t v)
 {
   while (v > 0x7f) {
     *p++ = v | 0x80;
@@ -1166,19 +1166,19 @@ inline __device__ auto cpw_put_uint64(uint8_t* p, uint64_t v) -> uint8_t*
   return p;
 }
 
-inline __device__ auto cpw_put_int32(uint8_t* p, int32_t v) -> uint8_t*
+inline __device__ uint8_t* cpw_put_int32(uint8_t* p, int32_t v)
 {
   int32_t s = (v < 0);
   return cpw_put_uint32(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ auto cpw_put_int64(uint8_t* p, int64_t v) -> uint8_t*
+inline __device__ uint8_t* cpw_put_int64(uint8_t* p, int64_t v)
 {
   int64_t s = (v < 0);
   return cpw_put_uint64(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ auto cpw_put_fldh(uint8_t* p, int f, int cur, int t) -> uint8_t*
+inline __device__ uint8_t* cpw_put_fldh(uint8_t* p, int f, int cur, int t)
 {
   if (f > cur && f <= cur + 15) {
     *p++ = ((f - cur) << 4) | t;
@@ -1244,15 +1244,15 @@ class header_encoder {
     *header_end = current_header_ptr;
   }
 
-  inline __device__ auto get_ptr() -> uint8_t* { return current_header_ptr; }
+  inline __device__ uint8_t* get_ptr() { return current_header_ptr; }
 
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-__device__ auto EncodeStatistics(uint8_t* start,
-                                 const statistics_chunk* s,
-                                 uint8_t dtype,
-                                 float* fp_scratch) -> uint8_t*
+__device__ uint8_t* EncodeStatistics(uint8_t* start,
+                                     const statistics_chunk* s,
+                                     uint8_t dtype,
+                                     float* fp_scratch)
 {
   uint8_t *end, dtype_len;
   switch (dtype) {
@@ -1446,7 +1446,7 @@ struct def_level_fn {
   uint8_t sub_level_start;
   uint8_t curr_def_level;
 
-  __device__ auto operator()(size_type i) -> uint32_t
+  __device__ uint32_t operator()(size_type i)
   {
     uint32_t def       = curr_def_level;
     uint8_t l          = sub_level_start;
@@ -1571,11 +1571,11 @@ struct def_level_fn {
  *              - | - | -- | ---
  * ```
  */
-auto get_dremel_data(column_view h_col,
-                     // TODO(cp): use device_span once it is converted to a single hd_vec
-                     rmm::device_uvector<uint8_t> const& d_nullability,
-                     std::vector<uint8_t> const& nullability,
-                     rmm::cuda_stream_view stream) -> dremel_data
+dremel_data get_dremel_data(column_view h_col,
+                            // TODO(cp): use device_span once it is converted to a single hd_vec
+                            rmm::device_uvector<uint8_t> const& d_nullability,
+                            std::vector<uint8_t> const& nullability,
+                            rmm::cuda_stream_view stream)
 {
   auto get_list_level = [](column_view col) {
     while (col.type().id() == type_id::STRUCT) {

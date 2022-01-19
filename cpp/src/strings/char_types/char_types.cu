@@ -110,7 +110,7 @@ struct filter_chars_fn {
   /**
    * @brief Returns true if the given character should be replaced.
    */
-  __device__ auto replace_char(char_utf8 ch) -> bool
+  __device__ bool replace_char(char_utf8 ch)
   {
     auto const code_point = detail::utf8_to_codepoint(ch);
     auto const flag       = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
@@ -187,14 +187,14 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 }  // namespace detail
 
-auto operator|(string_character_types lhs, string_character_types rhs) -> string_character_types
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
 {
   return static_cast<string_character_types>(
     static_cast<std::underlying_type_t<string_character_types>>(lhs) |
     static_cast<std::underlying_type_t<string_character_types>>(rhs));
 }
 
-auto operator|=(string_character_types& lhs, string_character_types rhs) -> string_character_types&
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
 {
   lhs = static_cast<string_character_types>(
     static_cast<std::underlying_type_t<string_character_types>>(lhs) |

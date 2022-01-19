@@ -40,7 +40,7 @@ enum class usage_policy : uint8_t { OFF, GDS, ALWAYS };
 /**
  * @brief Get the current usage policy.
  */
-auto get_env_policy() -> usage_policy
+usage_policy get_env_policy()
 {
   static auto const env_val = getenv_or("LIBCUDF_CUFILE_POLICY", "GDS");
   if (env_val == "OFF") return usage_policy::OFF;
@@ -50,12 +50,9 @@ auto get_env_policy() -> usage_policy
 }
 }  // namespace
 
-auto is_always_enabled() -> bool { return get_env_policy() == usage_policy::ALWAYS; }
+bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-auto is_gds_enabled() -> bool
-{
-  return is_always_enabled() or get_env_policy() == usage_policy::GDS;
-}
+bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
 
 }  // namespace cufile_integration
 
@@ -70,7 +67,7 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
 /**
  * @brief Get the current usage policy.
  */
-auto get_env_policy() -> usage_policy
+usage_policy get_env_policy()
 {
   static auto const env_val = getenv_or("LIBCUDF_NVCOMP_POLICY", "STABLE");
   if (env_val == "OFF") return usage_policy::OFF;
@@ -80,12 +77,9 @@ auto get_env_policy() -> usage_policy
 }
 }  // namespace
 
-auto is_all_enabled() -> bool { return get_env_policy() == usage_policy::ALWAYS; }
+bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-auto is_stable_enabled() -> bool
-{
-  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
-}
+bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
 

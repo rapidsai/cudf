@@ -75,7 +75,7 @@ column::column(column&& other) noexcept
 }
 
 // Release contents
-auto column::release() noexcept -> column::contents
+column::contents column::release() noexcept
 {
   _size       = 0;
   _null_count = 0;
@@ -86,7 +86,7 @@ auto column::release() noexcept -> column::contents
 }
 
 // Create immutable view
-auto column::view() const -> column_view
+column_view column::view() const
 {
   // Create views of children
   std::vector<column_view> child_views;
@@ -105,7 +105,7 @@ auto column::view() const -> column_view
 }
 
 // Create mutable view
-auto column::mutable_view() -> mutable_column_view
+mutable_column_view column::mutable_view()
 {
   CUDF_FUNC_RANGE();
 
@@ -138,7 +138,7 @@ auto column::mutable_view() -> mutable_column_view
 }
 
 // If the null count is known, return it. Else, compute and return it
-auto column::null_count() const -> size_type
+size_type column::null_count() const
 {
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {

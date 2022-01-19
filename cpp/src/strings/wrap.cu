@@ -46,7 +46,7 @@ struct execute_wrap {
   {
   }
 
-  __device__ auto operator()(size_type idx) -> int32_t
+  __device__ int32_t operator()(size_type idx)
   {
     if (d_column_.is_null(idx)) return 0;  // null string
 

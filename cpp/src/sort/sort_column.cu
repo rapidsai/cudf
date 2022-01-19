@@ -30,7 +30,7 @@ struct column_sorted_order_fn {
    * Floating point is removed here for special handling of NaNs.
    */
   template <typename T>
-  static constexpr auto is_radix_sort_supported() -> bool
+  static constexpr bool is_radix_sort_supported()
   {
     return cudf::is_fixed_width<T>() && !cudf::is_floating_point<T>();
   }
