@@ -40,9 +40,9 @@ class file_source : public datasource {
 
   virtual ~file_source() = default;
 
-  [[nodiscard]] auto supports_device_read() const -> bool override { return _cufile_in != nullptr; }
+  [[nodiscard]] bool supports_device_read() const override { return _cufile_in != nullptr; }
 
-  [[nodiscard]] auto is_device_read_preferred(size_t size) const -> bool override
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
     return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
   }
@@ -77,7 +77,7 @@ class file_source : public datasource {
     return _cufile_in->read_async(offset, read_size, dst, stream);
   }
 
-  [[nodiscard]] auto size() const -> size_t override { return _file.size(); }
+  [[nodiscard]] size_t size() const override { return _file.size(); }
 
  protected:
   detail::file_wrapper _file;
@@ -100,7 +100,7 @@ class memory_mapped_source : public file_source {
     if (_file.size() != 0) map(_file.desc(), offset, size);
   }
 
-  ~memory_mapped_source() override
+  virtual ~memory_mapped_source()
   {
     if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
   }
@@ -208,7 +208,7 @@ class user_datasource_wrapper : public datasource {
     return source->host_read(offset, size);
   }
 
-  [[nodiscard]] auto supports_device_read() const -> bool override
+  [[nodiscard]] bool supports_device_read() const override
   {
     return source->supports_device_read();
   }
@@ -226,7 +226,7 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
-  [[nodiscard]] auto size() const -> size_t override { return source->size(); }
+  [[nodiscard]] size_t size() const override { return source->size(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource

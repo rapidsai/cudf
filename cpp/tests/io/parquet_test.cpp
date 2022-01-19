@@ -1087,7 +1087,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     outfile_.write(static_cast<char const*>(data), size);
   }
 
-  [[nodiscard]] auto supports_device_write() const -> bool override { return true; }
+  [[nodiscard]] bool supports_device_write() const override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -1414,13 +1414,13 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask1[] = {true, true, false, true, true, true, true};
+  bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
   cols.push_back(strings1.release());
   auto tbl1 = cudf::table(std::move(cols));
 
-  bool mask2[] = {false, true, true, true, true, true, true};
+  bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
   cols.push_back(strings2.release());
@@ -2152,10 +2152,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 
-  [[nodiscard]] auto supports_device_write() const -> bool override
-  {
-    return supports_device_writes;
-  }
+  [[nodiscard]] bool supports_device_write() const override { return supports_device_writes; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {

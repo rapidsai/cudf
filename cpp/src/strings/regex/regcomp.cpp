@@ -20,7 +20,7 @@
 
 #include <algorithm>
 #include <array>
-#include <cstring>
+#include <string.h>
 
 namespace cudf {
 namespace strings {

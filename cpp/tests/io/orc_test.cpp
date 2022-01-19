@@ -773,12 +773,12 @@ TEST_F(OrcChunkedWriterTest, Metadata)
 
 TEST_F(OrcChunkedWriterTest, Strings)
 {
-  bool mask1[] = {true, true, false, true, true, true, true};
+  bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   str_col strings1(h_strings1.begin(), h_strings1.end(), mask1);
   table_view tbl1({strings1});
 
-  bool mask2[] = {false, true, true, true, true, true, true};
+  bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   str_col strings2(h_strings2.begin(), h_strings2.end(), mask2);
   table_view tbl2({strings2});

@@ -38,7 +38,7 @@ TEST_F(HashTest, MultiValue)
                                             "The quick brown fox",
                                             "jumps over the lazy dog.",
                                             "All work and no play makes Jack a dull boy",
-                                            R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
+                                            "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
@@ -71,13 +71,13 @@ TEST_F(HashTest, MultiValueNulls)
                                              "The quick brown fox",
                                              "jumps over the lazy dog.",
                                              "All work and no play makes Jack a dull boy",
-                                             R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
+                                             "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
                                             {0, 1, 1, 0, 1});
   strings_column_wrapper const strings_col2({"different but null",
                                              "The quick brown fox",
                                              "jumps over the lazy dog.",
                                              "I am Jack's complete lack of null value",
-                                             R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
+                                             "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
                                             {0, 1, 1, 0, 1});
 
   // Nulls with different values should be equal
@@ -462,7 +462,7 @@ TEST_F(MD5HashTest, MultiValue)
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "MD5 hash function. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
-     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   strings_column_wrapper const md5_string_results1({"d41d8cd98f00b204e9800998ecf8427e",
                                                     "682240021651ae166d08fe2a014d5c09",
@@ -509,7 +509,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "MD5 hash function. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
-     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
     {1, 0, 0, 1, 0});
   strings_column_wrapper const strings_col2(
     {"",
@@ -551,7 +551,7 @@ TEST_F(MD5HashTest, StringListsNulls)
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "MD5 hash function. This string needed to be longer. It needed to be even longer.",
      "All work and no play makes Jack a dull boy",
-     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
 
   lists_column_wrapper<cudf::string_view> strings_list_col(
     {{""},

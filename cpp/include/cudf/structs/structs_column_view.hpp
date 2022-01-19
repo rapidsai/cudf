@@ -60,7 +60,7 @@ class structs_column_view : public column_view {
    *
    * @throw cudf::logic error if this is an empty column
    */
-  [[nodiscard]] column_view get_sliced_child(int index) const;
+  column_view get_sliced_child(int index) const;
 };         // class structs_column_view;
 /** @} */  // end of group
 }  // namespace cudf

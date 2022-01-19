@@ -1901,7 +1901,7 @@ class TestSource : public cudf::io::datasource {
     return read_size;
   }
 
-  [[nodiscard]] auto size() const -> size_t override { return str.size(); }
+  [[nodiscard]] size_t size() const override { return str.size(); }
 };
 
 TEST_F(CsvReaderTest, UserImplementedSource)

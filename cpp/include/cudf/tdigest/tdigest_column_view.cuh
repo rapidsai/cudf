@@ -82,28 +82,28 @@ class tdigest_column_view : private column_view {
   /**
    * @brief Returns the parent column.
    */
-  [[nodiscard]] column_view parent() const;
+  column_view parent() const;
 
   /**
    * @brief Returns the column of centroids
    */
-  [[nodiscard]] lists_column_view centroids() const;
+  lists_column_view centroids() const;
 
   /**
    * @brief Returns the internal column of mean values
    */
-  [[nodiscard]] column_view means() const;
+  column_view means() const;
 
   /**
    * @brief Returns the internal column of weight values
    */
-  [[nodiscard]] column_view weights() const;
+  column_view weights() const;
 
   /**
    * @brief Returns an iterator that returns the size of each tdigest
    * in the column (each row is 1 digest)
    */
-  [[nodiscard]] auto size_begin() const
+  auto size_begin() const
   {
     return cudf::detail::make_counting_transform_iterator(
       0, tdigest_size{centroids().offsets_begin()});
@@ -113,13 +113,13 @@ class tdigest_column_view : private column_view {
    * @brief Returns the first min value for the column. Each row corresponds
    * to the minimum value for the accompanying digest.
    */
-  [[nodiscard]] double const* min_begin() const;
+  double const* min_begin() const;
 
   /**
    * @brief Returns the first max value for the column. Each row corresponds
    * to the maximum value for the accompanying digest.
    */
-  [[nodiscard]] double const* max_begin() const;
+  double const* max_begin() const;
 };
 
 }  // namespace tdigest

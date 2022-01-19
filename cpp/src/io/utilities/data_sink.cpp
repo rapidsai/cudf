@@ -49,12 +49,9 @@ class file_sink : public data_sink {
 
   auto bytes_written() -> size_t override { return _bytes_written; }
 
-  [[nodiscard]] auto supports_device_write() const -> bool override
-  {
-    return _cufile_out != nullptr;
-  }
+  [[nodiscard]] bool supports_device_write() const override { return _cufile_out != nullptr; }
 
-  [[nodiscard]] auto is_device_write_preferred(size_t size) const -> bool override
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
     return _cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size);
   }
@@ -118,7 +115,7 @@ class void_sink : public data_sink {
 
   void host_write(void const* data, size_t size) override { _bytes_written += size; }
 
-  [[nodiscard]] auto supports_device_write() const -> bool override { return true; }
+  [[nodiscard]] bool supports_device_write() const override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -138,7 +135,7 @@ class void_sink : public data_sink {
   auto bytes_written() -> size_t override { return _bytes_written; }
 
  private:
-  size_t _bytes_written{0};
+  size_t _bytes_written;
 };
 
 class user_sink_wrapper : public data_sink {
@@ -149,7 +146,7 @@ class user_sink_wrapper : public data_sink {
 
   void host_write(void const* data, size_t size) override { user_sink->host_write(data, size); }
 
-  [[nodiscard]] auto supports_device_write() const -> bool override
+  [[nodiscard]] bool supports_device_write() const override
   {
     return user_sink->supports_device_write();
   }
