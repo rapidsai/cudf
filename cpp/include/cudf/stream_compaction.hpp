@@ -223,7 +223,7 @@ enum class duplicate_keep_option {
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
- * @throws cudf::logic_error if `input.num_rows() != keys.size()`.
+ * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
@@ -254,7 +254,7 @@ std::unique_ptr<table> drop_duplicates(
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
- * @throws cudf::logic_error if `input.num_rows() != keys.size()`.
+ * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
@@ -322,8 +322,8 @@ cudf::size_type distinct_count(column_view const& input,
  * @brief Count the number of consecutive groups of equivalent elements in a table.
  *
  * @param[in] input Table whose number of distinct consecutive groups will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal
- * nulls are not equal if null_equality::UNEQUAL
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal.
+ *            nulls are not equal if null_equality::UNEQUAL.
  *
  * @return number of distinct consecutive groups in the table
  */
@@ -358,8 +358,8 @@ cudf::size_type unordered_distinct_count(column_view const& input,
  * @brief Count the unique rows in a table.
  *
  * @param[in] input Table whose unique rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal
- * nulls are not equal if null_equality::UNEQUAL
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal.
+ *            nulls are not equal if null_equality::UNEQUAL.
  *
  * @return number of unique rows in the table
  */

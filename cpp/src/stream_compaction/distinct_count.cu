@@ -119,33 +119,13 @@ struct has_nans {
  * the row `index` of `column_device_view` is `NaN`.
  */
 struct check_nan {
-  /**
-   * @brief Checks if the row `index` of `input` is `NaN`.
-   *
-   * @note This will be applicable only for floating point type columns.
-   *
-   * @param[in] input The `column_device_view` which will be checked for `NaN`
-   * @param[in] index The index at which the `NaN` needs to be checked in `input`
-   *
-   * @returns bool true if value at `index` is `NaN`, else false
-   */
+  // Check if it's `NaN` for floating point type columns
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   __device__ bool operator()(column_device_view const& input, size_type index)
   {
     return std::isnan(input.data<T>()[index]);
   }
-  /**
-   * @brief Checks if the row `index` of `input` is `NaN`.
-   *
-   * @note This will be applicable for non-floating point type columns. And
-   * non-floating point columns can never have `NaN`, so it will always return
-   * false.
-   *
-   * @param[in] input The `column_device_view` which will be checked for `NaN`
-   * @param[in] index The index at which the `NaN` needs to be checked in `input`
-   *
-   * @returns bool true if value at `index` is `NaN`, else false
-   */
+  // Non-floating point type columns can never have `NaN`, so it will always return false.
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
   __device__ bool operator()(column_device_view const&, size_type)
   {
@@ -184,23 +164,25 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
 
   compaction_hash hash_key{has_null, *table_ptr};
   row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
+  auto iter = cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
+    // TODO: cuco::make_pair currently requires rvalue references. We
+    // create a copy to avoid double-move invoking undefined behavior.
+    auto ii = i;
+    return cuco::make_pair(std::move(i), std::move(ii));
+  });
 
-  auto const count = [&]() {
-    if (nulls_equal == null_equality::EQUAL and has_null) {
-      thrust::counting_iterator<size_type> stencil(0);
-      auto const [row_bitmask, null_count] = cudf::detail::bitmask_or(keys, stream);
-      row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+  // when nulls are equal, insert non-null rows only to improve efficiency
+  if (nulls_equal == null_equality::EQUAL and has_null) {
+    thrust::counting_iterator<size_type> stencil(0);
+    auto const [row_bitmask, null_count] = cudf::detail::bitmask_or(keys, stream);
+    row_validity pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
-      // when nulls are equal, insert non-null rows only
-      key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
-      return key_map.get_size() + static_cast<std::size_t>((null_count > 0) ? 1 : 0);
-    }
-    key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
-    return key_map.get_size();
-  }();
-  return static_cast<size_type>(count);
+    key_map.insert_if(iter, iter + num_rows, stencil, pred, hash_key, row_equal, stream.value());
+    return key_map.get_size() + static_cast<std::size_t>((null_count > 0) ? 1 : 0);
+  }
+  // otherwise, insert all
+  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+  return key_map.get_size();
 }
 
 cudf::size_type distinct_count(column_view const& input,

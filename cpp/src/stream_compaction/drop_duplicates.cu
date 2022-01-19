@@ -198,8 +198,12 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
   compaction_hash hash_key{has_null, *table_ptr};
   row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
 
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(std::move(i), std::move(i)); });
+  auto iter = cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
+    // TODO: cuco::make_pair currently requires rvalue references. We
+    // create a copy to avoid double-move invoking undefined behavior.
+    auto ii = i;
+    return cuco::make_pair(std::move(i), std::move(ii));
+  });
   // insert unique indices into the map.
   key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
 

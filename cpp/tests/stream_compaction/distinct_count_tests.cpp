@@ -54,8 +54,7 @@ TYPED_TEST(DistinctCountCommon, NoNull)
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 
-  std::vector<double> input_data;
-  std::copy(input.begin(), input.end(), std::back_inserter(input_data));
+  std::vector<double> input_data(input.begin(), input.end());
   auto const new_end      = std::unique(input_data.begin(), input_data.end());
   auto const gold_ordered = new_end - input_data.begin();
   EXPECT_EQ(gold_ordered,
@@ -277,8 +276,6 @@ TEST_F(DistinctCount, EmptyColumnedTable)
 
   EXPECT_EQ(0, cudf::unordered_distinct_count(input, null_equality::EQUAL));
   EXPECT_EQ(0, cudf::unordered_distinct_count(input, null_equality::UNEQUAL));
-  EXPECT_EQ(0, cudf::unordered_distinct_count(cudf::table_view{}, null_equality::EQUAL));
-  EXPECT_EQ(0, cudf::unordered_distinct_count(cudf::table_view{}, null_equality::UNEQUAL));
 }
 
 TEST_F(DistinctCount, TableMixedTypes)
