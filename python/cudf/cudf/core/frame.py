@@ -169,9 +169,8 @@ class Frame:
         column_names: List[str],
         index_names: Optional[List[str]] = None,
     ):
-        col = self.__class__._from_columns(columns, column_names, index_names)
-        col._copy_type_metadata(self, include_index=bool(index_names))
-        return col
+        frame = self.__class__._from_columns(columns, column_names, index_names)
+        return frame._copy_type_metadata(self, include_index=bool(index_names))
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
