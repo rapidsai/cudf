@@ -15,6 +15,7 @@
  */
 
 #include "avro.h"
+
 #include <cstring>
 #include <unordered_map>
 

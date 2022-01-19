@@ -16,9 +16,10 @@
 
 #pragma once
 
+#include <io/utilities/column_buffer.hpp>
+
 #include <cstdint>
 #include <cstdio>
-#include <io/utilities/column_buffer.hpp>
 
 namespace cudf {
 namespace io {
