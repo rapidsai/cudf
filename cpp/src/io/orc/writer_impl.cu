@@ -1176,7 +1176,7 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   blobs.device_to_host(stream, true);
 
   auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
-    if (is_granularity_rowgroup) { return {}; }
+    if (not is_granularity_rowgroup) { return {}; }
     std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
     for (size_t i = 0; i < num_rowgroup_blobs; i++) {
       auto const stat_begin = blobs.host_ptr(rowgroup_stat_merge[i].start_chunk);
