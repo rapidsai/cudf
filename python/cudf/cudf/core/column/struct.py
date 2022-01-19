@@ -82,12 +82,7 @@ class StructColumn(ColumnBase):
         )
 
     def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
-        nullable = kwargs.get("nullable", False)
-        if nullable:
-            kwargs["integer_object_nulls"] = True
-        # pd_series = pd.Series(self.to_arrow().tolist())
-        pd_series = self.to_arrow().to_pandas(kwargs)
-
+        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
         if index is not None:
             pd_series.index = index
         return pd_series
