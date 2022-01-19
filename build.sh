@@ -186,7 +186,7 @@ if buildAll || hasArg libcudf; then
 
     # get the current count before the compile starts
     FILES_IN_CCACHE=""
-    if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v ccache)" ]]; then
+    if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v ccache)" ]]; then
         FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
         echo "$FILES_IN_CCACHE"
         # zero the ccache statistics
@@ -212,7 +212,7 @@ if buildAll || hasArg libcudf; then
     compile_total=$(( compile_end - compile_start ))
 
     # Record build times
-    if [[ "$BUILD_REPORT_METRICS"=="ON" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+    if [[ "$BUILD_REPORT_METRICS" == "ON" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build metrics"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         MSG="<p>"

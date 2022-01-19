@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import array as arr
 import datetime
@@ -746,18 +746,31 @@ def test_index_astype(nelem):
     np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
 
 
-def test_dataframe_to_string():
-    pd.options.display.max_rows = 5
-    pd.options.display.max_columns = 8
-    # Test basic
+def test_dataframe_to_string_with_skipped_rows():
+    # Test skipped rows
     df = cudf.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
     )
-    string = str(df)
 
-    assert string.splitlines()[-1] == "[6 rows x 2 columns]"
+    with pd.option_context("display.max_rows", 5):
+        got = df.to_string()
 
-    # Test skipped columns
+    expect = textwrap.dedent(
+        """\
+            a   b
+        0   1  11
+        1   2  12
+        .. ..  ..
+        4   5  15
+        5   6  16
+
+        [6 rows x 2 columns]"""
+    )
+    assert got == expect
+
+
+def test_dataframe_to_string_with_skipped_rows_and_columns():
+    # Test skipped rows and skipped columns
     df = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6],
@@ -766,11 +779,26 @@ def test_dataframe_to_string():
             "d": [11, 12, 13, 14, 15, 16],
         }
     )
-    string = df.to_string()
 
-    assert string.splitlines()[-1] == "[6 rows x 4 columns]"
+    with pd.option_context("display.max_rows", 5, "display.max_columns", 3):
+        got = df.to_string()
 
-    # Test masked
+    expect = textwrap.dedent(
+        """\
+            a  ...   d
+        0   1  ...  11
+        1   2  ...  12
+        .. ..  ...  ..
+        4   5  ...  15
+        5   6  ...  16
+
+        [6 rows x 4 columns]"""
+    )
+    assert got == expect
+
+
+def test_dataframe_to_string_with_masked_data():
+    # Test masked data
     df = cudf.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]}
     )
@@ -783,34 +811,33 @@ def test_dataframe_to_string():
     assert masked.null_count == 2
     df["c"] = masked
 
-    # check data
+    # Check data
     values = masked.copy()
     validids = [0, 2, 3, 5]
     densearray = masked.dropna().to_numpy()
     np.testing.assert_equal(data[validids], densearray)
-    # valid position is correct
-
+    # Valid position is correct
     for i in validids:
         assert data[i] == values[i]
-    # null position is correct
+    # Null position is correct
     for i in range(len(values)):
         if i not in validids:
             assert values[i] is cudf.NA
 
-    pd.options.display.max_rows = 10
-    got = df.to_string()
+    with pd.option_context("display.max_rows", 10):
+        got = df.to_string()
 
-    expect = """
-a b  c
-0 1 11 0
-1 2 12 <NA>
-2 3 13 2
-3 4 14 3
-4 5 15 <NA>
-5 6 16 5
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a   b     c
+        0  1  11     0
+        1  2  12  <NA>
+        2  3  13     2
+        3  4  14     3
+        4  5  15  <NA>
+        5  6  16     5"""
+    )
+    assert got == expect
 
 
 def test_dataframe_to_string_wide(monkeypatch):
@@ -2149,13 +2176,17 @@ def test_quantile(q, numeric_only):
 
 @pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
 @pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
-def test_decimal_quantile(q, interpolation):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_decimal_quantile(q, interpolation, decimal_type):
     data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
     gdf = cudf.DataFrame(
         {"id": np.random.randint(0, 10, size=len(data)), "val": data}
     )
     gdf["id"] = gdf["id"].astype("float64")
-    gdf["val"] = gdf["val"].astype(cudf.Decimal64Dtype(7, 2))
+    gdf["val"] = gdf["val"].astype(decimal_type(7, 2))
     pdf = gdf.to_pandas()
 
     got = gdf.quantile(q, numeric_only=False, interpolation=interpolation)
@@ -7634,9 +7665,14 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     actual = cudf.DataFrame(gd_data, columns=columns)
 
     if ignore_dtype:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_index_type=True,
+        )
     else:
-        assert_eq(expected, actual)
+        assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -9030,3 +9066,14 @@ def test_dataframe_add_suffix():
     expected = pdf.add_suffix("_item")
 
     assert_eq(got, expected)
+
+
+def test_dataframe_assign_cp_np_array():
+    m, n = 5, 3
+    cp_ndarray = cupy.random.randn(m, n)
+    pdf = pd.DataFrame({f"f_{i}": range(m) for i in range(n)})
+    gdf = cudf.DataFrame({f"f_{i}": range(m) for i in range(n)})
+    pdf[[f"f_{i}" for i in range(n)]] = cupy.asnumpy(cp_ndarray)
+    gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
+
+    assert_eq(pdf, gdf)
