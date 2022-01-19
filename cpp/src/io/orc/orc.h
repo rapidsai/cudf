@@ -131,9 +131,9 @@ struct Metadata {
   std::vector<StripeStatistics> stripeStats;
 };
 
-int static constexpr encode_field_number(int field_number, uint8_t field_type) noexcept
+int inline constexpr encode_field_number(int field_number, ProtofType field_type) noexcept
 {
-  return (field_number * 8) + field_type;
+  return (field_number * 8) + static_cast<int>(field_type);
 }
 
 namespace {
@@ -142,7 +142,7 @@ template <typename base_t,
                                     !std::is_enum<base_t>::value>* = nullptr>
 int static constexpr encode_field_number_base(int field_number) noexcept
 {
-  return encode_field_number(field_number, PB_TYPE_FIXEDLEN);
+  return encode_field_number(field_number, ProtofType::FIXEDLEN);
 }
 
 template <typename base_t,
@@ -150,26 +150,26 @@ template <typename base_t,
                                     std::is_enum<base_t>::value>* = nullptr>
 int static constexpr encode_field_number_base(int field_number) noexcept
 {
-  return encode_field_number(field_number, PB_TYPE_VARINT);
+  return encode_field_number(field_number, ProtofType::VARINT);
 }
 
 template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, float>>* = nullptr>
 int static constexpr encode_field_number_base(int field_number) noexcept
 {
-  return encode_field_number(field_number, PB_TYPE_FIXED32);
+  return encode_field_number(field_number, ProtofType::FIXED32);
 }
 
 template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, double>>* = nullptr>
 int static constexpr encode_field_number_base(int field_number) noexcept
 {
-  return encode_field_number(field_number, PB_TYPE_FIXED64);
+  return encode_field_number(field_number, ProtofType::FIXED64);
 }
 };  // namespace
 
 template <
   typename T,
   typename std::enable_if_t<!std::is_class<T>::value or std::is_same_v<T, std::string>>* = nullptr>
-int static constexpr encode_field_number(int field_number) noexcept
+int constexpr encode_field_number(int field_number) noexcept
 {
   return encode_field_number_base<T>(field_number);
 }
@@ -178,7 +178,7 @@ int static constexpr encode_field_number(int field_number) noexcept
 template <
   typename T,
   typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value>* = nullptr>
-int static constexpr encode_field_number(int field_number) noexcept
+int constexpr encode_field_number(int field_number) noexcept
 {
   return encode_field_number_base<T>(field_number);
 }
@@ -187,7 +187,7 @@ int static constexpr encode_field_number(int field_number) noexcept
 template <typename T,
           typename std::enable_if_t<
             std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
-int static constexpr encode_field_number(int field_number) noexcept
+int constexpr encode_field_number(int field_number) noexcept
 {
   return encode_field_number_base<typename T::value_type>(field_number);
 }
@@ -483,10 +483,11 @@ class ProtobufWriter {
     return 1;
   }
   template <typename T>
-  uint32_t put_bytes(T const& values)
+  uint32_t put_bytes(host_span<T const> values)
   {
+    static_assert(sizeof(T) == 1);
     m_buf->reserve(m_buf->size() + values.size());
-    m_buf->insert(m_buf->end(), values.cbegin(), values.cend());
+    m_buf->insert(m_buf->end(), values.begin(), values.end());
     return values.size();
   }
   uint32_t put_uint(uint64_t v)

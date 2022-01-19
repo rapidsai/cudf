@@ -38,10 +38,10 @@ uint32_t ProtobufReader::read_field_size(const uint8_t* end)
 void ProtobufReader::skip_struct_field(int t)
 {
   switch (t) {
-    case PB_TYPE_VARINT: get<uint32_t>(); break;
-    case PB_TYPE_FIXED64: skip_bytes(8); break;
-    case PB_TYPE_FIXEDLEN: skip_bytes(get<uint32_t>()); break;
-    case PB_TYPE_FIXED32: skip_bytes(4); break;
+    case ProtofType::VARINT: get<uint32_t>(); break;
+    case ProtofType::FIXED64: skip_bytes(8); break;
+    case ProtofType::FIXEDLEN: skip_bytes(get<uint32_t>()); break;
+    case ProtofType::FIXED32: skip_bytes(4); break;
     default: break;
   }
 }
@@ -213,11 +213,11 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          ColStatsBlob const* stats)
 {
   size_t sz = 0, lpos;
-  put_uint(encode_field_number(1, PB_TYPE_FIXEDLEN));  // 1:RowIndex.entry
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:RowIndex.entry
   lpos = m_buf->size();
-  put_byte(0xcd);                                      // sz+2
-  put_uint(encode_field_number(1, PB_TYPE_FIXEDLEN));  // 1:positions[packed=true]
-  put_byte(0xcd);                                      // sz
+  put_byte(0xcd);                                          // sz+2
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
+  put_byte(0xcd);                                          // sz
   if (present_blk >= 0) sz += put_uint(present_blk);
   if (present_ofs >= 0) {
     sz += put_uint(present_ofs);
@@ -252,7 +252,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
     sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
     // Statistics field contains its length as varint and dtype specific data (encoded on the GPU)
     sz += put_uint(stats->size());
-    sz += put_bytes(*stats);
+    sz += put_bytes<typename ColStatsBlob::value_type>(*stats);
   }
 
   // size of the whole row index entry
