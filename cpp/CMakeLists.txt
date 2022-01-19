@@ -322,16 +322,16 @@ add_library(
   src/jit/parser.cpp
   src/jit/type.cpp
   src/join/conditional_join.cu
-  src/join/mixed_join.cu
-  src/join/mixed_join_semi.cu
-  src/join/mixed_join_kernels.cu
-  src/join/mixed_join_kernels_semi.cu
-  src/join/mixed_join_size_kernels.cu
-  src/join/mixed_join_size_kernels_semi.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
+  src/join/mixed_join.cu
+  src/join/mixed_join_kernels.cu
+  src/join/mixed_join_kernels_semi.cu
+  src/join/mixed_join_semi.cu
+  src/join/mixed_join_size_kernels.cu
+  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu

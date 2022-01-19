@@ -195,7 +195,6 @@ mixed_join(
           size.data(),
           mutable_matches_per_row_span);
     }
-    CHECK_CUDA(stream.value());
     join_size = size.value(stream);
   }
 
@@ -425,7 +424,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
         size.data(),
         matches_per_row_span);
   }
-  CHECK_CUDA(stream.value());
 
   return {size.value(stream), std::move(matches_per_row)};
 }
