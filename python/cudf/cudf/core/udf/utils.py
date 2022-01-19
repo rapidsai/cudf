@@ -208,9 +208,8 @@ def _get_kernel(kernel_string, globals_, sig, func):
     """template kernel compilation helper function"""
     f_ = cuda.jit(device=True)(func)
     globals_["f_"] = f_
-    locals_ = {}
-    exec(kernel_string, globals_, locals_)
-    _kernel = locals_["_kernel"]
+    exec(kernel_string, globals_)
+    _kernel = globals_["_kernel"]
     kernel = cuda.jit(sig)(_kernel)
 
     return kernel
