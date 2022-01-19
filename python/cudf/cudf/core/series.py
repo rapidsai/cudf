@@ -1205,11 +1205,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             self.loc[key] = value
 
-    def take(self, indices, axis=0, keep_index=True):
-        # Validate but don't use the axis.
-        _ = self._get_axis_from_axis_arg(axis)
-        return super().take(indices, keep_index)
-
     def __repr__(self):
         _, height = get_terminal_size()
         max_rows = (
