@@ -169,6 +169,11 @@ class Frame:
         column_names: List[str],
         index_names: Optional[List[str]] = None,
     ):
+        """Construct a `Frame` from a list of columns with metadata from self.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
         col = self.__class__._from_columns(columns, column_names, index_names)
         col._copy_type_metadata(self, include_index=bool(index_names))
         return col
