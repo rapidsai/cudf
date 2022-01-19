@@ -174,9 +174,10 @@ class Frame:
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
         """
-        col = self.__class__._from_columns(columns, column_names, index_names)
-        col._copy_type_metadata(self, include_index=bool(index_names))
-        return col
+        frame = self.__class__._from_columns(
+            columns, column_names, index_names
+        )
+        return frame._copy_type_metadata(self, include_index=bool(index_names))
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
