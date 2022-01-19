@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, uint32_t
 
@@ -79,6 +79,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DURATION_NANOSECONDS   "cudf::type_id::DURATION_NANOSECONDS"
         DECIMAL32              "cudf::type_id::DECIMAL32"
         DECIMAL64              "cudf::type_id::DECIMAL64"
+        DECIMAL128             "cudf::type_id::DECIMAL128"
 
     ctypedef enum hash_id "cudf::hash_id":
         HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
@@ -102,3 +103,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HIGHER "cudf::interpolation::HIGHER"
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
+
+    # A Hack to let cython compile with __int128_t symbol
+    # https://stackoverflow.com/a/27609033
+    ctypedef int int128 "__int128_t"

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -30,7 +30,12 @@ from cudf.core.column import (
     column,
     string,
 )
-from cudf.core.dtypes import CategoricalDtype, Decimal32Dtype, Decimal64Dtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal32Dtype,
+    Decimal64Dtype,
+    Decimal128Dtype,
+)
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -166,16 +171,20 @@ class NumericalColumn(NumericalBaseColumn):
                     (
                         NumericalColumn,
                         cudf.Scalar,
-                        cudf.core.column.Decimal64Column,
-                        cudf.core.column.Decimal32Column,
+                        cudf.core.column.DecimalBaseColumn,
                     ),
                 )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
-            if isinstance(rhs, cudf.core.column.Decimal64Column):
+            if isinstance(rhs, cudf.core.column.Decimal128Column):
                 lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
+                    Decimal128Dtype(Decimal128Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
+            elif isinstance(rhs, cudf.core.column.Decimal64Column):
+                lhs = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
                 )
                 return lhs.binary_operator(binop, rhs)
@@ -291,7 +300,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal64Column":
+    ) -> "cudf.core.column.DecimalBaseColumn":
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:

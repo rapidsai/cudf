@@ -1744,6 +1744,13 @@ class MultiIndex(Frame, BaseIndex):
             return midx.sort_values()
         return midx
 
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> Frame:
+        res = super()._copy_type_metadata(other, include_index=include_index)
+        res._names = other._names
+        return res
+
     def _split_columns_by_levels(self, levels):
         # This function assumes that for levels with duplicate names, they are
         # specified by indices, not name by ``levels``. E.g. [None, None] can
