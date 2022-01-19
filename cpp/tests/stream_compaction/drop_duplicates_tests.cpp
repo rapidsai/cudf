@@ -172,7 +172,7 @@ TEST_F(DropDuplicates, NonNullTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
 
-TEST_F(DropDuplicates, WithNull)
+TEST_F(DropDuplicates, KeepFirstWithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
@@ -180,7 +180,6 @@ TEST_F(DropDuplicates, WithNull)
   cudf::table_view input{{col, key}};
   std::vector<cudf::size_type> keys{1};
 
-  // Keep the first of duplicate
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first_equal{{5, 3, 5, 8, 1},
                                                                       {1, 1, 1, 1, 1}};
@@ -202,8 +201,16 @@ TEST_F(DropDuplicates, WithNull)
     drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::UNEQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first_unequal, got_first_unequal->view());
+}
 
-  // Keep the last of duplicate
+TEST_F(DropDuplicates, KeepLastWithNull)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
+                                                      {1, 1, 0, 0, 1, 1, 1}};
+  cudf::table_view input{{col, key}};
+  std::vector<cudf::size_type> keys{1};
+
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last_equal{{4, 2, 5, 8, 1},
                                                                      {0, 1, 1, 1, 1}};
@@ -225,8 +232,16 @@ TEST_F(DropDuplicates, WithNull)
     drop_duplicates(input, keys, cudf::duplicate_keep_option::KEEP_LAST, null_equality::UNEQUAL);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last_unequal, got_last_unequal->view());
+}
 
-  // Keep no duplicate rows
+TEST_F(DropDuplicates, KeepNoneWithNull)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
+                                                      {1, 1, 0, 0, 1, 1, 1}};
+  cudf::table_view input{{col, key}};
+  std::vector<cudf::size_type> keys{1};
+
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique_equal{{5, 8, 1}, {1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique_equal{{19, 21, 19}, {1, 1, 1}};
@@ -307,7 +322,6 @@ TEST_F(SortedDropDuplicates, WithNull)
   std::vector<cudf::size_type> keys{1};
 
   // Keep the first of duplicate
-  // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first{{4, 5, 5, 8}, {0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_first{{exp_col_first, exp_key_col_first}};
