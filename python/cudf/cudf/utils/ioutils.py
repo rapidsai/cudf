@@ -107,7 +107,7 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
     docstring=_docstring_read_parquet_metadata
@@ -154,6 +154,9 @@ num_rows : int, default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+categorical_partitions : boolean, default True
+    Whether directory-partitioned columns should be interpreted as categorical
+    or raw dtypes.
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
@@ -183,7 +186,7 @@ Examples
 See Also
 --------
 cudf.io.parquet.read_parquet_metadata
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 cudf.read_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
@@ -195,9 +198,10 @@ Write a DataFrame to the parquet format.
 
 Parameters
 ----------
-path : str
+path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
-    while writing a partitioned dataset.
+    while writing a partitioned dataset. Use list of str with partition_offsets
+    to write parts of the dataframe to different files.
 compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
@@ -215,17 +219,36 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+partition_offsets : list, optional, default None
+    Offsets to partition the dataframe by. Should be used when path is list
+    of str. Should be a list of integers of size ``len(path) + 1``
+statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    Level at which column statistics should be included in file.
+metadata_file_path : str, optional, default None
+    If specified, this function will return a binary blob containing the footer
+    metadata of the written parquet file. The returned blob will have the
+    ``chunk.file_path`` field set to the ``metadata_file_path`` for each chunk.
+    When using with ``partition_offsets``, should be same size as ``len(path)``
 int96_timestamps : bool, default False
     If ``True``, write timestamps in int96 format. This will convert
     timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
     timestamp[us] to the int96 format, which is the number of Julian
     days and the number of nanoseconds since midnight. If ``False``,
     timestamps will not be altered.
+row_group_size_bytes: integer or None, default None
+    Maximum size of each stripe of the output.
+    If None, 13369344 (128MB) will be used.
+row_group_size_rows: integer or None, default None
+    Maximum number of rows of each stripe of the output.
+    If None, 1000000 will be used.
+**kwargs
+    To request metadata binary blob when using with ``partition_cols``, Pass
+    ``return_metadata=True`` instead of specifying ``metadata_file_path``
 
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
@@ -244,7 +267,7 @@ Combined parquet metadata blob
 
 See Also
 --------
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 """
 doc_merge_parquet_filemetadata = docfmt_partial(
     docstring=_docstring_merge_parquet_filemetadata
@@ -357,6 +380,10 @@ use_index : bool, default True
 decimal_cols_as_float: list, default None
     If specified, names of the columns that should be converted from
     Decimal to Float64 in the resulting dataframe.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger ORC files.
 kwargs are passed to the engine
 
 Returns
@@ -379,8 +406,8 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
-cudf.io.parquet.to_parquet
+cudf.read_parquet
+cudf.DataFrame.to_parquet
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -397,6 +424,15 @@ compression : {{ 'snappy', None }}, default None
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
+stripe_size_bytes: integer or None, default None
+    Maximum size of each stripe of the output.
+    If None, 67108864 (64MB) will be used.
+stripe_size_rows: integer or None, default None
+    Maximum number of rows of each stripe of the output.
+    If None, 1000000 will be used.
+row_index_stride: integer or None, default None
+    Row index stride (maximum number of rows in each row group).
+    If None, 10000 will be used.
 
 
 Notes
@@ -638,7 +674,7 @@ item : object
 
 See Also
 --------
-cudf.io.hdf.to_hdf : Write a HDF file from a DataFrame.
+cudf.DataFrame.to_hdf : Write a HDF file from a DataFrame.
 """
 doc_read_hdf = docfmt_partial(docstring=_docstring_read_hdf)
 
@@ -709,8 +745,8 @@ errors : str, default 'strict'
 See Also
 --------
 cudf.read_hdf : Read from HDF file.
-cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
-cudf.io.feather.to_feather : Write out feather-format for DataFrames.
+cudf.DataFrame.to_parquet : Write a DataFrame to the binary parquet format.
+cudf.DataFrame.to_feather : Write out feather-format for DataFrames.
 """
 doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
 
@@ -740,7 +776,7 @@ Examples
 
 See Also
 --------
-cudf.io.feather.to_feather
+cudf.DataFrame.to_feather
 """
 doc_read_feather = docfmt_partial(docstring=_docstring_read_feather)
 
@@ -754,7 +790,7 @@ path : str
 
 See Also
 --------
-cudf.io.feather.read_feather
+cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
@@ -884,6 +920,10 @@ prefix : str, default None
 index_col : int, string or False, default None
     Column to use as the row labels of the DataFrame. Passing `index_col=False`
     explicitly disables index column inference and discards the last column.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger CSV files.
 
 Returns
 -------
@@ -919,7 +959,7 @@ Read the file with ``cudf.read_csv``
 
 See Also
 --------
-cudf.io.csv.to_csv
+cudf.DataFrame.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -932,9 +972,9 @@ Write a dataframe to csv.
 >>> import cudf
 >>> filename = 'foo.csv'
 >>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
-                         'y': [1.0, 3.3, 2.2, 4.4],
-                         'z': ['a', 'b', 'c', 'd']})
->>> df = df.set_index([3, 2, 1, 0])
+...                      'y': [1.0, 3.3, 2.2, 4.4],
+...                      'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index(cudf.Series([3, 2, 1, 0]))
 >>> df.to_csv(filename)
 
 """
@@ -1015,7 +1055,7 @@ partition : int,
     should consume messages from. Valid values are 0 - (N-1)
 start_offset : int, Kafka Topic/Partition offset that consumption
     should begin at. Inclusive.
-end_offset : int, Kafka Topic/Parition offset that consumption
+end_offset : int, Kafka Topic/Partition offset that consumption
     should end at. Inclusive.
 batch_timeout : int, default 10000
     Maximum number of milliseconds that will be spent trying to
@@ -1038,7 +1078,7 @@ filepath_or_buffer : str, path object, or file-like object
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
 delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into seperate cudf column rows. Currently
+    for splitting text chunks into separate cudf column rows. Currently
     only a single delimiter is supported.
 
 Returns
@@ -1098,14 +1138,15 @@ def _is_local_filesystem(fs):
 
 
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
-    """Return False if `path_or_data` resolves to multiple filepaths or buffers
+    """Return False if `path_or_data` resolves to multiple filepaths or
+    buffers.
     """
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs, _, paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
         except ValueError as e:
@@ -1123,16 +1164,15 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
 
 
 def is_directory(path_or_data, **kwargs):
-    """Returns True if the provided filepath is a directory
-    """
+    """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
-            )
+            )[0]
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
                 return False
@@ -1166,10 +1206,8 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        # Pyarrow did not support the protocol or storage options.
-        # Fall back to fsspec
         try:
-            fs, _, fs_paths = fsspec.get_fs_token_paths(
+            fs, _, fs_paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
             return_paths = fs_paths
@@ -1299,9 +1337,9 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options", {})
         path_or_data = os.path.expanduser(path_or_data)
-        fs, _, _ = fsspec.get_fs_token_paths(
+        fs = get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
-        )
+        )[0]
 
         if not _is_local_filesystem(fs):
             filepath_or_buffer = fsspec.open(
@@ -1490,11 +1528,12 @@ def _prepare_filters(filters):
     return filters
 
 
-def _ensure_filesystem(passed_filesystem, path):
+def _ensure_filesystem(passed_filesystem, path, **kwargs):
     if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
+        return get_fs_token_paths(
+            path[0] if isinstance(path, list) else path,
+            storage_options=kwargs.get("storage_options", {}),
+        )[0]
     return passed_filesystem
 
 
@@ -1513,7 +1552,6 @@ def _fsspec_data_transfer(
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
-    clip_local_buffer=False,
     **kwargs,
 ):
 
@@ -1572,14 +1610,6 @@ def _fsspec_data_transfer(
         _read_byte_ranges(
             path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
         )
-
-    if clip_local_buffer:
-        # If we only need the populated byte range
-        # (e.g. a csv byte-range read) then clip parts
-        # of the local buffer that are outside this range
-        start = byte_ranges[0][0]
-        end = byte_ranges[-1][0] + byte_ranges[-1][1]
-        return buf[start:end].tobytes()
 
     return buf.tobytes()
 

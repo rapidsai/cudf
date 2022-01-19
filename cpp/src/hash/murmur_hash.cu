@@ -29,7 +29,6 @@ namespace cudf {
 namespace detail {
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        cudf::host_span<uint32_t const> initial_hash,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -44,38 +43,12 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
   auto output_view        = output->mutable_view();
 
-  // Compute the hash value for each row depending on the specified hash function
-  if (!initial_hash.empty()) {
-    CUDF_EXPECTS(initial_hash.size() == size_t(input.num_columns()),
-                 "Expected same size of initial hash values as number of columns");
-    auto device_initial_hash = make_device_uvector_async(initial_hash, stream);
-
-    if (nullable) {
-      thrust::tabulate(
-        rmm::exec_policy(stream),
-        output_view.begin<int32_t>(),
-        output_view.end<int32_t>(),
-        row_hasher_initial_values<MurmurHash3_32, true>(*device_input, device_initial_hash.data()));
-    } else {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher_initial_values<MurmurHash3_32, false>(
-                         *device_input, device_initial_hash.data()));
-    }
-  } else {
-    if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher<MurmurHash3_32, true>(*device_input));
-    } else {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher<MurmurHash3_32, false>(*device_input));
-    }
-  }
+  // Compute the hash value for each row
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_view.begin<int32_t>(),
+    output_view.end<int32_t>(),
+    row_hasher<MurmurHash3_32, nullate::DYNAMIC>(nullate::DYNAMIC{nullable}, *device_input));
 
   return output;
 }

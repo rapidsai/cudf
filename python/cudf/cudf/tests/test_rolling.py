@@ -185,7 +185,18 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
     got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)
 
-    assert_eq(expect, got, **kwargs)
+    import platform
+
+    if platform.machine() == "aarch64":
+        # Due to pandas-37051, pandas rolling var/std on uniform window is
+        # not reliable. Skipping these rows when comparing.
+        for col in expect:
+            mask = (got[col].fillna(-1) != 0).to_pandas()
+            expect[col] = expect[col][mask]
+            got[col] = got[col][mask]
+            assert_eq(expect[col], got[col], **kwargs)
+    else:
+        assert_eq(expect, got, **kwargs)
 
 
 @pytest.mark.xfail

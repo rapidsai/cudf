@@ -255,7 +255,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
                            std::move(offsets),
                            std::move(strings_output),
                            strings.null_count(),
-                           copy_bitmask(strings.parent(), stream, mr));
+                           copy_bitmask(strings.parent(), stream, mr),
+                           stream,
+                           mr);
 }
 
 template <Dir dir>
@@ -266,7 +268,7 @@ std::unique_ptr<column> split_record(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   // makes consistent with Pandas
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();

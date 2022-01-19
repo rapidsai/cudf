@@ -113,7 +113,7 @@ def is_sorted(
     return c_result
 
 
-def order_by(source_table, object ascending, bool na_position):
+def order_by(source_table, object ascending, str na_position):
     """
     Sorting the table ascending/descending
 
@@ -123,33 +123,27 @@ def order_by(source_table, object ascending, bool na_position):
     ascending : list of boolean values which correspond to each column
                 in source_table signifying order of each column
                 True - Ascending and False - Descending
-    na_position : whether null should be considered larget or smallest value
-                  0 - largest and 1 - smallest
-
+    na_position : whether null value should show up at the "first" or "last"
+                position of **all** sorted column.
     """
-
     cdef table_view source_table_view = table_view_from_table(
         source_table, ignore_index=True
     )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
-    cdef null_order pred = (
-        null_order.BEFORE
-        if na_position == 1
-        else null_order.AFTER
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            source_table._num_columns,
-            pred
-        )
-    )
+    cdef vector[null_order] null_precedence
+    null_precedence.reserve(len(ascending))
 
     for i in ascending:
         if i is True:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
+
+        if i ^ (na_position == "first"):
+            null_precedence.push_back(null_order.AFTER)
+        else:
+            null_precedence.push_back(null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     with nogil:

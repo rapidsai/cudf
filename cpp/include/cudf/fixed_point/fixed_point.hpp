@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
@@ -48,13 +49,15 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
+  return cuda::std::is_same_v<T, int32_t> ||  //
+         cuda::std::is_same_v<T, int64_t> ||  //
+         cuda::std::is_same_v<T, __int128_t>;
 }
 
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
-  return cuda::std::is_integral<T>::value || cuda::std::is_floating_point<T>::value;
+  return cuda::std::is_integral<T>() || cuda::std::is_floating_point<T>::value;
 }
 
 // Helper functions for `fixed_point` type
@@ -76,7 +79,7 @@ template <typename Rep,
           typename T,
           typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
                                            is_supported_representation_type<Rep>())>* = nullptr>
-CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
+CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
   if (exponent == 0) return static_cast<Rep>(1);
@@ -105,7 +108,7 @@ CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
  * @return Shifted value of type T
  */
 template <typename Rep, Radix Rad, typename T>
-CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const& scale)
+CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& scale)
 {
   return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
 }
@@ -122,7 +125,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
  * @return Shifted value of type T
  */
 template <typename Rep, Radix Rad, typename T>
-CUDA_HOST_DEVICE_CALLABLE constexpr T left_shift(T const& val, scale_type const& scale)
+CUDF_HOST_DEVICE inline constexpr T left_shift(T const& val, scale_type const& scale)
 {
   return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
 }
@@ -141,7 +144,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T left_shift(T const& val, scale_type const&
  * @return Shifted value of type T
  */
 template <typename Rep, Radix Rad, typename T>
-CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scale)
+CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
 {
   if (scale == 0)
     return val;
@@ -176,7 +179,7 @@ template <typename Rep,
 struct scaled_integer {
   Rep value;
   scale_type scale;
-  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value{v}, scale{s} {}
+  CUDF_HOST_DEVICE inline explicit scaled_integer(Rep v, scale_type s) : value{v}, scale{s} {}
 };
 
 /**
@@ -207,7 +210,7 @@ class fixed_point {
   template <typename T,
             typename cuda::std::enable_if_t<cuda::std::is_floating_point<T>() &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
+  CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
     : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
   {
   }
@@ -223,7 +226,7 @@ class fixed_point {
   template <typename T,
             typename cuda::std::enable_if_t<cuda::std::is_integral<T>() &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
+  CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
     // `value` is cast to `Rep` to avoid overflow in cases where
     // constructing to `Rep` that is wider than `T`
     : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)}, _scale{scale}
@@ -235,8 +238,10 @@ class fixed_point {
    *
    * @param s scaled_integer that contains scale and already shifted value
    */
-  CUDA_HOST_DEVICE_CALLABLE
-  explicit fixed_point(scaled_integer<Rep> s) : _value{s.value}, _scale{s.scale} {}
+  CUDF_HOST_DEVICE inline explicit fixed_point(scaled_integer<Rep> s)
+    : _value{s.value}, _scale{s.scale}
+  {
+  }
 
   /**
    * @brief "Scale-less" constructor that constructs `fixed_point` number with a specified
@@ -244,7 +249,7 @@ class fixed_point {
    */
   template <typename T,
             typename cuda::std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE fixed_point(T const& value)
+  CUDF_HOST_DEVICE inline fixed_point(T const& value)
     : _value{static_cast<Rep>(value)}, _scale{scale_type{0}}
   {
   }
@@ -253,8 +258,7 @@ class fixed_point {
    * @brief Default constructor that constructs `fixed_point` number with a
    * value and scale of zero
    */
-  CUDA_HOST_DEVICE_CALLABLE
-  fixed_point() : _value{0}, _scale{scale_type{0}} {}
+  CUDF_HOST_DEVICE inline fixed_point() : _value{0}, _scale{scale_type{0}} {}
 
   /**
    * @brief Explicit conversion operator for casting to floating point types
@@ -286,7 +290,7 @@ class fixed_point {
     return static_cast<U>(detail::shift<Rep, Rad>(value, scale_type{-_scale}));
   }
 
-  CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
+  CUDF_HOST_DEVICE inline operator scaled_integer<Rep>() const
   {
     return scaled_integer<Rep>{_value, _scale};
   }
@@ -296,21 +300,21 @@ class fixed_point {
    *
    * @return The underlying value of the `fixed_point` number
    */
-  CUDA_HOST_DEVICE_CALLABLE rep value() const { return _value; }
+  CUDF_HOST_DEVICE inline rep value() const { return _value; }
 
   /**
    * @brief Method that returns the scale of the `fixed_point` number
    *
    * @return The scale of the `fixed_point` number
    */
-  CUDA_HOST_DEVICE_CALLABLE scale_type scale() const { return _scale; }
+  CUDF_HOST_DEVICE inline scale_type scale() const { return _scale; }
 
   /**
    * @brief Explicit conversion operator to `bool`
    *
    * @return The `fixed_point` value as a boolean (zero is `false`, nonzero is `true`)
    */
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator bool() const
+  CUDF_HOST_DEVICE inline explicit constexpr operator bool() const
   {
     return static_cast<bool>(_value);
   }
@@ -323,7 +327,7 @@ class fixed_point {
    * @return The sum
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs)
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs)
   {
     *this = *this + rhs;
     return *this;
@@ -337,7 +341,7 @@ class fixed_point {
    * @return The product
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator*=(fixed_point<Rep1, Rad1> const& rhs)
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator*=(fixed_point<Rep1, Rad1> const& rhs)
   {
     *this = *this * rhs;
     return *this;
@@ -351,7 +355,7 @@ class fixed_point {
    * @return The difference
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator-=(fixed_point<Rep1, Rad1> const& rhs)
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator-=(fixed_point<Rep1, Rad1> const& rhs)
   {
     *this = *this - rhs;
     return *this;
@@ -365,7 +369,7 @@ class fixed_point {
    * @return The quotient
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator/=(fixed_point<Rep1, Rad1> const& rhs)
+  CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1>& operator/=(fixed_point<Rep1, Rad1> const& rhs)
   {
     *this = *this / rhs;
     return *this;
@@ -376,8 +380,7 @@ class fixed_point {
    *
    * @return The incremented result
    */
-  CUDA_HOST_DEVICE_CALLABLE
-  fixed_point<Rep, Rad>& operator++()
+  CUDF_HOST_DEVICE inline fixed_point<Rep, Rad>& operator++()
   {
     *this = *this + fixed_point<Rep, Rad>{1, scale_type{_scale}};
     return *this;
@@ -395,7 +398,7 @@ class fixed_point {
    * @return The resulting `fixed_point` sum
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator+(
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator+(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
@@ -410,7 +413,7 @@ class fixed_point {
    * @return The resulting `fixed_point` difference
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator-(
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator-(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
@@ -423,7 +426,7 @@ class fixed_point {
    * @return The resulting `fixed_point` product
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator*(
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator*(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
@@ -436,7 +439,7 @@ class fixed_point {
    * @return The resulting `fixed_point` quotient
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator/(
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator/(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
@@ -451,8 +454,8 @@ class fixed_point {
    * @return true if `lhs` and `rhs` are equal, false if not
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
-                                                   fixed_point<Rep1, Rad1> const& rhs);
+  CUDF_HOST_DEVICE inline friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
+                                                 fixed_point<Rep1, Rad1> const& rhs);
 
   /**
    * @brief operator != (for comparing two `fixed_point` numbers)
@@ -466,8 +469,8 @@ class fixed_point {
    * @return true if `lhs` and `rhs` are not equal, false if not
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
-                                                   fixed_point<Rep1, Rad1> const& rhs);
+  CUDF_HOST_DEVICE inline friend bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
+                                                 fixed_point<Rep1, Rad1> const& rhs);
 
   /**
    * @brief operator <= (for comparing two `fixed_point` numbers)
@@ -481,8 +484,8 @@ class fixed_point {
    * @return true if `lhs` less than or equal to `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
-                                                   fixed_point<Rep1, Rad1> const& rhs);
+  CUDF_HOST_DEVICE inline friend bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
+                                                 fixed_point<Rep1, Rad1> const& rhs);
 
   /**
    * @brief operator >= (for comparing two `fixed_point` numbers)
@@ -496,8 +499,8 @@ class fixed_point {
    * @return true if `lhs` greater than or equal to `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
-                                                   fixed_point<Rep1, Rad1> const& rhs);
+  CUDF_HOST_DEVICE inline friend bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
+                                                 fixed_point<Rep1, Rad1> const& rhs);
 
   /**
    * @brief operator < (for comparing two `fixed_point` numbers)
@@ -511,8 +514,8 @@ class fixed_point {
    * @return true if `lhs` less than `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator<(fixed_point<Rep1, Rad1> const& lhs,
-                                                  fixed_point<Rep1, Rad1> const& rhs);
+  CUDF_HOST_DEVICE inline friend bool operator<(fixed_point<Rep1, Rad1> const& lhs,
+                                                fixed_point<Rep1, Rad1> const& rhs);
 
   /**
    * @brief operator > (for comparing two `fixed_point` numbers)
@@ -526,8 +529,8 @@ class fixed_point {
    * @return true if `lhs` greater than `rhs`, false if not
    */
   template <typename Rep1, Radix Rad1>
-  CUDA_HOST_DEVICE_CALLABLE friend bool operator>(fixed_point<Rep1, Rad1> const& lhs,
-                                                  fixed_point<Rep1, Rad1> const& rhs);
+  CUDF_HOST_DEVICE inline friend bool operator>(fixed_point<Rep1, Rad1> const& lhs,
+                                                fixed_point<Rep1, Rad1> const& rhs);
 
   /**
    * @brief Method for creating a `fixed_point` number with a new `scale`
@@ -538,7 +541,7 @@ class fixed_point {
    * @param scale The `scale` of the returned `fixed_point` number
    * @return `fixed_point` number with a new `scale`
    */
-  CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep, Rad> rescaled(scale_type scale) const
+  CUDF_HOST_DEVICE inline fixed_point<Rep, Rad> rescaled(scale_type scale) const
   {
     if (scale == _scale) return *this;
     Rep const value = detail::shift<Rep, Rad>(_value, scale_type{scale - _scale});
@@ -551,17 +554,18 @@ class fixed_point {
   explicit operator std::string() const
   {
     if (_scale < 0) {
-      auto const av   = std::abs(_value);
-      int64_t const n = std::pow(10, -_scale);
-      int64_t const f = av % n;
+      auto const av = detail::abs(_value);
+      Rep const n   = detail::exp10<Rep>(-_scale);
+      Rep const f   = av % n;
       auto const num_zeros =
-        std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
+        std::max(0, (-_scale - static_cast<int32_t>(detail::to_string(f).size())));
       auto const zeros = std::string(num_zeros, '0');
       auto const sign  = _value < 0 ? std::string("-") : std::string();
-      return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
+      return sign + detail::to_string(av / n) + std::string(".") + zeros +
+             detail::to_string(av % n);
     } else {
       auto const zeros = std::string(_scale, '0');
-      return std::to_string(_value) + zeros;
+      return detail::to_string(_value) + zeros;
     }
   }
 };
@@ -576,7 +580,7 @@ class fixed_point {
  * @return true if addition causes overflow, false otherwise
  */
 template <typename Rep, typename T>
-CUDA_HOST_DEVICE_CALLABLE auto addition_overflow(T lhs, T rhs)
+CUDF_HOST_DEVICE inline auto addition_overflow(T lhs, T rhs)
 {
   return rhs > 0 ? lhs > cuda::std::numeric_limits<Rep>::max() - rhs
                  : lhs < cuda::std::numeric_limits<Rep>::min() - rhs;
@@ -591,7 +595,7 @@ CUDA_HOST_DEVICE_CALLABLE auto addition_overflow(T lhs, T rhs)
  * @return true if subtraction causes overflow, false otherwise
  */
 template <typename Rep, typename T>
-CUDA_HOST_DEVICE_CALLABLE auto subtraction_overflow(T lhs, T rhs)
+CUDF_HOST_DEVICE inline auto subtraction_overflow(T lhs, T rhs)
 {
   return rhs > 0 ? lhs < cuda::std::numeric_limits<Rep>::min() + rhs
                  : lhs > cuda::std::numeric_limits<Rep>::max() + rhs;
@@ -606,7 +610,7 @@ CUDA_HOST_DEVICE_CALLABLE auto subtraction_overflow(T lhs, T rhs)
  * @return true if division causes overflow, false otherwise
  */
 template <typename Rep, typename T>
-CUDA_HOST_DEVICE_CALLABLE auto division_overflow(T lhs, T rhs)
+CUDF_HOST_DEVICE inline auto division_overflow(T lhs, T rhs)
 {
   return lhs == cuda::std::numeric_limits<Rep>::min() && rhs == -1;
 }
@@ -620,7 +624,7 @@ CUDA_HOST_DEVICE_CALLABLE auto division_overflow(T lhs, T rhs)
  * @return true if multiplication causes overflow, false otherwise
  */
 template <typename Rep, typename T>
-CUDA_HOST_DEVICE_CALLABLE auto multiplication_overflow(T lhs, T rhs)
+CUDF_HOST_DEVICE inline auto multiplication_overflow(T lhs, T rhs)
 {
   auto const min = cuda::std::numeric_limits<Rep>::min();
   auto const max = cuda::std::numeric_limits<Rep>::max();
@@ -634,8 +638,8 @@ CUDA_HOST_DEVICE_CALLABLE auto multiplication_overflow(T lhs, T rhs)
 
 // PLUS Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
-                                                            fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
+                                                          fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   auto const sum   = lhs.rescaled(scale)._value + rhs.rescaled(scale)._value;
@@ -652,8 +656,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 
 // MINUS Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
-                                                            fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
+                                                          fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   auto const diff  = lhs.rescaled(scale)._value - rhs.rescaled(scale)._value;
@@ -670,8 +674,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 // MULTIPLIES Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
-                                                            fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
+                                                          fixed_point<Rep1, Rad1> const& rhs)
 {
 #if defined(__CUDACC_DEBUG__)
 
@@ -685,8 +689,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Ra
 
 // DIVISION Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
-                                                            fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
+                                                          fixed_point<Rep1, Rad1> const& rhs)
 {
 #if defined(__CUDACC_DEBUG__)
 
@@ -700,8 +704,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 
 // EQUALITY COMPARISON Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
-                                          fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline bool operator==(fixed_point<Rep1, Rad1> const& lhs,
+                                        fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value == rhs.rescaled(scale)._value;
@@ -709,8 +713,8 @@ CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
 
 // EQUALITY NOT COMPARISON Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
-                                          fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
+                                        fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value != rhs.rescaled(scale)._value;
@@ -718,8 +722,8 @@ CUDA_HOST_DEVICE_CALLABLE bool operator!=(fixed_point<Rep1, Rad1> const& lhs,
 
 // LESS THAN OR EQUAL TO Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
-                                          fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
+                                        fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value <= rhs.rescaled(scale)._value;
@@ -727,8 +731,8 @@ CUDA_HOST_DEVICE_CALLABLE bool operator<=(fixed_point<Rep1, Rad1> const& lhs,
 
 // GREATER THAN OR EQUAL TO Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
-                                          fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
+                                        fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value >= rhs.rescaled(scale)._value;
@@ -736,8 +740,8 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>=(fixed_point<Rep1, Rad1> const& lhs,
 
 // LESS THAN Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE bool operator<(fixed_point<Rep1, Rad1> const& lhs,
-                                         fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline bool operator<(fixed_point<Rep1, Rad1> const& lhs,
+                                       fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value < rhs.rescaled(scale)._value;
@@ -745,15 +749,16 @@ CUDA_HOST_DEVICE_CALLABLE bool operator<(fixed_point<Rep1, Rad1> const& lhs,
 
 // GREATER THAN Operation
 template <typename Rep1, Radix Rad1>
-CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
-                                         fixed_point<Rep1, Rad1> const& rhs)
+CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1> const& lhs,
+                                       fixed_point<Rep1, Rad1> const& rhs)
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
-using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
-using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
+using decimal32  = fixed_point<int32_t, Radix::BASE_10>;
+using decimal64  = fixed_point<int64_t, Radix::BASE_10>;
+using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;
 
 /** @} */  // end of group
 }  // namespace numeric

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,7 +169,7 @@ std::unique_ptr<table> repeat(
  * @param init First value in the sequence
  * @param step Increment value
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result table containing the sequence
+ * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
@@ -195,11 +195,40 @@ std::unique_ptr<column> sequence(
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result table containing the sequence
+ * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Generate a sequence of timestamps beginning at `init` and incrementing by `months` for
+ * each successive element, i.e., `output[i] = init + i * months` for `i` in `[0, size)`.
+ *
+ * If a given date is invalid, the date is scaled back to the last available day of that month.
+ *
+ * Example:
+ * ```
+ * size = 3
+ * init = 2020-01-31 08:00:00
+ * months = 1
+ * return = [2020-01-31 08:00:00, 2020-02-29 08:00:00, 2020-03-31 08:00:00]
+ * ```
+ *
+ * @throw cudf::logic_error if input datatype is not a TIMESTAMP
+ *
+ * @param size Number of timestamps to generate
+ * @param init The initial timestamp
+ * @param months Months to increment
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @return Timestamps column with sequences of months.
+ */
+std::unique_ptr<cudf::column> calendrical_month_sequence(
+  size_type size,
+  scalar const& init,
+  size_type months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

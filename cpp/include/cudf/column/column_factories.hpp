@@ -41,6 +41,16 @@ namespace cudf {
 std::unique_ptr<column> make_empty_column(data_type type);
 
 /**
+ * @brief Creates an empty column of the specified type.
+ *
+ * An empty column contains zero elements and no validity mask.
+ *
+ * @param[in] id The column type id
+ * @return Empty column with specified type
+ */
+std::unique_ptr<column> make_empty_column(type_id id);
+
+/**
  * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
  * specified numeric `data_type` with an optional null mask.
  *

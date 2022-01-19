@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/is_flags.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -27,6 +25,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <strings/char_types/char_cases.h>
+#include <strings/char_types/is_flags.h>
 
 #include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
@@ -125,7 +125,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;

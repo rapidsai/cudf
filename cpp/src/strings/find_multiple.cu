@@ -37,7 +37,7 @@ std::unique_ptr<column> find_multiple(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::INT32});
+  if (strings_count == 0) return make_empty_column(type_id::INT32);
   auto targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
   CUDF_EXPECTS(!targets.has_nulls(), "Search targets cannot contain null strings");

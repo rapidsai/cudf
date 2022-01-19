@@ -30,6 +30,8 @@ _param_sizes = [1, 7, 10, 100, 1000]
 _param_dtypes = [np.int32, np.float32]
 
 
+@pytest.mark.filterwarnings("ignore:DataFrame.label_encoding is deprecated")
+@pytest.mark.filterwarnings("ignore:Series.label_encoding is deprecated")
 @pytest.mark.parametrize(
     "nelem,dtype", list(product(_param_sizes, _param_dtypes))
 )
@@ -57,6 +59,8 @@ def test_label_encode(nelem, dtype):
     assert df2.columns[1] == "cats_labels"
 
 
+@pytest.mark.filterwarnings("ignore:DataFrame.label_encoding is deprecated")
+@pytest.mark.filterwarnings("ignore:Series.label_encoding is deprecated")
 def test_label_encode_drop_one():
     random.seed(0)
     np.random.seed(0)
@@ -92,6 +96,7 @@ def test_label_encode_drop_one():
     assert df2.columns[1] == "cats_labels"
 
 
+@pytest.mark.filterwarnings("ignore:DataFrame.label_encoding is deprecated")
 def test_label_encode_float_output():
     random.seed(0)
     np.random.seed(0)
@@ -116,6 +121,7 @@ def test_label_encode_float_output():
     np.testing.assert_equal(got, handcoded)
 
 
+@pytest.mark.filterwarnings("ignore:Series.label_encoding is deprecated")
 @pytest.mark.parametrize(
     "ncats,cat_dtype", [(10, np.int8), (127, np.int8), (128, np.int16)]
 )

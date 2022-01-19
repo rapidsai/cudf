@@ -101,70 +101,6 @@ rmm::device_buffer create_null_mask(
 void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid);
 
 /**
- * @brief Given a bitmask, counts the number of set (1) bits in the range
- * `[start, stop)`
- *
- * Returns `0` if `bitmask == nullptr`.
- *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
- *
- * @param bitmask Bitmask residing in device memory whose bits will be counted
- * @param start Index of the first bit to count (inclusive)
- * @param stop Index of the last bit to count (exclusive)
- * @return The number of non-zero bits in the specified range
- */
-cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, size_type stop);
-
-/**
- * @brief Given a bitmask, counts the number of unset (0) bits  in the range
- *`[start, stop)`.
- *
- * Returns `0` if `bitmask == nullptr`.
- *
- * @throws cudf::logic_error if `start > stop`
- * @throws cudf::logic_error if `start < 0`
- *
- * @param bitmask Bitmask residing in device memory whose bits will be counted
- * @param start Index of the first bit to count (inclusive)
- * @param stop Index of the last bit to count (exclusive)
- * @return The number of zero bits in the specified range
- */
-cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, size_type stop);
-
-/**
- * @brief Given a bitmask, counts the number of set (1) bits in every range
- * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
- *
- * Returns an empty vector if `bitmask == nullptr`.
- *
- * @throws cudf::logic_error if `indices.size() % 2 != 0`
- * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
- *
- * @param[in] bitmask Bitmask residing in device memory whose bits will be counted
- * @param[in] indices A host_span of indices specifying ranges to count the number of set bits
- * @return A vector storing the number of non-zero bits in the specified ranges
- */
-std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
-                                                host_span<cudf::size_type const> indices);
-
-/**
- * @brief Given a bitmask, counts the number of unset (0) bits in every range
- * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
- *
- * Returns an empty vector if `bitmask == nullptr`.
- *
- * @throws cudf::logic_error if `indices.size() % 2 != 0`
- * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
- *
- * @param[in] bitmask Bitmask residing in device memory whose bits will be counted
- * @param[in] indices A host_span of indices specifying ranges to count the number of unset bits
- * @return A vector storing the number of zero bits in the specified ranges
- */
-std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
-                                                  host_span<cudf::size_type const> indices);
-
-/**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range
  * of indices `[begin_bit, end_bit)`.
  *
@@ -202,30 +138,32 @@ rmm::device_buffer copy_bitmask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a bitwise AND of the bitmasks of columns of a table
+ * @brief Performs bitwise AND of the bitmasks of columns of a table. Returns
+ * a pair of resulting mask and count of unset bits.
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
  * @param mr Device memory resource used to allocate the returned device_buffer
- * @return rmm::device_buffer Output bitmask
+ * @return A pair of resulting bitmask and count of unset bits
  */
-rmm::device_buffer bitmask_and(
+std::pair<rmm::device_buffer, size_type> bitmask_and(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a bitwise OR of the bitmasks of columns of a table
+ * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns
+ * a pair of resulting mask and count of unset bits.
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
  * @param mr Device memory resource used to allocate the returned device_buffer
- * @return rmm::device_buffer Output bitmask
+ * @return A pair of resulting bitmask and count of unset bits
  */
-rmm::device_buffer bitmask_or(
+std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

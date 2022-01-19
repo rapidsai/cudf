@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <vector>
 
-struct StringsReplaceTests : public cudf::test::BaseFixture {
+struct StringsReplaceRegexTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(StringsReplaceTests, ReplaceRegexTest)
+TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
 {
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
@@ -59,7 +59,7 @@ TEST_F(StringsReplaceTests, ReplaceRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
+TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
 {
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
@@ -95,7 +95,7 @@ TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, InvalidRegex)
+TEST_F(StringsReplaceRegexTest, InvalidRegex)
 {
   cudf::test::strings_column_wrapper strings(
     {"abc*def|ghi+jkl", ""});  // these do not really matter
@@ -116,7 +116,7 @@ TEST_F(StringsReplaceTests, InvalidRegex)
                cudf::logic_error);
 }
 
-TEST_F(StringsReplaceTests, WithEmptyPattern)
+TEST_F(StringsReplaceRegexTest, WithEmptyPattern)
 {
   std::vector<const char*> h_strings{"asd", "xcv"};
   cudf::test::strings_column_wrapper strings(
@@ -133,7 +133,59 @@ TEST_F(StringsReplaceTests, WithEmptyPattern)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
+TEST_F(StringsReplaceRegexTest, MultiReplacement)
+{
+  cudf::test::strings_column_wrapper input({"aba bcd aba", "abababa abababa"});
+  auto results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar("_"), 2);
+  cudf::test::strings_column_wrapper expected({"_ bcd _", "_b_ abababa"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar(""), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, input);
+}
+
+TEST_F(StringsReplaceRegexTest, Multiline)
+{
+  auto const multiline = cudf::strings::regex_flags::MULTILINE;
+
+  cudf::test::strings_column_wrapper input({"bcd\naba\nefg", "aba\naba abab\naba", "aba"});
+  auto sv = cudf::strings_column_view(input);
+
+  // single-replace
+  auto results =
+    cudf::strings::replace_re(sv, "^aba$", cudf::string_scalar("_"), std::nullopt, multiline);
+  cudf::test::strings_column_wrapper expected_ml({"bcd\n_\nefg", "_\naba abab\n_", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_ml);
+
+  results = cudf::strings::replace_re(sv, "^aba$", cudf::string_scalar("_"));
+  cudf::test::strings_column_wrapper expected({"bcd\naba\nefg", "aba\naba abab\naba", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  // multi-replace
+  std::vector<std::string> patterns({"aba$", "^aba"});
+  cudf::test::strings_column_wrapper repls({">", "<"});
+  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls), multiline);
+  cudf::test::strings_column_wrapper multi_expected_ml({"bcd\n>\nefg", ">\n< abab\n>", ">"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected_ml);
+
+  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls));
+  cudf::test::strings_column_wrapper multi_expected({"bcd\naba\nefg", "<\naba abab\n>", ">"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected);
+
+  // backref-replace
+  results = cudf::strings::replace_with_backrefs(sv, "(^aba)", "[\\1]", multiline);
+  cudf::test::strings_column_wrapper br_expected_ml(
+    {"bcd\n[aba]\nefg", "[aba]\n[aba] abab\n[aba]", "[aba]"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, br_expected_ml);
+
+  results = cudf::strings::replace_with_backrefs(sv, "(^aba)", "[\\1]");
+  cudf::test::strings_column_wrapper br_expected(
+    {"bcd\naba\nefg", "[aba]\naba abab\naba", "[aba]"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, br_expected);
+}
+
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexTest)
 {
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
@@ -167,7 +219,7 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexAltIndexPatternTest)
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexAltIndexPatternTest)
 {
   cudf::test::strings_column_wrapper strings({"12-3 34-5 67-89", "0-99: 777-888:: 5673-0"});
   auto strings_view = cudf::strings_column_view(strings);
@@ -181,7 +233,7 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexAltIndexPatternTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexReversedTest)
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexReversedTest)
 {
   cudf::test::strings_column_wrapper strings(
     {"A543", "Z756", "", "tést-string", "two-thréé four-fivé", "abcd-éfgh", "tést-string-again"});
@@ -200,7 +252,7 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexReversedTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, BackrefWithGreedyQuantifier)
+TEST_F(StringsReplaceRegexTest, BackrefWithGreedyQuantifier)
 {
   cudf::test::strings_column_wrapper input(
     {"<h1>title</h1><h2>ABC</h2>", "<h1>1234567</h1><h2>XYZ</h2>"});
@@ -217,7 +269,7 @@ TEST_F(StringsReplaceTests, BackrefWithGreedyQuantifier)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexErrorTest)
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexErrorTest)
 {
   cudf::test::strings_column_wrapper strings({"this string left intentionally blank"});
   auto view = cudf::strings_column_view(strings);
@@ -228,7 +280,7 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexErrorTest)
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", ""), cudf::logic_error);
 }
 
-TEST_F(StringsReplaceTests, MediumReplaceRegex)
+TEST_F(StringsReplaceRegexTest, MediumReplaceRegex)
 {
   // This results in 95 regex instructions and falls in the 'medium' range.
   std::string medium_regex =
@@ -256,7 +308,7 @@ TEST_F(StringsReplaceTests, MediumReplaceRegex)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, LargeReplaceRegex)
+TEST_F(StringsReplaceRegexTest, LargeReplaceRegex)
 {
   // This results in 117 regex instructions and falls in the 'large' range.
   std::string large_regex =

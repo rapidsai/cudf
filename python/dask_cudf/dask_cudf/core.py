@@ -33,7 +33,7 @@ DASK_VERSION = LooseVersion(dask.__version__)
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
-    """ Superclass for DataFrame and Series
+    """Superclass for DataFrame and Series
 
     Parameters
     ----------
@@ -233,6 +233,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
         max_branch=None,
         divisions=None,
         set_divisions=False,
+        ascending=True,
+        na_position="last",
+        sort_function=None,
+        sort_function_kwargs=None,
         **kwargs,
     ):
         if kwargs:
@@ -240,30 +244,31 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 f"Unsupported input arguments passed : {list(kwargs.keys())}"
             )
 
-        if self.npartitions == 1:
-            df = self.map_partitions(M.sort_values, by)
-        else:
-            df = sorting.sort_values(
-                self,
-                by,
-                max_branch=max_branch,
-                divisions=divisions,
-                set_divisions=set_divisions,
-                ignore_index=ignore_index,
-            )
+        df = sorting.sort_values(
+            self,
+            by,
+            max_branch=max_branch,
+            divisions=divisions,
+            set_divisions=set_divisions,
+            ignore_index=ignore_index,
+            ascending=ascending,
+            na_position=na_position,
+            sort_function=sort_function,
+            sort_function_kwargs=sort_function_kwargs,
+        )
 
         if ignore_index:
             return df.reset_index(drop=True)
         return df
 
     def to_parquet(self, path, *args, **kwargs):
-        """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
+        """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
         from dask_cudf.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
     def to_orc(self, path, **kwargs):
-        """ Calls dask_cudf.io.to_orc """
+        """Calls dask_cudf.io.to_orc"""
         from dask_cudf.io import to_orc
 
         return to_orc(self, path, **kwargs)
@@ -320,8 +325,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().repartition(*args, **kwargs)
 
     def shuffle(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.shuffle method
-        """
+        """Wraps dask.dataframe DataFrame.shuffle method"""
         shuffle_arg = kwargs.pop("shuffle", None)
         if shuffle_arg and shuffle_arg != "tasks":
             raise ValueError("dask_cudf does not support disk-based shuffle.")

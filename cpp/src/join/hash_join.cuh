@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,13 @@
  */
 #pragma once
 
-#include <cudf/detail/concatenate.cuh>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
-#include <join/join_kernels.cuh>
 
+#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -37,12 +39,48 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
+ *
+ * @param hash The hash value to potentially remap
+ * @param sentinel The reserved value
+ */
+template <typename H, typename S>
+constexpr auto remap_sentinel_hash(H hash, S sentinel)
+{
+  // Arbitrarily choose hash - 1
+  return (hash == sentinel) ? (hash - 1) : hash;
+}
+
+/**
+ * @brief Device functor to create a pair of hash value and index for a given row.
+ */
+class make_pair_function {
+ public:
+  CUDF_HOST_DEVICE make_pair_function(row_hash const& hash,
+                                      hash_value_type const empty_key_sentinel)
+    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
+  {
+  }
+
+  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  {
+    // Compute the hash value of row `i`
+    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
+    return cuco::make_pair<hash_value_type, size_type>(std::move(row_hash_value), std::move(i));
+  }
+
+ private:
+  row_hash _hash;
+  hash_value_type const _empty_key_sentinel;
+};
+
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
- * @throw cudf::logic_error if the exact size overflows cudf::size_type
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
@@ -60,6 +98,7 @@ template <join_kind JoinKind, typename multimap_type>
 std::size_t compute_join_output_size(table_device_view build_table,
                                      table_device_view probe_table,
                                      multimap_type const& hash_table,
+                                     bool has_nulls,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream)
 {
@@ -81,41 +120,23 @@ std::size_t compute_join_output_size(table_device_view build_table,
     }
   }
 
-  // Allocate storage for the counter used to get the size of the join output
-  std::size_t h_size{0};
-  rmm::device_scalar<std::size_t> d_size(0, stream);
+  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+  pair_equality equality{probe_table, build_table, probe_nulls, compare_nulls};
 
-  CHECK_CUDA(stream.value());
+  row_hash hash_probe{probe_nulls, probe_table};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  int numBlocks{-1};
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<JoinKind, multimap_type, block_size>, block_size, 0));
+  std::size_t size;
+  if constexpr (JoinKind == join_kind::LEFT_JOIN) {
+    size = hash_table.pair_count_outer(iter, iter + probe_table_num_rows, equality, stream.value());
+  } else {
+    size = hash_table.pair_count(iter, iter + probe_table_num_rows, equality, stream.value());
+  }
 
-  int dev_id{-1};
-  CUDA_TRY(cudaGetDevice(&dev_id));
-
-  int num_sms{-1};
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-
-  row_hash hash_probe{probe_table};
-  row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
-  // Probe the hash table without actually building the output to simply
-  // find what the size of the output will be.
-  compute_join_output_size<JoinKind, multimap_type, block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table,
-                                                             build_table,
-                                                             probe_table,
-                                                             hash_probe,
-                                                             equality,
-                                                             probe_table_num_rows,
-                                                             d_size.data());
-
-  CHECK_CUDA(stream.value());
-  h_size = d_size.value(stream);
-
-  return h_size;
+  return size;
 }
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
@@ -124,6 +145,46 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
 
+/**
+ * @brief Builds the hash table based on the given `build_table`.
+ *
+ * @tparam MultimapType The type of the hash table
+ *
+ * @param build Table of columns used to build join hash.
+ * @param hash_table Build hash table.
+ * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ */
+template <typename MultimapType>
+void build_join_hash_table(cudf::table_view const& build,
+                           MultimapType& hash_table,
+                           null_equality compare_nulls,
+                           rmm::cuda_stream_view stream)
+{
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+
+  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+
+  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+  size_type const build_table_num_rows{build_table_ptr->num_rows()};
+  if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
+    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    thrust::counting_iterator<size_type> stencil(0);
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+    // insert valid rows
+    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+  }
+}
 }  // namespace detail
 
 struct hash_join::hash_join_impl {
@@ -136,10 +197,11 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
+  bool _is_empty;
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
-  std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
-    _hash_table;
+  cudf::structs::detail::flattened_table _flattened_build_table;
+  cudf::detail::multimap_type _hash_table;
 
  public:
   /**

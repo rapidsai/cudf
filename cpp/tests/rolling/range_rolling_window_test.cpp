@@ -101,7 +101,7 @@ template <typename T>
 struct TypedTimeRangeRollingTest : RangeRollingTest {
 };
 
-TYPED_TEST_CASE(TypedTimeRangeRollingTest, cudf::test::TimestampTypes);
+TYPED_TEST_SUITE(TypedTimeRangeRollingTest, cudf::test::TimestampTypes);
 
 template <typename WindowExecT>
 void verify_results_for_ascending(WindowExecT exec)
@@ -265,7 +265,7 @@ template <typename T>
 struct TypedIntegralRangeRollingTest : RangeRollingTest {
 };
 
-TYPED_TEST_CASE(TypedIntegralRangeRollingTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(TypedIntegralRangeRollingTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(TypedIntegralRangeRollingTest, OrderByASC)
 {
@@ -321,7 +321,7 @@ struct TypedRangeRollingNullsTest : public RangeRollingTest {
 
 using TypesUnderTest = IntegralTypesNotBool;
 
-TYPED_TEST_CASE(TypedRangeRollingNullsTest, TypesUnderTest);
+TYPED_TEST_SUITE(TypedRangeRollingNullsTest, TypesUnderTest);
 
 template <typename T>
 auto do_count_over_window(

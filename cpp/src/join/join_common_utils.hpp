@@ -15,11 +15,17 @@
  */
 #pragma once
 
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <hash/concurrent_unordered_multimap.cuh>
+#include <hash/hash_allocator.cuh>
+#include <hash/helper_functions.cuh>
+
+#include <rmm/mr/device/polymorphic_allocator.hpp>
+
+#include <cuco/static_multimap.cuh>
 
 #include <limits>
 
@@ -27,23 +33,36 @@ namespace cudf {
 namespace detail {
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
+constexpr int DEFAULT_JOIN_CG_SIZE    = 2;
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
+using pair_type = cuco::pair_type<hash_value_type, size_type>;
+
+using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
+
+using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+
 using multimap_type =
-  concurrent_unordered_multimap<hash_value_type,
-                                size_type,
-                                size_t,
-                                std::numeric_limits<hash_value_type>::max(),
-                                std::numeric_limits<size_type>::max(),
-                                default_hash<hash_value_type>,
-                                equal_to<hash_value_type>,
-                                default_allocator<thrust::pair<hash_value_type, size_type>>>;
+  cuco::static_multimap<hash_value_type,
+                        size_type,
+                        cuda::thread_scope_device,
+                        hash_table_allocator_type,
+                        cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
-using row_hash = cudf::row_hasher<default_hash>;
+// Multimap type used for mixed joins. TODO: This is a temporary alias used
+// until the mixed joins are converted to using CGs properly. Right now it's
+// using a cooperative group of size 1.
+using mixed_multimap_type = cuco::static_multimap<hash_value_type,
+                                                  size_type,
+                                                  cuda::thread_scope_device,
+                                                  hash_table_allocator_type,
+                                                  cuco::double_hashing<1, hash_type, hash_type>>;
 
-using row_equality = cudf::row_equality_comparator<true>;
+using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
+
+using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 

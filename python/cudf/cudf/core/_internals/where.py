@@ -10,9 +10,10 @@ import cudf
 from cudf._typing import ColumnLike, ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.series import Series
+from cudf.core.single_column_frame import SingleColumnFrame
 
 
 def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
@@ -308,7 +309,7 @@ def where(
                 ):
                     result = cudf.core.column.build_categorical_column(
                         categories=frame._data[column_name].categories,
-                        codes=cudf.core.column.as_column(
+                        codes=cudf.core.column.build_column(
                             result.base_data, dtype=result.dtype
                         ),
                         mask=result.base_mask,
@@ -367,7 +368,7 @@ def where(
                     cudf.core.column.CategoricalColumn,
                     frame._data[frame.name],
                 ).categories,
-                codes=cudf.core.column.as_column(
+                codes=cudf.core.column.build_column(
                     result.base_data, dtype=result.dtype
                 ),
                 mask=result.base_mask,

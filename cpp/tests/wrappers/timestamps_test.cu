@@ -69,7 +69,7 @@ struct compare_chrono_elements_to_primitive_representation {
   }
 };
 
-TYPED_TEST_CASE(ChronoColumnTest, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(ChronoColumnTest, cudf::test::ChronoTypes);
 
 TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
 {
@@ -78,10 +78,9 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
   using namespace cudf::test;
   using namespace cuda::std::chrono;
 
-  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto chrono_col =
-    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+  auto start      = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop       = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto chrono_col = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   // round-trip through the host to copy `chrono_col` values
   // to a new fixed_width_column_wrapper `primitive_col`
@@ -135,14 +134,14 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
 
   auto start_lhs = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto start_rhs = milliseconds(-2400000000000);  // Tue, 12 Dec 1893 05:20:00 GMT
-  auto stop_lhs_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto stop_rhs_ = milliseconds(2600000000000);   // Wed, 22 May 2052 14:13:20 GMT
+  auto stop_lhs  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop_rhs  = milliseconds(2600000000000);   // Wed, 22 May 2052 14:13:20 GMT
 
   auto chrono_lhs_col =
-    generate_timestamps<T>(this->size(), time_point_ms(start_lhs), time_point_ms(stop_lhs_));
+    generate_timestamps<T>(this->size(), time_point_ms(start_lhs), time_point_ms(stop_lhs));
 
   auto chrono_rhs_col =
-    generate_timestamps<T>(this->size(), time_point_ms(start_rhs), time_point_ms(stop_rhs_));
+    generate_timestamps<T>(this->size(), time_point_ms(start_rhs), time_point_ms(stop_rhs));
 
   rmm::device_uvector<int32_t> indices(this->size(), rmm::cuda_stream_default);
   thrust::sequence(rmm::exec_policy(), indices.begin(), indices.end());

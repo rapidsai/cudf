@@ -50,7 +50,8 @@ from cudf.core.column import (
 from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
+from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range
@@ -85,6 +86,7 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = None):
     """Construct an index of the appropriate type from some data."""
+
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:
@@ -110,6 +112,13 @@ def _index_from_data(data: MutableMapping, name: Any = None):
     else:
         index_class_type = cudf.MultiIndex
     return index_class_type._from_data(data, None, name)
+
+
+def _index_from_columns(
+    columns: List[cudf.core.column.ColumnBase], name: Any = None
+):
+    """Construct an index from ``columns``, with levels named 0, 1, 2..."""
+    return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
 
 
 class RangeIndex(BaseIndex):
@@ -145,6 +154,8 @@ class RangeIndex(BaseIndex):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
+    _range: range
+
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
@@ -163,6 +174,10 @@ class RangeIndex(BaseIndex):
         self._step = int(step) if step is not None else 1
         self._index = None
         self._name = name
+        self._range = range(self._start, self._stop, self._step)
+        # _end is the actual last element of RangeIndex,
+        # whereas _stop is an upper bound.
+        self._end = self._start + self._step * (len(self._range) - 1)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -215,6 +230,27 @@ class RangeIndex(BaseIndex):
             )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
+
+    def is_numeric(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return True
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
     @property
     def _data(self):
@@ -312,7 +348,7 @@ class RangeIndex(BaseIndex):
                 other._step,
             ):
                 return True
-        return cudf.Int64Index._from_data(self._data).equals(other)
+        return Int64Index._from_data(self._data).equals(other)
 
     def serialize(self):
         header = {}
@@ -446,7 +482,12 @@ class RangeIndex(BaseIndex):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    def memory_usage(self, **kwargs):
+    def memory_usage(self, deep=False):
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         return 0
 
     def unique(self):
@@ -476,7 +517,7 @@ class RangeIndex(BaseIndex):
     def _as_int64(self):
         # Convert self to an Int64Index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
-        return cudf.Int64Index._from_data(self._data)
+        return Int64Index._from_data(self._data)
 
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
@@ -520,6 +561,125 @@ class RangeIndex(BaseIndex):
         if tolerance is not None and (abs(idx) * self._step > tolerance):
             raise KeyError(key)
         return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
+
+    def _union(self, other, sort=None):
+        if isinstance(other, RangeIndex):
+            # Variable suffixes are of the
+            # following notation: *_o -> other, *_s -> self,
+            # and *_r -> result
+            start_s, step_s = self.start, self.step
+            end_s = self._end
+            start_o, step_o = other.start, other.step
+            end_o = other._end
+            if self.step < 0:
+                start_s, step_s, end_s = end_s, -step_s, start_s
+            if other.step < 0:
+                start_o, step_o, end_o = end_o, -step_o, start_o
+            if len(self) == 1 and len(other) == 1:
+                step_s = step_o = abs(self.start - other.start)
+            elif len(self) == 1:
+                step_s = step_o
+            elif len(other) == 1:
+                step_o = step_s
+
+            # Determine minimum start value of the result.
+            start_r = min(start_s, start_o)
+            # Determine maximum end value of the result.
+            end_r = max(end_s, end_o)
+            result = None
+            min_step = min(step_o, step_s)
+
+            if ((start_s - start_o) % min_step) == 0:
+                # Checking to determine other is a subset of self with
+                # equal step size.
+                if (
+                    step_o == step_s
+                    and (start_s - end_o) <= step_s
+                    and (start_o - end_s) <= step_s
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if self is a subset of other with unequal
+                # step sizes.
+                elif (
+                    step_o % step_s == 0
+                    and (start_o + step_s >= start_s)
+                    and (end_o - step_s <= end_s)
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if other is a subset of self with unequal
+                # step sizes.
+                elif (
+                    step_s % step_o == 0
+                    and (start_s + step_o >= start_o)
+                    and (end_s - step_o <= end_o)
+                ):
+                    result = type(self)(start_r, end_r + step_o, step_o)
+            # Checking to determine when the steps are even but one of
+            # the inputs spans across is near half or less then half
+            # the other input. This case needs manipulation to step
+            # size.
+            elif (
+                step_o == step_s
+                and (step_s % 2 == 0)
+                and (abs(start_s - start_o) <= step_s / 2)
+                and (abs(end_s - end_o) <= step_s / 2)
+            ):
+                result = type(self)(start_r, end_r + step_s / 2, step_s / 2)
+            if result is not None:
+                if sort is None and not result.is_monotonic_increasing:
+                    return result.sort_values()
+                else:
+                    return result
+
+        # If all the above optimizations don't cater to the inputs,
+        # we materialize RangeIndex's into `Int64Index` and
+        # then perform `union`.
+        return Int64Index(self._values)._union(other, sort=sort)
+
+    def _intersection(self, other, sort=False):
+        if not isinstance(other, RangeIndex):
+            return super()._intersection(other, sort=sort)
+
+        if not len(self) or not len(other):
+            return RangeIndex(0)
+
+        first = self._range[::-1] if self.step < 0 else self._range
+        second = other._range[::-1] if other.step < 0 else other._range
+
+        # check whether intervals intersect
+        # deals with in- and decreasing ranges
+        int_low = max(first.start, second.start)
+        int_high = min(first.stop, second.stop)
+        if int_high <= int_low:
+            return RangeIndex(0)
+
+        # Method hint: linear Diophantine equation
+        # solve intersection problem
+        # performance hint: for identical step sizes, could use
+        # cheaper alternative
+        gcd, s, _ = _extended_gcd(first.step, second.step)
+
+        # check whether element sets intersect
+        if (first.start - second.start) % gcd:
+            return RangeIndex(0)
+
+        # calculate parameters for the RangeIndex describing the
+        # intersection disregarding the lower bounds
+        tmp_start = (
+            first.start + (second.start - first.start) * first.step // gcd * s
+        )
+        new_step = first.step * second.step // gcd
+        no_steps = -(-(int_low - tmp_start) // abs(new_step))
+        new_start = tmp_start + abs(new_step) * no_steps
+        new_range = range(new_start, int_high, new_step)
+        new_index = RangeIndex(new_range)
+
+        if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
+            new_index = new_index[::-1]
+        if sort is None:
+            new_index = new_index.sort_values()
+
+        return new_index
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -617,34 +777,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         return super().deserialize(header, frames)
-
-    def drop_duplicates(self, keep="first"):
-        """
-        Return Index with duplicate values removed
-
-        Parameters
-        ----------
-        keep : {‘first’, ‘last’, False}, default ‘first’
-            * ‘first’ : Drop duplicates except for the
-                first occurrence.
-            * ‘last’ : Drop duplicates except for the
-                last occurrence.
-            *  False : Drop all duplicates.
-
-        Returns
-        -------
-        Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
-        >>> idx
-        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
-        >>> idx.drop_duplicates()
-        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
-        """  # noqa: E501
-        return super().drop_duplicates(keep=keep)
 
     def _binaryop(
         self,
@@ -875,9 +1007,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         mask[true_inds] = True
         return mask
 
-    def __sizeof__(self):
-        return self._values.__sizeof__()
-
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0
@@ -994,6 +1123,65 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return True
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
+
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        """Return the integer indices that would sort the Series values.
+
+        Parameters
+        ----------
+        axis : {0 or "index"}
+            Has no effect but is accepted for compatibility with numpy.
+        kind : {'mergesort', 'quicksort', 'heapsort', 'stable'}, default 'quicksort'
+            Choice of sorting algorithm. See :func:`numpy.sort` for more
+            information. 'mergesort' and 'stable' are the only stable
+            algorithms. Only quicksort is supported in cuDF.
+        order : None
+            Has no effect but is accepted for compatibility with numpy.
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+
+        Returns
+        -------
+        cupy.ndarray: The indices sorted based on input.
+        """  # noqa: E501
+        return super().argsort(
+            axis=axis,
+            kind=kind,
+            order=order,
+            ascending=ascending,
+            na_position=na_position,
+        )
+
 
 class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
@@ -1028,6 +1216,27 @@ class NumericIndex(GenericIndex):
         data = column.as_column(data, dtype=dtype)
 
         super().__init__(data, **kwargs)
+
+    def is_numeric(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return True
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
 
 class Int8Index(NumericIndex):
@@ -1254,6 +1463,12 @@ class Float32Index(NumericIndex):
 
     _dtype = np.float32
 
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return True
+
 
 class Float64Index(NumericIndex):
     """
@@ -1278,6 +1493,12 @@ class Float64Index(NumericIndex):
     """
 
     _dtype = np.float64
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return True
 
 
 class DatetimeIndex(GenericIndex):
@@ -1314,9 +1535,11 @@ class DatetimeIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.DatetimeIndex([1, 2, 3, 4], name="a")
-    DatetimeIndex(['1970-01-01 00:00:00.001000', '1970-01-01 00:00:00.002000',
-                   '1970-01-01 00:00:00.003000', '1970-01-01 00:00:00.004000'],
-                  dtype='datetime64[ms]', name='a')
+    DatetimeIndex(['1970-01-01 00:00:00.000000001',
+                   '1970-01-01 00:00:00.000000002',
+                   '1970-01-01 00:00:00.000000003',
+                   '1970-01-01 00:00:00.000000004'],
+                  dtype='datetime64[ns]', name='a')
     """
 
     def __init__(
@@ -1654,6 +1877,112 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
+    def is_boolean(self):
+        return False
+
+    def ceil(self, freq):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:05:42",
+        ...     "1999-12-31 18:40:30",
+        ... ])
+        >>> gIndex.ceil("T")
+        DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.ceil(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def floor(self, freq):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:59:59",
+        ...     "1999-12-31 18:44:59",
+        ... ])
+        >>> gIndex.floor("T")
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.floor(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index containing rounded datetimes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_idx = cudf.Index([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_idx
+        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:04:58',
+                       '2001-01-01 00:05:04'],
+                      dtype='datetime64[ns]')
+        >>> dt_idx.round('H')
+        DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
+        >>> dt_idx.round('T')
+        DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.round(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -1686,14 +2015,15 @@ class TimedeltaIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.TimedeltaIndex([1132223, 2023232, 342234324, 4234324],
-    ...     dtype='timedelta64[ns]')
-    TimedeltaIndex(['00:00:00.001132', '00:00:00.002023', '00:00:00.342234',
-                    '00:00:00.004234'],
-                dtype='timedelta64[ns]')
-    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype='timedelta64[s]',
+    ...     dtype="timedelta64[ns]")
+    TimedeltaIndex(['0 days 00:00:00.001132223', '0 days 00:00:00.002023232',
+                    '0 days 00:00:00.342234324', '0 days 00:00:00.004234324'],
+                  dtype='timedelta64[ns]')
+    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype="timedelta64[s]",
     ...     name="delta-index")
-    TimedeltaIndex(['00:00:01', '00:00:02', '00:00:03', '00:00:04'],
-                dtype='timedelta64[s]', name='delta-index')
+    TimedeltaIndex(['0 days 00:00:01', '0 days 00:00:02', '0 days 00:00:03',
+                    '0 days 00:00:04'],
+                  dtype='timedelta64[s]', name='delta-index')
     """
 
     def __init__(
@@ -1782,6 +2112,9 @@ class TimedeltaIndex(GenericIndex):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
+    def is_boolean(self):
+        return False
+
 
 class CategoricalIndex(GenericIndex):
     """
@@ -1819,11 +2152,11 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """  # noqa: E501
 
     def __init__(
@@ -1893,6 +2226,12 @@ class CategoricalIndex(GenericIndex):
         The categories of this categorical.
         """
         return as_index(self._values.categories)
+
+    def is_boolean(self):
+        return False
+
+    def is_categorical(self):
+        return True
 
 
 def interval_range(
@@ -2025,7 +2364,7 @@ def interval_range(
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
-        return cudf.IntervalIndex(data, closed=closed)
+        return IntervalIndex(data, closed=closed)
 
     interval_col = column.build_interval_column(
         left_col, right_col, closed=closed
@@ -2078,6 +2417,7 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data)
             data.dtype.closed = closed
 
+        self.closed = closed
         super().__init__(data, **kwargs)
 
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
@@ -2107,9 +2447,7 @@ class IntervalIndex(GenericIndex):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]],
-                    closed='right',
-                    dtype='interval[int64]')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
@@ -2121,6 +2459,12 @@ class IntervalIndex(GenericIndex):
         )
 
         return IntervalIndex(interval_col, name=name)
+
+    def is_interval(self):
+        return True
+
+    def is_boolean(self):
+        return False
 
 
 class StringIndex(GenericIndex):
@@ -2152,9 +2496,6 @@ class StringIndex(GenericIndex):
             self.to_numpy(na_value=None), name=self.name, dtype="object"
         )
 
-    def take(self, indices):
-        return self._values[indices]
-
     def __repr__(self):
         return (
             f"{self.__class__.__name__}({self._values.to_array()},"
@@ -2177,13 +2518,19 @@ class StringIndex(GenericIndex):
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return self.fillna(cudf._NA_REP)
         else:
             return self
 
+    def is_boolean(self):
+        return False
 
-def as_index(arbitrary, **kwargs) -> BaseIndex:
+    def is_object(self):
+        return True
+
+
+def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2216,7 +2563,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, ColumnBase):
         return _index_from_data({kwargs.get("name", None): arbitrary})
     elif isinstance(arbitrary, cudf.Series):
-        return as_index(arbitrary._column, **kwargs)
+        return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
     elif isinstance(arbitrary, (pd.RangeIndex, range)):
         return RangeIndex(
             start=arbitrary.start,
@@ -2225,11 +2572,14 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
             **kwargs,
         )
     elif isinstance(arbitrary, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(arbitrary)
+        return cudf.MultiIndex.from_pandas(arbitrary, nan_as_null=nan_as_null)
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
-        column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
+        column.as_column(
+            arbitrary, dtype=kwargs.get("dtype", None), nan_as_null=nan_as_null
+        ),
+        **kwargs,
     )
 
 
@@ -2279,6 +2629,10 @@ class Index(BaseIndex, metaclass=IndexMeta):
     tupleize_cols : bool (default: True)
         When True, attempt to create a MultiIndex if possible.
         tupleize_cols == False is not yet supported.
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
 
     Returns
     -------
@@ -2311,6 +2665,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
         copy=False,
         name=None,
         tupleize_cols=True,
+        nan_as_null=True,
         **kwargs,
     ):
         assert (
@@ -2321,7 +2676,14 @@ class Index(BaseIndex, metaclass=IndexMeta):
                 "tupleize_cols != True is not yet supported"
             )
 
-        return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+        return as_index(
+            data,
+            copy=copy,
+            dtype=dtype,
+            name=name,
+            nan_as_null=nan_as_null,
+            **kwargs,
+        )
 
     @classmethod
     def from_arrow(cls, obj):
@@ -2370,3 +2732,21 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
 
     stop = non_empty_indexes[-1].stop if next_ is None else next_
     return RangeIndex(start, stop, step)
+
+
+def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
+    """
+    Extended Euclidean algorithms to solve Bezout's identity:
+       a*x + b*y = gcd(x, y)
+    Finds one particular solution for x, y: s, t
+    Returns: gcd, s, t
+    """
+    s, old_s = 0, 1
+    t, old_t = 1, 0
+    r, old_r = b, a
+    while r:
+        quotient = old_r // r
+        old_r, r = r, old_r - quotient * r
+        old_s, s = s, old_s - quotient * s
+        old_t, t = t, old_t - quotient * t
+    return old_r, old_s, old_t

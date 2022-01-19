@@ -96,7 +96,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
                                    device_views_ptr + views.size(),
                                    std::next(d_partition_offsets.begin()),
                                    chars_size_transform{},
-                                   thrust::plus<size_t>{});
+                                   thrust::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
@@ -214,7 +214,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings is too large for cudf column");

@@ -45,7 +45,7 @@ namespace {
  * @brief This function converts the given string into a
  * floating point double value.
  *
- * This will also map strings containing "NaN", "Inf" and "-Inf"
+ * This will also map strings containing "NaN", "Inf", etc.
  * to the appropriate float values.
  *
  * This function will also handle scientific notation format.
@@ -55,14 +55,17 @@ __device__ inline double stod(string_view const& d_str)
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
-  // special strings
-  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<double>::quiet_NaN();
-  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<double>::infinity();
-  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<double>::infinity();
   double sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
+  }
+
+  // special strings: NaN, Inf
+  if ((in_ptr < end) && *in_ptr > '9') {
+    auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
+    if (string::is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
+    if (string::is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
   }
 
   // Parse and store the mantissa as much as we can,
@@ -526,7 +529,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = floats.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, stream, mr);
 }

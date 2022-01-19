@@ -43,9 +43,9 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be a valid string_scalar");
 
   string_view d_separator(separator.data(), separator.size());
   auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
@@ -93,7 +93,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   // build null mask
   // only one entry so it is either all valid or all null
   auto const null_count =
-    static_cast<size_type>(strings.null_count() == strings_count && !narep.is_valid());
+    static_cast<size_type>(strings.null_count() == strings_count && !narep.is_valid(stream));
   auto null_mask    = null_count
                         ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr)
                         : rmm::device_buffer{0, stream, mr};

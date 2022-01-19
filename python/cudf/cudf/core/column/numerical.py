@@ -1,9 +1,18 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Mapping, Sequence, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import cupy
 import numpy as np
@@ -21,7 +30,12 @@ from cudf.core.column import (
     column,
     string,
 )
-from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal32Dtype,
+    Decimal64Dtype,
+    Decimal128Dtype,
+)
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -47,6 +61,8 @@ class NumericalColumn(NumericalBaseColumn):
     mask : Buffer, optional
     """
 
+    _nan_count: Optional[int]
+
     def __init__(
         self,
         data: Buffer,
@@ -61,9 +77,8 @@ class NumericalColumn(NumericalBaseColumn):
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
-            size = data.size // dtype.itemsize
-            size = size - offset
-
+            size = (data.size // dtype.itemsize) - offset
+        self._nan_count = None
         super().__init__(
             data,
             size=size,
@@ -72,6 +87,10 @@ class NumericalColumn(NumericalBaseColumn):
             offset=offset,
             null_count=null_count,
         )
+
+    def _clear_cache(self):
+        super()._clear_cache()
+        self._nan_count = None
 
     def __contains__(self, item: ScalarLike) -> bool:
         """
@@ -91,6 +110,11 @@ class NumericalColumn(NumericalBaseColumn):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
+    def has_nulls(self, include_nan=False):
+        return self.null_count != 0 or (
+            self.nan_count != 0 if include_nan else False
+        )
+
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
@@ -101,7 +125,7 @@ class NumericalColumn(NumericalBaseColumn):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -118,8 +142,12 @@ class NumericalColumn(NumericalBaseColumn):
 
         return output
 
-    def unary_operator(self, unaryop: str) -> ColumnBase:
-        return _numeric_column_unaryop(self, op=unaryop)
+    def unary_operator(self, unaryop: Union[str, Callable]) -> ColumnBase:
+        if callable(unaryop):
+            return libcudf.transform.transform(self, unaryop)
+
+        unaryop = libcudf.unary.UnaryOp[unaryop.upper()]
+        return libcudf.unary.unary_operation(self, unaryop)
 
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
@@ -143,16 +171,26 @@ class NumericalColumn(NumericalBaseColumn):
                     (
                         NumericalColumn,
                         cudf.Scalar,
-                        cudf.core.column.Decimal64Column,
+                        cudf.core.column.DecimalBaseColumn,
                     ),
                 )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
-            if isinstance(rhs, cudf.core.column.Decimal64Column):
+            if isinstance(rhs, cudf.core.column.Decimal128Column):
                 lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
+                    Decimal128Dtype(Decimal128Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
+            elif isinstance(rhs, cudf.core.column.Decimal64Column):
+                lhs = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
+            elif isinstance(rhs, cudf.core.column.Decimal32Column):
+                lhs = self.as_decimal_column(
+                    Decimal32Dtype(Decimal32Dtype.MAX_PRECISION, 0)
                 )
                 return lhs.binary_operator(binop, rhs)
             out_dtype = np.result_type(self.dtype, rhs.dtype)
@@ -203,8 +241,7 @@ class NumericalColumn(NumericalBaseColumn):
             if self.dtype.kind == "b":
                 other_dtype = min_signed_type(other)
             if np.isscalar(other):
-                other = cudf.dtype(other_dtype).type(other)
-                return other
+                return cudf.dtype(other_dtype).type(other)
             else:
                 ary = utils.scalar_broadcast_to(
                     other, size=len(self), dtype=other_dtype
@@ -263,7 +300,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal64Column":
+    ) -> "cudf.core.column.DecimalBaseColumn":
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
@@ -271,6 +308,15 @@ class NumericalColumn(NumericalBaseColumn):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
+
+    @property
+    def nan_count(self) -> int:
+        if self.dtype.kind != "f":
+            self._nan_count = 0
+        elif self._nan_count is None:
+            nan_col = libcudf.unary.is_nan(self)
+            self._nan_count = nan_col.sum()
+        return self._nan_count
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -288,9 +334,22 @@ class NumericalColumn(NumericalBaseColumn):
 
         return lhs, rhs
 
+    def _can_return_nan(self, skipna: bool = None) -> bool:
+        return not skipna and self.has_nulls(include_nan=True)
+
+    def _process_for_reduction(
+        self, skipna: bool = None, min_count: int = 0
+    ) -> Union[ColumnBase, ScalarLike]:
+        skipna = True if skipna is None else skipna
+
+        if self._can_return_nan(skipna=skipna):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return super()._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+
     def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column
-        """
+        """Returns the default NA value for this column"""
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)
@@ -312,8 +371,19 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return col with *to_replace* replaced with *value*.
         """
+
+        # If all of `to_replace`/`replacement` are `None`,
+        # dtype of `to_replace_col`/`replacement_col`
+        # is inferred as `string`, but this is a valid
+        # float64 column too, Hence we will need to type-cast
+        # to self.dtype.
         to_replace_col = column.as_column(to_replace)
+        if to_replace_col.null_count == len(to_replace_col):
+            to_replace_col = to_replace_col.astype(self.dtype)
+
         replacement_col = column.as_column(replacement)
+        if replacement_col.null_count == len(replacement_col):
+            replacement_col = replacement_col.astype(self.dtype)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
@@ -352,7 +422,7 @@ class NumericalColumn(NumericalBaseColumn):
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             replaced = replaced.fillna(
-                df._data["new"][df._data["old"].isna()][0]
+                df._data["new"][df._data["old"].isnull()][0]
             )
             df = df.dropna(subset=["old"])
 
@@ -370,10 +440,7 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Fill null values with *fill_value*
         """
-        if fill_nan:
-            col = self.nans_to_nulls()
-        else:
-            col = self
+        col = self.nans_to_nulls() if fill_nan else self
 
         if col.null_count == 0:
             return col
@@ -401,13 +468,44 @@ class NumericalColumn(NumericalBaseColumn):
             fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
-            # cast safely to the same dtype as self
             if is_integer_dtype(col.dtype):
-                fill_value = _safe_cast_to_int(fill_value, col.dtype)
+                # cast safely to the same dtype as self
+                if fill_value.dtype != col.dtype:
+                    new_fill_value = fill_value.astype(col.dtype)
+                    if not (new_fill_value == fill_value).all():
+                        raise TypeError(
+                            f"Cannot safely cast non-equivalent "
+                            f"{col.dtype.type.__name__} to "
+                            f"{cudf.dtype(dtype).type.__name__}"
+                        )
+                    fill_value = new_fill_value
             else:
                 fill_value = fill_value.astype(col.dtype)
 
         return super(NumericalColumn, col).fillna(fill_value, method)
+
+    def _find_value(
+        self, value: ScalarLike, closest: bool, find: Callable, compare: str
+    ) -> int:
+        value = to_cudf_compatible_scalar(value)
+        if not is_number(value):
+            raise ValueError("Expected a numeric value")
+        found = 0
+        if len(self):
+            found = find(self.data_array_view, value, mask=self.mask,)
+        if found == -1:
+            if self.is_monotonic_increasing and closest:
+                found = find(
+                    self.data_array_view,
+                    value,
+                    mask=self.mask,
+                    compare=compare,
+                )
+                if found == -1:
+                    raise ValueError("value not found")
+            else:
+                raise ValueError("value not found")
+        return found
 
     def find_first_value(
         self, value: ScalarLike, closest: bool = False
@@ -417,28 +515,12 @@ class NumericalColumn(NumericalBaseColumn):
         columns, returns the offset of the first larger value
         if closest=True.
         """
-        value = to_cudf_compatible_scalar(value)
-        if not is_number(value):
-            raise ValueError("Expected a numeric value")
-        found = 0
-        if len(self):
-            found = cudautils.find_first(
-                self.data_array_view, value, mask=self.mask
-            )
-        if found == -1 and self.is_monotonic and closest:
+        if self.is_monotonic_increasing and closest:
             if value < self.min():
-                found = 0
+                return 0
             elif value > self.max():
-                found = len(self)
-            else:
-                found = cudautils.find_first(
-                    self.data_array_view, value, mask=self.mask, compare="gt",
-                )
-                if found == -1:
-                    raise ValueError("value not found")
-        elif found == -1:
-            raise ValueError("value not found")
-        return found
+                return len(self)
+        return self._find_value(value, closest, cudautils.find_first, "gt")
 
     def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         """
@@ -446,28 +528,12 @@ class NumericalColumn(NumericalBaseColumn):
         columns, returns the offset of the last smaller value
         if closest=True.
         """
-        value = to_cudf_compatible_scalar(value)
-        if not is_number(value):
-            raise ValueError("Expected a numeric value")
-        found = 0
-        if len(self):
-            found = cudautils.find_last(
-                self.data_array_view, value, mask=self.mask,
-            )
-        if found == -1 and self.is_monotonic and closest:
+        if self.is_monotonic_increasing and closest:
             if value < self.min():
-                found = -1
+                return -1
             elif value > self.max():
-                found = len(self) - 1
-            else:
-                found = cudautils.find_last(
-                    self.data_array_view, value, mask=self.mask, compare="lt",
-                )
-                if found == -1:
-                    raise ValueError("value not found")
-        elif found == -1:
-            raise ValueError("value not found")
-        return found
+                return len(self) - 1
+        return self._find_value(value, closest, cudautils.find_last, "lt")
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         """
@@ -505,34 +571,23 @@ class NumericalColumn(NumericalBaseColumn):
                     # Column contains only infs
                     return True
 
-                max_ = col.max()
-                if (min_ >= lower_) and (max_ < upper_):
-                    return True
-                else:
-                    return False
+                return (min_ >= lower_) and (col.max() < upper_)
 
         # want to cast int to uint
         elif self.dtype.kind == "i" and to_dtype.kind == "u":
             i_max_ = np.iinfo(self.dtype).max
             u_max_ = np.iinfo(to_dtype).max
 
-            if self.min() >= 0:
-                if i_max_ <= u_max_:
-                    return True
-                if self.max() < u_max_:
-                    return True
-            return False
+            return (self.min() >= 0) and (
+                (i_max_ <= u_max_) or (self.max() < u_max_)
+            )
 
         # want to cast uint to int
         elif self.dtype.kind == "u" and to_dtype.kind == "i":
             u_max_ = np.iinfo(self.dtype).max
             i_max_ = np.iinfo(to_dtype).max
 
-            if u_max_ <= i_max_:
-                return True
-            if self.max() < i_max_:
-                return True
-            return False
+            return (u_max_ <= i_max_) or (self.max() < i_max_)
 
         # want to cast int to float
         elif self.dtype.kind in {"i", "u"} and to_dtype.kind == "f":
@@ -545,13 +600,10 @@ class NumericalColumn(NumericalBaseColumn):
             else:
 
                 filled = self.fillna(0)
-                if (
+                return (
                     cudf.Series(filled).astype(to_dtype).astype(filled.dtype)
                     == cudf.Series(filled)
-                ).all():
-                    return True
-                else:
-                    return False
+                ).all()
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
@@ -561,10 +613,7 @@ class NumericalColumn(NumericalBaseColumn):
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
                 filled = self.fillna(0, fill_nan=False)
-                if (cudf.Series(filled) % 1 == 0).all():
-                    return True
-                else:
-                    return False
+                return (cudf.Series(filled) % 1 == 0).all()
             else:
                 return False
 
@@ -574,7 +623,7 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
                 categories=dtype.categories._values,
-                codes=as_column(self.base_data, dtype=self.dtype),
+                codes=build_column(self.base_data, dtype=self.dtype),
                 mask=self.base_mask,
                 ordered=dtype.ordered,
                 size=self.size,
@@ -592,7 +641,7 @@ class NumericalColumn(NumericalBaseColumn):
             arrow_array = self.to_arrow()
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls:
+        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
@@ -601,32 +650,16 @@ class NumericalColumn(NumericalBaseColumn):
             pd_series.index = index
         return pd_series
 
+    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+        col_dtype = self.dtype
+        if reduction_op in {"sum", "product"}:
+            col_dtype = (
+                col_dtype if col_dtype.kind == "f" else np.dtype("int64")
+            )
+        elif reduction_op == "sum_of_squares":
+            col_dtype = np.find_common_type([col_dtype], [np.dtype("uint64")])
 
-def _numeric_column_unaryop(operand: ColumnBase, op: str) -> ColumnBase:
-    if callable(op):
-        return libcudf.transform.transform(operand, op)
-
-    op = libcudf.unary.UnaryOp[op.upper()]
-    return libcudf.unary.unary_operation(operand, op)
-
-
-def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
-    """
-    Cast given NumericalColumn to given integer dtype safely.
-    """
-    assert is_integer_dtype(dtype)
-
-    if col.dtype == dtype:
-        return col
-
-    new_col = col.astype(dtype)
-    if (new_col == col).all():
-        return new_col
-    else:
-        raise TypeError(
-            f"Cannot safely cast non-equivalent "
-            f"{col.dtype.type.__name__} to {cudf.dtype(dtype).type.__name__}"
-        )
+        return col_dtype
 
 
 def _normalize_find_and_replace_input(
@@ -638,6 +671,8 @@ def _normalize_find_and_replace_input(
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
+        if normalized_column.null_count == len(normalized_column):
+            normalized_column = normalized_column.astype(input_column_dtype)
         col_to_normalize_dtype = min_column_type(
             normalized_column, input_column_dtype
         )

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <structs/utilities.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -27,6 +25,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/null_mask.hpp>
 
 namespace cudf::test {
@@ -39,8 +38,7 @@ void flatten_unflatten_compare(table_view const& input_table)
 {
   using namespace cudf::structs::detail;
 
-  auto [flattened, _, __, ___] =
-    flatten_nested_columns(input_table, {}, {}, column_nullability::FORCE);
+  auto flattened = flatten_nested_columns(input_table, {}, {}, column_nullability::FORCE);
   auto unflattened =
     unflatten_nested_columns(std::make_unique<cudf::table>(flattened), input_table);
 

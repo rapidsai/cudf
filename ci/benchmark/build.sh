@@ -98,7 +98,7 @@ conda list --show-channel-urls
 ################################################################################
 
 logger "Build libcudf..."
-if [[ ${BUILD_MODE} == "pull-request" ]]; then
+if [[ "${BUILD_MODE}" == "pull-request" ]]; then
     "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests --ptds
 else
     "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests -l --ptds

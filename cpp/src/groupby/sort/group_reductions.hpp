@@ -441,6 +441,47 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
+/**
+ * @brief Internal API to find covariance of child columns of a non-nullable struct column.
+ *
+ * @param values_0 The first grouped values column to compute covariance
+ * @param values_1 The second grouped values column to compute covariance
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups.
+ * @param count The count of valid rows of the grouped values of both columns
+ * @param mean_0 The mean of the first grouped values column
+ * @param mean_1 The mean of the second grouped values column
+ * @param min_periods The minimum number of non-null rows required to consider the covariance
+ * @param ddof The delta degrees of freedom used in the calculation of the variance
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_covariance(column_view const& values_0,
+                                         column_view const& values_1,
+                                         cudf::device_span<size_type const> group_labels,
+                                         size_type num_groups,
+                                         column_view const& count,
+                                         column_view const& mean_0,
+                                         column_view const& mean_1,
+                                         size_type min_periods,
+                                         size_type ddof,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to find correlation from covariance and standard deviation.
+ *
+ * @param covariance The covariance of two grouped values columns
+ * @param stddev_0 The standard deviation of the first grouped values column
+ * @param stddev_1 The standard deviation of the second grouped values column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_correlation(column_view const& covariance,
+                                          column_view const& stddev_0,
+                                          column_view const& stddev_1,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Generate a tdigest column from a grouped set of numeric input values.

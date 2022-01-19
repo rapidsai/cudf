@@ -171,7 +171,7 @@ def test_dt_ops(data):
     assert_eq(pd_data > pd_data, gdf_data > gdf_data)
 
 
-# libgdf doesn't respect timezones
+# libcudf doesn't respect timezones
 @pytest.mark.parametrize("data", [data1()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_series(data, field):
@@ -1433,6 +1433,203 @@ def test_is_month_start(data, dtype):
     assert_eq(expect, got)
 
 
+##################################################################
+#                       Date Range Tests                         #
+##################################################################
+
+date_range_test_dates_start = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_dates_end = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_periods = [1, 10, 100]
+date_range_test_freq = [
+    {"months": 3, "years": 1},
+    pytest.param(
+        {"hours": 10, "days": 57, "nanoseconds": 3},
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas ignoring nanoseconds component. "
+            "https://github.com/pandas-dev/pandas/issues/44393",
+        ),
+    ),
+    "83D",
+    "17h",
+    "-680T",
+    "110546s",
+    pytest.param(
+        "110546789L",
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas DateOffset ignores milliseconds. "
+            "https://github.com/pandas-dev/pandas/issues/43371",
+        ),
+    ),
+    "110546789248U",
+]
+
+
+@pytest.fixture(params=date_range_test_dates_start[:])
+def start(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_dates_end[:])
+def end(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_periods[:])
+def periods(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_freq[:])
+def freq(request):
+    return request.param
+
+
+def test_date_range_start_end_periods(start, end, periods):
+    expect = pd.date_range(start=start, end=end, periods=periods, name="a")
+    got = cudf.date_range(start=start, end=end, periods=periods, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_start_end_freq(start, end, freq):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, end=end, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, end=end, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_start_freq_periods(start, freq, periods):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_end_freq_periods(end, freq, periods):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_freq_does_not_divide_range():
+    expect = pd.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    got = cudf.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_raise_overflow():
+    # Fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns")
+    periods = 2
+    freq = cudf.DateOffset(nanoseconds=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+    # Non-fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns")
+    periods = 2
+    freq = cudf.DateOffset(months=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+
+@pytest.mark.parametrize(
+    "freqstr_unsupported",
+    [
+        "1M",
+        "2SM",
+        "3MS",
+        "4BM",
+        "5CBM",
+        "6SMS",
+        "7BMS",
+        "8CBMS",
+        "Q",
+        "2BQ",
+        "3BQS",
+        "10A",
+        "10Y",
+        "9BA",
+        "9BY",
+        "8AS",
+        "8YS",
+        "7BAS",
+        "7BYS",
+        "BH",
+        "B",
+    ],
+)
+def test_date_range_raise_unsupported(freqstr_unsupported):
+    s, e = "2001-01-01", "2008-01-31"
+    pd.date_range(start=s, end=e, freq=freqstr_unsupported)
+    with pytest.raises(ValueError, match="does not yet support"):
+        cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
+
+    # We also check that these values are unsupported when using lowercase
+    # characters. We exclude the value 3MS (every 3 month starts) because 3ms
+    # is a valid frequency for every 3 milliseconds.
+    if freqstr_unsupported != "3MS":
+        freqstr_unsupported = freqstr_unsupported.lower()
+        pd.date_range(start=s, end=e, freq=freqstr_unsupported)
+        with pytest.raises(ValueError, match="does not yet support"):
+            cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
+
+
+##################################################################
+#                    End of Date Range Test                      #
+##################################################################
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1622,12 +1819,180 @@ def test_error_values():
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
 def test_ceil(data, time_type, resolution):
 
-    ps = pd.Series(data, dtype=time_type)
-    gs = cudf.from_pandas(ps)
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
 
     expect = ps.dt.ceil(resolution)
     got = gs.dt.ceil(resolution)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:10",
+                "2000-12-31 04:00:05",
+                "1900-02-28 07:00:06",
+                "1800-03-14 07:30:20",
+                "2100-03-14 07:30:20",
+                "1970-01-01 00:00:09",
+                "1969-12-31 12:59:10",
+            ]
+        )
+    ],
+)
+@pytest.mark.parametrize("time_type", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_floor(data, time_type, resolution):
+
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
+
+    expect = ps.dt.floor(resolution)
+    got = gs.dt.floor(resolution)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:10",
+                "2000-12-31 04:00:05",
+                "1900-02-28 07:00:06",
+                "1800-03-14 07:30:20",
+                "2100-03-14 07:30:20",
+                "1970-01-01 00:00:09",
+                "1969-12-31 12:59:10",
+            ]
+        )
+    ],
+)
+@pytest.mark.parametrize("time_type", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_round(data, time_type, resolution):
+
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
+
+    expect = ps.dt.round(resolution)
+    got = gs.dt.round(resolution)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.DatetimeIndex([]),
+        pd.DatetimeIndex(["2010-05-31"]),
+        pd.date_range("2000-01-01", "2000-12-31", periods=21),
+    ],
+)
+@pytest.mark.parametrize(
+    "offset",
+    [
+        "10Y",
+        "6M",
+        "M",
+        "31D",
+        "0H",
+        "44640T",
+        "44640min",
+        "2678000S",
+        "2678000000L",
+        "2678000000ms",
+        "2678000000000U",
+        "2678000000000us",
+        "2678000000000000N",
+        "2678000000000000ns",
+    ],
+)
+def test_first(idx, offset):
+    p = pd.Series(range(len(idx)), index=idx)
+    g = cudf.from_pandas(p)
+
+    expect = p.first(offset=offset)
+    got = g.first(offset=offset)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    # This test case tests correctness when start is end of month
+    "idx, offset",
+    [
+        (
+            pd.DatetimeIndex(
+                [
+                    "2020-01-31",
+                    "2020-02-15",
+                    "2020-02-29",
+                    "2020-03-15",
+                    "2020-03-31",
+                    "2020-04-15",
+                    "2020-04-30",
+                ]
+            ),
+            "3M",
+        )
+    ],
+)
+def test_first_start_at_end_of_month(idx, offset):
+    p = pd.Series(range(len(idx)), index=idx)
+    g = cudf.from_pandas(p)
+
+    expect = p.first(offset=offset)
+    got = g.first(offset=offset)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.DatetimeIndex([]),
+        pd.DatetimeIndex(["2010-05-31"]),
+        pd.date_range("2000-01-01", "2000-12-31", periods=21),
+    ],
+)
+@pytest.mark.parametrize(
+    "offset",
+    [
+        "10Y",
+        "6M",
+        "M",
+        "31D",
+        "0H",
+        "44640T",
+        "44640min",
+        "2678000S",
+        "2678000000L",
+        "2678000000ms",
+        "2678000000000U",
+        "2678000000000us",
+        "2678000000000000N",
+        "2678000000000000ns",
+    ],
+)
+def test_last(idx, offset):
+    p = pd.Series(range(len(idx)), index=idx)
+    g = cudf.from_pandas(p)
+
+    expect = p.last(offset=offset)
+    got = g.last(offset=offset)
+
     assert_eq(expect, got)

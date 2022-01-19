@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime as dt
 from collections import namedtuple
@@ -121,8 +121,7 @@ ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
 def np_to_pa_dtype(dtype):
-    """Util to convert numpy dtype to PyArrow dtype.
-    """
+    """Util to convert numpy dtype to PyArrow dtype."""
     # special case when dtype is np.datetime64
     if dtype.kind == "M":
         time_unit, _ = np.datetime_data(dtype)
@@ -153,8 +152,7 @@ def get_numeric_type_info(dtype):
 
 
 def numeric_normalize_types(*args):
-    """Cast all args to a common type using numpy promotion logic
-    """
+    """Cast all args to a common type using numpy promotion logic"""
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
 
@@ -166,13 +164,25 @@ def _find_common_type_decimal(dtypes):
     lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
     # Combine to get the necessary precision and clip at the maximum
     # precision
-    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-    return cudf.Decimal64Dtype(p, s)
+    p = s + lhs
+
+    if p > cudf.Decimal64Dtype.MAX_PRECISION:
+        return cudf.Decimal128Dtype(
+            min(cudf.Decimal128Dtype.MAX_PRECISION, p), s
+        )
+    elif p > cudf.Decimal32Dtype.MAX_PRECISION:
+        return cudf.Decimal64Dtype(
+            min(cudf.Decimal64Dtype.MAX_PRECISION, p), s
+        )
+    else:
+        return cudf.Decimal32Dtype(
+            min(cudf.Decimal32Dtype.MAX_PRECISION, p), s
+        )
 
 
 def cudf_dtype_from_pydata_dtype(dtype):
-    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
+    """Given a numpy or pandas dtype, converts it into the equivalent cuDF
+    Python dtype.
     """
 
     if cudf.api.types.is_categorical_dtype(dtype):
@@ -181,6 +191,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal32Dtype
     elif cudf.api.types.is_decimal64_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
+    elif cudf.api.types.is_decimal128_dtype(dtype):
+        return cudf.core.dtypes.Decimal128Dtype
     elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
         return dtype.type
 
@@ -188,8 +200,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
 
 def cudf_dtype_to_pa_type(dtype):
-    """ Given a cudf pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
+    """Given a cudf pandas dtype, converts it into the equivalent cuDF
+    Python dtype.
     """
     if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError()
@@ -204,15 +216,15 @@ def cudf_dtype_to_pa_type(dtype):
 
 
 def cudf_dtype_from_pa_type(typ):
-    """ Given a cuDF pyarrow dtype, converts it into the equivalent
-        cudf pandas dtype.
+    """Given a cuDF pyarrow dtype, converts it into the equivalent
+    cudf pandas dtype.
     """
     if pa.types.is_list(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
-        return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
+        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -259,7 +271,11 @@ def to_cudf_compatible_scalar(val, dtype=None):
     val = cudf.api.types.pandas_dtype(type(val)).type(val)
 
     if dtype is not None:
-        val = val.astype(dtype)
+        if isinstance(val, str) and np.dtype(dtype).kind == "M":
+            # pd.Timestamp can handle str, but not np.str_
+            val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
+        else:
+            val = val.astype(dtype)
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)
@@ -584,8 +600,9 @@ def _can_cast(from_dtype, to_dtype):
 
     # TODO : Add precision & scale checking for
     # decimal types in future
-    if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
-        if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+
+    if isinstance(from_dtype, cudf.core.dtypes.DecimalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
             return True
         elif isinstance(to_dtype, np.dtype):
             if to_dtype.kind in {"i", "f", "u", "U", "O"}:
@@ -595,7 +612,7 @@ def _can_cast(from_dtype, to_dtype):
     elif isinstance(from_dtype, np.dtype):
         if isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype, to_dtype)
-        elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+        elif isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
             if from_dtype.kind in {"i", "f", "u", "U", "O"}:
                 return True
             else:

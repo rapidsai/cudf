@@ -34,7 +34,7 @@ struct groupby_quantile_test : public cudf::test::BaseFixture {
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 using K = int32_t;
-TYPED_TEST_CASE(groupby_quantile_test, supported_types);
+TYPED_TEST_SUITE(groupby_quantile_test, supported_types);
 
 TYPED_TEST(groupby_quantile_test, basic)
 {

@@ -169,7 +169,7 @@ std::unique_ptr<column> is_integer(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) { return cudf::make_empty_column(data_type{type_id::BOOL8}); }
+  if (strings.is_empty()) { return cudf::make_empty_column(type_id::BOOL8); }
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
 }
 
@@ -390,7 +390,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, mr);
 }

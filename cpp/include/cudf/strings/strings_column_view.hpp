@@ -52,6 +52,9 @@ class strings_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
+  using offset_iterator = offset_type const*;
+  using chars_iterator  = char const*;
+
   /**
    * @brief Returns the parent column.
    */
@@ -63,6 +66,24 @@ class strings_column_view : private column_view {
    * @throw cudf::logic error if this is an empty column
    */
   column_view offsets() const;
+
+  /**
+   * @brief Return an iterator for the offsets child column.
+   *
+   * This automatically applies the offset of the parent.
+   *
+   * @return Iterator pointing to the first offset value.
+   */
+  offset_iterator offsets_begin() const;
+
+  /**
+   * @brief Return an end iterator for the offsets child column.
+   *
+   * This automatically applies the offset of the parent.
+   *
+   * @return Iterator pointing 1 past the last offset value.
+   */
+  offset_iterator offsets_end() const;
 
   /**
    * @brief Returns the internal column of chars
@@ -78,6 +99,29 @@ class strings_column_view : private column_view {
    * view  (i.e.: non-zero offset or reduced row count).
    */
   size_type chars_size() const noexcept;
+
+  /**
+   * @brief Return an iterator for the chars child column.
+   *
+   * This does not apply the offset of the parent.
+   * The offsets child must be used to properly address the char bytes.
+   *
+   * For example, to access the first character of string `i` (accounting for
+   * a sliced column offset) use: `chars_begin()[offsets_begin()[i]]`.
+   *
+   * @return Iterator pointing to the first char byte.
+   */
+  chars_iterator chars_begin() const;
+
+  /**
+   * @brief Return an end iterator for the offsets child column.
+   *
+   * This does not apply the offset of the parent.
+   * The offsets child must be used to properly address the char bytes.
+   *
+   * @return Iterator pointing 1 past the last char byte.
+   */
+  chars_iterator chars_end() const;
 };
 
 //! Strings column APIs.

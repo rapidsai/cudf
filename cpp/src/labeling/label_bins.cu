@@ -146,9 +146,9 @@ std::unique_ptr<column> label_bins(column_view const& input,
                         left_begin, left_end, right_begin));
   }
 
-  const auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel());
+  auto mask_and_count = valid_if(output_begin, output_end, filter_null_sentinel(), stream, mr);
 
-  output->set_null_mask(mask_and_count.first, mask_and_count.second);
+  output->set_null_mask(std::move(mask_and_count.first), mask_and_count.second);
   return output;
 }
 
@@ -213,7 +213,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                "The left and right edge columns cannot contain nulls.");
 
   // Handle empty inputs.
-  if (input.is_empty()) { return make_empty_column(data_type(type_to_id<size_type>())); }
+  if (input.is_empty()) { return make_empty_column(type_to_id<size_type>()); }
 
   return type_dispatcher<dispatch_storage_type>(input.type(),
                                                 detail::bin_type_dispatcher{},

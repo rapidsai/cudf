@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <tests/strings/utilities.h>
 
 #include <cudf/reshape.hpp>
 
@@ -357,12 +357,12 @@ TEST_F(InterleaveStringsColumnsTest, MultiColumnStringMixNullableMix)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointInterleave)
+TYPED_TEST(FixedPointTestAllReps, FixedPointInterleave)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
