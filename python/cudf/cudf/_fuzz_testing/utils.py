@@ -213,7 +213,6 @@ def get_orc_dtype_info(dtype):
     if dtype in PANDAS_TO_ORC_TYPES:
         return PANDAS_TO_ORC_TYPES[dtype]
     else:
-        # import pdb;pdb.set_trace()
         raise TypeError(
             f"Unsupported dtype({dtype}) according to orc spec:"
             f" https://orc.apache.org/specification/"
@@ -303,7 +302,7 @@ def _preprocess_to_orc_tuple(df, arrow_table_schema):
     def sanitize(value, struct_type):
         if value is None:
             return None
-        # import pdb;pdb.set_trace()
+
         values_list = []
         for name, sub_type in struct_type.fields.items():
             if isinstance(sub_type, cudf.StructDtype):
@@ -324,7 +323,6 @@ def _preprocess_to_orc_tuple(df, arrow_table_schema):
     pdf = df.copy(deep=True)
     for field in arrow_table_schema:
         if isinstance(field.type, pa.StructType):
-            # import pdb;pdb.set_trace()
             pdf[field.name] = pdf[field.name].apply(
                 sanitize, args=(cudf.StructDtype.from_arrow(field.type),)
             )
@@ -346,13 +344,12 @@ def pandas_to_orc(
     stripe_size=67108864,
     arrow_table_schema=None,
 ):
-    # import pdb;pdb.set_trace()
     schema = get_orc_schema(df, arrow_table_schema=arrow_table_schema)
 
     tuple_list, pdf, df = _preprocess_to_orc_tuple(
         df, arrow_table_schema=arrow_table_schema
     )
-    # import pdb;pdb.set_trace()
+
     if file_name is not None:
         with open(file_name, "wb") as data:
             with pyorc.Writer(data, schema, stripe_size=stripe_size) as writer:

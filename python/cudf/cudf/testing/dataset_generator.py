@@ -551,7 +551,7 @@ def rand_dataframe(
 
     df = get_dataframe(
         Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
-        use_threads=False,
+        use_threads=use_threads,
     )
 
     return df

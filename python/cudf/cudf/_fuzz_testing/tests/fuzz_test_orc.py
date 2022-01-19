@@ -44,13 +44,8 @@ def orc_reader_test(input_tuple, columns, skiprows, num_rows, use_index):
         num_rows=num_rows,
         use_index=use_index,
     )
-    try:
-        compare_dataframe(expected_pdf, gdf)
-    except AssertionError:
-        import pdb
 
-        pdb.set_trace()
-        print("abc")
+    compare_dataframe(expected_pdf, gdf)
 
 
 @pythonfuzz(

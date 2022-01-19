@@ -63,7 +63,7 @@ class OrcReader(IOFuzz):
                 - cudf.utils.dtypes.UNSIGNED_TYPES
                 - {"datetime64[ns]"}
             )
-            dtypes_list = ["struct"]
+
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
