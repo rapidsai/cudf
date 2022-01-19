@@ -19,7 +19,6 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
-#include "cudf/io/orc.hpp"
 #include "writer_impl.hpp"
 
 #include <io/statistics/column_statistics.cuh>
@@ -1073,7 +1072,6 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   auto const num_file_blobs         = orc_table.num_columns();
   auto const num_stat_blobs         = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
   auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
-
   if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
