@@ -29,7 +29,6 @@ precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
 def _get_udf_return_type(argty, func: Callable, args=()):
-
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
     is assumed that the function consumes a dictionary whose keys are strings

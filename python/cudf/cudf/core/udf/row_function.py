@@ -117,19 +117,17 @@ def _row_kernel_from_template(frame, row_type, args):
     row_initializers = []
     for i, (colname, col) in enumerate(frame.items()):
         idx = str(i)
-        if col.mask is not None:
-            template = masked_input_initializer_template
-        else:
-            template = unmasked_input_initializer_template
-
-        initializer = template.format(idx=idx)
-
-        initializers.append(initializer)
-
-        row_initializer = row_initializer_template.format(
-            idx=idx, name=colname
+        template = (
+            masked_input_initializer_template
+            if col.mask is not None
+            else unmasked_input_initializer_template
         )
-        row_initializers.append(row_initializer)
+        initializers.append(template.format(idx=idx))
+        row_initializers.append(
+            row_initializer_template.format(
+                idx=idx, name=colname
+            )
+        )
 
     return row_kernel_template.format(
         input_columns=input_columns,
