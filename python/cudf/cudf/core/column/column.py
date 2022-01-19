@@ -77,7 +77,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import _gather_map_is_valid, mask_dtype
+from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -702,7 +702,9 @@ class ColumnBase(Column, Serializable):
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
             indices = indices.astype("int32")
-        if not _gather_map_is_valid(indices, len(self), check_bounds, nullify):
+        if not libcudf.copying._gather_map_is_valid(
+            indices, len(self), check_bounds, nullify
+        ):
             raise IndexError("Gather map index is out of bounds.")
 
         return libcudf.copying.gather([self], indices, nullify=nullify)[
