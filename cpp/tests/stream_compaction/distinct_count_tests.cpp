@@ -34,6 +34,9 @@ using cudf::nan_policy;
 using cudf::null_equality;
 using cudf::null_policy;
 
+constexpr int32_t XXX{70};  // Mark for null elements
+constexpr int32_t YYY{3};   // Mark for null elements
+
 template <typename T>
 struct DistinctCountCommon : public cudf::test::BaseFixture {
 };
@@ -49,11 +52,13 @@ TYPED_TEST(DistinctCountCommon, NoNull)
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
 
+  // explicit instantiation to one particular type (`double`) to reduce build time
   cudf::size_type const expected = std::set<double>(input.begin(), input.end()).size();
   EXPECT_EQ(
     expected,
     cudf::unordered_distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 
+  // explicit instantiation to one particular type (`double`) to reduce build time
   std::vector<double> input_data(input.begin(), input.end());
   auto const new_end      = std::unique(input_data.begin(), input_data.end());
   auto const gold_ordered = new_end - input_data.begin();
@@ -98,13 +103,14 @@ TEST_F(DistinctCount, WithNull)
 {
   using T = int32_t;
 
-  // Considering 70 as null
-  std::vector<T> input = {1, 3, 3, 70, 31, 1, 8, 2, 0, 70, 70, 70, 10, 40, 31, 42, 0, 42, 8, 5, 70};
+  std::vector<T> input               = {1,   3,  3,  XXX, 31, 1, 8,  2, 0, XXX, XXX,
+                          XXX, 10, 40, 31,  42, 0, 42, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
+  // explicit instantiation to one particular type (`double`) to reduce build time
   cudf::size_type const expected = std::set<double>(input.begin(), input.end()).size();
   EXPECT_EQ(
     expected,
@@ -120,15 +126,15 @@ TEST_F(DistinctCount, IgnoringNull)
 {
   using T = int32_t;
 
-  // Considering 70 and 3 as null
-  std::vector<T> input = {1, 3, 3, 70, 31, 1, 8, 2, 0, 70, 1, 70, 10, 40, 31, 42, 0, 42, 8, 5, 70};
+  std::vector<T> input               = {1,   YYY, YYY, XXX, 31, 1, 8,  2, 0, XXX, 1,
+                          XXX, 10,  40,  31,  42, 0, 42, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
   cudf::size_type const expected = std::set<T>(input.begin(), input.end()).size();
-  // Removing 2 from expected to remove count for 70 and 3
+  // Removing 2 from expected to remove count for `XXX` and `YYY`
   EXPECT_EQ(
     expected - 2,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
@@ -143,8 +149,8 @@ TEST_F(DistinctCount, WithNansAndNull)
 {
   using T = float;
 
-  std::vector<T> input               = {1,  3,  NAN, 70, 31,  1, 8,   2, 0, 70, 1,
-                          70, 10, 40,  31, NAN, 0, NAN, 8, 5, 70};
+  std::vector<T> input               = {1,   3,  NAN, XXX, 31,  1, 8,   2, 0, XXX, 1,
+                          XXX, 10, 40,  31,  NAN, 0, NAN, 8, 5, XXX};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1,
                                         0, 1, 1, 1, 1, 1, 1, 1, 1, 0};
 
@@ -199,7 +205,7 @@ TEST_F(DistinctCount, NansAsNullWithNull)
 {
   using T = float;
 
-  std::vector<T> input               = {1, 3, NAN, 70, 31};
+  std::vector<T> input               = {1, 3, NAN, XXX, 31};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1};
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
@@ -216,7 +222,7 @@ TEST_F(DistinctCount, NansAsNullWithIgnoreNull)
 {
   using T = float;
 
-  std::vector<T> input               = {1, 3, NAN, 70, 31};
+  std::vector<T> input               = {1, 3, NAN, XXX, 31};
   std::vector<cudf::size_type> valid = {1, 1, 1, 0, 1};
 
   cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
