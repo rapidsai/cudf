@@ -15,7 +15,7 @@
  */
 
 #include "avro.h"
-#include <string.h>
+#include <cstring>
 #include <unordered_map>
 
 namespace cudf {
@@ -75,7 +75,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   sig4 |= get_raw<uint8_t>() << 24;
   if (sig4 != avro_magic) { return false; }
   for (;;) {
-    uint32_t num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
+    auto num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
     if (num_md_items == 0) { break; }
     for (uint32_t i = 0; i < num_md_items; i++) {
       auto const key   = get_encoded<std::string>();

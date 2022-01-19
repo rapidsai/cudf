@@ -22,7 +22,7 @@
 
 #include <cuda_runtime.h>
 
-#include <string.h>  // memset
+#include <cstring>  // memset
 
 #include <zlib.h>  // uncompress
 
@@ -196,7 +196,7 @@ bool OpenZipArchive(zip_archive_s* dst, const uint8_t* raw, size_t len)
     for (ptrdiff_t i = len - sizeof(zip_eocd_s) - 2;
          i + sizeof(zip_eocd_s) + 2 + 0xffff >= len && i >= 0;
          i--) {
-      const zip_eocd_s* eocd = reinterpret_cast<zip_eocd_s const*>(raw + i);
+      const auto* eocd = reinterpret_cast<zip_eocd_s const*>(raw + i);
       if (eocd->sig == 0x06054b50 &&
           eocd->disk_id == eocd->start_disk  // multi-file archives not supported
           && eocd->num_entries == eocd->total_entries &&

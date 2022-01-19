@@ -81,8 +81,8 @@ For more information on these sources, see the manual.
 
 #include "io_uncomp.h"
 #include "unbz2.h"
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 namespace cudf {
@@ -111,15 +111,15 @@ namespace io {
 
 #define BZ_MAX_SELECTORS (2 + (900000 / BZ_G_SIZE))
 
-typedef struct {
+using huff_s = struct {
   int32_t minLen;
   int32_t limit[BZ_MAX_CODE_LEN];
   int32_t base[BZ_MAX_CODE_LEN];
   uint16_t perm[BZ_MAX_ALPHA_SIZE];
-} huff_s;
+};
 
 // Decoder state
-typedef struct {
+using unbz_state_s = struct {
   // Input
   const uint8_t* cur;
   const uint8_t* end;
@@ -153,7 +153,7 @@ typedef struct {
   uint8_t len[BZ_MAX_ALPHA_SIZE];
 
   huff_s ht[BZ_N_GROUPS];
-} unbz_state_s;
+};
 
 // return next 32 bits
 static inline uint32_t next32bits(const unbz_state_s* s)

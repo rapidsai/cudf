@@ -102,7 +102,7 @@ class memory_mapped_source : public file_source {
     if (_file.size() != 0) map(_file.desc(), offset, size);
   }
 
-  virtual ~memory_mapped_source()
+  ~memory_mapped_source() override
   {
     if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
   }

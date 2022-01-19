@@ -49,7 +49,7 @@ THE SOFTWARE.
 */
 
 #include "brotli_dict.h"
-#include <stdint.h>
+#include <cstdint>
 
 namespace cudf {
 namespace io {

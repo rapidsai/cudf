@@ -1414,13 +1414,13 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
+  bool mask1[] = {true, true, false, true, true, true, true};
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
   cols.push_back(strings1.release());
   cudf::table tbl1(std::move(cols));
 
-  bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
+  bool mask2[] = {false, true, true, true, true, true, true};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
   cols.push_back(strings2.release());
