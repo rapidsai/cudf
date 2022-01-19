@@ -1213,11 +1213,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def nans_to_nulls(self: T) -> T:
-        # Only floats can contain nan.
-        if self.dtype.kind != "f":
-            return self
-        newmask = libcudf.transform.nans_to_nulls(self)
-        return self.set_mask(newmask)
+        return self
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
