@@ -1,4 +1,5 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
 import collections
@@ -8,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Tuple, cast
 import numpy as np
 
 import cudf
-from cudf.api.types import is_dtype_equal
+from cudf.api.types import is_decimal_dtype, is_dtype_equal
 from cudf.core.column import CategoricalColumn
 from cudf.core.dtypes import CategoricalDtype
 
@@ -85,9 +86,7 @@ def _match_join_keys(
     if is_dtype_equal(ltype, rtype):
         return lcol, rcol
 
-    if isinstance(ltype, cudf.Decimal64Dtype) or isinstance(
-        rtype, cudf.Decimal64Dtype
-    ):
+    if is_decimal_dtype(ltype) or is_decimal_dtype(rtype):
         raise TypeError(
             "Decimal columns can only be merged with decimal columns "
             "of the same precision and scale"
