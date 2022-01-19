@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from itertools import product
 
 import numpy as np
@@ -5,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.dtypes import Decimal64Dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
@@ -69,7 +71,13 @@ def test_cumsum_masked():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(8, 4), Decimal64Dtype(10, 5), Decimal64Dtype(12, 7)],
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(10, 5),
+        Decimal64Dtype(12, 7),
+        Decimal32Dtype(8, 5),
+        Decimal128Dtype(13, 6),
+    ],
 )
 def test_cumsum_decimal(dtype):
     data = ["243.32", "48.245", "-7234.298", np.nan, "-467.2"]
@@ -126,7 +134,13 @@ def test_cummin_masked():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(8, 4), Decimal64Dtype(11, 6), Decimal64Dtype(14, 7)],
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(11, 6),
+        Decimal64Dtype(14, 7),
+        Decimal32Dtype(8, 4),
+        Decimal128Dtype(11, 6),
+    ],
 )
 def test_cummin_decimal(dtype):
     data = ["8394.294", np.nan, "-9940.444", np.nan, "-23.928"]
@@ -183,7 +197,13 @@ def test_cummax_masked():
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(8, 4), Decimal64Dtype(11, 6), Decimal64Dtype(14, 7)],
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(11, 6),
+        Decimal64Dtype(14, 7),
+        Decimal32Dtype(8, 4),
+        Decimal128Dtype(11, 6),
+    ],
 )
 def test_cummax_decimal(dtype):
     data = [np.nan, "54.203", "8.222", "644.32", "-562.272"]
