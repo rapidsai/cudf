@@ -805,15 +805,7 @@ def struct_generator(dtype, cardinality, size, max_null_frequency):
 
 
 def create_nested_struct_type(max_types_at_each_level, nesting_level):
-    dtypes_list = cudf.utils.dtypes.ALL_TYPES - {
-        "category",
-        "datetime64[ns]",
-        "str",
-    } - cudf.utils.dtypes.TIMEDELTA_TYPES - {
-        "uint32"
-    } - cudf.utils.dtypes.UNSIGNED_TYPES | {
-        "struct"
-    }
+    dtypes_list = cudf.utils.dtypes.ALL_TYPES
     picked_types = np.random.choice(list(dtypes_list), max_types_at_each_level)
     type_dict = {}
     for name, type_ in enumerate(picked_types):

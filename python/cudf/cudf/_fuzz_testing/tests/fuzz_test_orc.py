@@ -18,7 +18,7 @@ from cudf._fuzz_testing.utils import (
     data_handle=OrcReader,
     params={
         "columns": ALL_POSSIBLE_VALUES,
-        "skiprows": [None],
+        "skiprows": ALL_POSSIBLE_VALUES,
         "num_rows": ALL_POSSIBLE_VALUES,
         "use_index": ALL_POSSIBLE_VALUES,
     },
