@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1604,17 +1604,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
                    std::back_inserter(column_views),
                    [](auto const &p_column) { return *p_column; });
-    cudf::table_view *input_table = new cudf::table_view(column_views);
+    cudf::table_view input_table{column_views};
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
     switch (op) {
       case cudf::binary_operator::BITWISE_AND: {
-        auto [new_bitmask, null_count] = cudf::bitmask_and(*input_table);
+        auto [new_bitmask, null_count] = cudf::bitmask_and(input_table);
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
       case cudf::binary_operator::BITWISE_OR: {
-        auto [new_bitmask, null_count] = cudf::bitmask_or(*input_table);
+        auto [new_bitmask, null_count] = cudf::bitmask_or(input_table);
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }

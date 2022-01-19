@@ -359,10 +359,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jobje
     std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
                    std::back_inserter(column_views),
                    [](auto const &p_column) { return *p_column; });
-    cudf::table_view *input_table = new cudf::table_view(column_views);
+    cudf::table_view input_table{column_views};
 
     std::unique_ptr<cudf::column> result =
-        cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id), seed);
+        cudf::hash(input_table, static_cast<cudf::hash_id>(hash_function_id), seed);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
