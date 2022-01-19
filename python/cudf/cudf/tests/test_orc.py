@@ -406,9 +406,7 @@ def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
             print(type(excpr).__name__)
 
     expect = orcfile.read().to_pandas()
-    cudf.from_pandas(expect).to_orc(
-        gdf_fname.strpath, statistics=stats_freq
-    )
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, statistics=stats_freq)
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
@@ -643,8 +641,9 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
+@pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
-def test_orc_write_statistics(tmpdir, datadir, nrows):
+def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -660,7 +659,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath)
+    gdf.to_orc(fname.strpath, statistics=stats_freq)
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
