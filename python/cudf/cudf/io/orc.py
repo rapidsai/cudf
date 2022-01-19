@@ -421,6 +421,14 @@ def to_orc(
             "Categorical columns."
         )
 
+    # Convert from ORC terminology ("STRIPE", "ROWGROUP")
+    # to CUDF ("ROWGROUP", "PAGE")
+    stats_freq = "NONE"
+    if enable_statistics == "STRIPE":
+        stats_freq = "ROWGROUP"
+    elif enable_statistics == "ROWGROUP":
+        stats_freq = "PAGE"
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
     )
@@ -431,7 +439,7 @@ def to_orc(
                 df,
                 file_obj,
                 compression,
-                enable_statistics,
+                stats_freq,
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
@@ -441,7 +449,7 @@ def to_orc(
             df,
             path_or_buf,
             compression,
-            enable_statistics,
+            stats_freq,
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,
