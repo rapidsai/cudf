@@ -681,6 +681,16 @@ class RangeIndex(BaseIndex):
 
         return new_index
 
+    def _gather(self, gather_map, nullify=False, check_bounds=True):
+        return Int64Index._from_columns(
+            [self._values.take(gather_map, nullify, check_bounds)], [self.name]
+        )
+
+    def _apply_boolean_mask(self, boolean_mask):
+        return Int64Index._from_columns(
+            [self._values.apply_boolean_mask(boolean_mask)], [self.name]
+        )
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.

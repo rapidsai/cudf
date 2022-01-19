@@ -48,6 +48,23 @@ from cudf._lib.utils cimport (
 ctypedef const scalar constscalar
 
 
+def _gather_map_is_valid(
+    gather_map: "cudf.core.column.ColumnBase",
+    nrows: int,
+    check_bounds: bool,
+    nullify: bool,
+) -> bool:
+    """Returns true if gather map is valid.
+
+    A gather map is valid if empty or all indices are within the range
+    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    """
+    if not check_bounds or nullify or len(gather_map) == 0:
+        return True
+    gm_min, gm_max = minmax(gather_map)
+    return gm_min >= -nrows and gm_max < nrows
+
+
 def copy_column(Column input_column):
     """
     Deep copies a column
