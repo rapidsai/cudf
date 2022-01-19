@@ -323,6 +323,7 @@ add_library(
   src/jit/type.cpp
   src/join/conditional_join.cu
   src/join/mixed_join.cu
+  src/join/mixed_join_semi.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
   src/join/join.cu

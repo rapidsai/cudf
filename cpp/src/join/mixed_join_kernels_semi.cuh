@@ -26,31 +26,22 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
-#include <cooperative_groups.h>
-
 #include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
 namespace detail {
 namespace cg = cooperative_groups;
 
 /**
- * @brief Equality comparator for cuco::static_multimap queries.
+ * @brief Equality comparator for cuco::static_map queries.
  *
- * This equality comparator is designed for use with cuco::static_multimap's
- * pair* APIs, which will compare equality based on comparing (key, value)
- * pairs. In the context of joins, these pairs are of the form
- * (row_hash, row_id). A hash probe hit indicates that hash of a probe row's hash is
- * equal to the hash of the hash of some row in the multimap, at which point we need an
- * equality comparator that will check whether the contents of the rows are
- * identical. This comparator does so by verifying key equality (i.e. that
- * probe_row_hash == build_row_hash) and then using a row_equality_comparator
- * to compare the contents of the row indices that are stored as the payload in
- * the hash map.
+ * This equality comparator is designed for use with cuco::static_map's APIs. A
+ * probe hit indicates that the hashes of the keys are equal, at which point
+ * this comparator checks whether the keys themselves are equal (using the
+ * provided equality_probe) and then evaluates the conditional expression
  */
 template <bool has_nulls>
-struct pair_expression_equality : public expression_equality<has_nulls> {
+struct single_expression_equality : expression_equality<has_nulls> {
   using expression_equality<has_nulls>::expression_equality;
 
   // The parameters are build/probe rather than left/right because the operator
@@ -61,21 +52,23 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
   // until we get to the expression evaluator, which needs to convert back to
   // left/right semantics because the conditional expression need not be
   // commutative.
-  __device__ __forceinline__ bool operator()(pair_type const& build_row,
-                                             pair_type const& probe_row) const noexcept
+  // TODO: The input types should really be size_type.
+  __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
+                                             hash_value_type const probe_row_index) const noexcept
   {
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-    // Three levels of checks:
-    // 1. Row hashes of the columns involved in the equality condition are equal.
-    // 2. The contents of the columns involved in the equality condition are equal.
-    // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
+    // Two levels of checks:
+    // 1. The contents of the columns involved in the equality condition are equal.
+    // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if ((probe_row.first == build_row.first) &&
-        this->equality_probe(probe_row.second, build_row.second)) {
-      auto const lrow_idx = this->swap_tables ? build_row.second : probe_row.second;
-      auto const rrow_idx = this->swap_tables ? probe_row.second : build_row.second;
-      this->evaluator.evaluate(
-        output_dest, lrow_idx, rrow_idx, 0, this->thread_intermediate_storage);
+    if (this->equality_probe(probe_row_index, build_row_index)) {
+      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
+      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
+      this->evaluator.evaluate(output_dest,
+                               static_cast<size_type>(lrow_idx),
+                               static_cast<size_type>(rrow_idx),
+                               0,
+                               this->thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
     }
     return false;
@@ -83,7 +76,7 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
 };
 
 /**
- * @brief Computes the output size of joining the left table to the right table.
+ * @brief Computes the output size of joining the left table to the right table for semi/anti joins.
  *
  * This method probes the hash table with each row in the probe table using a
  * custom equality comparator that also checks that the conditional expression
@@ -113,14 +106,14 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
  * probe table has already happened on the host.
  */
 template <int block_size, bool has_nulls>
-__global__ void compute_mixed_join_output_size(
+__global__ void compute_mixed_join_output_size_semi(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  cudf::detail::semi_map_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size,
@@ -145,27 +138,16 @@ __global__ void compute_mixed_join_output_size(
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
-
   row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
-  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
-
-  // Figure out the number of elements for this key.
-  cg::thread_block_tile<1> this_thread = cg::this_thread();
   // TODO: Address asymmetry in operator.
-  auto count_equality = pair_expression_equality<has_nulls>{
+  auto equality = single_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    auto query_pair = pair_func(outer_row_index);
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      matches_per_row[outer_row_index] =
-        hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
-    } else {
-      matches_per_row[outer_row_index] =
-        hash_table_view.pair_count(this_thread, query_pair, count_equality);
-    }
+    matches_per_row[outer_row_index] =
+      ((join_type == join_kind::LEFT_ANTI_JOIN) !=
+       (hash_table_view.contains(outer_row_index, hash_probe, equality)));
     thread_counter += matches_per_row[outer_row_index];
   }
 
@@ -178,9 +160,9 @@ __global__ void compute_mixed_join_output_size(
 }
 
 /**
- * @brief Performs a join using the combination of a hash lookup to identify
- * equal rows between one pair of tables and the evaluation of an expression
- * containing an arbitrary expression.
+ * @brief Performs a semi/anti join using the combination of a hash lookup to
+ * identify equal rows between one pair of tables and the evaluation of an
+ * expression containing an arbitrary expression.
  *
  * This method probes the hash table with each row in the probe table using a
  * custom equality comparator that also checks that the conditional expression
@@ -199,7 +181,6 @@ __global__ void compute_mixed_join_output_size(
  * @param[in] join_type The type of join to be performed
  * @param[in] hash_table_view The hash table built from `build`.
  * @param[out] join_output_l The left result of the join operation
- * @param[out] join_output_r The right result of the join operation
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  * @param[in] join_result_offsets The starting indices in join_output[l|r]
@@ -211,20 +192,18 @@ __global__ void compute_mixed_join_output_size(
 template <cudf::size_type block_size,
           cudf::size_type output_cache_size,
           bool has_nulls,
-          typename OutputIt1,
-          typename OutputIt2>
-__global__ void mixed_join(table_device_view left_table,
-                           table_device_view right_table,
-                           table_device_view probe,
-                           table_device_view build,
-                           row_equality const equality_probe,
-                           join_kind const join_type,
-                           cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                           OutputIt1 join_output_l,
-                           OutputIt2 join_output_r,
-                           cudf::ast::detail::expression_device_view device_expression_data,
-                           cudf::size_type const* join_result_offsets,
-                           bool const swap_tables)
+          typename OutputIt1>
+__global__ void mixed_join_semi(table_device_view left_table,
+                                table_device_view right_table,
+                                table_device_view probe,
+                                table_device_view build,
+                                row_equality const equality_probe,
+                                join_kind const join_type,
+                                cudf::detail::semi_map_type::device_view hash_table_view,
+                                OutputIt1 join_output_l,
+                                cudf::ast::detail::expression_device_view device_expression_data,
+                                cudf::size_type const* join_result_offsets,
+                                bool const swap_tables)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -246,40 +225,15 @@ __global__ void mixed_join(table_device_view left_table,
     left_table, right_table, device_expression_data);
 
   row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
-  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
   if (outer_row_index < outer_num_rows) {
     // Figure out the number of elements for this key.
-    cg::thread_block_tile<1> this_thread = cg::this_thread();
-    // Figure out the number of elements for this key.
-    auto query_pair = pair_func(outer_row_index);
-    auto equality   = pair_expression_equality<has_nulls>{
+    auto equality = single_expression_equality<has_nulls>{
       evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-    auto probe_key_begin       = thrust::make_discard_iterator();
-    auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]
-                                             : join_output_l + join_result_offsets[outer_row_index];
-    auto contained_key_begin   = thrust::make_discard_iterator();
-    auto contained_value_begin = swap_tables ? join_output_l + join_result_offsets[outer_row_index]
-                                             : join_output_r + join_result_offsets[outer_row_index];
-
-    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
-      hash_table_view.pair_retrieve_outer(this_thread,
-                                          query_pair,
-                                          probe_key_begin,
-                                          probe_value_begin,
-                                          contained_key_begin,
-                                          contained_value_begin,
-                                          equality);
-    } else {
-      hash_table_view.pair_retrieve(this_thread,
-                                    query_pair,
-                                    probe_key_begin,
-                                    probe_value_begin,
-                                    contained_key_begin,
-                                    contained_value_begin,
-                                    equality);
+    if ((join_type == join_kind::LEFT_ANTI_JOIN) !=
+        (hash_table_view.contains(outer_row_index, hash_probe, equality))) {
+      *(join_output_l + join_result_offsets[outer_row_index]) = outer_row_index;
     }
   }
 }
