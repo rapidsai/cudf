@@ -82,7 +82,11 @@ class StructColumn(ColumnBase):
         )
 
     def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        # We cannot go via Arrow's `to_pandas` because of the following issue:
+        # https://issues.apache.org/jira/browse/ARROW-12680
+
         pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
+
         if index is not None:
             pd_series.index = index
         return pd_series
