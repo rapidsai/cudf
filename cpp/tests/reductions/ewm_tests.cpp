@@ -57,11 +57,13 @@ TYPED_TEST(TypedEwmScanTest, Ewm)
                                                        3.51851851851851815667,
                                                        4.50617283950617242283}};
 
-  this->test_ungrouped_ewma_scan(
-    *col, expected_ewma_vals_adjust, cudf::make_ewma_aggregation(0.5, true), null_policy::INCLUDE);
+  this->test_ungrouped_ewma_scan(*col,
+                                 expected_ewma_vals_adjust,
+                                 cudf::make_ewma_aggregation(0.5, cudf::ewm_history::INFINITE),
+                                 null_policy::INCLUDE);
   this->test_ungrouped_ewma_scan(*col,
                                  expected_ewma_vals_noadjust,
-                                 cudf::make_ewma_aggregation(0.5, false),
+                                 cudf::make_ewma_aggregation(0.5, cudf::ewm_history::FINITE),
                                  null_policy::INCLUDE);
 }
 
@@ -89,10 +91,12 @@ TYPED_TEST(TypedEwmScanTest, EwmWithNulls)
                                                        5.82706766917293172980,
                                                        6.60902255639097724327}};
 
-  this->test_ungrouped_ewma_scan(
-    *col, expected_ewma_vals_adjust, cudf::make_ewma_aggregation(0.5, true), null_policy::INCLUDE);
+  this->test_ungrouped_ewma_scan(*col,
+                                 expected_ewma_vals_adjust,
+                                 cudf::make_ewma_aggregation(0.5, cudf::ewm_history::INFINITE),
+                                 null_policy::INCLUDE);
   this->test_ungrouped_ewma_scan(*col,
                                  expected_ewma_vals_noadjust,
-                                 cudf::make_ewma_aggregation(0.5, false),
+                                 cudf::make_ewma_aggregation(0.5, cudf::ewm_history::FINITE),
                                  null_policy::INCLUDE);
 }
