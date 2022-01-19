@@ -414,7 +414,7 @@ def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
 
 @pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
 def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
-    reference_file = "TestOrcFile.demo-12-zlib.orc"
+    reference_file = "TestOrcFile.test1.orc"
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("chunked_gdf.orc")
 
@@ -426,7 +426,16 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
         else:
             print(type(excpr).__name__)
 
-    pdf = orcfile.read().to_pandas()
+    columns = [
+        "boolean1",
+        "byte1",
+        "short1",
+        "int1",
+        "long1",
+        "float1",
+        "double1",
+    ]
+    pdf = orcfile.read(columns=columns).to_pandas()
     gdf = cudf.from_pandas(pdf)
     expect = pd.concat([pdf, pdf]).reset_index(drop=True)
 
