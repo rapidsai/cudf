@@ -55,6 +55,39 @@ struct expression_equality {
   row_equality const& equality_probe;
 };
 
+/**
+ * @brief Device functor to create a pair of hash value and index for a given row.
+ */
+struct make_pair_function_semi {
+  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  {
+    // The value is irrelevant since we only ever use the hash map to check for
+    // membership of a particular row index.
+    return cuco::make_pair<hash_value_type, size_type>(i, 0);
+  }
+};
+
+/**
+ * @brief Equality comparator that composes two row_equality comparators.
+ */
+class double_row_equality {
+ public:
+  double_row_equality(row_equality equality_comparator, row_equality conditional_comparator)
+    : _equality_comparator{equality_comparator}, _conditional_comparator{conditional_comparator}
+  {
+  }
+
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  {
+    return _equality_comparator(lhs_row_index, rhs_row_index) &&
+           _conditional_comparator(lhs_row_index, rhs_row_index);
+  }
+
+ private:
+  row_equality _equality_comparator;
+  row_equality _conditional_comparator;
+};
+
 }  // namespace detail
 
 }  // namespace cudf

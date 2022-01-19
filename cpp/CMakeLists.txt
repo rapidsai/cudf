@@ -324,6 +324,8 @@ add_library(
   src/join/conditional_join.cu
   src/join/mixed_join.cu
   src/join/mixed_join_semi.cu
+  src/join/mixed_join_size.cu
+  src/join/mixed_join_semi_size.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
   src/join/join.cu
