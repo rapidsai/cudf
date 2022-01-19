@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -348,10 +348,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     } else if (use_arena_alloc) {
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_size);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_size);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size);
       }
     } else if (use_cuda_async_alloc) {
       // Use `limiting_resource_adaptor` to set a hard limit on the max pool size since
