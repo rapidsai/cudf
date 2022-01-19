@@ -118,12 +118,7 @@ void nvbench_compaction(
   });
 }
 
-using data_type   = nvbench::type_list<bool,
-                                     nvbench::int8_t,
-                                     nvbench::int32_t,
-                                     nvbench::int64_t,
-                                     nvbench::float32_t,
-                                     cudf::timestamp_ms>;
+using data_type   = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
 using algo        = nvbench::enum_type_list<algorithm::SORT_BASED, algorithm::HASH_BASED>;
 using keep_option = nvbench::enum_type_list<cudf::duplicate_keep_option::KEEP_FIRST,
                                             cudf::duplicate_keep_option::KEEP_LAST,
