@@ -483,10 +483,11 @@ class ProtobufWriter {
     return 1;
   }
   template <typename T>
-  uint32_t put_bytes(T const& values)
+  uint32_t put_bytes(host_span<T const> values)
   {
+    static_assert(sizeof(T) == 1);
     m_buf->reserve(m_buf->size() + values.size());
-    m_buf->insert(m_buf->end(), values.cbegin(), values.cend());
+    m_buf->insert(m_buf->end(), values.begin(), values.end());
     return values.size();
   }
   uint32_t put_uint(uint64_t v)

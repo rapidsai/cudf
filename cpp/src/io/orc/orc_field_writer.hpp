@@ -73,7 +73,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   {
     struct_size += p->put_uint(encode_field_number<T>(field));
     struct_size += p->put_uint(values.size());
-    struct_size += p->put_bytes(values);
+    struct_size += p->put_bytes<typename T::value_type>(values);
   }
 
   /**

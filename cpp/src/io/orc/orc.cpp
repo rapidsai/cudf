@@ -252,7 +252,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
     sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
     // Statistics field contains its length as varint and dtype specific data (encoded on the GPU)
     sz += put_uint(stats->size());
-    sz += put_bytes(*stats);
+    sz += put_bytes<typename ColStatsBlob::value_type>(*stats);
   }
 
   // size of the whole row index entry
