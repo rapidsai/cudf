@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 from typing import Sequence, Union
-#
-# from cudf._typing import Dtype, DtypeObj, ScalarLike
-# from cudf.core.buffer import Buffer
-# from cudf.core.column import ColumnBase
-#
-# T = TypeVar("T")
 
 
 class Reducible:
