@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,7 +235,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const& join_output_l = left_indices->data();
 
   if (has_nulls) {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
+    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_conditional_view,
         *right_conditional_view,
@@ -249,7 +249,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         join_result_offsets.data(),
         swap_tables);
   } else {
-    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
+    mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_conditional_view,
         *right_conditional_view,
