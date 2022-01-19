@@ -109,16 +109,16 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = input.num_rows();
-  if (0 == num_rows || 0 == input.num_columns() || 0 == keys.size()) { return empty_like(input); }
+  if (num_rows == 0 or input.num_columns() == 0 or keys.empty()) { return empty_like(input); }
 
   auto unique_indices =
     make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_view     = mutable_column_device_view::create(*unique_indices, stream);
   auto keys_view        = input.select(keys);
-  auto device_keys_view = cudf::table_device_view::create(keys_view, stream);
+  auto keys_device_view = cudf::table_device_view::create(keys_view, stream);
   auto row_equal        = row_equality_comparator(nullate::DYNAMIC{cudf::has_nulls(keys_view)},
-                                           *device_keys_view,
-                                           *device_keys_view,
+                                           *keys_device_view,
+                                           *keys_device_view,
                                            nulls_equal);
 
   // get indices of unique rows
@@ -150,7 +150,7 @@ std::unique_ptr<table> sort_and_drop_duplicates(table_view const& input,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
+  if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
     return empty_like(input);
   }
 
@@ -204,9 +204,9 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
   key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
 
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  rmm::device_uvector<bool> existences(num_rows, stream, mr);
+  rmm::device_uvector<bool> index_exists_in_map(num_rows, stream, mr);
   // enumerate all indices to check if they are present in the map.
-  key_map.contains(counting_iter, counting_iter + num_rows, existences.begin(), hash_key);
+  key_map.contains(counting_iter, counting_iter + num_rows, index_exists_in_map.begin(), hash_key);
 
   auto const output_size{key_map.get_size()};
 
@@ -217,9 +217,9 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
   thrust::copy_if(rmm::exec_policy(stream),
                   counting_iter,
                   counting_iter + num_rows,
-                  existences.begin(),
+                  index_exists_in_map.begin(),
                   mutable_view->begin<size_type>(),
-                  [] __device__(bool const b) { return b; });
+                  thrust::identity<bool>{});
 
   // run gather operation to establish new order
   return detail::gather(input,

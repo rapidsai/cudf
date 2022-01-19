@@ -29,16 +29,15 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ctgmath>
 
 using cudf::nan_policy;
 using cudf::null_equality;
 using cudf::null_policy;
 
-struct DropDuplicateCommon : public cudf::test::BaseFixture {
+struct DropDuplicatesCommon : public cudf::test::BaseFixture {
 };
 
-TEST_F(DropDuplicateCommon, StringKeyColumn)
+TEST_F(DropDuplicatesCommon, StringKeyColumn)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 4, 5, 5, 8, 1}, {1, 0, 0, 1, 1, 1, 1}};
   cudf::test::strings_column_wrapper key_col{{"all", "new", "new", "all", "new", "the", "strings"},
@@ -68,7 +67,7 @@ TEST_F(DropDuplicateCommon, StringKeyColumn)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, sorted_result->view());
 }
 
-TEST_F(DropDuplicateCommon, EmptyInputTable)
+TEST_F(DropDuplicatesCommon, EmptyInputTable)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col(std::initializer_list<int32_t>{});
   cudf::table_view input{{col}};
@@ -86,7 +85,7 @@ TEST_F(DropDuplicateCommon, EmptyInputTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got_unordered->view());
 }
 
-TEST_F(DropDuplicateCommon, NoColumnInputTable)
+TEST_F(DropDuplicatesCommon, NoColumnInputTable)
 {
   cudf::table_view input{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{1, 2};
@@ -103,7 +102,7 @@ TEST_F(DropDuplicateCommon, NoColumnInputTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got_unordered->view());
 }
 
-TEST_F(DropDuplicateCommon, EmptyKeys)
+TEST_F(DropDuplicatesCommon, EmptyKeys)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
@@ -122,10 +121,10 @@ TEST_F(DropDuplicateCommon, EmptyKeys)
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{empty_col}}, got_unordered->view());
 }
 
-struct DropDuplicate : public cudf::test::BaseFixture {
+struct DropDuplicates : public cudf::test::BaseFixture {
 };
 
-TEST_F(DropDuplicate, NonNullTable)
+TEST_F(DropDuplicates, NonNullTable)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<float> col2{{4, 5, 3, 4, 9, 4}};
@@ -135,7 +134,7 @@ TEST_F(DropDuplicate, NonNullTable)
   cudf::table_view input{{col1, col2, col1_key, col2_key}};
   std::vector<cudf::size_type> keys{2, 3};
 
-  // Keep first of duplicate
+  // Keep the first of duplicate
   // The expected table would be sorted in ascending order with respect to keys
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_first{{5, 3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_first{{4, 3, 4, 9, 4}};
@@ -148,7 +147,7 @@ TEST_F(DropDuplicate, NonNullTable)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
-  // keep last of duplicate
+  // Keep the last of duplicate
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_last{{4, 3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_last{{5, 3, 4, 9, 4}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_key_last{{20, 20, 19, 21, 9}};
@@ -160,7 +159,7 @@ TEST_F(DropDuplicate, NonNullTable)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
-  // Keep unique
+  // Keep no duplicate rows
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_unique{{3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_unique{{3, 4, 9, 4}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_key_unique{{20, 19, 21, 9}};
@@ -173,7 +172,7 @@ TEST_F(DropDuplicate, NonNullTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
 
-TEST_F(DropDuplicate, WithNull)
+TEST_F(DropDuplicates, WithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
@@ -181,7 +180,7 @@ TEST_F(DropDuplicate, WithNull)
   cudf::table_view input{{col, key}};
   std::vector<cudf::size_type> keys{1};
 
-  // Keep first of duplicate
+  // Keep the first of duplicate
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first_equal{{5, 3, 5, 8, 1},
                                                                       {1, 1, 1, 1, 1}};
@@ -204,7 +203,7 @@ TEST_F(DropDuplicate, WithNull)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first_unequal, got_first_unequal->view());
 
-  // Keep last of duplicate
+  // Keep the last of duplicate
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last_equal{{4, 2, 5, 8, 1},
                                                                      {0, 1, 1, 1, 1}};
@@ -227,7 +226,7 @@ TEST_F(DropDuplicate, WithNull)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last_unequal, got_last_unequal->view());
 
-  // Keep unique
+  // Keep no duplicate rows
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique_equal{{5, 8, 1}, {1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique_equal{{19, 21, 19}, {1, 1, 1}};
@@ -249,10 +248,10 @@ TEST_F(DropDuplicate, WithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique_unequal, got_unique_unequal->view());
 }
 
-struct SortedDropDuplicate : public cudf::test::BaseFixture {
+struct SortedDropDuplicates : public cudf::test::BaseFixture {
 };
 
-TEST_F(SortedDropDuplicate, NonNullTable)
+TEST_F(SortedDropDuplicates, NonNullTable)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{5, 4, 3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<float> col2{{4, 5, 3, 4, 9, 4}};
@@ -262,7 +261,7 @@ TEST_F(SortedDropDuplicate, NonNullTable)
   cudf::table_view input{{col1, col2, col1_key, col2_key}};
   std::vector<cudf::size_type> keys{2, 3};
 
-  // Keep first of duplicate
+  // Keep the first of duplicate
   // The expected table would be sorted in ascending order with respect to keys
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_first{{5, 5, 5, 3, 8}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_first{{4, 4, 4, 3, 9}};
@@ -275,7 +274,7 @@ TEST_F(SortedDropDuplicate, NonNullTable)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
-  // keep last of duplicate
+  // Keep the last of duplicate
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_last{{5, 5, 4, 3, 8}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_last{{4, 4, 5, 3, 9}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_key_last{{9, 19, 20, 20, 21}};
@@ -287,7 +286,7 @@ TEST_F(SortedDropDuplicate, NonNullTable)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
-  // Keep unique
+  // Keep no duplicate rows
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_unique{{5, 5, 3, 8}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_unique{{4, 4, 3, 9}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_key_unique{{9, 19, 20, 21}};
@@ -300,14 +299,14 @@ TEST_F(SortedDropDuplicate, NonNullTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
 
-TEST_F(SortedDropDuplicate, WithNull)
+TEST_F(SortedDropDuplicates, WithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 19, 21, 19}, {1, 0, 0, 1, 1, 1}};
   cudf::table_view input{{col, key}};
   std::vector<cudf::size_type> keys{1};
 
-  // Keep first of duplicate
+  // Keep the first of duplicate
   // nulls are equal
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first{{4, 5, 5, 8}, {0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first{{20, 19, 20, 21}, {0, 1, 1, 1}};
@@ -317,7 +316,7 @@ TEST_F(SortedDropDuplicate, WithNull)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
-  // Keep last of duplicate
+  // Keep the last of duplicate
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last{{3, 1, 5, 8}, {1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_last{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_last{{exp_col_last, exp_key_col_last}};
@@ -325,7 +324,7 @@ TEST_F(SortedDropDuplicate, WithNull)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last, got_last->view());
 
-  // Keep unique
+  // Keep no duplicate rows
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique{{5, 8}, {1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique{{20, 21}, {1, 1}};
   cudf::table_view expected_unique{{exp_col_unique, exp_key_col_unique}};
@@ -334,10 +333,10 @@ TEST_F(SortedDropDuplicate, WithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique, got_unique->view());
 }
 
-struct UnorderedDropDuplicate : public cudf::test::BaseFixture {
+struct UnorderedDropDuplicates : public cudf::test::BaseFixture {
 };
 
-TEST_F(UnorderedDropDuplicate, NonNullTable)
+TEST_F(UnorderedDropDuplicates, NonNullTable)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col1{{6, 6, 3, 5, 8, 5}};
   cudf::test::fixed_width_column_wrapper<float> col2{{6, 6, 3, 4, 9, 4}};
@@ -361,7 +360,7 @@ TEST_F(UnorderedDropDuplicate, NonNullTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, sorted_result->view());
 }
 
-TEST_F(UnorderedDropDuplicate, WithNull)
+TEST_F(UnorderedDropDuplicates, WithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 4, 1, 8, 1}, {1, 0, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 19, 21, 19}, {1, 0, 0, 1, 1, 1}};

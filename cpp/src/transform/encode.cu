@@ -48,7 +48,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 
   std::vector<order> column_order(num_cols, order::ASCENDING);
   std::vector<null_order> null_precedence(num_cols, null_order::AFTER);
-  auto sorted_unique_keys = sort(unique_keys->view(), column_order, null_precedence, stream, mr);
+  auto sorted_unique_keys =
+    cudf::detail::sort(unique_keys->view(), column_order, null_precedence, stream, mr);
 
   auto indices_column = cudf::detail::lower_bound(
     sorted_unique_keys->view(), input_table, column_order, null_precedence, stream, mr);

@@ -41,9 +41,9 @@ class compaction_hash {
 /**
  * @brief Device functor to determine if a row is valid.
  */
-class row_is_valid {
+class row_validity {
  public:
-  row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+  row_validity(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
   __device__ __inline__ bool operator()(const size_type& i) const noexcept
   {

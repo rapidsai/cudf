@@ -29,7 +29,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <ctgmath>
 
 using cudf::nan_policy;
 using cudf::null_equality;
