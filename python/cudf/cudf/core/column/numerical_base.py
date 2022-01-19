@@ -12,7 +12,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
-from cudf.core.reductions import Reducible
+from cudf.core.mixins import Reducible
 
 
 class NumericalBaseColumn(ColumnBase, Reducible):

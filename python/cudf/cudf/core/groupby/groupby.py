@@ -16,7 +16,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
 from cudf.core.multiindex import MultiIndex
-from cudf.core.reductions import Reducible
+from cudf.core.mixins import Reducible
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
