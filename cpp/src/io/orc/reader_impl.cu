@@ -260,12 +260,13 @@ auto decimal_column_type(std::vector<std::string> const& float64_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s> stats, bool* any_block_failure)
+__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s> stats,
+                                        bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
     if (stats[tid].status != 0) {
-      any_block_failure[0] = true; // Doesn't need to be atomic
+      any_block_failure[0] = true;  // Doesn't need to be atomic
     }
   }
 }
@@ -285,7 +286,7 @@ __global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
-    stats[tid].status = static_cast<uint32_t>(nvcomp_stats[tid]);
+    stats[tid].status        = static_cast<uint32_t>(nvcomp_stats[tid]);
     stats[tid].bytes_written = actual_uncompressed_sizes[tid];
   }
 }
@@ -339,9 +340,8 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
 
   dim3 block(128);
   dim3 grid(cudf::util::div_rounding_up_safe(num_blocks, static_cast<size_t>(block.x)));
-  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(statuses.data(),
-                                                            actual_uncompressed_data_sizes.data(),
-                                                            comp_stat);
+  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(
+    statuses.data(), actual_uncompressed_data_sizes.data(), comp_stat);
 }
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
