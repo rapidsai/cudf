@@ -102,8 +102,8 @@ class ewma_adjust_denominator_null_functor {
   {
     bool const valid = thrust::get<0>(data);
     int const exp    = thrust::get<1>(data);
-    T const input = thrust::get<2>(data);
-    T const beta = this->beta;
+    T const input    = thrust::get<2>(data);
+    T const beta     = this->beta;
 
     if (valid and (exp != 0)) {
       // The value is non-null, but nulls preceeded it
@@ -128,9 +128,62 @@ class ewma_adjust_denominator_nonull_functor {
  public:
   ewma_adjust_denominator_nonull_functor(T beta) : beta{beta} {}
 
-  __device__ pair_type<T> operator()(pair_type<T> pairs)
+  __device__ pair_type<T> operator()(pair_type<T> pairs) { return {beta, 1.0}; }
+};
+
+template <typename T>
+class ewma_noadjust_nonull_functor {
+ private:
+  T beta;
+
+ public:
+  ewma_noadjust_nonull_functor(T beta) : beta{beta} {}
+
+  __device__ pair_type<T> operator()(thrust::tuple<T, size_type> data)
   {
-    return {beta, 1.0};
+    T const beta          = this->beta;
+    T const input         = thrust::get<0>(data);
+    size_type const index = thrust::get<1>(data);
+    if (index == 0) {
+      return {beta, input};
+    } else {
+      return {beta, (1.0 - beta) * input};
+    }
+  }
+};
+
+template <typename T>
+class ewma_noadjust_null_functor {
+ private:
+  T beta;
+
+ public:
+  ewma_noadjust_null_functor(T beta) : beta{beta} {}
+
+  __device__ pair_type<T> operator()(thrust::tuple<T, size_type, bool, size_type> data)
+  {
+    T input           = thrust::get<0>(data);
+    size_type index   = thrust::get<1>(data);
+    bool is_valid     = thrust::get<2>(data);
+    size_type nullcnt = thrust::get<3>(data);
+
+    T beta = this->beta;
+
+    if (index == 0) {
+      return {beta, input};
+    } else {
+      if (is_valid and nullcnt == 0) {
+        // preceeding value is valid, return normal pair
+        return {beta, (1.0 - beta) * input};
+      } else if (is_valid and nullcnt != 0) {
+        // one or more preceeding values is null, adjust by how many
+        T factor = (1.0 - beta) + pow(beta, nullcnt + 1);
+        return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
+      } else {
+        // value is not valid
+        return {1.0, 0.0};
+      }
+    }
   }
 };
 
@@ -222,7 +275,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      pairs.end(),
                                      pairs.begin(),
                                      ewma_adjust_denominator_nonull_functor{beta},
-                                     recurrence_functor<T>{}); 
+                                     recurrence_functor<T>{});
   }
 
   thrust::transform(
@@ -250,18 +303,15 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   // pairs are all (beta, 1-beta x_i) except for the first one
 
   if (!input.has_nulls()) {
-    thrust::transform(rmm::exec_policy(stream),
-                      input.begin<T>(),
-                      input.end<T>(),
-                      thrust::make_counting_iterator<size_type>(0),
-                      pairs.begin(),
-                      [beta] __device__(T input, size_type index) -> pair_type<T> {
-                        if (index == 0) {
-                          return {beta, input};
-                        } else {
-                          return {beta, (1.0 - beta) * input};
-                        }
-                      });
+    auto data = thrust::make_zip_iterator(
+      thrust::make_tuple(input.begin<T>(), thrust::make_counting_iterator<size_type>(0)));
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+                                     data,
+                                     data + input.size(),
+                                     pairs.begin(),
+                                     ewma_noadjust_nonull_functor{beta},
+                                     recurrence_functor<T>{});
+
   } else {
     /*
     In this case, a denominator actually has to be computed. The formula is
@@ -283,37 +333,13 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     auto data = thrust::make_zip_iterator(thrust::make_tuple(
       input.begin<T>(), thrust::make_counting_iterator<size_type>(0), valid_it, nullcnt.begin()));
 
-    thrust::transform(
-      rmm::exec_policy(stream),
-      data,
-      data + input.size(),
-      pairs.begin(),
-      [beta] __device__(thrust::tuple<T, size_type, bool, size_type> data) -> pair_type<T> {
-        T input           = thrust::get<0>(data);
-        size_type index   = thrust::get<1>(data);
-        bool is_valid     = thrust::get<2>(data);
-        size_type nullcnt = thrust::get<3>(data);
-
-        if (index == 0) {
-          return {beta, input};
-        } else {
-          if (is_valid and nullcnt == 0) {
-            // preceeding value is valid, return normal pair
-            return {beta, (1.0 - beta) * input};
-          } else if (is_valid and nullcnt != 0) {
-            // one or more preceeding values is null, adjust by how many
-            T factor = (1.0 - beta) + pow(beta, nullcnt + 1);
-            return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
-          } else {
-            // value is not valid
-            return {1.0, 0.0};
-          }
-        }
-      });
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+                                     data,
+                                     data + input.size(),
+                                     pairs.begin(),
+                                     ewma_noadjust_null_functor{beta},
+                                     recurrence_functor<T>());
   }
-
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
 
   // copy the second elements to the output for now
   thrust::transform(rmm::exec_policy(stream),
