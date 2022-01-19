@@ -46,6 +46,6 @@ def read_text(object filepaths_or_buffers,
     else:
         with nogil:
             datasource = move(make_source_from_file(filename))
-            c_col = move(multibyte_split(dereference(datasource), delim, c_byte_range))
+            c_col = move(multibyte_split(dereference(datasource), delim))
 
     return {None: Column.from_unique_ptr(move(c_col))}
