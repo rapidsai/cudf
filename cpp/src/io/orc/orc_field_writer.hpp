@@ -82,7 +82,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
   template <typename T>
   void field_struct(int field, const T& value)
   {
-    struct_size += p->put_uint(encode_field_number(field, PB_TYPE_FIXEDLEN));
+    struct_size += p->put_uint(encode_field_number(field, ProtofType::FIXEDLEN));
     auto lpos = p->m_buf->size();
     p->put_byte(0);
     auto sz = p->write(value);
