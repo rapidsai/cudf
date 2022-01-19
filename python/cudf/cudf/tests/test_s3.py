@@ -229,8 +229,15 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
 @pytest.mark.parametrize("precache", [None, "parquet"])
+@pytest.mark.parametrize("use_python_file_object", [True, False])
 def test_read_parquet(
-    s3_base, s3so, pdf, bytes_per_thread, columns, precache,
+    s3_base,
+    s3so,
+    pdf,
+    bytes_per_thread,
+    columns,
+    precache,
+    use_python_file_object,
 ):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
@@ -242,10 +249,15 @@ def test_read_parquet(
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got1 = cudf.read_parquet(
             "s3://{}/{}".format(bname, fname),
-            open_file_options={"precache_options": {"method": precache}},
+            open_file_options=(
+                {"precache_options": {"method": precache}}
+                if use_python_file_object
+                else None
+            ),
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             columns=columns,
+            use_python_file_object=use_python_file_object,
         )
     expect = pdf[columns] if columns else pdf
     assert_eq(expect, got1)
@@ -258,7 +270,10 @@ def test_read_parquet(
         )[0]
         with fs.open("s3://{}/{}".format(bname, fname), mode="rb") as f:
             got2 = cudf.read_parquet(
-                f, bytes_per_thread=bytes_per_thread, columns=columns,
+                f,
+                bytes_per_thread=bytes_per_thread,
+                columns=columns,
+                use_python_file_object=use_python_file_object,
             )
     assert_eq(expect, got2)
 

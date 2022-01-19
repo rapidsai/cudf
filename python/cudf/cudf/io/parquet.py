@@ -857,6 +857,13 @@ def _default_open_file_options(
     under the "precache_options" key. By default,
     we set "method" to "parquet", but precaching
     will be disabled if the user chooses `method=None`
+
+    Parameters
+    ----------
+    open_file_options : dict or None
+    columns : list
+    row_groups : list
+    fs : fsspec.AbstractFileSystem, Optional
     """
     if fs and ioutils._is_local_filesystem(fs):
         # Quick return for local fs
