@@ -284,17 +284,24 @@ class writer::impl {
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
+  struct encoded_statistics {
+    std::vector<ColStatsBlob> rowgroup_level;
+    std::vector<ColStatsBlob> stripe_level;
+    std::vector<ColStatsBlob> file_level;
+  };
+
   /**
-   * @brief Returns per-stripe and per-file column statistics encoded
-   * in ORC protobuf format.
+   * @brief Returns column statistics encoded in ORC protobuf format.
    *
+   * @param are_statistics_enabled True if statistics are to be included in the output file
    * @param orc_table Table information to be written
    * @param columns List of columns
    * @param segmentation stripe and rowgroup ranges
    * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,
-                                                           file_segmentation const& segmentation);
+  encoded_statistics gather_statistic_blobs(bool are_statistics_enabled,
+                                            orc_table_view const& orc_table,
+                                            file_segmentation const& segmentation);
 
   /**
    * @brief Writes the specified column's row index stream.
@@ -302,10 +309,11 @@ class writer::impl {
    * @param[in] stripe_id Stripe's identifier
    * @param[in] stream_id Stream identifier (column id + 1)
    * @param[in] columns List of columns
-   * @param[in] rowgroups_range Indexes of rowgroups in the stripe
+   * @param[in] segmentation stripe and rowgroup ranges
    * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in] strm_desc List of stream descriptors
    * @param[in] comp_out Output status for compressed streams
+   * @param[in] rg_stats row group level statistics
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
    * @param[in,out] pbw Protobuf writer
@@ -313,10 +321,11 @@ class writer::impl {
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
                           host_span<orc_column_view const> columns,
-                          stripe_rowgroups const& rowgroups_range,
+                          file_segmentation const& segmentation,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
                           host_span<gpu_inflate_status_s const> comp_out,
+                          std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,
                           ProtobufWriter* pbw);

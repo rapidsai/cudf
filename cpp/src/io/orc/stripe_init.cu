@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,7 +227,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
                                                       const uint8_t* start,
                                                       const uint8_t* end)
 {
-  constexpr uint32_t pb_rowindexentry_id = static_cast<uint32_t>(PB_TYPE_FIXEDLEN) + 8;
+  constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
 
   const uint8_t* cur      = start;
   row_entry_state_e state = NOT_FOUND;
@@ -246,13 +246,13 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
           state = GET_LENGTH;
         } else {
           v &= 7;
-          if (v == PB_TYPE_FIXED64)
+          if (v == ProtofType::FIXED64)
             cur += 8;
-          else if (v == PB_TYPE_FIXED32)
+          else if (v == ProtofType::FIXED32)
             cur += 4;
-          else if (v == PB_TYPE_VARINT)
+          else if (v == ProtofType::VARINT)
             state = SKIP_VARINT;
-          else if (v == PB_TYPE_FIXEDLEN)
+          else if (v == ProtofType::FIXEDLEN)
             state = SKIP_FIXEDLEN;
         }
         break;
