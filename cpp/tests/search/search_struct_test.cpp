@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -35,15 +36,14 @@ constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_leve
 constexpr int32_t null{0};  // Mark for null child elements
 constexpr int32_t XXX{0};   // Mark for null struct elements
 
-template <typename T>
-struct TypedStructSearchTest : public cudf::test::BaseFixture {
-};
-
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::FloatingPointTypes,
                                      cudf::test::DurationTypes,
                                      cudf::test::TimestampTypes>;
 
+template <typename T>
+struct TypedStructSearchTest : public cudf::test::BaseFixture {
+};
 TYPED_TEST_SUITE(TypedStructSearchTest, TestTypes);
 
 namespace {
@@ -352,4 +352,235 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
   auto const expected_upper_bound = int32s_col{0, 5, 3, 6, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
+}
+
+template <typename T>
+struct TypedScalarStructContainTest : public cudf::test::BaseFixture {
+};
+TYPED_TEST_SUITE(TypedScalarStructContainTest, TestTypes);
+
+TYPED_TEST(TypedScalarStructContainTest, EmptyInputTest)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const col = [] {
+    auto child = col_wrapper{};
+    return structs_col{{child}};
+  }();
+
+  auto const val = [] {
+    auto child = col_wrapper{1};
+    return cudf::struct_scalar(std::vector<cudf::column_view>{child});
+  }();
+
+  EXPECT_EQ(false, cudf::contains(col, val));
+}
+
+TYPED_TEST(TypedScalarStructContainTest, TrivialInputTests)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const col = [] {
+    auto child1 = col_wrapper{1, 2, 3};
+    auto child2 = col_wrapper{4, 5, 6};
+    auto child3 = strings_col{"x", "y", "z"};
+    return structs_col{{child1, child2, child3}};
+  }();
+
+  auto const val1 = [] {
+    auto child1 = col_wrapper{1};
+    auto child2 = col_wrapper{4};
+    auto child3 = strings_col{"x"};
+    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+  }();
+  auto const val2 = [] {
+    auto child1 = col_wrapper{1};
+    auto child2 = col_wrapper{4};
+    auto child3 = strings_col{"a"};
+    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+  }();
+
+  EXPECT_EQ(true, cudf::contains(col, val1));
+  EXPECT_EQ(false, cudf::contains(col, val2));
+}
+
+TYPED_TEST(TypedScalarStructContainTest, SlicedColumnInputTests)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  constexpr int32_t dont_care{0};
+
+  auto const col_original = [] {
+    auto child1 = col_wrapper{dont_care, dont_care, 1, 2, 3, dont_care};
+    auto child2 = col_wrapper{dont_care, dont_care, 4, 5, 6, dont_care};
+    auto child3 = strings_col{"dont_care", "dont_care", "x", "y", "z", "dont_care"};
+    return structs_col{{child1, child2, child3}};
+  }();
+  auto const col = cudf::slice(col_original, {2, 5})[0];
+
+  auto const val1 = [] {
+    auto child1 = col_wrapper{1};
+    auto child2 = col_wrapper{4};
+    auto child3 = strings_col{"x"};
+    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+  }();
+  auto const val2 = [] {
+    auto child1 = col_wrapper{dont_care};
+    auto child2 = col_wrapper{dont_care};
+    auto child3 = strings_col{"dont_care"};
+    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+  }();
+
+  EXPECT_EQ(true, cudf::contains(col, val1));
+  EXPECT_EQ(false, cudf::contains(col, val2));
+}
+
+TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  constexpr int32_t null{0};
+
+  // Test with nulls at the top level.
+  {
+    auto const col = [] {
+      auto child1 = col_wrapper{1, null, 3};
+      auto child2 = col_wrapper{4, null, 6};
+      auto child3 = strings_col{"x", "" /*NULL*/, "z"};
+      return structs_col{{child1, child2, child3}, null_at(1)};
+    }();
+
+    auto const val1 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{"x"};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+    auto const val2 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{"a"};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+
+    EXPECT_EQ(true, cudf::contains(col, val1));
+    EXPECT_EQ(false, cudf::contains(col, val2));
+  }
+
+  // Test with nulls at the children level.
+  {
+    auto const col = [] {
+      auto child1 = col_wrapper{{1, null, 3}, null_at(1)};
+      auto child2 = col_wrapper{{4, null, 6}, null_at(1)};
+      auto child3 = strings_col{{"" /*NULL*/, "y", "z"}, null_at(0)};
+      return structs_col{{child1, child2, child3}};
+    }();
+
+    auto const val1 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+    auto const val2 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{""};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+
+    EXPECT_EQ(true, cudf::contains(col, val1));
+    EXPECT_EQ(false, cudf::contains(col, val2));
+  }
+
+  // Test with nulls in the input scalar.
+  {
+    auto const col = [] {
+      auto child1 = col_wrapper{1, 2, 3};
+      auto child2 = col_wrapper{4, 5, 6};
+      auto child3 = strings_col{"x", "y", "z"};
+      return structs_col{{child1, child2, child3}};
+    }();
+
+    auto const val1 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{"x"};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+    auto const val2 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+
+    EXPECT_EQ(true, cudf::contains(col, val1));
+    EXPECT_EQ(false, cudf::contains(col, val2));
+  }
+}
+
+TYPED_TEST(TypedScalarStructContainTest, SlicedInputWithNullsTests)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  constexpr int32_t dont_care{0};
+  constexpr int32_t null{0};
+
+  // Test with nulls at the top level.
+  {
+    auto const col_original = [] {
+      auto child1 = col_wrapper{dont_care, dont_care, 1, null, 3, dont_care};
+      auto child2 = col_wrapper{dont_care, dont_care, 4, null, 6, dont_care};
+      auto child3 = strings_col{"dont_care", "dont_care", "x", "" /*NULL*/, "z", "dont_care"};
+      return structs_col{{child1, child2, child3}, null_at(3)};
+    }();
+    auto const col = cudf::slice(col_original, {2, 5})[0];
+
+    auto const val1 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{"x"};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+    auto const val2 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{"a"};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+
+    EXPECT_EQ(true, cudf::contains(col, val1));
+    EXPECT_EQ(false, cudf::contains(col, val2));
+  }
+
+  // Test with nulls at the children level.
+  {
+    auto const col_original = [] {
+      auto child1 =
+        col_wrapper{{dont_care, dont_care /*also NULL*/, 1, null, 3, dont_care}, null_at(3)};
+      auto child2 =
+        col_wrapper{{dont_care, dont_care /*also NULL*/, 4, null, 6, dont_care}, null_at(3)};
+      auto child3 = strings_col{
+        {"dont_care", "dont_care" /*also NULL*/, "" /*NULL*/, "y", "z", "dont_care"}, null_at(2)};
+      return structs_col{{child1, child2, child3}, null_at(1)};
+    }();
+    auto const col = cudf::slice(col_original, {2, 5})[0];
+
+    auto const val1 = [] {
+      auto child1 = col_wrapper{1};
+      auto child2 = col_wrapper{4};
+      auto child3 = strings_col{{"x"}, null_at(0)};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+    auto const val2 = [] {
+      auto child1 = col_wrapper{dont_care};
+      auto child2 = col_wrapper{dont_care};
+      auto child3 = strings_col{"dont_care"};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
+
+    EXPECT_EQ(true, cudf::contains(col, val1));
+    EXPECT_EQ(false, cudf::contains(col, val2));
+  }
 }
