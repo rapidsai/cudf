@@ -84,8 +84,8 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
       gpuci_logger "Copying build metrics results"
       mkdir -p "$WORKSPACE/build-metrics"
-      # cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
-      cp "$LIBCUDF_BUILD_DIR/ninja.log" "$WORKSPACE/build-metrics/BuildMetrics.html"
+      cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+      cp "$LIBCUDF_BUILD_DIR/ninja.log" "$WORKSPACE/build-metrics/ninja_log.html"
   fi
 
   gpuci_logger "Build conda pkg for libcudf_kafka"
