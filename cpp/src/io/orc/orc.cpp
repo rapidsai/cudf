@@ -215,9 +215,9 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   size_t sz = 0, lpos;
   put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:RowIndex.entry
   lpos = m_buf->size();
-  put_byte(0xcd);                                      // sz+2
+  put_byte(0xcd);                                          // sz+2
   put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
-  put_byte(0xcd);                                      // sz
+  put_byte(0xcd);                                          // sz
   if (present_blk >= 0) sz += put_uint(present_blk);
   if (present_ofs >= 0) {
     sz += put_uint(present_ofs);
