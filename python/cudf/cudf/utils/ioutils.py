@@ -12,12 +12,18 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
-from packaging.version import parse as parse_version
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
+
+try:
+    import fsspec.parquet as fsspec_parquet
+
+except ImportError:
+    fsspec_parquet = None
+
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -1247,9 +1253,6 @@ def _open_remote_files(
     """Return a list of open file-like objects given
     a list of remote file paths.
 
-    WARNING: This utility is currently experimental,
-    and is meant for internal cudf use only.
-
     Parameters
     ----------
     paths : list(str)
@@ -1287,32 +1290,15 @@ def _open_remote_files(
 
     # Check that "parts" caching (used for all format-aware file handling)
     # is supported by the installed fsspec/s3fs version
-    if precache == "parquet":
-        supported = parse_version(fsspec.__version__) > parse_version(
-            "2021.11.0"
+    if precache == "parquet" and not fsspec_parquet:
+        warnings.warn(
+            f"This version of fsspec ({fsspec.__version__}) does "
+            f"not support parquet-optimized precaching. Please "
+            f"to the latest fsspec version for better performance."
         )
-        if supported and "s3" in fs.protocol:
-            try:
-                import s3fs
-
-                supported = parse_version(s3fs.__version__) > parse_version(
-                    "2021.11.0"
-                )
-            except ImportError:
-                pass
-            if not supported:
-                precache = None
-                warnings.warn(
-                    f"This version of s3fs ({s3fs.__version__}) does not "
-                    f"support the 'parts' cache in fsspec. Please update "
-                    f"to the latest s3fs version for better performance."
-                )
-        elif not supported:
-            precache = None
+        precache = None
 
     if precache == "parquet":
-        import fsspec.parquet as fsspec_parquet
-
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.

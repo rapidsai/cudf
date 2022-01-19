@@ -384,7 +384,7 @@ def read_parquet(
     filepaths_or_buffers = []
     if use_python_file_object:
         open_file_options = _default_open_file_options(
-            open_file_options, columns, row_groups
+            open_file_options, columns, row_groups, fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
         tmp_source, compression = ioutils.get_filepath_or_buffer(
@@ -846,12 +846,22 @@ class ParquetDatasetWriter:
         self.close()
 
 
-def _default_open_file_options(open_file_options, columns, row_groups):
-    # Copy and update `open_file_options` to include
-    # column and row-group information under the
-    # "precache_options" key. By default, we set
-    # "method" to "parquet", but precaching will
-    # be disabled if the user chooses `method=None`
+def _default_open_file_options(
+    open_file_options, columns, row_groups, fs=None
+):
+    """
+    Set default fields in open_file_options.
+
+    Copies and updates `open_file_options` to
+    include column and row-group information
+    under the "precache_options" key. By default,
+    we set "method" to "parquet", but precaching
+    will be disabled if the user chooses `method=None`
+    """
+    if fs and ioutils._is_local_filesystem(fs):
+        # Quick return for local fs
+        return open_file_options or {}
+    # Assume remote storage if `fs` was not specified
     open_file_options = (open_file_options or {}).copy()
     precache_options = open_file_options.pop("precache_options", {}).copy()
     if precache_options.get("method", "parquet") == "parquet":

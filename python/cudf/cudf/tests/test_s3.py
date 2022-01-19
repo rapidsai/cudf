@@ -131,7 +131,9 @@ def pdf_ext(scope="module"):
     df["Integer"] = np.array([i for i in range(size)])
     df["List"] = [[i] for i in range(size)]
     df["Struct"] = [{"a": i} for i in range(size)]
-    df["String"] = ["Alpha", "Beta", "Gamma", "Delta"] * (size // 4)
+    df["String"] = (["Alpha", "Beta", "Gamma", "Delta"] * (-(size // -4)))[
+        :size
+    ]
     return df
 
 
