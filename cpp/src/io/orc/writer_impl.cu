@@ -1168,12 +1168,12 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
     stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks, stream);
   // Skip rowgroup blobs when encoding, if chosen granularity is coarser than "ROW_GROUP".
   auto const is_granularity_rowgroup = stats_freq == ORC_STATISTICS_ROW_GROUP;
-  auto const encode_chunks_start =
-    stat_chunks.data() + (is_granularity_rowgroup ? 0 : num_rowgroup_blobs);
-  auto const num_blobs_for_encode =
-    is_granularity_rowgroup ? num_stat_blobs : (num_stripe_blobs + num_file_blobs);
-  gpu::orc_encode_statistics(
-    blobs.device_ptr(), stat_merge.device_ptr(), encode_chunks_start, num_blobs_for_encode, stream);
+  auto const num_skip                = is_granularity_rowgroup ? 0 : num_rowgroup_blobs;
+  gpu::orc_encode_statistics(blobs.device_ptr(),
+                             stat_merge.device_ptr(num_skip),
+                             stat_chunks.data() + num_skip,
+                             num_stat_blobs - num_skip,
+                             stream);
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
 
