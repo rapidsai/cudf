@@ -2413,7 +2413,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             by numba based on the function logic and argument types.
             See examples for details.
         args : tuple
-            Not supported
+            Positional arguments passed to func after the series value.
         **kwargs
             Not supported
 
@@ -2479,6 +2479,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
         """
+        if convert_dtype is not True:
+            raise ValueError("Series.apply only supports convert_dtype=True")
         return self._apply(func, _get_scalar_kernel, *args, **kwargs)
 
     def applymap(self, udf, out_dtype=None):

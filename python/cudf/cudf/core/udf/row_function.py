@@ -35,6 +35,8 @@ def _get_frame_row_type(dtype):
     from the Numba internals and slightly modified to
     account for validity bools to be present in the final
     struct.
+
+    See numba.np.numpy_support.from_struct_dtype for details.
     """
 
     # Create the numpy structured type corresponding to the numpy dtype.
@@ -72,7 +74,7 @@ def _get_frame_row_type(dtype):
     return Record(fields, offset, _is_aligned_struct)
 
 
-def _row_kernel_from_template(frame, row_type, args):
+def _row_kernel_string_from_template(frame, row_type, args):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -124,9 +126,7 @@ def _row_kernel_from_template(frame, row_type, args):
         )
         initializers.append(template.format(idx=idx))
         row_initializers.append(
-            row_initializer_template.format(
-                idx=idx, name=colname
-            )
+            row_initializer_template.format(idx=idx, name=colname)
         )
 
     return row_kernel_template.format(
@@ -163,7 +163,7 @@ def _get_row_kernel(frame, func, args):
         "pack_return": pack_return,
         "row_type": row_type,
     }
-    kernel_string = _row_kernel_from_template(frame, row_type, args)
+    kernel_string = _row_kernel_string_from_template(frame, row_type, args)
     kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
 
     return kernel, scalar_return_type

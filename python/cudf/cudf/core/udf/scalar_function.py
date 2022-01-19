@@ -16,7 +16,7 @@ from cudf.core.udf.utils import (
 )
 
 
-def _scalar_kernel_from_template(sr, args):
+def _scalar_kernel_string_from_template(sr, args):
     """
     Function to write numba kernels for `Series.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -78,7 +78,7 @@ def _get_scalar_kernel(sr, func, args):
         "_mask_get": _mask_get,
         "pack_return": pack_return,
     }
-    kernel_string = _scalar_kernel_from_template(sr, args=args)
+    kernel_string = _scalar_kernel_string_from_template(sr, args=args)
     kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
 
     return kernel, scalar_return_type
