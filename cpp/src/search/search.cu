@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,11 +173,56 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
 }
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const&,
-                                                             scalar const&,
-                                                             rmm::cuda_stream_view)
+bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
+                                                             scalar const& value,
+                                                             rmm::cuda_stream_view stream)
 {
-  CUDF_FAIL("struct_view type not supported yet");
+  CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+
+  auto const scalar_table = static_cast<struct_scalar const*>(&value)->view();
+  CUDF_EXPECTS(col.num_children() == scalar_table.num_columns(),
+               "struct scalar and structs column must have the same number of children");
+  for (size_type i = 0; i < col.num_children(); ++i) {
+    CUDF_EXPECTS(col.child(i).type() == scalar_table.column(i).type(),
+                 "scalar and column children types must match");
+  }
+
+  // Prepare to flatten the structs column and scalar.
+  auto const has_null_elements =
+    has_nested_nulls(table_view{std::vector<column_view>{col.child_begin(), col.child_end()}}) ||
+    has_nested_nulls(scalar_table);
+  auto const flatten_nullability = has_null_elements
+                                     ? structs::detail::column_nullability::FORCE
+                                     : structs::detail::column_nullability::MATCH_INCOMING;
+
+  // Flatten the input structs column, only materialize the bitmask if there is null in the input.
+  auto const col_flattened =
+    structs::detail::flatten_nested_columns(table_view{{col}}, {}, {}, flatten_nullability);
+  auto const val_flattened =
+    structs::detail::flatten_nested_columns(scalar_table, {}, {}, flatten_nullability);
+
+  // The struct scalar only contains the struct member columns.
+  // Thus, if there is any null in the input, we must exclude the first column in the flattened
+  // table of the input column from searching because that column is the materialized bitmask of
+  // the input structs column.
+  auto const col_flattened_content  = col_flattened.flattened_columns();
+  auto const col_flattened_children = table_view{std::vector<column_view>{
+    col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
+    col_flattened_content.end()}};
+
+  auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
+  auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
+
+  auto const start_iter = thrust::make_counting_iterator<size_type>(0);
+  auto const end_iter   = start_iter + col.size();
+  auto const comp       = row_equality_comparator(
+    nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
+  auto const found_iter = thrust::find_if(
+    rmm::exec_policy(stream), start_iter, end_iter, [comp] __device__(auto const idx) {
+      return comp(idx, 0);  // compare col[idx] == val[0].
+    });
+
+  return found_iter != end_iter;
 }
 
 template <>
@@ -203,7 +248,6 @@ namespace detail {
 bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
 {
   if (col.is_empty()) { return false; }
-
   if (not value.is_valid(stream)) { return col.has_nulls(); }
 
   return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
@@ -264,20 +308,14 @@ struct multi_contains_dispatch {
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
 {
   CUDF_FAIL("list_view type not supported");
 }
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
 {
   CUDF_FAIL("struct_view type not supported");
 }
