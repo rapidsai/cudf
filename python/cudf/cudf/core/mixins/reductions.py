@@ -2,10 +2,9 @@
 
 from .mixin_factory import _create_delegating_mixin
 
-
 Reducible = _create_delegating_mixin(
     "Reducible",
-    "Mixin encapsulating for reduction operations.",
+    "Mixin encapsulating reduction operations.",
     "REDUCTION",
     "_reduce",
     {
@@ -33,5 +32,5 @@ Reducible = _create_delegating_mixin(
         "idxmax",
         "first",
         "last",
-    }
+    },
 )

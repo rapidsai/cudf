@@ -10,17 +10,24 @@ def _create_delegating_mixin(
 
     This function generates mixins based on two common paradigms in cuDF:
 
-    1. Many classes implement similar operations (e.g. `sum`) via a sequence of
-       calls to lower-level APIs terminating in a libcudf C++ function call.
-    2. libcudf groups many operations into categories using a common API. These
+    1. libcudf groups many operations into categories using a common API. These
        APIs usually accept an enum to delinate the specific operation to
        perform, e.g. binary operations use the `binary_operator` enum when
        calling the `binary_operation` function. cuDF Python mimics this
        structure by having operations within a category delegate to a common
        internal function (e.g. DataFrame.__add__ calls DataFrame._binaryop).
+    2. Many cuDF classes implement similar operations (e.g. `sum`) via
+       delegation to lower-level APIs before reaching a libcudf C++ function
+       call. As a result, many API function calls actually involve multiple
+       delegations to lower-level APIs that can look essentially identical. An
+       example of such a sequence would be DataFrame.sum -> DataFrame._reduce
+       -> Column.sum -> Column._reduce -> libcudf.
 
     This factory creates mixins for a category of operations implemented by via
-    this delegator pattern. Its usage is best demonstrated by example below.
+    this delegator pattern. The resulting mixins make it easy to share common
+    functions across various classes while also providing a common entrypoint
+    for implementing the centralized logic for a given category of operations.
+    Its usage is best demonstrated by example below.
 
     Parameters
     ----------
@@ -96,7 +103,7 @@ def _create_delegating_mixin(
             new_params.pop("op")
             signature = signature.replace(parameters=new_params.values())
 
-            # Generate the list of arguments forwarded to _reduce.
+            # Generate the list of arguments forwarded to the base operation.
             arglist = ", ".join(
                 [
                     f"{key}={key}"
@@ -135,9 +142,9 @@ def {operation}{str(signature)}:
                 valid_operations |= getattr(base_cls, validity_attr, set())
 
             invalid_operations = valid_operations - supported_operations
-            assert len(invalid_operations) == 0, (
-                f"Invalid requested operations: {invalid_operations}"
-            )
+            assert (
+                len(invalid_operations) == 0
+            ), f"Invalid requested operations: {invalid_operations}"
             for operation in valid_operations:
                 # Check if the operation is already defined so that subclasses
                 # can override the method if desired.
@@ -150,7 +157,11 @@ def {operation}{str(signature)}:
     OperationMixin.__name__ = mixin_name
     OperationMixin.__doc__ = docstring
     setattr(OperationMixin, operation_name, _operation)
-    setattr(OperationMixin, f"_SUPPORTED_{category_name}S",
-            supported_operations)
+    # This attribute is set in case lookup is convenient at a later point, but
+    # it is not strictly necessary since `supported_operations` is part of the
+    # closure associated with the class's creation.
+    setattr(
+        OperationMixin, f"_SUPPORTED_{category_name}S", supported_operations
+    )
 
     return OperationMixin
