@@ -246,9 +246,20 @@ def test_filters_at_row_group_level(tmpdir):
 @pytest.mark.parametrize(
     "parts", [["year", "month", "day"], ["year", "month"], ["year"]]
 )
-def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
-    tmpdir = str(tmpdir)
+@pytest.mark.parametrize("categorical_partitions", [True, False])
+def test_roundtrip_from_dask_partitioned(
+    tmpdir, parts, daskcudf, metadata, categorical_partitions
+):
 
+    # Check if `categorical_partitions=False` is supported
+    # for this version of Dask
+    pytest.mark.skipif(
+        parse_version(dask.__version__) > parse_version("2021.8.0")
+        and not categorical_partitions,
+        reason="Newer version of Dask required for categorical_partitions.",
+    )
+
+    tmpdir = str(tmpdir)
     df = pd.DataFrame()
     df["year"] = [2018, 2019, 2019, 2019, 2020, 2021]
     df["month"] = [1, 2, 3, 3, 3, 2]
@@ -268,8 +279,12 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             write_metadata_file=metadata,
             partition_on=parts,
         )
-    df_read = dd.read_parquet(tmpdir, engine="pyarrow")
-    gdf_read = dask_cudf.read_parquet(tmpdir)
+    df_read = dd.read_parquet(
+        tmpdir, engine="pyarrow", categorical_partitions=categorical_partitions
+    )
+    gdf_read = dask_cudf.read_parquet(
+        tmpdir, categorical_partitions=categorical_partitions
+    )
 
     # TODO: Avoid column selection after `CudfEngine`
     # can be aligned with dask/dask#6534
@@ -281,6 +296,12 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
     )
 
     assert gdf_read.index.name == "index"
+
+    # Check that categorical_partitions is working
+    if categorical_partitions:
+        assert df_read["year"].dtype == "category"
+    else:
+        assert df_read["year"].dtype != "category"
 
     # Check that we don't have uuid4 file names
     for _, _, files in os.walk(tmpdir):
