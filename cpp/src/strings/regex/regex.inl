@@ -207,7 +207,7 @@ __device__ inline int32_t reprog_device::regexec(
 
   jnk.list1->reset();
   do {
-    /* fast check for first char */
+    // fast check for first char
     if (checkstart) {
       switch (jnk.starttype) {
         case CHAR: {
@@ -284,8 +284,9 @@ __device__ inline int32_t reprog_device::regexec(
             break;
           case BOW:
           case NBOW: {
-            auto const codept      = utf8_to_codepoint(c);
-            auto const last_c      = static_cast<char32_t>(pos ? *(itr - 1) : 0);
+            auto const codept = utf8_to_codepoint(c);
+            auto const last_c =
+              static_cast<char32_t>((pos > 0) && (pos <= dstr.length()) ? *(itr - 1) : 0);
             auto const last_codept = utf8_to_codepoint(last_c);
 
             bool const cur_alphaNumeric =
