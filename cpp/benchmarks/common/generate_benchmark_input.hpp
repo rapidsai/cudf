@@ -300,8 +300,8 @@ class data_profile {
 
   auto get_bool_probability() const { return bool_probability; }
   auto get_null_frequency() const { return null_frequency; };
-  auto get_cardinality() const { return cardinality; };
-  auto get_avg_run_length() const { return avg_run_length; };
+  [[nodiscard]] auto get_cardinality() const { return cardinality; };
+  [[nodiscard]] auto get_avg_run_length() const { return avg_run_length; };
 
   // Users should pass integral values for bounds when setting the parameters for types that have
   // discrete distributions (integers, strings, lists). Otherwise the call with have no effect.
