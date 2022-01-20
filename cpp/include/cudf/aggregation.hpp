@@ -99,9 +99,9 @@ class aggregation {
   Kind kind;  ///< The aggregation to perform
   virtual ~aggregation() = default;
 
-  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
-  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
-  virtual std::unique_ptr<aggregation> clone() const = 0;
+  [[nodiscard]] virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
+  [[nodiscard]] virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+  [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
 
   // override functions for compound aggregations
   virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
@@ -118,7 +118,7 @@ class aggregation {
  */
 class rolling_aggregation : public virtual aggregation {
  public:
-  ~rolling_aggregation() = default;
+  ~rolling_aggregation() override = default;
 
  protected:
   rolling_aggregation() {}
@@ -130,7 +130,7 @@ class rolling_aggregation : public virtual aggregation {
  */
 class groupby_aggregation : public virtual aggregation {
  public:
-  ~groupby_aggregation() = default;
+  ~groupby_aggregation() override = default;
 
  protected:
   groupby_aggregation() {}
@@ -141,7 +141,7 @@ class groupby_aggregation : public virtual aggregation {
  */
 class groupby_scan_aggregation : public virtual aggregation {
  public:
-  ~groupby_scan_aggregation() = default;
+  ~groupby_scan_aggregation() override = default;
 
  protected:
   groupby_scan_aggregation() {}

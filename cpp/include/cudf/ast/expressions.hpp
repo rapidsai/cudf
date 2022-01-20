@@ -38,14 +38,14 @@ class expression_parser;
 struct expression {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 
-  bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
+  [[nodiscard]] bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
   {
     return may_evaluate_null(left, left, stream);
   }
 
-  virtual bool may_evaluate_null(table_view const& left,
-                                 table_view const& right,
-                                 rmm::cuda_stream_view stream) const = 0;
+  [[nodiscard]] virtual bool may_evaluate_null(table_view const& left,
+                                               table_view const& right,
+                                               rmm::cuda_stream_view stream) const = 0;
 
   virtual ~expression() {}
 };
@@ -173,14 +173,17 @@ class literal : public expression {
    *
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type() const { return get_value().type(); }
+  [[nodiscard]] cudf::data_type get_data_type() const { return get_value().type(); }
 
   /**
    * @brief Get the value object.
    *
    * @return cudf::detail::fixed_width_scalar_device_view_base
    */
-  cudf::detail::fixed_width_scalar_device_view_base get_value() const { return value; }
+  [[nodiscard]] cudf::detail::fixed_width_scalar_device_view_base get_value() const
+  {
+    return value;
+  }
 
   /**
    * @brief Accepts a visitor class.
@@ -190,9 +193,9 @@ class literal : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return !is_valid(stream);
   }
@@ -202,7 +205,10 @@ class literal : public expression {
    *
    * @return bool
    */
-  bool is_valid(rmm::cuda_stream_view stream) const { return scalar.is_valid(stream); }
+  [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream) const
+  {
+    return scalar.is_valid(stream);
+  }
 
  private:
   cudf::scalar const& scalar;
@@ -232,14 +238,14 @@ class column_reference : public expression {
    *
    * @return cudf::size_type
    */
-  cudf::size_type get_column_index() const { return column_index; }
+  [[nodiscard]] cudf::size_type get_column_index() const { return column_index; }
 
   /**
    * @brief Get the table source.
    *
    * @return table_reference
    */
-  table_reference get_table_source() const { return table_source; }
+  [[nodiscard]] table_reference get_table_source() const { return table_source; }
 
   /**
    * @brief Get the data type.
@@ -247,7 +253,7 @@ class column_reference : public expression {
    * @param table Table used to determine types.
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type(table_view const& table) const
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const
   {
     return table.column(get_column_index()).type();
   }
@@ -259,7 +265,8 @@ class column_reference : public expression {
    * @param right_table Right table used to determine types.
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type(table_view const& left_table, table_view const& right_table) const
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& left_table,
+                                              table_view const& right_table) const
   {
     auto const table = [&] {
       if (get_table_source() == table_reference::LEFT) {
@@ -281,9 +288,9 @@ class column_reference : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
@@ -327,7 +334,7 @@ class operation : public expression {
    *
    * @return ast_operator
    */
-  ast_operator get_operator() const { return op; }
+  [[nodiscard]] ast_operator get_operator() const { return op; }
 
   /**
    * @brief Get the operands.
@@ -344,9 +351,9 @@ class operation : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return std::any_of(operands.cbegin(),
                        operands.cend(),

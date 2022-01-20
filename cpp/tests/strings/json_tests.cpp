@@ -389,7 +389,7 @@ TEST_F(JsonPathTests, GetJsonObjectFilter)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::strings_column_wrapper expected_raw{"[\"0-553-21311-3\",\"0-395-19395-8\"]"};
+    cudf::test::strings_column_wrapper expected_raw{R"(["0-553-21311-3","0-395-19395-8"])"};
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -402,7 +402,7 @@ TEST_F(JsonPathTests, GetJsonObjectFilter)
     auto result     = drop_whitespace(*result_raw);
 
     cudf::test::strings_column_wrapper expected_raw{
-      "[\"reference\",\"fiction\",\"fiction\",\"fiction\"]"};
+      R"(["reference","fiction","fiction","fiction"])"};
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -415,7 +415,7 @@ TEST_F(JsonPathTests, GetJsonObjectFilter)
     auto result     = drop_whitespace(*result_raw);
 
     cudf::test::strings_column_wrapper expected_raw{
-      "[\"Sayings of the Century\",\"Sword of Honour\",\"Moby Dick\",\"The Lord of the Rings\"]"};
+      R"(["Sayings of the Century","Sword of Honour","Moby Dick","The Lord of the Rings"])"};
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -470,7 +470,7 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyQuery)
 {
   // empty query -> null
   {
-    cudf::test::strings_column_wrapper input{"{\"a\" : \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a" : "b"})"};
     std::string json_path("");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
@@ -497,7 +497,7 @@ TEST_F(JsonPathTests, GetJsonObjectEmptyInputsAndOutputs)
   // returning something, but it happens to be empty. so we expect
   // a valid, but empty row
   {
-    cudf::test::strings_column_wrapper input{"{\"store\": { \"bicycle\" : \"\" } }"};
+    cudf::test::strings_column_wrapper input{R"({"store": { "bicycle" : "" } })"};
     std::string json_path("$.store.bicycle");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
@@ -513,7 +513,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
   // can't have more than one root operator, or a root operator anywhere other
   // than the beginning
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("$$");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -523,7 +523,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
 
   // invalid index
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("$[auh46h-]");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -533,7 +533,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
 
   // invalid index
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("$[[]]");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -543,7 +543,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
 
   // negative index
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("$[-1]");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -553,7 +553,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
 
   // child operator with no name specified
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path(".");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -562,7 +562,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
   }
 
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("][");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -571,7 +571,7 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
   }
 
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("6hw6,56i3");
     auto query = [&]() {
       auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
@@ -585,7 +585,7 @@ TEST_F(JsonPathTests, GetJsonObjectInvalidQuery)
 {
   // non-existent field
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("$[*].c");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
@@ -596,7 +596,7 @@ TEST_F(JsonPathTests, GetJsonObjectInvalidQuery)
 
   // non-existent field
   {
-    cudf::test::strings_column_wrapper input{"{\"a\": \"b\"}"};
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
     std::string json_path("$[*].c[2]");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
@@ -667,8 +667,8 @@ TEST_F(JsonPathTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "{\"b\" : \"c\"}",
-      "{\"b\" : \"c\"}",
+      R"({"b" : "c"})",
+      R"({"b" : "c"})",
       "",
       "[\"y\",500]",
       "",
@@ -786,7 +786,7 @@ TEST_F(JsonPathTests, StripQuotes)
 
   // a valid, but empty row
   {
-    cudf::test::strings_column_wrapper input{"{\"store\": { \"bicycle\" : \"\" } }"};
+    cudf::test::strings_column_wrapper input{R"({"store": { "bicycle" : "" } })"};
     std::string json_path("$.store.bicycle");
 
     cudf::strings::get_json_object_options options;
@@ -858,8 +858,8 @@ TEST_F(JsonPathTests, AllowSingleQuotes)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "{\'b\' : \'c\'}",
-      "{\'b\' : \"c\"}",
+      R"({'b' : 'c'})",
+      R"({'b' : "c"})",
       "",
       "[\'y\',500]",
       "",
@@ -902,7 +902,7 @@ TEST_F(JsonPathTests, StringsWithSpecialChars)
 
       // clang-format off
       cudf::test::strings_column_wrapper expected({
-        "[{\"key\" : \"value[\"}]",
+        R"([{"key" : "value["}])",
       });
       // clang-format on
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
@@ -928,7 +928,7 @@ TEST_F(JsonPathTests, StringsWithSpecialChars)
 
       // clang-format off
       cudf::test::strings_column_wrapper expected({
-        "[}{}][][{[\\\"}}[\\\"]",
+        R"([}{}][][{[\"}}[\"])",
       });
       // clang-format on
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
@@ -961,8 +961,8 @@ TEST_F(JsonPathTests, EscapeSequences)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "\\\" \\\\ \\/ \\b \\f \\n \\r \\t",
-      "\\u1248 \\uacdf \\uACDF \\u10EF"
+      R"(\" \\ \/ \b \f \n \r \t)",
+      R"(\u1248 \uacdf \uACDF \u10EF)"
     });
     // clang-format on
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);

@@ -64,7 +64,7 @@ template <typename BinaryOperator>
 struct is_binary_operation_supported {
   // For types where Out type is fixed. (eg. comparison types)
   template <typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()(void)
+  inline constexpr bool operator()()
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
@@ -80,7 +80,7 @@ struct is_binary_operation_supported {
   }
 
   template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()(void)
+  inline constexpr bool operator()()
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>() and
