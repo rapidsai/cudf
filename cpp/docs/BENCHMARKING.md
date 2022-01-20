@@ -2,7 +2,7 @@
 
 Unit benchmarks in libcudf are written using [NVBench](https://github.com/NVIDIA/nvbench).
 While many existing benchmarks are written using
-[Google Benchmark](https://github.com/google/benchmark), new benchmarks should use nvbench.
+[Google Benchmark](https://github.com/google/benchmark), new benchmarks should use NVBench.
 
 The NVBench library is similar to Google Benchmark, but has several quality of life improvements
 when doing GPU benchmarking such as displaying the fraction of peak memory bandwidth achieved and
