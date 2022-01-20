@@ -315,8 +315,16 @@ def xfail_param(param, **kwargs):
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):
+    """Assert the memory location and size of `lhs` and `rhs` are equivalent.
+
+    Both data pointer and mask pointer are checked. Also recursively check for
+    children to the same contarints. Also fails check if the number of children
+    mismatches at any level.
+    """
     assert lhs.base_data_ptr == rhs.base_data_ptr
     assert lhs.base_mask_ptr == rhs.base_mask_ptr
+    assert lhs.size == rhs.size
+    assert len(lhs.base_children) == len(rhs.base_children)
     for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
         assert_column_memory_eq(lhs_child, rhs_child)
 
