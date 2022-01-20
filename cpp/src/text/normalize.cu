@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <text/subword/detail/data_normalizer.hpp>
+#include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <nvtext/normalize.hpp>
@@ -199,8 +200,10 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
-  data_normalizer normalizer(stream, do_lower_case);
-  auto result = [&strings, &normalizer, stream] {
+  auto result = [&] {
+    auto const cp_metadata = get_codepoint_metadata(stream);
+    auto const aux_table   = get_aux_codepoint_data(stream);
+    data_normalizer normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
     auto const offsets   = strings.offsets();
     auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
     auto const offset    = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);

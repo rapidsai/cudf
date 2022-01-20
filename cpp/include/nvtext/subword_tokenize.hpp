@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,8 @@ struct hashed_vocabulary {
   std::unique_ptr<cudf::column> table;             // uint64
   std::unique_ptr<cudf::column> bin_coefficients;  // uint64
   std::unique_ptr<cudf::column> bin_offsets;       // uint16
+  std::unique_ptr<cudf::column> cp_metadata;       // uint32
+  std::unique_ptr<cudf::column> aux_cp_table;      // uint64
 };
 
 /**
