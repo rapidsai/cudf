@@ -33,6 +33,7 @@ dependencies:
   - ipython
   - pandoc=<2.0.0
   - cudatoolkit=11.5
+  - cuda-python >=11.5,<12.0
   - pip
   - flake8=3.8.3
   - black=19.10
