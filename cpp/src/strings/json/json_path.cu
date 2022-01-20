@@ -72,7 +72,7 @@ enum class parse_result {
  */
 class parser {
  protected:
-  CUDF_HOST_DEVICE inline parser() : input(nullptr), input_len(0), pos(nullptr) {}
+  CUDF_HOST_DEVICE inline parser() {}
   CUDF_HOST_DEVICE inline parser(const char* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
@@ -177,9 +177,9 @@ class parser {
   }
 
  protected:
-  char const* input;
-  int64_t input_len;
-  char const* pos;
+  char const* input{nullptr};
+  int64_t input_len{0};
+  char const* pos{nullptr};
 
   CUDF_HOST_DEVICE inline bool is_whitespace(char c) { return c <= ' '; }
 };
@@ -220,18 +220,10 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
  */
 class json_state : private parser {
  public:
-  __device__ json_state()
-    : parser(),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE)
-  {
-  }
+  __device__ json_state() : parser() {}
   __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE),
+
       options(_options)
   {
   }
@@ -340,7 +332,7 @@ class json_state : private parser {
       // next
       parse_result result = next_element_internal(false);
       if (result != parse_result::SUCCESS) { return result; }
-    } while (1);
+    } while (true);
 
     return parse_result::ERROR;
   }
@@ -486,12 +478,12 @@ class json_state : private parser {
     return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
   }
 
-  const char* cur_el_start;          // pointer to the first character of the -value- of the current
-                                     // element - not the name
-  string_view cur_el_name;           // name of the current element (if applicable)
-  json_element_type cur_el_type;     // type of the current element
-  json_element_type parent_el_type;  // parent element type
-  get_json_object_options options;   // behavior options
+  const char* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
+                                      // current element - not the name
+  string_view cur_el_name;            // name of the current element (if applicable)
+  json_element_type cur_el_type{json_element_type::NONE};     // type of the current element
+  json_element_type parent_el_type{json_element_type::NONE};  // parent element type
+  get_json_object_options options;                            // behavior options
 };
 
 enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
@@ -501,26 +493,23 @@ enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR,
  * an array of these operators applied to the incoming json string,
  */
 struct path_operator {
-  CUDF_HOST_DEVICE inline path_operator()
-    : type(path_operator_type::ERROR), index(-1), expected_type{NONE}
-  {
-  }
+  CUDF_HOST_DEVICE inline path_operator() {}
   CUDF_HOST_DEVICE inline path_operator(path_operator_type _type,
                                         json_element_type _expected_type = NONE)
-    : type(_type), index(-1), expected_type{_expected_type}
+    : type(_type), expected_type{_expected_type}
   {
   }
 
-  path_operator_type type;  // operator type
+  path_operator_type type{path_operator_type::ERROR};  // operator type
   // the expected element type we're applying this operation to.
   // for example:
   //    - you cannot retrieve a subscripted field (eg [5]) from an object.
   //    - you cannot retrieve a field by name (eg  .book) from an array.
   //    - you -can- use .* for both arrays and objects
   // a value of NONE imples any type accepted
-  json_element_type expected_type;  // the expected type of the element we're working with
-  string_view name;                 // name to match against (if applicable)
-  int index;                        // index for subscript operator
+  json_element_type expected_type{NONE};  // the expected type of the element we're working with
+  string_view name;                       // name to match against (if applicable)
+  int index{-1};                          // index for subscript operator
 };
 
 /**

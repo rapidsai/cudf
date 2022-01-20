@@ -49,7 +49,7 @@ struct var_transform {
   {
     if (d_values.is_null(i)) return 0.0;
 
-    ResultType x = static_cast<ResultType>(values_iter[i]);
+    auto x = static_cast<ResultType>(values_iter[i]);
 
     size_type group_idx  = d_group_labels[i];
     size_type group_size = d_group_sizes[group_idx];

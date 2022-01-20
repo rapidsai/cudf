@@ -133,7 +133,25 @@ def _generate_column(column_params, num_rows):
         else:
             arrow_type = None
 
-        if not isinstance(arrow_type, pa.lib.Decimal128Type):
+        if isinstance(column_params.dtype, cudf.StructDtype):
+            vals = pa.StructArray.from_arrays(
+                column_params.generator,
+                names=column_params.dtype.fields.keys(),
+                mask=pa.array(
+                    np.random.choice(
+                        [True, False],
+                        size=num_rows,
+                        p=[
+                            column_params.null_frequency,
+                            1 - column_params.null_frequency,
+                        ],
+                    )
+                )
+                if column_params.null_frequency > 0.0
+                else None,
+            )
+            return vals
+        elif not isinstance(arrow_type, pa.lib.Decimal128Type):
             vals = pa.array(
                 column_params.generator,
                 size=column_params.cardinality,
@@ -350,6 +368,30 @@ def rand_dataframe(
                     ),
                     is_sorted=False,
                     dtype=dtype,
+                )
+            )
+        elif dtype == "struct":
+            nesting_max_depth = meta["nesting_max_depth"]
+            max_types_at_each_level = meta["max_types_at_each_level"]
+            max_null_frequency = meta["max_null_frequency"]
+            nesting_depth = np.random.randint(1, nesting_max_depth)
+            structDtype = create_nested_struct_type(
+                max_types_at_each_level=max_types_at_each_level,
+                nesting_level=nesting_depth,
+            )
+
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=struct_generator(
+                        dtype=structDtype,
+                        cardinality=cardinality,
+                        size=rows,
+                        max_null_frequency=max_null_frequency,
+                    ),
+                    is_sorted=False,
+                    dtype=structDtype,
                 )
             )
         elif dtype == "decimal64":
@@ -600,11 +642,15 @@ def decimal_generator(dtype, size):
     )
 
 
-def get_values_for_nested_data(dtype, lists_max_length):
+def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
     """
     Returns list of values based on dtype.
     """
-    cardinality = np.random.randint(0, lists_max_length)
+    if size is None:
+        cardinality = np.random.randint(0, lists_max_length)
+    else:
+        cardinality = size
+
     dtype = cudf.dtype(dtype)
     if dtype.kind in ("i", "u"):
         values = int_generator(dtype=dtype, size=cardinality)()
@@ -628,12 +674,7 @@ def get_values_for_nested_data(dtype, lists_max_length):
     else:
         raise TypeError(f"Unsupported dtype: {dtype}")
 
-    # To ensure numpy arrays are not passed as input to
-    # list constructor, returning a python list object here.
-    if isinstance(values, np.ndarray):
-        return values.tolist()
-    else:
-        return values
+    return values
 
 
 def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
@@ -657,7 +698,38 @@ def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
         top_level_list = get_values_for_nested_data(
             dtype=dtype, lists_max_length=lists_max_length
         )
+        # To ensure numpy arrays are not passed as input to
+        # list constructor, returning a python list object here.
+        if isinstance(top_level_list, np.ndarray):
+            top_level_list = top_level_list.tolist()
+
     return top_level_list
+
+
+def make_array_for_struct(dtype, cardinality, size, max_null_frequency):
+    """
+    Helper to create a pa.array with `size` and `dtype`
+    for a `StructArray`.
+    """
+
+    null_frequency = np.random.uniform(low=0, high=max_null_frequency)
+    local_cardinality = max(np.random.randint(low=0, high=cardinality), 1)
+    data = get_values_for_nested_data(
+        dtype=dtype.type.to_pandas_dtype(), size=local_cardinality
+    )
+    vals = np.random.choice(data, size=size)
+
+    return pa.array(
+        vals,
+        mask=np.random.choice(
+            [True, False], size=size, p=[null_frequency, 1 - null_frequency],
+        )
+        if null_frequency > 0.0
+        else None,
+        size=size,
+        safe=False,
+        type=dtype.type,
+    )
 
 
 def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
@@ -680,6 +752,34 @@ def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
     return list_of_lists
 
 
+def get_nested_structs(dtype, cardinality, size, max_null_frequency):
+    """
+    Returns a list of arrays with random data
+    corresponding to the dtype provided.
+    ``dtype`` here should be a ``cudf.StructDtype``
+    """
+    list_of_arrays = []
+
+    for name, col_dtype in dtype.fields.items():
+        if isinstance(col_dtype, cudf.StructDtype):
+            result_arrays = get_nested_structs(
+                col_dtype, cardinality, size, max_null_frequency
+            )
+            result_arrays = pa.StructArray.from_arrays(
+                result_arrays, names=col_dtype.fields.keys()
+            )
+        else:
+            result_arrays = make_array_for_struct(
+                dtype=dtype._typ[name],
+                cardinality=cardinality,
+                size=size,
+                max_null_frequency=max_null_frequency,
+            )
+        list_of_arrays.append(result_arrays)
+
+    return list_of_arrays
+
+
 def list_generator(dtype, size, nesting_depth, lists_max_length):
     """
     Generator for list data
@@ -690,3 +790,29 @@ def list_generator(dtype, size, nesting_depth, lists_max_length):
         nesting_depth=nesting_depth,
         lists_max_length=lists_max_length,
     )
+
+
+def struct_generator(dtype, cardinality, size, max_null_frequency):
+    """
+    Generator for struct data
+    """
+    return lambda: get_nested_structs(
+        dtype=dtype,
+        cardinality=cardinality,
+        size=size,
+        max_null_frequency=max_null_frequency,
+    )
+
+
+def create_nested_struct_type(max_types_at_each_level, nesting_level):
+    dtypes_list = cudf.utils.dtypes.ALL_TYPES
+    picked_types = np.random.choice(list(dtypes_list), max_types_at_each_level)
+    type_dict = {}
+    for name, type_ in enumerate(picked_types):
+        if type_ == "struct":
+            type_dict[str(name)] = create_nested_struct_type(
+                max_types_at_each_level, nesting_level - 1
+            )
+        else:
+            type_dict[str(name)] = cudf.dtype(type_)
+    return cudf.StructDtype(type_dict)

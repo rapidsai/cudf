@@ -181,7 +181,7 @@ class orc_column_view {
 
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
   void set_dict_stride(size_t stride) noexcept { _dict_stride = stride; }
-  auto dict_stride() const noexcept { return _dict_stride; }
+  [[nodiscard]] auto dict_stride() const noexcept { return _dict_stride; }
 
   /**
    * @brief Function that associates an existing dictionary chunk allocation
@@ -192,14 +192,14 @@ class orc_column_view {
     dict   = host_dict;
     d_dict = dev_dict;
   }
-  auto host_dict_chunk(size_t rowgroup) const
+  [[nodiscard]] auto host_dict_chunk(size_t rowgroup) const
   {
     CUDF_EXPECTS(is_string(), "Dictionary chunks are only present in string columns.");
     return &dict[rowgroup * _dict_stride + _str_idx];
   }
-  auto device_dict_chunk() const { return d_dict; }
+  [[nodiscard]] auto device_dict_chunk() const { return d_dict; }
 
-  auto const& decimal_offsets() const { return d_decimal_offsets; }
+  [[nodiscard]] auto const& decimal_offsets() const { return d_decimal_offsets; }
   void attach_decimal_offsets(uint32_t* sizes_ptr) { d_decimal_offsets = sizes_ptr; }
 
   /**
@@ -211,39 +211,39 @@ class orc_column_view {
     stripe_dict   = host_stripe_dict;
     d_stripe_dict = dev_stripe_dict;
   }
-  auto host_stripe_dict(size_t stripe) const
+  [[nodiscard]] auto host_stripe_dict(size_t stripe) const
   {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
     return &stripe_dict[stripe * _dict_stride + _str_idx];
   }
-  auto device_stripe_dict() const noexcept { return d_stripe_dict; }
+  [[nodiscard]] auto device_stripe_dict() const noexcept { return d_stripe_dict; }
 
   // Index in the table
-  uint32_t index() const noexcept { return _index; }
+  [[nodiscard]] uint32_t index() const noexcept { return _index; }
   // Id in the ORC file
-  auto id() const noexcept { return _index + 1; }
+  [[nodiscard]] auto id() const noexcept { return _index + 1; }
 
-  auto is_child() const noexcept { return _is_child; }
+  [[nodiscard]] auto is_child() const noexcept { return _is_child; }
   auto parent_index() const noexcept { return _parent_index.value(); }
   auto child_begin() const noexcept { return children.cbegin(); }
   auto child_end() const noexcept { return children.cend(); }
   auto num_children() const noexcept { return children.size(); }
 
-  auto type_width() const noexcept { return _type_width; }
+  [[nodiscard]] auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
 
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }
-  bool nullable() const noexcept { return null_mask() != nullptr; }
+  [[nodiscard]] bool nullable() const noexcept { return null_mask() != nullptr; }
   auto user_defined_nullable() const noexcept { return nullable_from_metadata; }
 
-  auto scale() const noexcept { return _scale; }
-  auto precision() const noexcept { return _precision; }
+  [[nodiscard]] auto scale() const noexcept { return _scale; }
+  [[nodiscard]] auto precision() const noexcept { return _precision; }
 
   void set_orc_encoding(ColumnEncodingKind e) noexcept { _encoding_kind = e; }
-  auto orc_kind() const noexcept { return _type_kind; }
-  auto orc_encoding() const noexcept { return _encoding_kind; }
-  std::string_view orc_name() const noexcept { return name; }
+  [[nodiscard]] auto orc_kind() const noexcept { return _type_kind; }
+  [[nodiscard]] auto orc_encoding() const noexcept { return _encoding_kind; }
+  [[nodiscard]] std::string_view orc_name() const noexcept { return name; }
 
  private:
   column_view cudf_column;

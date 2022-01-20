@@ -102,12 +102,12 @@ class orc_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to read.
    */
-  std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns vector of vectors, stripes to read for each input source
@@ -503,32 +503,32 @@ class orc_writer_options {
   /**
    * @brief Returns sink info.
    */
-  sink_info const& get_sink() const { return _sink; }
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression type.
    */
-  compression_type get_compression() const { return _compression; }
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  bool is_enabled_statistics() const { return _stats_freq != statistics_freq::STATISTICS_NONE; }
+  [[nodiscard]] bool is_enabled_statistics() const { return _stats_freq != statistics_freq::STATISTICS_NONE; }
 
   /**
    * @brief Returns frequency of statistics collection.
    */
-  statistics_freq get_statistics_freq() const { return _stats_freq; }
+  [[nodiscard]] statistics_freq get_statistics_freq() const { return _stats_freq; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
    */
-  auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
+  [[nodiscard]] auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
    */
-  auto get_stripe_size_rows() const { return _stripe_size_rows; }
+  [[nodiscard]] auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
@@ -542,17 +542,20 @@ class orc_writer_options {
   /**
    * @brief Returns table to be written to output.
    */
-  table_view get_table() const { return _table; }
+  [[nodiscard]] table_view get_table() const { return _table; }
 
   /**
    * @brief Returns associated metadata.
    */
-  table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
    */
-  std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
+  [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
+  {
+    return _user_data;
+  }
 
   // Setters
 
@@ -841,27 +844,27 @@ class chunked_orc_writer_options {
   /**
    * @brief Returns sink info.
    */
-  sink_info const& get_sink() const { return _sink; }
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression type.
    */
-  compression_type get_compression() const { return _compression; }
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns granularity of statistics collection.
    */
-  statistics_freq get_statistics_freq() const { return _stats_freq; }
+  [[nodiscard]] statistics_freq get_statistics_freq() const { return _stats_freq; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
    */
-  auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
+  [[nodiscard]] auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
    */
-  auto get_stripe_size_rows() const { return _stripe_size_rows; }
+  [[nodiscard]] auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
@@ -875,12 +878,15 @@ class chunked_orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
    */
-  std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
+  [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
+  {
+    return _user_data;
+  }
 
   // Setters
 
