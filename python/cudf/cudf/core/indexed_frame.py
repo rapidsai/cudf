@@ -556,7 +556,7 @@ class IndexedFrame(Frame):
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.copying.gather(
                 list(self._index._columns + self._columns)
                 if keep_index
@@ -567,9 +567,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if keep_index else None,
         )
-
-        result._copy_type_metadata(self, include_index=keep_index)
-        return result
 
     def _positions_from_column_names(
         self, column_names, offset_by_index_columns=False
@@ -628,7 +625,7 @@ class IndexedFrame(Frame):
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
@@ -640,8 +637,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if not ignore_index else None,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def add_prefix(self, prefix):
         """
@@ -1354,7 +1349,7 @@ class IndexedFrame(Frame):
                 for col in self._columns
             ]
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
                 list(self._index._data.columns) + data_columns,
                 how=how,
@@ -1366,8 +1361,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def _apply_boolean_mask(self, boolean_mask):
         """Apply boolean mask to each row of `self`.
@@ -1378,15 +1371,13 @@ class IndexedFrame(Frame):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(
                 list(self._index._columns + self._columns), boolean_mask
             ),
             column_names=self._column_names,
             index_names=self._index.names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def take(self, indices, axis=0):
         """Return a new frame containing the rows specified by *indices*.

@@ -1444,7 +1444,8 @@ class BaseIndex(Serializable):
         """
 
         # This utilizes the fact that all `Index` is also a `Frame`.
-        result = self.__class__._from_columns(
+        # Except RangeIndex.
+        return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
                 keys=range(len(self._data)),
@@ -1453,8 +1454,6 @@ class BaseIndex(Serializable):
             ),
             self._column_names,
         )
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def dropna(self, how="any"):
         """
@@ -1476,12 +1475,10 @@ class BaseIndex(Serializable):
             for col in self._columns
         ]
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
             self._column_names,
         )
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         """Gather rows of index specified by indices in `gather_map`.
@@ -1501,13 +1498,10 @@ class BaseIndex(Serializable):
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             gather(list(self._columns), gather_map, nullify=nullify),
             self._column_names,
         )
-
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def take(self, indices, axis=0, allow_fill=True, fill_value=None):
         """Return a new index containing the rows specified by *indices*
@@ -1561,12 +1555,10 @@ class BaseIndex(Serializable):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             apply_boolean_mask(list(self._columns), boolean_mask),
             column_names=self._column_names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:

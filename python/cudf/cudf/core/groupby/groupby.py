@@ -184,11 +184,25 @@ class GroupBy(Serializable):
         Parameters
         ----------
         func : str, callable, list or dict
+            Argument specifying the aggregation(s) to perform on the
+            groups. `func` can be any of the following:
+
+              - string: the name of a supported aggregation
+              - callable: a function that accepts a Series/DataFrame and
+                performs a supported operation on it.
+              - list: a list of strings/callables specifying the
+                aggregations to perform on every column.
+              - dict: a mapping of column names to string/callable
+                specifying the aggregations to perform on those
+                columns.
+
+        See :ref:`the user guide <basics.groupby>` for supported
+        aggregations.
 
         Returns
         -------
         A Series or DataFrame containing the combined results of the
-        aggregation.
+        aggregation(s).
 
         Examples
         --------
@@ -654,6 +668,54 @@ class GroupBy(Serializable):
         _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
+
+    def transform(self, function):
+        """Apply an aggregation, then broadcast the result to the group size.
+
+        Parameters
+        ----------
+        function: str or callable
+            Aggregation to apply to each group. Note that the set of
+            operations currently supported by `transform` is identical
+            to that supported by the `agg` method.
+
+        Returns
+        -------
+        A Series or DataFrame of the same size as the input, with the
+        result of the aggregation per group broadcasted to the group
+        size.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          import cudf
+          df = cudf.DataFrame({'a': [2, 1, 1, 2, 2], 'b': [1, 2, 3, 4, 5]})
+          df.groupby('a').transform('max')
+             b
+          0  5
+          1  3
+          2  3
+          3  5
+          4  5
+
+        See also
+        --------
+        cudf.core.groupby.GroupBy.agg
+        """
+        try:
+            result = self.agg(function)
+        except TypeError as e:
+            raise NotImplementedError(
+                "Currently, `transform()` supports only aggregations."
+            ) from e
+
+        if not result.index.equals(self.grouping.keys):
+            result = result._align_to_index(
+                self.grouping.keys, how="right", allow_non_unique=True
+            )
+            result = result.reset_index(drop=True)
+        return result
 
     def rolling(self, *args, **kwargs):
         """
