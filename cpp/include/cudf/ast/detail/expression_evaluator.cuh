@@ -76,7 +76,7 @@ struct expression_result {
     subclass().template set_value<Element>(index, result);
   }
 
-  __device__ inline bool is_valid() const { return subclass().is_valid(); }
+  [[nodiscard]] __device__ inline bool is_valid() const { return subclass().is_valid(); }
 
   __device__ inline T value() const { return subclass().value(); }
 };
@@ -110,7 +110,7 @@ struct value_expression_result
   /**
    * @brief Returns true if the underlying data is valid and false otherwise.
    */
-  __device__ inline bool is_valid() const
+  [[nodiscard]] __device__ inline bool is_valid() const
   {
     if constexpr (has_nulls) { return _obj.has_value(); }
     return true;
@@ -174,7 +174,7 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  __device__ inline bool is_valid() const
+  [[nodiscard]] __device__ inline bool is_valid() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
@@ -186,7 +186,7 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  __device__ inline mutable_column_device_view value() const
+  [[nodiscard]] __device__ inline mutable_column_device_view value() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
@@ -429,7 +429,7 @@ struct expression_evaluator {
   __device__ __forceinline__ void evaluate(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage)
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage);
   }
@@ -452,7 +452,7 @@ struct expression_evaluator {
     cudf::size_type const left_row_index,
     cudf::size_type const right_row_index,
     cudf::size_type const output_row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage)
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
