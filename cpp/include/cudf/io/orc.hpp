@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -435,6 +435,18 @@ table_with_metadata read_orc(
 class orc_writer_options_builder;
 
 /**
+ * @brief Constants to disambiguate statistics terminology for ORC.
+ *
+ * ORC refers to its finest granularity of row-grouping as "row group",
+ * which corresponds to Parquet "pages".
+ * Similarly, ORC's "stripe" corresponds to a Parquet "row group".
+ * The following constants disambiguate the terminology for the statistics
+ * collected at each level.
+ */
+static constexpr statistics_freq ORC_STATISTICS_STRIPE    = statistics_freq::STATISTICS_ROWGROUP;
+static constexpr statistics_freq ORC_STATISTICS_ROW_GROUP = statistics_freq::STATISTICS_PAGE;
+
+/**
  * @brief Settings to use for `write_orc()`.
  */
 class orc_writer_options {
@@ -442,8 +454,8 @@ class orc_writer_options {
   sink_info _sink;
   // Specify the compression format to use
   compression_type _compression = compression_type::AUTO;
-  // Enable writing column statistics
-  bool _enable_statistics = true;
+  // Specify frequency of statistics collection
+  statistics_freq _stats_freq = ORC_STATISTICS_ROW_GROUP;
   // Maximum size of each stripe (unless smaller than a single row group)
   size_t _stripe_size_bytes = default_stripe_size_bytes;
   // Maximum number of rows in stripe (unless smaller than a single row group)
@@ -501,7 +513,15 @@ class orc_writer_options {
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  [[nodiscard]] bool is_enabled_statistics() const { return _enable_statistics; }
+  [[nodiscard]] bool is_enabled_statistics() const
+  {
+    return _stats_freq != statistics_freq::STATISTICS_NONE;
+  }
+
+  /**
+   * @brief Returns frequency of statistics collection.
+   */
+  [[nodiscard]] statistics_freq get_statistics_freq() const { return _stats_freq; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
@@ -550,11 +570,16 @@ class orc_writer_options {
   void set_compression(compression_type comp) { _compression = comp; }
 
   /**
-   * @brief Enable/Disable writing column statistics.
+   * @brief Choose granularity of statistics collection.
    *
-   * @param val Boolean value to enable/disable statistics.
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
+   *
+   * @param val Frequency of statistics collection.
    */
-  void enable_statistics(bool val) { _enable_statistics = val; }
+  void enable_statistics(statistics_freq val) { _stats_freq = val; }
 
   /**
    * @brief Sets the maximum stripe size, in bytes.
@@ -647,14 +672,19 @@ class orc_writer_options_builder {
   }
 
   /**
-   * @brief Enable/Disable writing column statistics.
+   * @brief Choose granularity of column statistics to be written
    *
-   * @param val Boolean value to enable/disable.
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
+   *
+   * @param val Level of statistics collection.
    * @return this for chaining.
    */
-  orc_writer_options_builder& enable_statistics(bool val)
+  orc_writer_options_builder& enable_statistics(statistics_freq val)
   {
-    options._enable_statistics = val;
+    options._stats_freq = val;
     return *this;
   }
 
@@ -775,8 +805,8 @@ class chunked_orc_writer_options {
   sink_info _sink;
   // Specify the compression format to use
   compression_type _compression = compression_type::AUTO;
-  // Enable writing column statistics
-  bool _enable_statistics = true;
+  // Specify granularity of statistics collection
+  statistics_freq _stats_freq = ORC_STATISTICS_ROW_GROUP;
   // Maximum size of each stripe (unless smaller than a single row group)
   size_t _stripe_size_bytes = default_stripe_size_bytes;
   // Maximum number of rows in stripe (unless smaller than a single row group)
@@ -825,9 +855,9 @@ class chunked_orc_writer_options {
   [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
-   * @brief Whether writing column statistics is enabled/disabled.
+   * @brief Returns granularity of statistics collection.
    */
-  [[nodiscard]] bool is_enabled_statistics() const { return _enable_statistics; }
+  [[nodiscard]] statistics_freq get_statistics_freq() const { return _stats_freq; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
@@ -871,11 +901,16 @@ class chunked_orc_writer_options {
   void set_compression(compression_type comp) { _compression = comp; }
 
   /**
-   * @brief Enable/Disable writing column statistics.
+   * @brief Choose granularity of statistics collection
    *
-   * @param val Boolean value to enable/disable.
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
+   *
+   * @param val Frequency of statistics collection.
    */
-  void enable_statistics(bool val) { _enable_statistics = val; }
+  void enable_statistics(statistics_freq val) { _stats_freq = val; }
 
   /**
    * @brief Sets the maximum stripe size, in bytes.
@@ -958,14 +993,19 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
-   * @brief Enable/Disable writing column statistics.
+   * @brief Choose granularity of statistics collection
    *
-   * @param val Boolean value to enable/disable.
+   * The granularity can be set to:
+   * - cudf::io::STATISTICS_NONE: No statistics are collected.
+   * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
+   * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
+   *
+   * @param val Frequency of statistics collection.
    * @return this for chaining.
    */
-  chunked_orc_writer_options_builder& enable_statistics(bool val)
+  chunked_orc_writer_options_builder& enable_statistics(statistics_freq val)
   {
-    options._enable_statistics = val;
+    options._stats_freq = val;
     return *this;
   }
 
