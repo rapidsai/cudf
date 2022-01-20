@@ -513,7 +513,10 @@ class orc_writer_options {
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  [[nodiscard]] bool is_enabled_statistics() const { return _stats_freq != statistics_freq::STATISTICS_NONE; }
+  [[nodiscard]] bool is_enabled_statistics() const
+  {
+    return _stats_freq != statistics_freq::STATISTICS_NONE;
+  }
 
   /**
    * @brief Returns frequency of statistics collection.
