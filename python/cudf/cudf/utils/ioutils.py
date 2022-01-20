@@ -1293,7 +1293,7 @@ def _open_remote_files(
     if precache == "parquet" and not fsspec_parquet:
         warnings.warn(
             f"This version of fsspec ({fsspec.__version__}) does "
-            f"not support parquet-optimized precaching. Please "
+            f"not support parquet-optimized precaching. Please upgrade "
             f"to the latest fsspec version for better performance."
         )
         precache = None
