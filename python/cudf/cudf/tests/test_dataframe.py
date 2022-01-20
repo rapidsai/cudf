@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import array as arr
 import datetime
@@ -2176,13 +2176,17 @@ def test_quantile(q, numeric_only):
 
 @pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
 @pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
-def test_decimal_quantile(q, interpolation):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_decimal_quantile(q, interpolation, decimal_type):
     data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
     gdf = cudf.DataFrame(
         {"id": np.random.randint(0, 10, size=len(data)), "val": data}
     )
     gdf["id"] = gdf["id"].astype("float64")
-    gdf["val"] = gdf["val"].astype(cudf.Decimal64Dtype(7, 2))
+    gdf["val"] = gdf["val"].astype(decimal_type(7, 2))
     pdf = gdf.to_pandas()
 
     got = gdf.quantile(q, numeric_only=False, interpolation=interpolation)
@@ -7661,9 +7665,14 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     actual = cudf.DataFrame(gd_data, columns=columns)
 
     if ignore_dtype:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_index_type=True,
+        )
     else:
-        assert_eq(expected, actual)
+        assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(
