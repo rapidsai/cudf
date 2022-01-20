@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf_kafka/kafka_consumer.hpp>
 #include <gtest/gtest.h>
 #include <map>
 #include <memory>
 #include <string>
-#include "cudf_kafka/kafka_consumer.hpp"
 
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
@@ -32,25 +32,37 @@ TEST_F(KafkaDatasourceTest, MissingGroupID)
 {
   // group.id is a required configuration.
   std::map<std::string, std::string> kafka_configs;
-  kafka_configs.insert({"bootstrap.servers", "localhost:9092"});
+  kafka_configs["bootstrap.servers"] = "localhost:9092";
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
-               cudf::logic_error);
+  kafka::python_callable_type python_callable;
+  kafka::kafka_oauth_callback_wrapper_type callback_wrapper;
+
+  EXPECT_THROW(
+    kafka::kafka_consumer kc(
+      kafka_configs, python_callable, callback_wrapper, "csv-topic", 0, 0, 3, 5000, "\n"),
+    cudf::logic_error);
 }
 
 TEST_F(KafkaDatasourceTest, InvalidConfigValues)
 {
   // Give a made up configuration value
   std::map<std::string, std::string> kafka_configs;
-  kafka_configs.insert({"completely_made_up_config", "wrong"});
+  kafka_configs["completely_made_up_config"] = "wrong";
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
-               cudf::logic_error);
+  kafka::python_callable_type python_callable;
+  kafka::kafka_oauth_callback_wrapper_type callback_wrapper;
 
-  kafka_configs.clear();
+  EXPECT_THROW(
+    kafka::kafka_consumer kc(
+      kafka_configs, python_callable, callback_wrapper, "csv-topic", 0, 0, 3, 5000, "\n"),
+    cudf::logic_error);
 
   // Give a good config property with a bad value
-  kafka_configs.insert({"message.max.bytes", "this should be a number not text"});
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
-               cudf::logic_error);
+  kafka_configs.clear();
+  kafka_configs["message.max.bytes"] = "this should be a number not text";
+
+  EXPECT_THROW(
+    kafka::kafka_consumer kc(
+      kafka_configs, python_callable, callback_wrapper, "csv-topic", 0, 0, 3, 5000, "\n"),
+    cudf::logic_error);
 }

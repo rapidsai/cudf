@@ -31,7 +31,10 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
+export DASK_DISTRIBUTED_GIT_TAG='main'
+
+# ucx-py version
+export UCX_PY_VERSION='0.25.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -83,10 +86,10 @@ gpuci_mamba_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.23.*"
+                  "ucx-py=${UCX_PY_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
@@ -121,7 +124,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
     else
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
@@ -166,15 +169,23 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_logger "GoogleTests"
     set -x
     cd $LIB_BUILD_DIR
+
+    gpuci_logger "GoogleTests"
 
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
+
+    # Copy libcudf build time results
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
+        gpuci_logger "Copying build time results"
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+    fi
 
     ################################################################################
     # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
@@ -206,12 +217,12 @@ else
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 
     gpuci_logger "Build python libs from source"
-    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka --ptds
     else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds

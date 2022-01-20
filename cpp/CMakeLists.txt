@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.02.00
+  VERSION 22.04.00
   LANGUAGES C CXX CUDA
 )
 
@@ -322,6 +322,7 @@ add_library(
   src/jit/parser.cpp
   src/jit/type.cpp
   src/join/conditional_join.cu
+  src/join/mixed_join.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
   src/join/join.cu
@@ -343,6 +344,7 @@ add_library(
   src/lists/lists_column_factories.cu
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
+  src/lists/sequences.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
@@ -416,7 +418,8 @@ add_library(
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/shift.cu
-  src/strings/extract.cu
+  src/strings/extract/extract.cu
+  src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/findall.cu
@@ -616,7 +619,7 @@ set_target_properties(
 )
 
 target_compile_options(
-  cudftestutil PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+  cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
                       "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
 )
 

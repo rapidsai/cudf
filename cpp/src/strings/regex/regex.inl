@@ -45,12 +45,12 @@ struct alignas(8) relist {
   int16_t* inst_ids{};  // one per instruction
   u_char* mask{};       // bit per instruction
 
-  __host__ __device__ inline static int32_t data_size_for(int32_t insts)
+  CUDF_HOST_DEVICE inline static int32_t data_size_for(int32_t insts)
   {
     return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) + ((insts + 7) / 8);
   }
 
-  __host__ __device__ inline static int32_t alloc_size(int32_t insts)
+  CUDF_HOST_DEVICE inline static int32_t alloc_size(int32_t insts)
   {
     int32_t size = sizeof(relist);
     size += data_size_for(insts);
@@ -58,9 +58,9 @@ struct alignas(8) relist {
     return size;
   }
 
-  __host__ __device__ inline relist() {}
+  CUDF_HOST_DEVICE inline relist() {}
 
-  __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr) : listsize(insts)
+  CUDF_HOST_DEVICE inline relist(int16_t insts, u_char* data = nullptr) : listsize(insts)
   {
     auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
     ranges   = reinterpret_cast<int2*>(ptr);
@@ -71,7 +71,7 @@ struct alignas(8) relist {
     reset();
   }
 
-  __host__ __device__ inline void reset()
+  CUDF_HOST_DEVICE inline void reset()
   {
     memset(mask, 0, (listsize + 7) / 8);
     size = 0;
@@ -276,10 +276,7 @@ __device__ inline int32_t reprog_device::regexec(
             }
             break;
           case EOL:
-            if (last_character ||
-                (c == '\n' && (inst->u1.c == '$' ||
-                               // edge case where \n appears at the end of the string
-                               pos + 1 == dstr.length()))) {
+            if (last_character || (c == '\n' && inst->u1.c == '$')) {
               id_activate = inst->u2.next_id;
               expanded    = true;
             }
