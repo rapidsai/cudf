@@ -51,9 +51,9 @@ enum InstType {
  * @brief Class type for regex compiler instruction.
  */
 struct reclass {
-  int32_t builtins;         // bit mask identifying builtin classes
+  int32_t builtins{0};      // bit mask identifying builtin classes
   std::u32string literals;  // ranges as pairs of utf-8 characters
-  reclass() : builtins(0) {}
+  reclass() {}
   reclass(int m) : builtins(m) {}
 };
 
@@ -99,20 +99,20 @@ class reprog {
   int32_t add_class(reclass cls);
 
   void set_groups_count(int32_t groups);
-  int32_t groups_count() const;
+  [[nodiscard]] int32_t groups_count() const;
 
-  const reinst* insts_data() const;
-  int32_t insts_count() const;
+  [[nodiscard]] const reinst* insts_data() const;
+  [[nodiscard]] int32_t insts_count() const;
   reinst& inst_at(int32_t id);
 
   reclass& class_at(int32_t id);
-  int32_t classes_count() const;
+  [[nodiscard]] int32_t classes_count() const;
 
-  const int32_t* starts_data() const;
-  int32_t starts_count() const;
+  [[nodiscard]] const int32_t* starts_data() const;
+  [[nodiscard]] int32_t starts_count() const;
 
   void set_start_inst(int32_t id);
-  int32_t get_start_inst() const;
+  [[nodiscard]] int32_t get_start_inst() const;
 
   void optimize1();
   void optimize2();
