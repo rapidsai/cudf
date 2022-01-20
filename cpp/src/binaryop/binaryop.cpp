@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -74,7 +74,8 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 inline bool is_null_dependent(binary_operator op)
 {
   return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
-         op == binary_operator::NULL_MAX;
+         op == binary_operator::NULL_MAX || op == binary_operator::NULL_LOGICAL_AND ||
+         op == binary_operator::NULL_LOGICAL_OR;
 }
 
 /**

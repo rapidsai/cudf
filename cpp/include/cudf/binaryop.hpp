@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,7 +72,11 @@ enum class binary_operator : int32_t {
                          ///< operand when one is null; or invalid when both are null
   GENERIC_BINARY,        ///< generic binary operator to be generated with input
                          ///< ptx code
-  INVALID_BINARY         ///< invalid operation
+  NULL_LOGICAL_AND,  ///< operator && with Spark rules: (null, null) is null, (null, true) is null,
+                     ///< (null, false) is false, and (valid, valid) == LOGICAL_AND(valid, valid)
+  NULL_LOGICAL_OR,   ///< operator || with Spark rules: (null, null) is null, (null, true) is true,
+                     ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
+  INVALID_BINARY     ///< invalid operation
 };
 /**
  * @brief Performs a binary operation between a scalar and a column.
