@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.02.00
+  VERSION 22.04.00
   LANGUAGES C CXX CUDA
 )
 
@@ -186,6 +186,8 @@ add_library(
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
+  src/binaryop/compiled/NullLogicalOr.cu
+  src/binaryop/compiled/NullLogicalAnd.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -322,6 +324,7 @@ add_library(
   src/jit/parser.cpp
   src/jit/type.cpp
   src/join/conditional_join.cu
+  src/join/mixed_join.cu
   src/join/cross_join.cu
   src/join/hash_join.cu
   src/join/join.cu

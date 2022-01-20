@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,10 +38,10 @@ uint32_t ProtobufReader::read_field_size(const uint8_t* end)
 void ProtobufReader::skip_struct_field(int t)
 {
   switch (t) {
-    case PB_TYPE_VARINT: get<uint32_t>(); break;
-    case PB_TYPE_FIXED64: skip_bytes(8); break;
-    case PB_TYPE_FIXEDLEN: skip_bytes(get<uint32_t>()); break;
-    case PB_TYPE_FIXED32: skip_bytes(4); break;
+    case ProtofType::VARINT: get<uint32_t>(); break;
+    case ProtofType::FIXED64: skip_bytes(8); break;
+    case ProtofType::FIXEDLEN: skip_bytes(get<uint32_t>()); break;
+    case ProtofType::FIXED32: skip_bytes(4); break;
     default: break;
   }
 }
@@ -209,43 +209,54 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          int32_t data_ofs,
                                          int32_t data2_blk,
                                          int32_t data2_ofs,
-                                         TypeKind kind)
+                                         TypeKind kind,
+                                         ColStatsBlob const* stats)
 {
   size_t sz = 0, lpos;
-  putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:RowIndex.entry
   lpos = m_buf->size();
-  putb(0xcd);                      // sz+2
-  putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:positions[packed=true]
-  putb(0xcd);                      // sz
+  put_byte(0xcd);                                          // sz+2
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
+  put_byte(0xcd);                                          // sz
   if (present_blk >= 0) sz += put_uint(present_blk);
   if (present_ofs >= 0) {
-    sz += put_uint(present_ofs) + 2;
-    putb(0);  // run pos = 0
-    putb(0);  // bit pos = 0
+    sz += put_uint(present_ofs);
+    sz += put_byte(0);  // run pos = 0
+    sz += put_byte(0);  // bit pos = 0
   }
   if (data_blk >= 0) { sz += put_uint(data_blk); }
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
     if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
-      putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
-      sz++;
+      // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      sz += put_byte(0);
       if (kind == BOOLEAN) {
-        putb(0);  // bit position in byte, always zero
-        sz++;
+        // bit position in byte, always zero
+        sz += put_byte(0);
       }
     }
   }
-  if (kind !=
-      INT)  // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
-  {
+  // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
+  if (kind != INT) {
     if (data2_blk >= 0) { sz += put_uint(data2_blk); }
     if (data2_ofs >= 0) {
-      sz += put_uint(data2_ofs) + 1;
-      putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      sz += put_uint(data2_ofs);
+      // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      sz += put_byte(0);
     }
   }
-  m_buf->data()[lpos]     = (uint8_t)(sz + 2);
+  // size of the field 1
   m_buf->data()[lpos + 2] = (uint8_t)(sz);
+
+  if (stats != nullptr) {
+    sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
+    // Statistics field contains its length as varint and dtype specific data (encoded on the GPU)
+    sz += put_uint(stats->size());
+    sz += put_bytes<typename ColStatsBlob::value_type>(*stats);
+  }
+
+  // size of the whole row index entry
+  m_buf->data()[lpos] = (uint8_t)(sz + 2);
 }
 
 size_t ProtobufWriter::write(const PostScript& s)
@@ -256,7 +267,7 @@ size_t ProtobufWriter::write(const PostScript& s)
   if (s.compression != NONE) { w.field_uint(3, s.compressionBlockSize); }
   w.field_packed_uint(4, s.version);
   w.field_uint(5, s.metadataLength);
-  w.field_string(8000, s.magic);
+  w.field_blob(8000, s.magic);
   return w.value();
 }
 
@@ -300,8 +311,8 @@ size_t ProtobufWriter::write(const SchemaType& s)
 size_t ProtobufWriter::write(const UserMetadataItem& s)
 {
   ProtobufFieldWriter w(this);
-  w.field_string(1, s.name);
-  w.field_string(2, s.value);
+  w.field_blob(1, s.name);
+  w.field_blob(2, s.value);
   return w.value();
 }
 
@@ -310,7 +321,7 @@ size_t ProtobufWriter::write(const StripeFooter& s)
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.streams);
   w.field_repeated_struct(2, s.columns);
-  if (s.writerTimezone != "") { w.field_string(3, s.writerTimezone); }
+  if (s.writerTimezone != "") { w.field_blob(3, s.writerTimezone); }
   return w.value();
 }
 
