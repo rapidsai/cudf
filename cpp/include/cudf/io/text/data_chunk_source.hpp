@@ -36,8 +36,8 @@ namespace text {
  */
 class device_data_chunk {
  public:
-  virtual char const* data() const                 = 0;
-  virtual std::size_t size() const                 = 0;
+  [[nodiscard]] virtual char const* data() const   = 0;
+  [[nodiscard]] virtual std::size_t size() const   = 0;
   virtual operator device_span<char const>() const = 0;
 };
 
@@ -76,7 +76,7 @@ class data_chunk_reader {
  */
 class data_chunk_source {
  public:
-  virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
+  [[nodiscard]] virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
 };
 
 }  // namespace text

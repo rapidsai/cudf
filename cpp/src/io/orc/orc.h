@@ -25,10 +25,10 @@
 #include <io/comp/io_uncomp.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
-#include <stddef.h>
-#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -87,7 +87,7 @@ struct Stream {
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
-  std::optional<uint32_t> column_index() const noexcept
+  [[nodiscard]] std::optional<uint32_t> column_index() const noexcept
   {
     return column_id.value_or(0) > 0 ? std::optional<uint32_t>{*column_id - 1}
                                      : std::optional<uint32_t>{};
@@ -540,14 +540,14 @@ class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
   const uint8_t* Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen);
-  uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
-  uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
+  [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
+  [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
     return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio
                                                          : m_blockSize;
   }
-  CompressionKind GetKind() const { return m_kind; }
-  uint32_t GetBlockSize() const { return m_blockSize; }
+  [[nodiscard]] CompressionKind GetKind() const { return m_kind; }
+  [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
 
  protected:
   CompressionKind const m_kind;
@@ -603,16 +603,16 @@ class metadata {
  public:
   explicit metadata(datasource* const src);
 
-  size_t get_total_rows() const { return ff.numberOfRows; }
-  int get_num_stripes() const { return ff.stripes.size(); }
-  int get_num_columns() const { return ff.types.size(); }
+  [[nodiscard]] size_t get_total_rows() const { return ff.numberOfRows; }
+  [[nodiscard]] int get_num_stripes() const { return ff.stripes.size(); }
+  [[nodiscard]] int get_num_columns() const { return ff.types.size(); }
   /**
    * @brief Returns the name of the column with the given ID.
    *
    * Name might not be unique in the ORC file, since columns with different parents are allowed to
    * have the same names.
    */
-  std::string const& column_name(size_type column_id) const
+  [[nodiscard]] std::string const& column_name(size_type column_id) const
   {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_names[column_id];
@@ -623,22 +623,25 @@ class metadata {
    *
    * Each column in the ORC file has a unique path.
    */
-  std::string const& column_path(size_type column_id) const
+  [[nodiscard]] std::string const& column_path(size_type column_id) const
   {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_paths[column_id];
   }
-  int get_row_index_stride() const { return ff.rowIndexStride; }
+  [[nodiscard]] int get_row_index_stride() const { return ff.rowIndexStride; }
 
   /**
    * @brief Returns the ID of the parent column of the given column.
    */
-  size_type parent_id(size_type column_id) const { return parents.at(column_id).value().id; }
+  [[nodiscard]] size_type parent_id(size_type column_id) const
+  {
+    return parents.at(column_id).value().id;
+  }
 
   /**
    * @brief Returns the index the given column has in its parent's children list.
    */
-  size_type field_index(size_type column_id) const
+  [[nodiscard]] size_type field_index(size_type column_id) const
   {
     return parents.at(column_id).value().field_idx;
   }
@@ -646,7 +649,7 @@ class metadata {
   /**
    * @brief Returns whether the given column has a parent.
    */
-  size_type column_has_parent(size_type column_id) const
+  [[nodiscard]] size_type column_has_parent(size_type column_id) const
   {
     return parents.at(column_id).has_value();
   }
@@ -693,7 +696,7 @@ struct orc_column_device_view : public column_device_view {
 struct rowgroup_rows {
   size_type begin;
   size_type end;
-  constexpr auto size() const noexcept { return end - begin; }
+  [[nodiscard]] constexpr auto size() const noexcept { return end - begin; }
 };
 
 }  // namespace orc
