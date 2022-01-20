@@ -298,7 +298,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
     std::srand(number_of_instantiations++);
   }
 
-  ~ReplaceTest() {}
+  ~ReplaceTest() override {}
 };
 
 /**

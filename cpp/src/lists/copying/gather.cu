@@ -53,8 +53,8 @@ namespace detail {
  * @endcode
  */
 struct list_gatherer {
-  typedef size_type argument_type;
-  typedef size_type result_type;
+  using argument_type = size_type;
+  using result_type   = size_type;
 
   size_t offset_count;
   size_type const* base_offsets;

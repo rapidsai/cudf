@@ -139,12 +139,12 @@ class alignas(16) column_device_view_base {
   /**
    * @brief Returns the number of elements in the column.
    */
-  __host__ __device__ size_type size() const noexcept { return _size; }
+  [[nodiscard]] __host__ __device__ size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the element type
    */
-  __host__ __device__ data_type type() const noexcept { return _type; }
+  [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates whether the column can contain null elements, i.e., if it
@@ -155,7 +155,7 @@ class alignas(16) column_device_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
+  [[nodiscard]] __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -164,13 +164,16 @@ class alignas(16) column_device_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  __host__ __device__ bitmask_type const* null_mask() const noexcept { return _null_mask; }
+  [[nodiscard]] __host__ __device__ bitmask_type const* null_mask() const noexcept
+  {
+    return _null_mask;
+  }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
    */
-  __host__ __device__ size_type offset() const noexcept { return _offset; }
+  [[nodiscard]] __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**
    * @brief Returns whether the specified element holds a valid value (i.e., not
@@ -186,7 +189,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid(size_type element_index) const noexcept
   {
     return not nullable() or is_valid_nocheck(element_index);
   }
@@ -203,7 +206,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid_nocheck(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_type element_index) const noexcept
   {
     return bit_is_set(_null_mask, offset() + element_index);
   }
@@ -221,7 +224,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  __device__ bool is_null(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null(size_type element_index) const noexcept
   {
     return not is_valid(element_index);
   }
@@ -237,7 +240,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  __device__ bool is_null_nocheck(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null_nocheck(size_type element_index) const noexcept
   {
     return not is_valid_nocheck(element_index);
   }
@@ -251,7 +254,7 @@ class alignas(16) column_device_view_base {
    * @param word_index The index of the word to get
    * @return bitmask word for the given word_index
    */
-  __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
+  [[nodiscard]] __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
   {
     return null_mask()[word_index];
   }
@@ -476,7 +479,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_iterator<T> begin() const
+  [[nodiscard]] const_iterator<T> begin() const
   {
     return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
   }
@@ -494,7 +497,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_iterator<T> end() const
+  [[nodiscard]] const_iterator<T> end() const
   {
     return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
@@ -602,7 +605,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_iterator<T, has_nulls> pair_begin() const
+  [[nodiscard]] const_pair_iterator<T, has_nulls> pair_begin() const
   {
     return const_pair_iterator<T, has_nulls>{count_it{0},
                                              detail::pair_accessor<T, has_nulls>{*this}};
@@ -632,7 +635,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
+  [[nodiscard]] const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
   {
     return const_pair_rep_iterator<T, has_nulls>{count_it{0},
                                                  detail::pair_rep_accessor<T, has_nulls>{*this}};
@@ -673,7 +676,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_iterator<T, has_nulls> pair_end() const
+  [[nodiscard]] const_pair_iterator<T, has_nulls> pair_end() const
   {
     return const_pair_iterator<T, has_nulls>{count_it{size()},
                                              detail::pair_accessor<T, has_nulls>{*this}};
@@ -693,7 +696,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
+  [[nodiscard]] const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
   {
     return const_pair_rep_iterator<T, has_nulls>{count_it{size()},
                                                  detail::pair_rep_accessor<T, has_nulls>{*this}};
@@ -743,7 +746,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  __device__ column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }
@@ -751,7 +754,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Returns a span containing the children of this column
    */
-  __device__ device_span<column_device_view const> children() const noexcept
+  [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
   {
     return device_span<column_device_view const>(d_children, _num_children);
   }
@@ -761,7 +764,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @return The number of child columns
    */
-  __host__ __device__ size_type num_child_columns() const noexcept { return _num_children; }
+  [[nodiscard]] __host__ __device__ size_type num_child_columns() const noexcept
+  {
+    return _num_children;
+  }
 
  protected:
   column_device_view* d_children{};  ///< Array of `column_device_view`
@@ -907,7 +913,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  __host__ __device__ bitmask_type* null_mask() const noexcept
+  [[nodiscard]] __host__ __device__ bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
@@ -957,7 +963,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  __device__ mutable_column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }

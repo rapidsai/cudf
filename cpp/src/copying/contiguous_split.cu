@@ -1017,7 +1017,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   rmm::device_buffer d_indices_and_source_info(indices_size + src_buf_info_size + offset_stack_size,
                                                stream,
                                                rmm::mr::get_current_device_resource());
-  size_type* d_indices         = reinterpret_cast<size_type*>(d_indices_and_source_info.data());
+  auto* d_indices              = reinterpret_cast<size_type*>(d_indices_and_source_info.data());
   src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(
     reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) + indices_size);
   size_type* d_offset_stack =
@@ -1198,8 +1198,8 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   rmm::device_buffer d_src_and_dst_buffers(src_bufs_size + dst_bufs_size + offset_stack_size,
                                            stream,
                                            rmm::mr::get_current_device_resource());
-  uint8_t const** d_src_bufs = reinterpret_cast<uint8_t const**>(d_src_and_dst_buffers.data());
-  uint8_t** d_dst_bufs       = reinterpret_cast<uint8_t**>(
+  auto const** d_src_bufs = reinterpret_cast<uint8_t const**>(d_src_and_dst_buffers.data());
+  uint8_t** d_dst_bufs    = reinterpret_cast<uint8_t**>(
     reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size);
 
   // setup src buffers
