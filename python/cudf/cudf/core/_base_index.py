@@ -9,8 +9,21 @@ from typing import Any, Set
 import pandas as pd
 
 import cudf
+from cudf._lib.copying import _gather_map_is_valid, gather
+from cudf._lib.stream_compaction import (
+    apply_boolean_mask,
+    drop_duplicates,
+    drop_nulls,
+)
 from cudf._typing import DtypeObj
-from cudf.api.types import is_dtype_equal, is_integer, is_list_like, is_scalar
+from cudf.api.types import (
+    is_bool_dtype,
+    is_dtype_equal,
+    is_integer,
+    is_integer_dtype,
+    is_list_like,
+    is_scalar,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
@@ -488,7 +501,7 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> index = cudf.Index([1, 2, None, 4])
         >>> index
-        Int64Index([1, 2, null, 4], dtype='int64')
+        Int64Index([1, 2, <NA>, 4], dtype='int64')
         >>> index.fillna(3)
         Int64Index([1, 2, 3, 4], dtype='int64')
         """
@@ -546,7 +559,7 @@ class BaseIndex(Serializable):
         >>> type(idx.to_pandas())
         <class 'pandas.core.indexes.numeric.Int64Index'>
         >>> type(idx)
-        <class 'cudf.core.index.GenericIndex'>
+        <class 'cudf.core.index.Int64Index'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
 
@@ -935,6 +948,7 @@ class BaseIndex(Serializable):
         Examples
         --------
         >>> import cudf
+        >>> import pandas as pd
         >>> idx = cudf.from_pandas(
         ...     pd.Index([pd.Interval(left=0, right=5),
         ...               pd.Interval(left=5, right=10)])
@@ -1098,15 +1112,16 @@ class BaseIndex(Serializable):
         Examples
         --------
         >>> import cudf
-        >>> lhs = cudf.DataFrame(
-        ...     {"a":[2, 3, 1], "b":[3, 4, 2]}).set_index(['a', 'b']
-        ... ).index
+        >>> lhs = cudf.DataFrame({
+        ...     "a": [2, 3, 1],
+        ...     "b": [3, 4, 2],
+        ... }).set_index(['a', 'b']).index
         >>> lhs
         MultiIndex([(2, 3),
                     (3, 4),
                     (1, 2)],
                    names=['a', 'b'])
-        >>> rhs = cudf.DataFrame({"a":[1, 4, 3]}).set_index('a').index
+        >>> rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index('a').index
         >>> rhs
         Int64Index([1, 4, 3], dtype='int64', name='a')
         >>> lhs.join(rhs, how='inner')
@@ -1413,6 +1428,137 @@ class BaseIndex(Serializable):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+    def drop_duplicates(
+        self, keep="first", nulls_are_equal=True,
+    ):
+        """
+        Drop duplicate rows in index.
+
+        keep : {"first", "last", False}, default "first"
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
+        """
+
+        # This utilizes the fact that all `Index` is also a `Frame`.
+        # Except RangeIndex.
+        return self._from_columns_like_self(
+            drop_duplicates(
+                list(self._columns),
+                keys=range(len(self._data)),
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
+        )
+
+    def dropna(self, how="any"):
+        """
+        Drop null rows from Index.
+
+        how : {"any", "all"}, default "any"
+            Specifies how to decide whether to drop a row.
+            "any" (default) drops rows containing at least
+            one null value. "all" drops only rows containing
+            *all* null values.
+        """
+
+        # This is to be consistent with IndexedFrame.dropna to handle nans
+        # as nulls by default
+        data_columns = [
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col
+            for col in self._columns
+        ]
+
+        return self._from_columns_like_self(
+            drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
+            self._column_names,
+        )
+
+    def _gather(self, gather_map, nullify=False, check_bounds=True):
+        """Gather rows of index specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(gather_map.dtype):
+            gather_map = gather_map.astype("int32")
+
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
+            raise IndexError("Gather map index is out of bounds.")
+
+        return self._from_columns_like_self(
+            gather(list(self._columns), gather_map, nullify=nullify),
+            self._column_names,
+        )
+
+    def take(self, indices, axis=0, allow_fill=True, fill_value=None):
+        """Return a new index containing the rows specified by *indices*
+
+        Parameters
+        ----------
+        indices : array-like
+            Array of ints indicating which positions to take.
+        axis : int
+            The axis over which to select values, always 0.
+        allow_fill : Unsupported
+        fill_value : Unsupported
+
+        Returns
+        -------
+        out : Index
+            New object with desired subset of rows.
+
+        Examples
+        --------
+        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
+        >>> idx.take([2, 0, 4, 3])
+        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
+        """
+
+        if axis not in {0, "index"}:
+            raise NotImplementedError(
+                "Gather along column axis is not yet supported."
+            )
+        if not allow_fill or fill_value is not None:
+            raise NotImplementedError(
+                "`allow_fill` and `fill_value` are unsupported."
+            )
+
+        indices = cudf.core.column.as_column(indices)
+        if is_bool_dtype(indices):
+            warnings.warn(
+                "Calling take with a boolean array is deprecated and will be "
+                "removed in the future.",
+                FutureWarning,
+            )
+            return self._apply_boolean_mask(indices)
+        return self._gather(indices)
+
+    def _apply_boolean_mask(self, boolean_mask):
+        """Apply boolean mask to each row of `self`.
+
+        Rows corresponding to `False` is dropped.
+        """
+        boolean_mask = cudf.core.column.as_column(boolean_mask)
+        if not is_bool_dtype(boolean_mask.dtype):
+            raise ValueError("boolean_mask is not boolean type.")
+
+        return self._from_columns_like_self(
+            apply_boolean_mask(list(self._columns), boolean_mask),
+            column_names=self._column_names,
+        )
 
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:
