@@ -87,7 +87,7 @@ class table_view_base {
   /**
    * @brief Returns an iterator to the first view in the `table`.
    */
-  const_iterator begin() const noexcept { return std::begin(_columns); }
+  [[nodiscard]] const_iterator begin() const noexcept { return std::begin(_columns); }
 
   /**
    * @brief Returns an iterator one past the last column view in the `table`.
@@ -103,7 +103,7 @@ class table_view_base {
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
    */
-  const_iterator end() const noexcept { return std::end(_columns); }
+  [[nodiscard]] const_iterator end() const noexcept { return std::end(_columns); }
 
   /**
    * @brief Returns a reference to the view of the specified column
@@ -119,17 +119,17 @@ class table_view_base {
   /**
    * @brief Returns the number of columns
    */
-  size_type num_columns() const noexcept { return _columns.size(); }
+  [[nodiscard]] size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
    */
-  size_type num_rows() const noexcept { return _num_rows; }
+  [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Returns true if `num_columns()` returns zero, or false otherwise
    */
-  size_type is_empty() const noexcept { return num_columns() == 0; }
+  [[nodiscard]] size_type is_empty() const noexcept { return num_columns() == 0; }
 
   table_view_base() = default;
 
@@ -208,7 +208,7 @@ class table_view : public detail::table_view_base<column_view> {
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
    */
-  table_view select(std::vector<size_type> const& column_indices) const;
+  [[nodiscard]] table_view select(std::vector<size_type> const& column_indices) const;
 };
 
 /**
@@ -227,7 +227,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
 
   mutable_table_view() = default;
 
-  mutable_column_view& column(size_type column_index) const
+  [[nodiscard]] mutable_column_view& column(size_type column_index) const
   {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }

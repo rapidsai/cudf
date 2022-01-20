@@ -183,7 +183,7 @@ TEST_F(StringsExtractTests, ExtractAllTest)
 
   auto results = cudf::strings::extract_all(sv, "(\\d+) (\\w+)");
 
-  bool valids[] = {1, 1, 1, 0, 0, 0, 1};
+  bool valids[] = {true, true, true, false, false, false, true};
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"123", "banana", "7", "eleven"},
                 LCW{"41", "apple"},

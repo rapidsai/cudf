@@ -114,7 +114,7 @@ TYPED_TEST(DefaultScalarFactory, TypeCast)
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
-  EXPECT_NO_THROW(numeric_s->value());
+  EXPECT_NO_THROW((void)numeric_s->value());
   EXPECT_FALSE(numeric_s->is_valid());
   EXPECT_FALSE(s->is_valid());
 }

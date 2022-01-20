@@ -371,7 +371,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   size_t decomp_offset           = 0;
   uint32_t max_uncomp_block_size = 0;
   uint32_t start_pos             = 0;
-  uint32_t start_pos_uncomp      = (uint32_t)num_compressed_blocks;
+  auto start_pos_uncomp          = (uint32_t)num_compressed_blocks;
   for (size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;

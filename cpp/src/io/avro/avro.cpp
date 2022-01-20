@@ -15,7 +15,8 @@
  */
 
 #include "avro.h"
-#include <string.h>
+
+#include <cstring>
 #include <unordered_map>
 
 namespace cudf {
@@ -75,7 +76,7 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   sig4 |= get_raw<uint8_t>() << 24;
   if (sig4 != avro_magic) { return false; }
   for (;;) {
-    uint32_t num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
+    auto num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
     if (num_md_items == 0) { break; }
     for (uint32_t i = 0; i < num_md_items; i++) {
       auto const key   = get_encoded<std::string>();
@@ -103,8 +104,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
     if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
     if (object_count > first_row) {
-      uint32_t block_row = static_cast<uint32_t>(total_object_count);
-      max_block_size     = std::max(max_block_size, block_size);
+      auto block_row = static_cast<uint32_t>(total_object_count);
+      max_block_size = std::max(max_block_size, block_size);
       total_object_count += object_count;
       if (!md->block_list.size()) {
         md->skip_rows = static_cast<uint32_t>(first_row);

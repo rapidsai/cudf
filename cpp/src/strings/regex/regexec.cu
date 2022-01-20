@@ -67,8 +67,7 @@ reprog_device::reprog_device(reprog& prog)
     _num_capturing_groups{prog.groups_count()},
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
-    _classes_count{prog.classes_count()},
-    _relists_mem{nullptr}
+    _classes_count{prog.classes_count()}
 {
 }
 

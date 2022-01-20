@@ -132,32 +132,38 @@ class reprog_device {
   /**
    * @brief Returns the number of regex instructions.
    */
-  __host__ __device__ int32_t insts_counts() const { return _insts_count; }
+  [[nodiscard]] __host__ __device__ int32_t insts_counts() const { return _insts_count; }
 
   /**
    * @brief Returns true if this is an empty program.
    */
-  __device__ bool is_empty() const { return insts_counts() == 0 || get_inst(0)->type == END; }
+  [[nodiscard]] __device__ bool is_empty() const
+  {
+    return insts_counts() == 0 || get_inst(0)->type == END;
+  }
 
   /**
    * @brief Returns the number of regex groups found in the expression.
    */
-  CUDF_HOST_DEVICE inline int32_t group_counts() const { return _num_capturing_groups; }
+  [[nodiscard]] CUDF_HOST_DEVICE inline int32_t group_counts() const
+  {
+    return _num_capturing_groups;
+  }
 
   /**
    * @brief Returns the regex instruction object for a given index.
    */
-  __device__ inline reinst* get_inst(int32_t idx) const;
+  [[nodiscard]] __device__ inline reinst* get_inst(int32_t idx) const;
 
   /**
    * @brief Returns the regex class object for a given index.
    */
-  __device__ inline reclass_device get_class(int32_t idx) const;
+  [[nodiscard]] __device__ inline reclass_device get_class(int32_t idx) const;
 
   /**
    * @brief Returns the start-instruction-ids vector.
    */
-  __device__ inline int32_t* startinst_ids() const;
+  [[nodiscard]] __device__ inline int32_t* startinst_ids() const;
 
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.

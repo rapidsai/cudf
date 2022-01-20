@@ -412,8 +412,8 @@ __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
   u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
   listmem += (idx * relists_size * 2L);                               // two relist ptrs in reljunk:
 
-  relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
-  relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
+  auto* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
+  auto* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
 
   reljunk jnk(list1, list2, stype, schar);
   return regexec(dstr, jnk, begin, end, group_id);

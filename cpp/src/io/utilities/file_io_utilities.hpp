@@ -45,8 +45,8 @@ class file_wrapper {
   explicit file_wrapper(std::string const& filepath, int flags);
   explicit file_wrapper(std::string const& filepath, int flags, mode_t mode);
   ~file_wrapper();
-  auto size() const { return _size; }
-  auto desc() const { return fd; }
+  [[nodiscard]] auto size() const { return _size; }
+  [[nodiscard]] auto desc() const { return fd; }
 };
 
 /**
@@ -184,7 +184,7 @@ struct cufile_registered_file {
     register_handle();
   }
 
-  auto const& handle() const noexcept { return cf_handle; }
+  [[nodiscard]] auto const& handle() const noexcept { return cf_handle; }
 
   ~cufile_registered_file();
 
