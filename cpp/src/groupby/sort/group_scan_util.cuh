@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <reductions/arg_minmax_util.cuh>
+#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -26,8 +26,6 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -115,7 +113,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to<size_type>{},
+                                    thrust::equal_to{},
                                     binop);
     };
 
@@ -160,7 +158,7 @@ struct group_scan_functor<K,
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to<size_type>{},
+                                    thrust::equal_to{},
                                     binop);
     };
 
@@ -192,58 +190,30 @@ struct group_scan_functor<K,
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 
-    // When finding MIN, we need to consider nulls as larger than non-null elements.
-    // Thing is opposite when finding MAX.
-    auto const null_precedence  = (K == aggregation::MIN) ? null_order::AFTER : null_order::BEFORE;
-    auto const flattened_values = structs::detail::flatten_nested_columns(
-      table_view{{values}}, {}, std::vector<null_order>{null_precedence});
-    auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
-    auto const flattened_null_precedences =
-      (K == aggregation::MIN)
-        ? cudf::detail::make_device_uvector_async(flattened_values.null_orders(), stream)
-        : rmm::device_uvector<null_order>(0, stream);
+    // Create a gather map containing indices of the prefix min/max elements within each group.
+    auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
 
-    // Create a gather map contaning indices of the prefix min/max elements.
-    auto gather_map      = rmm::device_uvector<size_type>(values.size(), stream);
-    auto const map_begin = gather_map.begin();
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
+    thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                  group_labels.begin(),
+                                  group_labels.end(),
+                                  thrust::make_counting_iterator<size_type>(0),
+                                  gather_map.begin(),
+                                  thrust::equal_to{},
+                                  binop_generator.binop());
 
-    // Perform segmented scan.
-    auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                    group_labels.begin(),
-                                    group_labels.end(),
-                                    inp_iter,
-                                    out_iter,
-                                    thrust::equal_to<size_type>{},
-                                    binop);
-    };
-
-    // Find the indices of the prefix min/max elements within each group.
-    auto const count_iter = thrust::make_counting_iterator<size_type>(0);
-    if (values.has_nulls()) {
-      auto const binop =
-        cudf::reduction::detail::row_arg_minmax_fn<true>(values.size(),
-                                                         *d_flattened_values_ptr,
-                                                         flattened_null_precedences.data(),
-                                                         K == aggregation::MIN);
-      do_scan(count_iter, map_begin, binop);
-    } else {
-      auto const binop =
-        cudf::reduction::detail::row_arg_minmax_fn<false>(values.size(),
-                                                          *d_flattened_values_ptr,
-                                                          flattened_null_precedences.data(),
-                                                          K == aggregation::MIN);
-      do_scan(count_iter, map_begin, binop);
-    }
-
-    auto gather_map_view =
-      column_view(data_type{type_to_id<offset_type>()}, gather_map.size(), gather_map.data());
-
+    //
     // Gather the children elements of the prefix min/max struct elements first.
+    //
+    // Typically, we should use `get_sliced_child` for each child column to properly handle the
+    // input if it is a sliced view. However, since the input to this function is just generated
+    // from groupby internal APIs which is never a sliced view, we just use `child_begin` and
+    // `child_end` iterators for simplicity.
     auto scanned_children =
       cudf::detail::gather(
         table_view(std::vector<column_view>{values.child_begin(), values.child_end()}),
-        gather_map_view,
+        gather_map,
         cudf::out_of_bounds_policy::DONT_CHECK,
         cudf::detail::negative_index_policy::NOT_ALLOWED,
         stream,
@@ -262,7 +232,9 @@ struct group_scan_functor<K,
     return make_structs_column(values.size(),
                                std::move(scanned_children),
                                values.null_count(),
-                               cudf::detail::copy_bitmask(values, stream, mr));
+                               cudf::detail::copy_bitmask(values, stream, mr),
+                               stream,
+                               mr);
   }
 };
 

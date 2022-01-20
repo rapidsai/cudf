@@ -84,7 +84,9 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            std::move(offsets),
                            std::move(child),
                            cudf::UNKNOWN_NULL_COUNT,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

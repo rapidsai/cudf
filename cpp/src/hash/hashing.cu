@@ -64,56 +64,36 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
   auto const device_input = table_device_view::create(leaf_table, stream);
   auto output_view        = output->mutable_view();
 
-  if (has_nulls(leaf_table)) {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     output_view.begin<int32_t>(),
-                     output_view.end<int32_t>(),
-                     [device_input = *device_input, seed] __device__(auto row_index) {
-                       return thrust::reduce(
-                         thrust::seq,
-                         device_input.begin(),
-                         device_input.end(),
-                         seed,
-                         [rindex = row_index] __device__(auto hash, auto column) {
-                           return cudf::type_dispatcher(
-                             column.type(),
-                             element_hasher_with_seed<hash_function, true>{hash, hash},
-                             column,
-                             rindex);
-                         });
-                     });
-  } else {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     output_view.begin<int32_t>(),
-                     output_view.end<int32_t>(),
-                     [device_input = *device_input, seed] __device__(auto row_index) {
-                       return thrust::reduce(
-                         thrust::seq,
-                         device_input.begin(),
-                         device_input.end(),
-                         seed,
-                         [rindex = row_index] __device__(auto hash, auto column) {
-                           return cudf::type_dispatcher(
-                             column.type(),
-                             element_hasher_with_seed<hash_function, false>{hash, hash},
-                             column,
-                             rindex);
-                         });
-                     });
-  }
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_view.begin<int32_t>(),
+    output_view.end<int32_t>(),
+    [device_input = *device_input, nulls = has_nulls(leaf_table), seed] __device__(auto row_index) {
+      return thrust::reduce(thrust::seq,
+                            device_input.begin(),
+                            device_input.end(),
+                            seed,
+                            [rindex = row_index, nulls] __device__(auto hash, auto column) {
+                              return cudf::type_dispatcher(
+                                column.type(),
+                                element_hasher_with_seed<hash_function, nullate::DYNAMIC>{
+                                  nullate::DYNAMIC{nulls}, hash, hash},
+                                column,
+                                rindex);
+                            });
+    });
 
   return output;
 }
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   switch (hash_function) {
-    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, stream, mr);
+    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     case (hash_id::HASH_SERIAL_MURMUR3):
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
@@ -127,12 +107,11 @@ std::unique_ptr<column> hash(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, initial_hash, seed, rmm::cuda_stream_default, mr);
+  return detail::hash(input, hash_function, seed, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

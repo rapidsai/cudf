@@ -28,12 +28,42 @@ namespace cudf {
 namespace detail {
 
 /**
+ * @brief Device functor to determine if a row is valid.
+ */
+class row_is_valid {
+ public:
+  row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+
+  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  {
+    return cudf::bit_is_set(_row_bitmask, i);
+  }
+
+ private:
+  bitmask_type const* _row_bitmask;
+};
+
+/**
  * @brief Device functor to determine if two pairs are identical.
+ *
+ * This equality comparator is designed for use with cuco::static_multimap's
+ * pair* APIs, which will compare equality based on comparing (key, value)
+ * pairs. In the context of joins, these pairs are of the form
+ * (row_hash, row_id). A hash probe hit indicates that hash of a probe row's hash is
+ * equal to the hash of the hash of some row in the multimap, at which point we need an
+ * equality comparator that will check whether the contents of the rows are
+ * identical. This comparator does so by verifying key equality (i.e. that
+ * probe_row_hash == build_row_hash) and then using a row_equality_comparator
+ * to compare the contents of the row indices that are stored as the payload in
+ * the hash map.
  */
 class pair_equality {
  public:
-  pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : _check_row_equality{lhs, rhs, nulls_are_equal}
+  pair_equality(table_device_view lhs,
+                table_device_view rhs,
+                nullate::DYNAMIC has_nulls,
+                null_equality nulls_are_equal = null_equality::EQUAL)
+    : _check_row_equality{has_nulls, lhs, rhs, nulls_are_equal}
   {
   }
 

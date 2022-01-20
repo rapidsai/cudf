@@ -1,13 +1,15 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cudf
 
 from libcpp cimport bool, int
+from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.io.orc cimport (
@@ -143,10 +145,27 @@ cdef compression_type _get_comp_type(object compression):
         raise ValueError(f"Unsupported `compression` type {compression}")
 
 
+cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
+    """
+    Convert ORC statistics terms to CUDF convention:
+      - ORC "STRIPE"   == CUDF "ROWGROUP"
+      - ORC "ROWGROUP" == CUDF "PAGE"
+    """
+    statistics = str(statistics).upper()
+    if statistics == "NONE":
+        return cudf_io_types.statistics_freq.STATISTICS_NONE
+    elif statistics == "STRIPE":
+        return cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
+    elif statistics == "ROWGROUP":
+        return cudf_io_types.statistics_freq.STATISTICS_PAGE
+    else:
+        raise ValueError(f"Unsupported `statistics_freq` type {statistics}")
+
+
 cpdef write_orc(table,
                 object path_or_buf,
                 object compression=None,
-                bool enable_statistics=True,
+                object statistics="ROWGROUP",
                 object stripe_size_bytes=None,
                 object stripe_size_rows=None,
                 object row_index_stride=None):
@@ -188,7 +207,7 @@ cpdef write_orc(table,
             sink_info_c, table_view_from_table(table, ignore_index=True)
         ).metadata(tbl_meta.get())
         .compression(compression_)
-        .enable_statistics(<bool> (True if enable_statistics else False))
+        .enable_statistics(_get_orc_stat_freq(statistics))
         .build()
     )
     if stripe_size_bytes is not None:
@@ -267,15 +286,15 @@ cdef class ORCWriter:
     cdef unique_ptr[orc_chunked_writer] writer
     cdef sink_info sink
     cdef unique_ptr[data_sink] _data_sink
-    cdef bool enable_stats
+    cdef cudf_io_types.statistics_freq stat_freq
     cdef compression_type comp_type
     cdef object index
     cdef unique_ptr[table_input_metadata] tbl_meta
 
     def __cinit__(self, object path, object index=None,
-                  object compression=None, bool enable_statistics=True):
+                  object compression=None, object statistics="ROWGROUP"):
         self.sink = make_sink_info(path, self._data_sink)
-        self.enable_stats = enable_statistics
+        self.stat_freq = _get_orc_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
@@ -310,10 +329,9 @@ cdef class ORCWriter:
         chunked_orc_writer_options anb creates a writer"""
         cdef table_view tv
 
-        # Set the table_metadata
         num_index_cols_meta = 0
         self.tbl_meta = make_unique[table_input_metadata](
-            table_view_from_table(table, ignore_index=True)
+            table_view_from_table(table, ignore_index=True),
         )
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
@@ -339,17 +357,18 @@ cdef class ORCWriter:
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
 
+        cdef map[string, string] user_data
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        self.tbl_meta.get().user_data[str.encode("pandas")] = \
-            str.encode(pandas_metadata)
+        user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
         cdef chunked_orc_writer_options args
         with nogil:
             args = move(
                 chunked_orc_writer_options.builder(self.sink)
                 .metadata(self.tbl_meta.get())
+                .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
-                .enable_statistics(self.enable_stats)
+                .enable_statistics(self.stat_freq)
                 .build()
             )
             self.writer.reset(new orc_chunked_writer(args))

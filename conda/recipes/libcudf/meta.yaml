@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
 {% set cuda_major=cuda_version.split('.')[0] %}
 
 package:
@@ -158,6 +158,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
+    - test -f $PREFIX/include/cudf/lists/filling.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
     - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp

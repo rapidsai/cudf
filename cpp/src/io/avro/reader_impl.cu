@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,8 +159,8 @@ rmm::device_buffer decompress_data(datasource& source,
   if (meta.codec == "deflate") {
     size_t uncompressed_data_size = 0;
 
-    auto inflate_in  = hostdevice_vector<gpu_inflate_input_s>(meta.block_list.size());
-    auto inflate_out = hostdevice_vector<gpu_inflate_status_s>(meta.block_list.size());
+    auto inflate_in  = hostdevice_vector<gpu_inflate_input_s>(meta.block_list.size(), stream);
+    auto inflate_out = hostdevice_vector<gpu_inflate_status_s>(meta.block_list.size(), stream);
 
     // Guess an initial maximum uncompressed block size
     uint32_t initial_blk_len = (meta.max_block_size * 2 + 0xfff) & ~0xfff;
@@ -278,7 +278,7 @@ rmm::device_buffer decompress_data(datasource& source,
                         0);
     uncompressed_data_offsets.host_to_device(stream);
 
-    thrust::tabulate(rmm::exec_policy(),
+    thrust::tabulate(rmm::exec_policy(stream),
                      uncompressed_data_ptrs.begin(),
                      uncompressed_data_ptrs.end(),
                      [off  = uncompressed_data_offsets.device_ptr(),
@@ -343,7 +343,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
   }
 
   // Build gpu schema
-  auto schema_desc = hostdevice_vector<gpu::schemadesc_s>(meta.schema.size());
+  auto schema_desc = hostdevice_vector<gpu::schemadesc_s>(meta.schema.size(), stream);
 
   uint32_t min_row_data_size = 0;
   int skip_field_cnt         = 0;

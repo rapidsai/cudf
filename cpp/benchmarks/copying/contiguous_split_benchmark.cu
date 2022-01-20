@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,26 +34,37 @@ void BM_contiguous_split_common(benchmark::State& state,
                                 int64_t bytes_total)
 {
   // generate splits
-  cudf::size_type split_stride = num_rows / num_splits;
   std::vector<cudf::size_type> splits;
-  for (int idx = 0; idx < num_rows; idx += split_stride) {
-    splits.push_back(std::min(idx + split_stride, static_cast<cudf::size_type>(num_rows)));
+  if (num_splits > 0) {
+    cudf::size_type const split_stride = num_rows / num_splits;
+    // start after the first element.
+    auto iter = thrust::make_counting_iterator(1);
+    splits.reserve(num_splits);
+    std::transform(iter,
+                   iter + num_splits,
+                   std::back_inserter(splits),
+                   [split_stride, num_rows](cudf::size_type i) {
+                     return std::min(i * split_stride, static_cast<cudf::size_type>(num_rows));
+                   });
   }
 
   std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());
   std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) {
     auto ret = in.release();
-    ret->null_count();
+    // computing the null count is not a part of the benchmark's target code path, and we want the
+    // property to be pre-computed so that we measure the performance of only the intended code path
+    [[maybe_unused]] auto const nulls = ret->null_count();
     return ret;
   });
-  cudf::table src_table(std::move(columns));
+  auto const src_table = cudf::table(std::move(columns));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     auto result = cudf::contiguous_split(src_table, splits);
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total);
+  // it's 2x bytes_total because we're both reading and writing.
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total * 2);
 }
 
 class ContiguousSplit : public cudf::benchmark {
@@ -61,13 +72,13 @@ class ContiguousSplit : public cudf::benchmark {
 
 void BM_contiguous_split(benchmark::State& state)
 {
-  int64_t total_desired_bytes = state.range(0);
-  cudf::size_type num_cols    = state.range(1);
-  cudf::size_type num_splits  = state.range(2);
-  bool include_validity       = state.range(3) == 0 ? false : true;
+  int64_t const total_desired_bytes = state.range(0);
+  cudf::size_type const num_cols    = state.range(1);
+  cudf::size_type const num_splits  = state.range(2);
+  bool const include_validity       = state.range(3) == 0 ? false : true;
 
   cudf::size_type el_size = 4;  // ints and floats
-  int64_t num_rows        = total_desired_bytes / (num_cols * el_size);
+  int64_t const num_rows  = total_desired_bytes / (num_cols * el_size);
 
   // generate input table
   srand(31337);
@@ -85,8 +96,10 @@ void BM_contiguous_split(benchmark::State& state)
     }
   }
 
-  size_t total_bytes = total_desired_bytes;
-  if (include_validity) { total_bytes += num_rows / (sizeof(cudf::bitmask_type) * 8); }
+  int64_t const total_bytes =
+    total_desired_bytes +
+    (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
+                      : 0);
 
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
@@ -102,17 +115,17 @@ int rand_range(int r)
 
 void BM_contiguous_split_strings(benchmark::State& state)
 {
-  int64_t total_desired_bytes = state.range(0);
-  cudf::size_type num_cols    = state.range(1);
-  cudf::size_type num_splits  = state.range(2);
-  bool include_validity       = state.range(3) == 0 ? false : true;
+  int64_t const total_desired_bytes = state.range(0);
+  cudf::size_type const num_cols    = state.range(1);
+  cudf::size_type const num_splits  = state.range(2);
+  bool const include_validity       = state.range(3) == 0 ? false : true;
 
-  const int64_t string_len = 8;
+  constexpr int64_t string_len = 8;
   std::vector<const char*> h_strings{
     "aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee", "ffffffff", "gggggggg", "hhhhhhhh"};
 
-  int64_t col_len_bytes = total_desired_bytes / num_cols;
-  int64_t num_rows      = col_len_bytes / string_len;
+  int64_t const col_len_bytes = total_desired_bytes / num_cols;
+  int64_t const num_rows      = col_len_bytes / string_len;
 
   // generate input table
   srand(31337);
@@ -133,8 +146,10 @@ void BM_contiguous_split_strings(benchmark::State& state)
     }
   }
 
-  size_t total_bytes = total_desired_bytes + (num_rows * sizeof(cudf::size_type));
-  if (include_validity) { total_bytes += num_rows / (sizeof(cudf::bitmask_type) * 8); }
+  int64_t const total_bytes =
+    total_desired_bytes + ((num_rows + 1) * sizeof(cudf::offset_type)) +
+    (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
+                      : 0);
 
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
@@ -157,12 +172,16 @@ CSBM_BENCHMARK_DEFINE(6Gb10ColsValidity, (int64_t)6 * 1024 * 1024 * 1024, 10, 25
 CSBM_BENCHMARK_DEFINE(4Gb512ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 256, 0);
 CSBM_BENCHMARK_DEFINE(4Gb512ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 256, 1);
 CSBM_BENCHMARK_DEFINE(4Gb10ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 256, 0);
-CSBM_BENCHMARK_DEFINE(46b10ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 256, 1);
+CSBM_BENCHMARK_DEFINE(4Gb10ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 256, 1);
+CSBM_BENCHMARK_DEFINE(4Gb4ColsNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 4, 0, 1);
+CSBM_BENCHMARK_DEFINE(4Gb4ColsValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 4, 0, 1);
 
 CSBM_BENCHMARK_DEFINE(1Gb512ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 256, 0);
 CSBM_BENCHMARK_DEFINE(1Gb512ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 256, 1);
 CSBM_BENCHMARK_DEFINE(1Gb10ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 256, 0);
 CSBM_BENCHMARK_DEFINE(1Gb10ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 256, 1);
+CSBM_BENCHMARK_DEFINE(1Gb1ColNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 1);
+CSBM_BENCHMARK_DEFINE(1Gb1ColValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 1);
 
 #define CSBM_STRINGS_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
   BENCHMARK_DEFINE_F(ContiguousSplitStrings, name)(::benchmark::State & state)       \
@@ -179,8 +198,12 @@ CSBM_STRINGS_BENCHMARK_DEFINE(4Gb512ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1
 CSBM_STRINGS_BENCHMARK_DEFINE(4Gb512ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 512, 256, 1);
 CSBM_STRINGS_BENCHMARK_DEFINE(4Gb10ColsNoValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 256, 0);
 CSBM_STRINGS_BENCHMARK_DEFINE(4Gb10ColsValidity, (int64_t)4 * 1024 * 1024 * 1024, 10, 256, 1);
+CSBM_STRINGS_BENCHMARK_DEFINE(4Gb4ColsNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 4, 0, 0);
+CSBM_STRINGS_BENCHMARK_DEFINE(4Gb4ColsValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 4, 0, 1);
 
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb512ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 256, 0);
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb512ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 512, 256, 1);
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb10ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 256, 0);
 CSBM_STRINGS_BENCHMARK_DEFINE(1Gb10ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 256, 1);
+CSBM_STRINGS_BENCHMARK_DEFINE(1Gb1ColNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 0);
+CSBM_STRINGS_BENCHMARK_DEFINE(1Gb1ColValidityNoSplits, (int64_t)1 * 1024 * 1024 * 1024, 1, 0, 1);

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
-from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
+from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
@@ -256,7 +256,7 @@ def test_dataframe_join_mismatch_cats(how):
 
     pdf1 = pdf1.set_index("join_col")
     pdf2 = pdf2.set_index("join_col")
-    join_gdf = gdf1.join(gdf2, how=how, sort=True, method="hash")
+    join_gdf = gdf1.join(gdf2, how=how, sort=True)
     join_pdf = pdf1.join(pdf2, how=how)
 
     got = join_gdf.fillna(-1).to_pandas()
@@ -403,7 +403,7 @@ def test_dataframe_merge_order():
     gdf2["id"] = [4, 5]
     gdf2["a"] = [7, 8]
 
-    gdf = gdf1.merge(gdf2, how="left", on=["id", "a"], method="hash")
+    gdf = gdf1.merge(gdf2, how="left", on=["id", "a"])
 
     df1 = pd.DataFrame()
     df2 = pd.DataFrame()
@@ -1130,7 +1130,12 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(5, 2), Decimal64Dtype(7, 5), Decimal64Dtype(12, 7)],
+    [
+        Decimal64Dtype(5, 2),
+        Decimal64Dtype(7, 5),
+        Decimal64Dtype(12, 7),
+        Decimal128Dtype(20, 5),
+    ],
 )
 def test_decimal_typecast_inner(dtype):
     other_data = ["a", "b", "c", "d", "e"]
@@ -1166,7 +1171,12 @@ def test_decimal_typecast_inner(dtype):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(7, 3), Decimal64Dtype(9, 5), Decimal64Dtype(14, 10)],
+    [
+        Decimal64Dtype(7, 3),
+        Decimal64Dtype(9, 5),
+        Decimal64Dtype(14, 10),
+        Decimal128Dtype(21, 9),
+    ],
 )
 def test_decimal_typecast_left(dtype):
     other_data = ["a", "b", "c", "d"]
@@ -1203,7 +1213,12 @@ def test_decimal_typecast_left(dtype):
 
 @pytest.mark.parametrize(
     "dtype",
-    [Decimal64Dtype(7, 3), Decimal64Dtype(10, 5), Decimal64Dtype(18, 9)],
+    [
+        Decimal64Dtype(7, 3),
+        Decimal64Dtype(10, 5),
+        Decimal64Dtype(18, 9),
+        Decimal128Dtype(22, 8),
+    ],
 )
 def test_decimal_typecast_outer(dtype):
     other_data = ["a", "b", "c"]
@@ -2150,3 +2165,16 @@ def test_join_redundant_params():
         lhs.merge(rhs, right_on="a", left_index=True, right_index=True)
     with pytest.raises(ValueError):
         lhs.merge(rhs, left_on="c", right_on="b")
+
+
+def test_join_multiindex_index():
+    # test joining a MultiIndex with an Index with overlapping name
+    lhs = (
+        cudf.DataFrame({"a": [2, 3, 1], "b": [3, 4, 2]})
+        .set_index(["a", "b"])
+        .index
+    )
+    rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index("a").index
+    expect = lhs.to_pandas().join(rhs.to_pandas(), how="inner")
+    got = lhs.join(rhs, how="inner")
+    assert_join_results_equal(expect, got, how="inner")

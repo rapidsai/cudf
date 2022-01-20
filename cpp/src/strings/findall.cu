@@ -67,7 +67,7 @@ struct findall_fn {
     string_view d_str      = d_strings.element<string_view>(idx);
     auto const nchars      = d_str.length();
     int32_t spos           = 0;
-    int32_t epos           = static_cast<int32_t>(nchars);
+    auto epos              = static_cast<int32_t>(nchars);
     size_type column_count = 0;
     while (spos <= nchars) {
       if (prog.find<stack_size>(idx, d_str, spos, epos) <= 0) break;  // no more matches found
@@ -153,11 +153,8 @@ std::unique_ptr<table> findall_re(
 
   std::vector<std::unique_ptr<column>> results;
 
-  size_type const columns = thrust::reduce(rmm::exec_policy(stream),
-                                           find_counts.begin(),
-                                           find_counts.end(),
-                                           0,
-                                           thrust::maximum<size_type>{});
+  size_type const columns = thrust::reduce(
+    rmm::exec_policy(stream), find_counts.begin(), find_counts.end(), 0, thrust::maximum{});
   // boundary case: if no columns, return all nulls column (issue #119)
   if (columns == 0)
     results.emplace_back(std::make_unique<column>(
