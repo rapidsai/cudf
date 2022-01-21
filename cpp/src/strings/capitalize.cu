@@ -108,7 +108,7 @@ struct base_fn {
       if (!d_chars) d_offsets[idx] = 0;
     }
 
-    Derived& derived  = static_cast<Derived&>(*this);
+    auto& derived     = static_cast<Derived&>(*this);
     auto const d_str  = d_column.element<string_view>(idx);
     offset_type bytes = 0;
     auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;

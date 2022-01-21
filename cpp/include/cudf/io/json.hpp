@@ -111,7 +111,7 @@ class json_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns data types of the columns.
