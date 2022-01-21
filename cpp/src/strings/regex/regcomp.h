@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,7 +117,9 @@ class reprog {
   void optimize1();
   void optimize2();
   void check_for_errors();
+#ifndef NDEBUG
   void print(regex_flags const flags);
+#endif
 
  private:
   std::vector<reinst> _insts;
