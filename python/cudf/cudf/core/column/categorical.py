@@ -61,7 +61,6 @@ class CategoricalAccessor(ColumnMethods):
     --------
     >>> s = cudf.Series([1,2,3], dtype='category')
     >>> s
-    >>> s
     0    1
     1    2
     2    3
@@ -809,7 +808,9 @@ class CategoricalColumn(column.ColumnBase):
             to_add_categories = 0
         else:
             to_add_categories = len(
-                cudf.Index(value).difference(self.categories)
+                cudf.Index(value, nan_as_null=False).difference(
+                    self.categories
+                )
             )
 
         if to_add_categories > 0:

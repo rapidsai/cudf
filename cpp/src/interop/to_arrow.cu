@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,6 +158,40 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
                      out[out_idx]       = in[in_idx];
                      out[out_idx + 1]   = in[in_idx] < 0 ? -1 : 0;
                    });
+
+  auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
+  auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);
+
+  CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
+                           buf.data(),
+                           buf_size_in_bytes,
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+
+  auto type    = arrow::decimal(18, -input.type().scale());
+  auto mask    = fetch_mask_buffer(input, ar_mr, stream);
+  auto buffers = std::vector<std::shared_ptr<arrow::Buffer>>{mask, std::move(data_buffer)};
+  auto data    = std::make_shared<arrow::ArrayData>(type, input.size(), buffers);
+
+  return std::make_shared<arrow::Decimal128Array>(data);
+}
+
+template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal128>(
+  column_view input,
+  cudf::type_id,
+  column_metadata const&,
+  arrow::MemoryPool* ar_mr,
+  rmm::cuda_stream_view stream)
+{
+  using DeviceType = __int128_t;
+
+  rmm::device_uvector<DeviceType> buf(input.size(), stream);
+
+  thrust::copy(rmm::exec_policy(stream),  //
+               input.begin<DeviceType>(),
+               input.end<DeviceType>(),
+               buf.begin());
 
   auto const buf_size_in_bytes = buf.size() * sizeof(DeviceType);
   auto data_buffer             = allocate_arrow_buffer(buf_size_in_bytes, ar_mr);

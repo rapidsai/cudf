@@ -5,8 +5,8 @@ import cupy as cp
 import numpy as np
 
 from cudf.core.column import as_column
-from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex
+from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.series import Series
 
 
@@ -92,7 +92,7 @@ def _index_or_values_interpolation(column, index=None):
     if num_nan == 0 or num_nan == len(column):
         return column
 
-    to_interp = Frame(data={None: column}, index=index)
+    to_interp = IndexedFrame(data={None: column}, index=index)
     known_x_and_y = to_interp._apply_boolean_mask(as_column(~mask))
 
     known_x = known_x_and_y._index._column.values

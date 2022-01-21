@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,15 +76,15 @@ enum ColumnEncodingKind : int8_t {
   DICTIONARY_V2         = 3,  // the encoding is dictionary-based using RLE v2
 };
 
-enum : uint8_t {  // Protobuf field types
-  PB_TYPE_VARINT      = 0,
-  PB_TYPE_FIXED64     = 1,
-  PB_TYPE_FIXEDLEN    = 2,
-  PB_TYPE_START_GROUP = 3,  // deprecated
-  PB_TYPE_END_GROUP   = 4,  // deprecated
-  PB_TYPE_FIXED32     = 5,
-  PB_TYPE_INVALID_6   = 6,
-  PB_TYPE_INVALID_7   = 7,
+enum ProtofType : uint8_t {
+  VARINT      = 0,
+  FIXED64     = 1,
+  FIXEDLEN    = 2,
+  START_GROUP = 3,  // deprecated
+  END_GROUP   = 4,  // deprecated
+  FIXED32     = 5,
+  INVALID_6   = 6,
+  INVALID_7   = 7,
 };
 
 }  // namespace orc

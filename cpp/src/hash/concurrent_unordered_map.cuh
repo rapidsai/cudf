@@ -242,7 +242,7 @@ class concurrent_unordered_map {
 
   __host__ __device__ mapped_type get_unused_element() const { return m_unused_element; }
 
-  __host__ __device__ size_type capacity() const { return m_capacity; }
+  [[nodiscard]] __host__ __device__ size_type capacity() const { return m_capacity; }
 
  private:
   /**

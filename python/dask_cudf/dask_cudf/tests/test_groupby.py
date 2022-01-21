@@ -17,6 +17,7 @@ from dask_cudf.groupby import SUPPORTED_AGGS, _is_supported
 @pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation):
+    np.random.seed(0)
     pdf = pd.DataFrame(
         {
             "x": np.random.randint(0, 5, size=10000),

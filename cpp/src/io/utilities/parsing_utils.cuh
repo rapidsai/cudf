@@ -68,7 +68,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
-  parse_options_view view() const
+  [[nodiscard]] parse_options_view view() const
   {
     return {delimiter,
             terminator,

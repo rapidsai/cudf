@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1136,6 +1136,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((Short) listElement);
       } else if (listElement instanceof BigDecimal) {
         childBuilder.append((BigDecimal) listElement);
+      } else if (listElement instanceof BigInteger) {
+        childBuilder.append((BigInteger) listElement);
       } else if (listElement instanceof List) {
         childBuilder.append((List<?>) listElement);
       } else if (listElement instanceof StructData) {
@@ -1230,18 +1232,20 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
-    public final ColumnBuilder append(BigDecimal value) {
+    public ColumnBuilder append(BigDecimal value) {
+      return append(value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue());
+    }
+
+    public ColumnBuilder append(BigInteger unscaledVal) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert currentIndex < rows;
-      // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
-      BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
         data.setInt(currentIndex * type.getSizeInBytes(), unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
         data.setLong(currentIndex * type.getSizeInBytes(), unscaledVal.longValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
         assert currentIndex < rows;
-        byte[] unscaledValueBytes = value.unscaledValue().toByteArray();
+        byte[] unscaledValueBytes = unscaledVal.toByteArray();
         byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
         data.setBytes(currentIndex*DType.DTypeEnum.DECIMAL128.sizeInBytes, result, 0, result.length);
       }  else {
