@@ -293,13 +293,13 @@ class writer::impl {
   /**
    * @brief Returns column statistics encoded in ORC protobuf format.
    *
-   * @param are_statistics_enabled True if statistics are to be included in the output file
+   * @param statistics_freq Frequency of statistics to be included in the output file
    * @param orc_table Table information to be written
    * @param columns List of columns
    * @param segmentation stripe and rowgroup ranges
    * @return The statistic blobs
    */
-  encoded_statistics gather_statistic_blobs(bool are_statistics_enabled,
+  encoded_statistics gather_statistic_blobs(statistics_freq statistics_freq,
                                             orc_table_view const& orc_table,
                                             file_segmentation const& segmentation);
 
@@ -365,8 +365,8 @@ class writer::impl {
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
-  bool enable_dictionary_ = true;
-  bool enable_statistics_ = true;
+  bool enable_dictionary_     = true;
+  statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;
 
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter ff;
