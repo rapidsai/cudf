@@ -20,7 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace nvtext {
 namespace detail {
