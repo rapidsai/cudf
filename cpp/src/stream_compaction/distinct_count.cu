@@ -34,6 +34,7 @@
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
+#include <thrust/logical.h>
 #include <vector>
 
 namespace cudf {
@@ -88,11 +89,10 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    auto count             = thrust::count_if(rmm::exec_policy(stream),
-                                  thrust::counting_iterator<cudf::size_type>(0),
-                                  thrust::counting_iterator<cudf::size_type>(input.size()),
-                                  check_for_nan<T>(device_view));
-    return count > 0;
+    return thrust::any_of(rmm::exec_policy(stream),
+                          thrust::counting_iterator<cudf::size_type>(0),
+                          thrust::counting_iterator<cudf::size_type>(input.size()),
+                          check_for_nan<T>(device_view));
   }
 
   /**
@@ -239,19 +239,24 @@ cudf::size_type unordered_distinct_count(column_view const& input,
   // only get affected if these two conditions are true. NaN will only be
   // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
   // will increase the count by 1.
-  if (has_null and nan_handling == nan_policy::NAN_IS_NULL) {
+  if (nan_handling == nan_policy::NAN_IS_NULL) {
     has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
   auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // if nan is considered null and there are already null values
-  if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and has_null) --count;
+  if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and has_null) { --count; }
+  if (not has_null and has_nan and null_handling == null_policy::EXCLUDE and
+      nan_handling == nan_policy::NAN_IS_NULL) {
+    --count;
+  }
 
-  if (null_handling == null_policy::EXCLUDE and has_null)
+  if (null_handling == null_policy::EXCLUDE and has_null) {
     return --count;
-  else
+  } else {
     return count;
+  }
 }
 }  // namespace detail
 
