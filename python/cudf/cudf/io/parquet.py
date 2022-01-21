@@ -1,14 +1,11 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
-import io
-import json
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
 from typing import Dict, List, Tuple
 from uuid import uuid4
 
-import fsspec
 import numpy as np
 from pyarrow import dataset as ds, parquet as pq
 
@@ -310,103 +307,6 @@ def _process_dataset(
     )
 
 
-def _get_byte_ranges(file_list, row_groups, columns, fs, **kwargs):
-
-    # This utility is used to collect the footer metadata
-    # from a parquet file. This metadata is used to define
-    # the exact byte-ranges that will be needed to read the
-    # target column-chunks from the file.
-    #
-    # This utility is only used for remote storage.
-    #
-    # The calculated byte-range information is used within
-    # cudf.io.ioutils.get_filepath_or_buffer (which uses
-    # _fsspec_data_transfer to convert non-local fsspec file
-    # objects into local byte buffers).
-
-    if row_groups is None:
-        if columns is None:
-            return None, None, None  # No reason to construct this
-        row_groups = [None for path in file_list]
-
-    # Construct a list of required byte-ranges for every file
-    all_byte_ranges, all_footers, all_sizes = [], [], []
-    for path, rgs in zip(file_list, row_groups):
-
-        # Step 0 - Get size of file
-        if fs is None:
-            file_size = path.size
-        else:
-            file_size = fs.size(path)
-
-        # Step 1 - Get 32 KB from tail of file.
-        #
-        # This "sample size" can be tunable, but should
-        # always be >= 8 bytes (so we can read the footer size)
-        tail_size = min(kwargs.get("footer_sample_size", 32_000), file_size,)
-        if fs is None:
-            path.seek(file_size - tail_size)
-            footer_sample = path.read(tail_size)
-        else:
-            footer_sample = fs.tail(path, tail_size)
-
-        # Step 2 - Read the footer size and re-read a larger
-        #          tail if necessary
-        footer_size = int.from_bytes(footer_sample[-8:-4], "little")
-        if tail_size < (footer_size + 8):
-            if fs is None:
-                path.seek(file_size - (footer_size + 8))
-                footer_sample = path.read(footer_size + 8)
-            else:
-                footer_sample = fs.tail(path, footer_size + 8)
-
-        # Step 3 - Collect required byte ranges
-        byte_ranges = []
-        md = pq.ParquetFile(io.BytesIO(footer_sample)).metadata
-        column_set = None if columns is None else set(columns)
-        if column_set is not None:
-            schema = md.schema.to_arrow_schema()
-            has_pandas_metadata = (
-                schema.metadata is not None and b"pandas" in schema.metadata
-            )
-            if has_pandas_metadata:
-                md_index = [
-                    ind
-                    for ind in json.loads(
-                        schema.metadata[b"pandas"].decode("utf8")
-                    ).get("index_columns", [])
-                    # Ignore RangeIndex information
-                    if not isinstance(ind, dict)
-                ]
-                column_set |= set(md_index)
-        for r in range(md.num_row_groups):
-            # Skip this row-group if we are targetting
-            # specific row-groups
-            if rgs is None or r in rgs:
-                row_group = md.row_group(r)
-                for c in range(row_group.num_columns):
-                    column = row_group.column(c)
-                    name = column.path_in_schema
-                    # Skip this column if we are targetting a
-                    # specific columns
-                    split_name = name.split(".")[0]
-                    if (
-                        column_set is None
-                        or name in column_set
-                        or split_name in column_set
-                    ):
-                        file_offset0 = column.dictionary_page_offset
-                        if file_offset0 is None:
-                            file_offset0 = column.data_page_offset
-                        num_bytes = column.total_compressed_size
-                        byte_ranges.append((file_offset0, num_bytes))
-
-        all_byte_ranges.append(byte_ranges)
-        all_footers.append(footer_sample)
-        all_sizes.append(file_size)
-    return all_byte_ranges, all_footers, all_sizes
-
-
 @ioutils.doc_read_parquet()
 def read_parquet(
     filepath_or_buffer,
@@ -418,12 +318,23 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    use_python_file_object=False,
+    use_python_file_object=True,
     categorical_partitions=True,
+    open_file_options=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
+
+    # Do not allow the user to set file-opening options
+    # when `use_python_file_object=False` is specified
+    if use_python_file_object is False:
+        if open_file_options:
+            raise ValueError(
+                "open_file_options is not currently supported when "
+                "use_python_file_object is set to False."
+            )
+        open_file_options = {}
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -470,38 +381,18 @@ def read_parquet(
         raise ValueError("cudf cannot apply filters to open file objects.")
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    # Check if we should calculate the specific byte-ranges
-    # needed for each parquet file. We always do this when we
-    # have a file-system object to work with and it is not a
-    # local filesystem object. We can also do it without a
-    # file-system object for `AbstractBufferedFile` buffers
-    byte_ranges, footers, file_sizes = None, None, None
-    if not use_python_file_object:
-        need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(
-            fs
-        )
-        if need_byte_ranges or (
-            filepath_or_buffer
-            and isinstance(
-                filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
-            )
-        ):
-            byte_ranges, footers, file_sizes = _get_byte_ranges(
-                filepath_or_buffer, row_groups, columns, fs, **kwargs
-            )
-
     filepaths_or_buffers = []
+    if use_python_file_object:
+        open_file_options = _default_open_file_options(
+            open_file_options, columns, row_groups, fs=fs,
+        )
     for i, source in enumerate(filepath_or_buffer):
-
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
-            byte_ranges=byte_ranges[i] if byte_ranges else None,
-            footer=footers[i] if footers else None,
-            file_size=file_sizes[i] if file_sizes else None,
-            add_par1_magic=True,
             use_python_file_object=use_python_file_object,
+            open_file_options=open_file_options,
             **kwargs,
         )
 
@@ -953,3 +844,41 @@ class ParquetDatasetWriter:
 
     def __exit__(self, *args):
         self.close()
+
+
+def _default_open_file_options(
+    open_file_options, columns, row_groups, fs=None
+):
+    """
+    Set default fields in open_file_options.
+
+    Copies and updates `open_file_options` to
+    include column and row-group information
+    under the "precache_options" key. By default,
+    we set "method" to "parquet", but precaching
+    will be disabled if the user chooses `method=None`
+
+    Parameters
+    ----------
+    open_file_options : dict or None
+    columns : list
+    row_groups : list
+    fs : fsspec.AbstractFileSystem, Optional
+    """
+    if fs and ioutils._is_local_filesystem(fs):
+        # Quick return for local fs
+        return open_file_options or {}
+    # Assume remote storage if `fs` was not specified
+    open_file_options = (open_file_options or {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
+    if precache_options.get("method", "parquet") == "parquet":
+        precache_options.update(
+            {
+                "method": "parquet",
+                "engine": precache_options.get("engine", "pyarrow"),
+                "columns": columns,
+                "row_groups": row_groups,
+            }
+        )
+    open_file_options["precache_options"] = precache_options
+    return open_file_options
