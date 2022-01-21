@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,13 @@ std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_pa
   T const init_value)
 {
   return TypeParam{typename TypeParam::duration(init_value)};
+}
+
+template <typename TypeParam, typename T>
+std::enable_if_t<std::is_same_v<TypeParam, std::string>, TypeParam> make_type_param_scalar(
+  T const init_value)
+{
+  return std::to_string(init_value);
 }
 
 /**

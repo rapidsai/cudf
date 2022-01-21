@@ -20,12 +20,14 @@
  */
 
 #pragma once
-#include <stdint.h>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cstdint>
 
 namespace cudf {
 namespace io {

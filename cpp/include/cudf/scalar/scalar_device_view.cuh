@@ -37,7 +37,7 @@ class scalar_device_view_base {
   /**
    * @brief Returns the value type
    */
-  __host__ __device__ data_type type() const noexcept { return _type; }
+  [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**
    * @brief Returns whether the scalar holds a valid value (i.e., not null).
@@ -45,7 +45,7 @@ class scalar_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid() const noexcept { return *_is_valid; }
+  [[nodiscard]] __device__ bool is_valid() const noexcept { return *_is_valid; }
 
   /**
    * @brief Updates the validity of the value
@@ -260,17 +260,23 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
   /**
    * @brief Returns string_view of the value of this scalar.
    */
-  __device__ ValueType value() const noexcept { return ValueType{this->data(), _size}; }
+  [[nodiscard]] __device__ ValueType value() const noexcept
+  {
+    return ValueType{this->data(), _size};
+  }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
    */
-  __device__ char const* data() const noexcept { return static_cast<char const*>(_data); }
+  [[nodiscard]] __device__ char const* data() const noexcept
+  {
+    return static_cast<char const*>(_data);
+  }
 
   /**
    * @brief Returns the size of the string in bytes.
    */
-  __device__ size_type size() const noexcept { return _size; }
+  [[nodiscard]] __device__ size_type size() const noexcept { return _size; }
 
  private:
   const char* _data{};  ///< Pointer to device memory containing the value
