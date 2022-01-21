@@ -39,7 +39,7 @@ template <class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state)
 {
   const cudf::size_type source_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type n_cols = (cudf::size_type)state.range(1);
+  const auto n_cols = (cudf::size_type)state.range(1);
 
   // Every element is valid
   auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });

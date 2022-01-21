@@ -21,7 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace nvtext {
 namespace detail {

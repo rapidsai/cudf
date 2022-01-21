@@ -28,9 +28,9 @@
 #include <rmm/device_uvector.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <stdint.h>
 #include <vector>
 
 namespace nvtext {

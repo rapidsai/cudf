@@ -242,13 +242,13 @@ struct hash_join::hash_join_impl {
             rmm::cuda_stream_view stream,
             rmm::mr::device_memory_resource* mr) const;
 
-  std::size_t inner_join_size(cudf::table_view const& probe,
-                              null_equality compare_nulls,
-                              rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::size_t inner_join_size(cudf::table_view const& probe,
+                                            null_equality compare_nulls,
+                                            rmm::cuda_stream_view stream) const;
 
-  std::size_t left_join_size(cudf::table_view const& probe,
-                             null_equality compare_nulls,
-                             rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::size_t left_join_size(cudf::table_view const& probe,
+                                           null_equality compare_nulls,
+                                           rmm::cuda_stream_view stream) const;
 
   std::size_t full_join_size(cudf::table_view const& probe,
                              null_equality compare_nulls,

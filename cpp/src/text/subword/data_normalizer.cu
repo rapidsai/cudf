@@ -250,9 +250,8 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
   chars_per_thread[char_for_thread] = num_new_chars;
 
-  typedef cub::
-    BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>
-      BlockStore;
+  using BlockStore =
+    cub::BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>;
   __shared__ typename BlockStore::TempStorage temp_storage;
 
   // Now we perform coalesced writes back to global memory using cub.

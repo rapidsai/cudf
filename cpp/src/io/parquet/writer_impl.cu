@@ -166,12 +166,12 @@ struct aggregate_writer_metadata {
     return global_rowgroup_base;
   }
 
-  bool schema_matches(std::vector<SchemaElement> const& schema) const
+  [[nodiscard]] bool schema_matches(std::vector<SchemaElement> const& schema) const
   {
     return this->schema == schema;
   }
   auto& file(size_t p) { return files[p]; }
-  size_t num_files() const { return files.size(); }
+  [[nodiscard]] size_t num_files() const { return files.size(); }
 
  private:
   int32_t version = 0;
@@ -678,18 +678,18 @@ struct parquet_column_view {
                       std::vector<schema_tree_node> const& schema_tree,
                       rmm::cuda_stream_view stream);
 
-  column_view leaf_column_view() const;
-  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream) const;
+  [[nodiscard]] column_view leaf_column_view() const;
+  [[nodiscard]] gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream) const;
 
-  column_view cudf_column_view() const { return cudf_col; }
-  parquet::Type physical_type() const { return schema_node.type; }
+  [[nodiscard]] column_view cudf_column_view() const { return cudf_col; }
+  [[nodiscard]] parquet::Type physical_type() const { return schema_node.type; }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
   // LIST related member functions
-  uint8_t max_def_level() const noexcept { return _max_def_level; }
-  uint8_t max_rep_level() const noexcept { return _max_rep_level; }
-  bool is_list() const noexcept { return _is_list; }
+  [[nodiscard]] uint8_t max_def_level() const noexcept { return _max_def_level; }
+  [[nodiscard]] uint8_t max_rep_level() const noexcept { return _max_rep_level; }
+  [[nodiscard]] bool is_list() const noexcept { return _is_list; }
 
  private:
   // Schema related members

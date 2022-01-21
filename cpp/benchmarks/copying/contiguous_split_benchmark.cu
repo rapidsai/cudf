@@ -51,10 +51,12 @@ void BM_contiguous_split_common(benchmark::State& state,
   std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());
   std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) {
     auto ret = in.release();
-    ret->null_count();
+    // computing the null count is not a part of the benchmark's target code path, and we want the
+    // property to be pre-computed so that we measure the performance of only the intended code path
+    [[maybe_unused]] auto const nulls = ret->null_count();
     return ret;
   });
-  cudf::table src_table(std::move(columns));
+  auto const src_table = cudf::table(std::move(columns));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
