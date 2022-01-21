@@ -84,7 +84,7 @@ struct has_nans {
    *
    * @returns bool true if `input` has `NaN` else false
    */
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   bool operator()(column_view const& input, rmm::cuda_stream_view stream)
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
@@ -107,8 +107,27 @@ struct has_nans {
    *
    * @returns bool Always false as non-floating point columns can't have `NaN`
    */
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   bool operator()(column_view const&, rmm::cuda_stream_view)
+  {
+    return false;
+  }
+};
+
+/**
+ * @brief A functor to be used along with type_dispatcher to determine if the device
+ * `check_nan` functor should be used.
+ */
+struct check_nan_predicate {
+  // Check `NaN` for floating point type columns
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  bool operator()()
+  {
+    return true;
+  }
+  // Non-floating point type columns can never have `NaN`, so it will always return false.
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
+  bool operator()()
   {
     return false;
   }
@@ -120,14 +139,14 @@ struct has_nans {
  */
 struct check_nan {
   // Check if it's `NaN` for floating point type columns
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  __device__ bool operator()(column_device_view const& input, size_type index)
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  __device__ __forceinline__ bool operator()(column_device_view const& input, size_type index)
   {
     return std::isnan(input.data<T>()[index]);
   }
   // Non-floating point type columns can never have `NaN`, so it will always return false.
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  __device__ bool operator()(column_device_view const&, size_type)
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
+  __device__ __forceinline__ bool operator()(column_device_view const&, size_type)
   {
     return false;
   }
@@ -194,12 +213,13 @@ cudf::size_type distinct_count(column_view const& input,
 
   if (num_rows == 0 or num_rows == input.null_count()) { return 0; }
 
-  auto const count_nulls = null_handling == null_policy::INCLUDE;
-  auto const nan_is_null = nan_handling == nan_policy::NAN_IS_NULL;
-  auto input_device_view = cudf::column_device_view::create(input, stream);
-  auto device_view       = *input_device_view;
-  auto input_table_view  = table_view{{input}};
-  auto table_ptr         = cudf::table_device_view::create(input_table_view, stream);
+  auto const count_nulls      = null_handling == null_policy::INCLUDE;
+  auto const nan_is_null      = nan_handling == nan_policy::NAN_IS_NULL;
+  auto const should_check_nan = cudf::type_dispatcher(input.type(), check_nan_predicate{});
+  auto input_device_view      = cudf::column_device_view::create(input, stream);
+  auto device_view            = *input_device_view;
+  auto input_table_view       = table_view{{input}};
+  auto table_ptr              = cudf::table_device_view::create(input_table_view, stream);
   row_equality_comparator comp(nullate::DYNAMIC{cudf::has_nulls(input_table_view)},
                                *table_ptr,
                                *table_ptr,
@@ -209,16 +229,22 @@ cudf::size_type distinct_count(column_view const& input,
     rmm::exec_policy(stream),
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(num_rows),
-    [count_nulls, nan_is_null, device_view, comp] __device__(cudf::size_type i) {
-      bool is_nan = cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i);
+    [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {
+      bool is_nan  = false;
+      bool is_null = device_view.is_null(i);
+      if (nan_is_null and should_check_nan) {
+        is_nan = cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i);
+      }
       if (count_nulls) {
-        if (nan_is_null and (is_nan or device_view.is_null(i))) {
-          bool prev_is_nan =
-            cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1);
+        if (nan_is_null and (is_nan or is_null)) {
+          auto prev_is_nan =
+            should_check_nan
+              ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1)
+              : false;
           return (i == 0 or not(device_view.is_null(i - 1) or prev_is_nan));
         }
       } else {
-        if (device_view.is_null(i) or (nan_is_null and is_nan)) { return false; }
+        if (is_null or (nan_is_null and is_nan)) { return false; }
       }
       return (i == 0 or not comp(i, i - 1));
     });
