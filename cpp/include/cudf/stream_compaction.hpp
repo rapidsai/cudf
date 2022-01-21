@@ -214,10 +214,9 @@ enum class duplicate_keep_option {
 };
 
 /**
- * @brief Eliminates all except the row specified by `keep` from every consecutive group of
- * equivalent rows.
+ * @brief Eliminates all except one specific row from every consecutive group of equivalent rows.
  *
- * Given an `input` table_view, one row from a group of equivalent elements is copied to
+ * Given an `input` table_view, one specific row from a group of equivalent elements is copied to
  * output table depending on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
