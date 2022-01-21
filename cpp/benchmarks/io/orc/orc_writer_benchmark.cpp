@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/types.hpp"
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_benchmark_input.hpp>
@@ -40,7 +41,7 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   cudf::size_type const run_length  = state.range(2);
   cudf_io::compression_type const compression =
     state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
-  io_type const sink_type = static_cast<io_type>(state.range(4));
+  auto const sink_type = static_cast<io_type>(state.range(4));
 
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);
@@ -65,8 +66,14 @@ void BM_orc_write_varying_inout(benchmark::State& state)
 
 void BM_orc_write_varying_options(benchmark::State& state)
 {
-  auto const compression  = static_cast<cudf::io::compression_type>(state.range(0));
-  auto const enable_stats = state.range(1) != 0;
+  auto const compression = static_cast<cudf::io::compression_type>(state.range(0));
+  auto const stats_freq  = [&] {
+    switch (state.range(2)) {
+      case 0: return cudf::io::STATISTICS_NONE;
+      case 1: return cudf::io::ORC_STATISTICS_STRIPE;
+      default: return cudf::io::ORC_STATISTICS_ROW_GROUP;
+    }
+  }();
 
   auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                              int32_t(type_group_id::FLOATING_POINT),
@@ -85,7 +92,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
     cudf_io::orc_writer_options const options =
       cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(compression)
-        .enable_statistics(enable_stats);
+        .enable_statistics(stats_freq);
     cudf_io::write_orc(options);
   }
 
@@ -113,6 +120,8 @@ BENCHMARK_DEFINE_F(OrcWrite, writer_options)
 BENCHMARK_REGISTER_F(OrcWrite, writer_options)
   ->ArgsProduct({{int32_t(cudf::io::compression_type::NONE),
                   int32_t(cudf::io::compression_type::SNAPPY)},
-                 {0, 1}})
+                 {int32_t{cudf::io::STATISTICS_NONE},
+                  int32_t{cudf::io::ORC_STATISTICS_STRIPE},
+                  int32_t{cudf::io::ORC_STATISTICS_ROW_GROUP}}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
