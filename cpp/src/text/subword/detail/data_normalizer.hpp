@@ -87,7 +87,7 @@ class data_normalizer {
   uvector_pair normalize(char const* d_strings,
                          uint32_t const* d_offsets,
                          uint32_t num_strings,
-                         rmm::cuda_stream_view stream);
+                         rmm::cuda_stream_view stream) const;
 
  private:
   bool const do_lower_case;

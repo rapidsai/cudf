@@ -271,7 +271,7 @@ data_normalizer::data_normalizer(codepoint_metadata_type const* cp_metadata,
 uvector_pair data_normalizer::normalize(char const* d_strings,
                                         uint32_t const* d_offsets,
                                         uint32_t num_strings,
-                                        rmm::cuda_stream_view stream)
+                                        rmm::cuda_stream_view stream) const
 {
   if (num_strings == 0)
     return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),

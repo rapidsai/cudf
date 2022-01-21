@@ -203,11 +203,11 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto result = [&] {
     auto const cp_metadata = get_codepoint_metadata(stream);
     auto const aux_table   = get_aux_codepoint_data(stream);
-    data_normalizer normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
-    auto const offsets   = strings.offsets();
-    auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
-    auto const offset    = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
-    auto const d_chars   = strings.chars().data<char>() + offset;
+    auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
+    auto const offsets     = strings.offsets();
+    auto const d_offsets   = offsets.data<uint32_t>() + strings.offset();
+    auto const offset      = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
+    auto const d_chars     = strings.chars().data<char>() + offset;
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 
