@@ -607,9 +607,10 @@ class hash_join {
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the the join keys .
    */
-  std::size_t inner_join_size(cudf::table_view const& probe,
-                              null_equality compare_nulls  = null_equality::EQUAL,
-                              rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  [[nodiscard]] std::size_t inner_join_size(
+    cudf::table_view const& probe,
+    null_equality compare_nulls  = null_equality::EQUAL,
+    rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a left join with the specified probe
@@ -622,9 +623,10 @@ class hash_join {
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the the join keys .
    */
-  std::size_t left_join_size(cudf::table_view const& probe,
-                             null_equality compare_nulls  = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  [[nodiscard]] std::size_t left_join_size(
+    cudf::table_view const& probe,
+    null_equality compare_nulls  = null_equality::EQUAL,
+    rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a full join with the specified probe

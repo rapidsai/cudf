@@ -553,8 +553,8 @@ struct packed_columns {
   struct metadata {
     metadata() = default;
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-    uint8_t const* data() const { return data_.data(); }
-    size_t size() const { return data_.size(); }
+    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
+    [[nodiscard]] size_t size() const { return data_.size(); }
 
    private:
     std::vector<uint8_t> data_;

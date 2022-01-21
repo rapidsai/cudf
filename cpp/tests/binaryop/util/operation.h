@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -320,6 +320,48 @@ struct PyMod {
       return ((x % y) + y) % y;
     }
     return {};
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullLogicalAnd {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    if (lhs_valid && !x) {
+      output_valid = true;
+      return false;
+    }
+    if (rhs_valid && !y) {
+      output_valid = true;
+      return false;
+    }
+    if (lhs_valid && rhs_valid) {
+      output_valid = true;
+      return true;
+    }
+    output_valid = false;
+    return false;
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullLogicalOr {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    if (lhs_valid && x) {
+      output_valid = true;
+      return true;
+    }
+    if (rhs_valid && y) {
+      output_valid = true;
+      return true;
+    }
+    if (lhs_valid && rhs_valid) {
+      output_valid = true;
+      return false;
+    }
+    output_valid = false;
+    return false;
   }
 };
 

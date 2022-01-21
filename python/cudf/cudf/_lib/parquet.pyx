@@ -200,12 +200,19 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     update_struct_field_names(df, c_out_table.metadata.schema_info)
 
-    # update the decimal precision of each column
     if meta is not None:
-        for col, col_meta in zip(column_names, meta["columns"]):
+        # Book keep each column metadata as the order
+        # of `meta["columns"]` and `column_names` are not
+        # guaranteed to be deterministic and same always.
+        meta_data_per_column = {
+            col_meta['name']: col_meta for col_meta in meta["columns"]
+        }
+
+        # update the decimal precision of each column
+        for col in column_names:
             if is_decimal_dtype(df._data[col].dtype):
                 df._data[col].dtype.precision = (
-                    col_meta["metadata"]["precision"]
+                    meta_data_per_column[col]["metadata"]["precision"]
                 )
 
     # Set the index column

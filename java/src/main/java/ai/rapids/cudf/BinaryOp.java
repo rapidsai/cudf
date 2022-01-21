@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020,2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,10 @@ public enum BinaryOp {
   GREATER_EQUAL(25), // >=
   NULL_EQUALS(26), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
   NULL_MAX(27), // MAX but NULL < not NULL
-  NULL_MIN(28); // MIN but NULL > not NULL
+  NULL_MIN(28), // MIN but NULL > not NULL
   //NOT IMPLEMENTED YET GENERIC_BINARY(29);
+  NULL_LOGICAL_AND(30),
+  NULL_LOGICAL_OR(31);
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(
