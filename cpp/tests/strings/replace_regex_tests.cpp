@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,6 +143,16 @@ TEST_F(StringsReplaceRegexTest, MultiReplacement)
   results =
     cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar(""), 0);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, input);
+}
+
+TEST_F(StringsReplaceRegexTest, WordBoundary)
+{
+  cudf::test::strings_column_wrapper input({"aba bcd\naba", "zéz", "A1B2-é3", "e é"});
+  auto results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "\\b", cudf::string_scalar("X"));
+  cudf::test::strings_column_wrapper expected(
+    {"XabaX XbcdX\nXabaX", "XzézX", "XA1B2X-Xé3X", "XeX XéX"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsReplaceRegexTest, Multiline)

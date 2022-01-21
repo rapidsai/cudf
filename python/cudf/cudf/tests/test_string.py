@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import json
 import re
@@ -229,9 +229,13 @@ def test_string_astype(dtype):
         ([], 0, 5),
     ],
 )
-def test_string_to_decimal(data, scale, precision):
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
+)
+def test_string_to_decimal(data, scale, precision, decimal_dtype):
     gs = cudf.Series(data, dtype="str")
-    fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    fp = gs.astype(decimal_dtype(scale=scale, precision=precision))
     got = fp.astype("str")
     assert_eq(gs, got)
 
@@ -256,7 +260,11 @@ def test_string_empty_to_decimal():
         ([], 0, 5),
     ],
 )
-def test_string_from_decimal(data, scale, precision):
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+)
+def test_string_from_decimal(data, scale, precision, decimal_dtype):
     decimal_data = []
     for d in data:
         if d is None:
@@ -264,11 +272,10 @@ def test_string_from_decimal(data, scale, precision):
         else:
             decimal_data.append(Decimal(d))
     fp = cudf.Series(
-        decimal_data,
-        dtype=cudf.Decimal64Dtype(scale=scale, precision=precision),
+        decimal_data, dtype=decimal_dtype(scale=scale, precision=precision),
     )
     gs = fp.astype("str")
-    got = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    got = gs.astype(decimal_dtype(scale=scale, precision=precision))
     assert_eq(fp, got)
 
 

@@ -44,7 +44,7 @@ namespace detail {
  */
 __device__ inline size_type characters_in_string(const char* str, size_type bytes)
 {
-  if ((str == 0) || (bytes == 0)) return 0;
+  if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
 #ifndef CUDF_JIT_UDF
   return thrust::count_if(
@@ -271,9 +271,9 @@ __device__ inline int string_view::compare(const string_view& in) const
 
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
-  size_type const len1      = size_bytes();
-  const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-  const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
+  size_type const len1 = size_bytes();
+  const auto* ptr1     = reinterpret_cast<const unsigned char*>(this->data());
+  const auto* ptr2     = reinterpret_cast<const unsigned char*>(data);
   if ((ptr1 == ptr2) && (bytes == len1)) return 0;
   size_type idx = 0;
   for (; (idx < len1) && (idx < bytes); ++idx) {
