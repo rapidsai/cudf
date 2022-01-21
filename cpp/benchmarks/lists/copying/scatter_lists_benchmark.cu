@@ -45,7 +45,7 @@ void BM_lists_scatter(::benchmark::State& state)
 
   const size_type base_size{(size_type)state.range(0)};
   const size_type num_elements_per_row{(size_type)state.range(1)};
-  const size_type num_rows = (size_type)ceil(double(base_size) / num_elements_per_row);
+  const auto num_rows = (size_type)ceil(double(base_size) / num_elements_per_row);
 
   auto source_base_col = make_fixed_width_column(
     data_type{type_to_id<TypeParam>()}, base_size, mask_state::UNALLOCATED, stream, mr);

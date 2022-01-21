@@ -46,12 +46,12 @@ class lists_column_device_view {
   /**
    * @brief Fetches number of rows in the lists column
    */
-  CUDF_HOST_DEVICE inline cudf::size_type size() const { return underlying.size(); }
+  [[nodiscard]] CUDF_HOST_DEVICE inline cudf::size_type size() const { return underlying.size(); }
 
   /**
    * @brief Fetches the offsets column of the underlying list column.
    */
-  __device__ inline column_device_view offsets() const
+  [[nodiscard]] __device__ inline column_device_view offsets() const
   {
     return underlying.child(lists_column_view::offsets_column_index);
   }
@@ -59,7 +59,7 @@ class lists_column_device_view {
   /**
    * @brief Fetches the child column of the underlying list column.
    */
-  __device__ inline column_device_view child() const
+  [[nodiscard]] __device__ inline column_device_view child() const
   {
     return underlying.child(lists_column_view::child_column_index);
   }
@@ -67,19 +67,22 @@ class lists_column_device_view {
   /**
    * @brief Indicates whether the list column is nullable.
    */
-  __device__ inline bool nullable() const { return underlying.nullable(); }
+  [[nodiscard]] __device__ inline bool nullable() const { return underlying.nullable(); }
 
   /**
    * @brief Indicates whether the row (i.e. list) at the specified
    * index is null.
    */
-  __device__ inline bool is_null(size_type idx) const { return underlying.is_null(idx); }
+  [[nodiscard]] __device__ inline bool is_null(size_type idx) const
+  {
+    return underlying.is_null(idx);
+  }
 
   /**
    * @brief Fetches the offset of the underlying column_device_view,
    *        in case it is a sliced/offset column.
    */
-  __device__ inline size_type offset() const { return underlying.offset(); }
+  [[nodiscard]] __device__ inline size_type offset() const { return underlying.offset(); }
 
  private:
   column_device_view underlying;

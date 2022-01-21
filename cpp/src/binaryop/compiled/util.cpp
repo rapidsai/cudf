@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,22 +64,23 @@ template <typename BinaryOperator>
 struct is_binary_operation_supported {
   // For types where Out type is fixed. (eg. comparison types)
   template <typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()(void)
+  inline constexpr bool operator()()
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
       if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
         using common_t = std::common_type_t<TypeLhs, TypeRhs>;
         return std::is_invocable_v<BinaryOperator, common_t, common_t>;
-      } else
+      } else {
         return std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>;
+      }
     } else {
       return false;
     }
   }
 
   template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()(void)
+  inline constexpr bool operator()()
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>() and
@@ -166,6 +167,10 @@ struct is_supported_operation_functor {
       case binary_operator::LESS_EQUAL: return bool_op<ops::LessEqual, TypeLhs, TypeRhs>(out);
       case binary_operator::GREATER_EQUAL: return bool_op<ops::GreaterEqual, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_EQUALS: return bool_op<ops::NullEquals, TypeLhs, TypeRhs>(out);
+      case binary_operator::NULL_LOGICAL_AND:
+        return bool_op<ops::NullLogicalAnd, TypeLhs, TypeRhs>(out);
+      case binary_operator::NULL_LOGICAL_OR:
+        return bool_op<ops::NullLogicalOr, TypeLhs, TypeRhs>(out);
       default: return type_dispatcher(out, nested_support_functor<TypeLhs, TypeRhs>{}, op);
     }
     return false;
