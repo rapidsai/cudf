@@ -92,7 +92,7 @@ std::unique_ptr<scalar> reduce(
  * If the input column has arithmetic type, output_dtype can be any arithmetic
  * type. For `mean`, `var` and `std` ops, a floating point output type must be
  * specified. If the input column has non-arithmetic type
- *   eg.(timestamp, string...), the same type must be specified.
+ *   (e.g. timestamp, string...), the same output type must be specified.
  *
  * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
