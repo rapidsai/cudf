@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "cudf/types.hpp"
+#include <cudf/types.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <reductions/simple_segmented.cuh>
+#include <cudf/reductions/simple_segmented.cuh>
 
 namespace cudf {
 namespace reduction {
@@ -30,7 +30,7 @@ std::unique_ptr<cudf::column> segmented_all(column_view const& col,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
-               "all() operation can be applied with output type `BOOL8` only");
+               "all() operation requires output type `BOOL8`");
 
   // dispatch for non-dictionary types
   return cudf::type_dispatcher(

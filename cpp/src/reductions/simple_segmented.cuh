@@ -182,7 +182,7 @@ struct same_column_type_dispatcher {
  *
  * This is used by operations sum(), product(), and sum_of_squares().
  * It only supports numeric types. If the output type is not the
- * same as the input type, an extra cast operation may incur.
+ * same as the input type, an extra cast operation may occur.
  *
  * @tparam Op The reduce operation to execute on the column.
  */

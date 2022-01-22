@@ -31,7 +31,7 @@ std::unique_ptr<cudf::column> segmented_max(column_view const& col,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(col.type() == output_dtype, "max() operation requires matching output type");
+  CUDF_EXPECTS(col.type() == output_dtype, "segmented_max() operation requires matching output type");
   return cudf::type_dispatcher(
     col.type(),
     simple::detail::same_column_type_dispatcher<cudf::reduction::op::max>{},

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "cudf/types.hpp"
+#include <cudf/types.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
