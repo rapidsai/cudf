@@ -98,8 +98,8 @@ std::unique_ptr<scalar> reduce(
  * will contain `false`.
  *
  * @param col Input column view
- * @param agg Aggregation operator applied by the reduction
  * @param offsets Indices to segment boundaries
+ * @param agg Aggregation operator applied by the reduction
  * @param output_dtype  The computation and output precision.
  * @param null_handling If `INCLUDE`, all elements in a segment must be valid
  * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
