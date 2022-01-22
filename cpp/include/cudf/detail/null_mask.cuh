@@ -595,7 +595,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
       reinterpret_cast<bitmask_type const*>(output_null_mask.data()),
       reinterpret_cast<bitmask_type const*>(null_policy_bitmask.data())};
     std::vector<size_type> begin_bits{0, 0};
-    cudf::detail::inplace_bitmask_and(
+    size_type valid_count = cudf::detail::inplace_bitmask_and(
       device_span<bitmask_type>(reinterpret_cast<bitmask_type*>(output_null_mask.data()),
                                 num_bitmask_words(num_segments)),
       masks,
@@ -604,8 +604,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
       stream,
       mr);
 
-    // TODO: inplace_bitmask_and should return its null count (PR 9904)
-    output_null_count = cudf::UNKNOWN_NULL_COUNT;
+    output_null_count = num_segments - valid_count;
   }
   return std::make_pair(std::move(output_null_mask), output_null_count);
 }
