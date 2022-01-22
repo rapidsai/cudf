@@ -265,6 +265,9 @@ std::unique_ptr<scalar> nth_element(
  * @param col Input column to compute sum
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sums of segments in type `output_dtype`.
@@ -286,7 +289,11 @@ std::unique_ptr<column> segmented_sum(
  * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
  *
  * @param col input column to compute product.
+ * @param offsets Indices to identify segment boundaries
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Product as scalar of type `output_dtype`.
@@ -309,6 +316,9 @@ std::unique_ptr<column> segmented_product(
  * @param col Input column to compute minimum.
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Minimums of segments in type `output_dtype`.
@@ -331,6 +341,9 @@ std::unique_ptr<column> segmented_min(
  * @param col Input column to compute maximum.
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Maximums of segments in type `output_dtype`.
@@ -354,6 +367,9 @@ std::unique_ptr<column> segmented_max(
  * @param col Input column to compute any_of.
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Column of bool8 for the results of the segments
@@ -377,6 +393,9 @@ std::unique_ptr<column> segmented_any(
  * @param col Input column to compute all_of.
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Column of bool8 for the results of the segments
