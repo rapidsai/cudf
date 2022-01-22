@@ -109,8 +109,7 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
  */
 template <typename Op>
 struct bool_result_column_dispatcher {
-  template <typename ElementType,
-            std::enable_if_t<cudf::is_numeric<ElementType>::value>* = nullptr>
+  template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      column_view const& offsets,
                                      null_policy null_handling,
@@ -235,7 +234,6 @@ struct column_type_dispatcher {
    * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
    * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
    * the reduced value is valid if any element in the segment is valid.
-
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
