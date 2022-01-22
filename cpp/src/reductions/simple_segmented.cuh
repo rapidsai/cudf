@@ -199,6 +199,7 @@ struct column_type_dispatcher {
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
+    // TODO: per gh-9988, we should change the compute precision to `output_type`.
     auto result =
       simple_segmented_reduction<ElementType, double, Op>(col, offsets, null_handling, stream, mr);
     if (output_type == result->type()) { return result; }
@@ -217,6 +218,7 @@ struct column_type_dispatcher {
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
+    // TODO: per gh-9988, we should change the compute precision to `output_type`.
     auto result =
       simple_segmented_reduction<ElementType, int64_t, Op>(col, offsets, null_handling, stream, mr);
     if (output_type == result->type()) { return result; }
