@@ -86,7 +86,7 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   auto const bitmask                 = col.null_mask();
   auto const first_bit_indices_begin = offsets.begin<size_type>();
   auto const first_bit_indices_end   = offsets.end<size_type>() - 1;
-  auto const last_bit_indices_begin  = offsets.begin<size_type>() + 1;
+  auto const last_bit_indices_begin  = first_bit_indices_begin + 1;
   auto const [output_null_mask, output_null_count] =
     cudf::detail::segmented_null_mask_reduction(bitmask,
                                                 first_bit_indices_begin,
