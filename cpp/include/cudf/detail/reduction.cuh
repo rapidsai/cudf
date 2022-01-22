@@ -290,7 +290,8 @@ template <typename Op,
           typename InputIterator,
           typename OffsetIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
+          typename std::enable_if_t<not is_fixed_width<OutputType>() ||
+                                    is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<column> segmented_reduce(InputIterator,
                                          OffsetIterator,
                                          cudf::size_type,
@@ -298,7 +299,9 @@ std::unique_ptr<column> segmented_reduce(InputIterator,
                                          rmm::cuda_stream_view,
                                          rmm::mr::device_memory_resource*)
 {
-  CUDF_FAIL("Segment reduction for string type is unsupported.");
+  CUDF_FAIL(
+    "Unsupported data types called on segmented_reduce. Only numeric and chrono types are "
+    "supported.");
 }
 
 }  // namespace detail
