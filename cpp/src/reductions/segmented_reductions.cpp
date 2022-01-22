@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
@@ -25,8 +24,9 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
