@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ std::unique_ptr<cudf::column> segmented_any(column_view const& col,
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "segmented_any() operation requires output type `BOOL8`");
 
-  // dispatch for non-dictionary types
   return cudf::type_dispatcher(
     col.type(),
     simple::detail::bool_result_column_dispatcher<cudf::reduction::op::max>{},

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,8 @@ std::unique_ptr<cudf::column> segmented_min(column_view const& col,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(col.type() == output_dtype, "segmented_min() operation requires matching output type");
+  CUDF_EXPECTS(col.type() == output_dtype,
+               "segmented_min() operation requires matching output type");
   return cudf::type_dispatcher(
     col.type(),
     simple::detail::same_column_type_dispatcher<cudf::reduction::op::min>{},
