@@ -105,7 +105,7 @@ std::unique_ptr<scalar> reduce(
  * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @returns Output column with segment's reduce result.
+ * @returns Output column with results of segmented reduction.
  */
 std::unique_ptr<column> segmented_reduce(
   column_view const& col,
