@@ -29,7 +29,7 @@ namespace reduction {
  * If all elements in input column are null, output scalar is null.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
- * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
+ * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
  * @param col input column to compute sum
  * @param output_dtype data type of return type and typecast elements of input column
@@ -127,7 +127,7 @@ std::unique_ptr<scalar> all(
  * If all elements in input column are null, output scalar is null.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
- * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
+ * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
  * @param col input column to compute product.
  * @param output_dtype data type of return type and typecast elements of input column
@@ -147,7 +147,7 @@ std::unique_ptr<scalar> product(
  * If all elements in input column are null, output scalar is null.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
- * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
+ * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
  * @param col input column to compute sum of squares.
  * @param output_dtype data type of return type and typecast elements of input column
@@ -260,7 +260,7 @@ std::unique_ptr<scalar> nth_element(
  * If all elements in input segment are null, the segment result is null.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
- * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
+ * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
  * @param col Input column to compute sum
  * @param offsets Indices to identify segment boundaries
@@ -286,7 +286,7 @@ std::unique_ptr<column> segmented_sum(
  * If all elements in input segment are null, the segment result is null.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
- * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
+ * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
  * @param col input column to compute product.
  * @param offsets Indices to identify segment boundaries
