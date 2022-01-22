@@ -224,16 +224,18 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @brief Compute the specified simple reduction over each of the segments in the
  * input range of elements.
  *
+ * @tparam Op               the reduction operator with device binary operator
+ * @tparam InputIterator    the input column iterator
+ * @tparam OffsetIterator   the offset column iterator
+ * @tparam OutputType       the output type of reduction
+ *
  * @param[in] d_in          the begin iterator to input
  * @param[in] d_offset      the begin iterator to offset
  * @param[in] num_segments  the number of segments
  * @param[in] op            the reduction operator
  * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
- * @returns   Output scalar in device memory
+ * @returns   Output column in device memory
  *
- * @tparam Op               the reduction operator with device binary operator
- * @tparam InputIterator    the input column iterator
- * @tparam OutputType       the output type of reduction
  */
 template <typename Op,
           typename InputIterator,
