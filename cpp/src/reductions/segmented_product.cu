@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/reduction_functions.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/types.hpp>
-#include <reductions/simple_segmented.cuh>
+#include "simple_segmented.cuh"
 
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {

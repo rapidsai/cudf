@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
+#include "simple_segmented.cuh"
+
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/reductions/simple_segmented.cuh>
-#include <cudf/types.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -32,6 +31,7 @@ std::unique_ptr<cudf::column> segmented_all(column_view const& col,
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "segmented_all() operation requires output type `BOOL8`");
 
+  // A minimum over bool types is used to implement all()
   return cudf::type_dispatcher(
     col.type(),
     simple::detail::bool_result_column_dispatcher<cudf::reduction::op::min>{},

@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "cudf/types.hpp"
+#include "simple_segmented.cuh"
+
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <reductions/simple_segmented.cuh>
 
 namespace cudf {
 namespace reduction {
@@ -32,6 +31,7 @@ std::unique_ptr<cudf::column> segmented_any(column_view const& col,
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "segmented_any() operation requires output type `BOOL8`");
 
+  // A maximum over bool types is used to implement any()
   return cudf::type_dispatcher(
     col.type(),
     simple::detail::bool_result_column_dispatcher<cudf::reduction::op::max>{},

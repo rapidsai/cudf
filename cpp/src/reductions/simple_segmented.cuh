@@ -232,6 +232,10 @@ struct column_type_dispatcher {
    * @param col Input column (must be numeric)
    * @param offsets Indices to segment boundaries
    * @param output_type Requested type of the scalar result
+   * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+   * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+   * the reduced value is valid if any element in the segment is valid.
+
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
