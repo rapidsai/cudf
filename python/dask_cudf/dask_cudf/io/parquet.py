@@ -20,7 +20,9 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
+from cudf.io.parquet import _default_open_file_options
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
+from cudf.utils.ioutils import _is_local_filesystem, _open_remote_files
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -64,6 +66,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
+        open_file_options=None,
         **kwargs,
     ):
 
@@ -75,15 +78,15 @@ class CudfEngine(ArrowDatasetEngine):
 
             # Non-local filesystem handling
             paths_or_fobs = paths
-            if not cudf.utils.ioutils._is_local_filesystem(fs):
-
-                # Convert paths to file objects for remote data
-                paths_or_fobs = [
-                    stack.enter_context(
-                        fs.open(path, mode="rb", cache_type="none")
-                    )
-                    for path in paths
-                ]
+            if not _is_local_filesystem(fs):
+                paths_or_fobs = _open_remote_files(
+                    paths_or_fobs,
+                    fs,
+                    context_stack=stack,
+                    **_default_open_file_options(
+                        open_file_options, columns, row_groups
+                    ),
+                )
 
             # Use cudf to read in data
             df = cudf.read_parquet(
@@ -150,6 +153,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=(),
         partitioning=None,
         schema=None,
+        open_file_options=None,
         **kwargs,
     ):
 
@@ -168,7 +172,10 @@ class CudfEngine(ArrowDatasetEngine):
         if not isinstance(pieces, list):
             pieces = [pieces]
 
+        # Extract supported kwargs from `kwargs`
         strings_to_cats = kwargs.get("strings_to_categorical", False)
+        read_kwargs = kwargs.get("read", {})
+        read_kwargs.update(open_file_options or {})
 
         # Assume multi-piece read
         paths = []
@@ -192,7 +199,7 @@ class CudfEngine(ArrowDatasetEngine):
                         partitions=partitions,
                         partitioning=partitioning,
                         partition_keys=last_partition_keys,
-                        **kwargs.get("read", {}),
+                        **read_kwargs,
                     )
                 )
                 paths = rgs = []
@@ -215,13 +222,13 @@ class CudfEngine(ArrowDatasetEngine):
                 partitions=partitions,
                 partitioning=partitioning,
                 partition_keys=last_partition_keys,
-                **kwargs.get("read", {}),
+                **read_kwargs,
             )
         )
         df = cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
 
         # Re-set "object" dtypes align with pa schema
-        set_object_dtypes_from_pa_schema(df, kwargs.get("schema", None))
+        set_object_dtypes_from_pa_schema(df, schema)
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
