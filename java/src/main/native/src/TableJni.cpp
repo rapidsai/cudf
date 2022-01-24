@@ -488,7 +488,7 @@ public:
 
   arrow::Result<int64_t> Read(int64_t nbytes, void *out) override {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
-    jlong ret = read_into(env, reinterpret_cast<jlong>(out), nbytes);
+    jlong ret = read_into(env, ptr_as_jlong(out), nbytes);
     total_read += ret;
     return ret;
   }
@@ -500,7 +500,7 @@ public:
     if (!tmp_buffer.ok()) {
       return tmp_buffer;
     }
-    jlong amount_read = read_into(env, reinterpret_cast<jlong>((*tmp_buffer)->data()), nbytes);
+    jlong amount_read = read_into(env, ptr_as_jlong((*tmp_buffer)->data()), nbytes);
     arrow::Status stat = (*tmp_buffer)->Resize(amount_read);
     if (!stat.ok()) {
       return stat;
@@ -613,10 +613,10 @@ convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result
   int num_columns = table_cols + extra_columns.size();
   cudf::jni::native_jlongArray outcol_handles(env, num_columns);
   for (int i = 0; i < table_cols; i++) {
-    outcol_handles[i] = reinterpret_cast<jlong>(ret[i].release());
+    outcol_handles[i] = release_as_jlong(ret[i]);
   }
   for (size_t i = 0; i < extra_columns.size(); i++) {
-    outcol_handles[i + table_cols] = reinterpret_cast<jlong>(extra_columns[i].release());
+    outcol_handles[i + table_cols] = release_as_jlong(extra_columns[i]);
   }
   return outcol_handles.get_jArray();
 }
@@ -779,10 +779,10 @@ jlongArray gather_maps_to_java(JNIEnv *env,
   auto right_map_buffer = std::make_unique<rmm::device_buffer>(maps.second->release());
   cudf::jni::native_jlongArray result(env, 5);
   result[0] = static_cast<jlong>(left_map_buffer->size());
-  result[1] = reinterpret_cast<jlong>(left_map_buffer->data());
-  result[2] = reinterpret_cast<jlong>(left_map_buffer.release());
-  result[3] = reinterpret_cast<jlong>(right_map_buffer->data());
-  result[4] = reinterpret_cast<jlong>(right_map_buffer.release());
+  result[1] = ptr_as_jlong(left_map_buffer->data());
+  result[2] = release_as_jlong(left_map_buffer);
+  result[3] = ptr_as_jlong(right_map_buffer->data());
+  result[4] = release_as_jlong(right_map_buffer);
   return result.get_jArray();
 }
 
@@ -797,8 +797,8 @@ jlongArray gather_map_to_java(JNIEnv *env,
   auto gather_map_buffer = std::make_unique<rmm::device_buffer>(map->release());
   cudf::jni::native_jlongArray result(env, 3);
   result[0] = static_cast<jlong>(gather_map_buffer->size());
-  result[1] = reinterpret_cast<jlong>(gather_map_buffer->data());
-  result[2] = reinterpret_cast<jlong>(gather_map_buffer.release());
+  result[1] = ptr_as_jlong(gather_map_buffer->data());
+  result[2] = release_as_jlong(gather_map_buffer);
   return result.get_jArray();
 }
 
@@ -906,19 +906,18 @@ jlongArray mixed_join_size(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
     auto const condition = reinterpret_cast<cudf::jni::ast::compiled_expr const *>(j_condition);
     auto const nulls_equal =
         j_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size_info =
+    auto [join_size, matches_per_row] =
         join_size_func(*left_keys, *right_keys, *left_condition, *right_condition,
                        condition->get_top_expression(), nulls_equal);
-    if (join_size_info.second->size() > std::numeric_limits<cudf::size_type>::max()) {
+    if (matches_per_row->size() > std::numeric_limits<cudf::size_type>::max()) {
       throw std::runtime_error("Too many values in device buffer to convert into a column");
     }
-    auto col_size = join_size_info.second->size();
-    auto col_data = join_size_info.second->release();
-    auto col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32}, col_size,
-                                              std::move(col_data), rmm::device_buffer{}, 0);
+    auto col_size = static_cast<size_type>(matches_per_row->size());
+    auto col_data = matches_per_row->release();
     cudf::jni::native_jlongArray result(env, 2);
-    result[0] = static_cast<jlong>(join_size_info.first);
-    result[1] = reinterpret_cast<jlong>(col.release());
+    result[0] = static_cast<jlong>(join_size);
+    result[1] = ptr_as_jlong(new cudf::column{cudf::data_type{cudf::type_id::INT32}, col_size,
+                                              std::move(col_data), rmm::device_buffer{}, 0});
     return result.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -953,9 +952,8 @@ std::pair<std::size_t, cudf::device_span<cudf::size_type const>>
 get_mixed_size_info(JNIEnv *env, jlong j_output_row_count, jlong j_matches_view) {
   auto const row_count = static_cast<std::size_t>(j_output_row_count);
   auto const matches = reinterpret_cast<cudf::column_view const *>(j_matches_view);
-  return std::pair<std::size_t, cudf::device_span<cudf::size_type const>>(
-      row_count, cudf::device_span<cudf::size_type const>(matches->template data<cudf::size_type>(),
-                                                          matches->size()));
+  return std::make_pair(row_count, cudf::device_span<cudf::size_type const>(
+                                       matches->template data<cudf::size_type>(), matches->size()));
 }
 
 // Returns a table view containing only the columns at the specified indices
@@ -987,12 +985,11 @@ cudf::table_view const get_non_keys_table(cudf::table_view const *t,
 jlongArray combine_join_results(JNIEnv *env, std::vector<std::unique_ptr<cudf::column>> left_cols,
                                 std::vector<std::unique_ptr<cudf::column>> right_cols) {
   cudf::jni::native_jlongArray outcol_handles(env, left_cols.size() + right_cols.size());
-  auto iter = std::transform(
-      left_cols.begin(), left_cols.end(), outcol_handles.begin(),
-      [](std::unique_ptr<cudf::column> &col) { return reinterpret_cast<jlong>(col.release()); });
-  std::transform(
-      right_cols.begin(), right_cols.end(), iter,
-      [](std::unique_ptr<cudf::column> &col) { return reinterpret_cast<jlong>(col.release()); });
+  auto iter =
+      std::transform(left_cols.begin(), left_cols.end(), outcol_handles.begin(),
+                     [](std::unique_ptr<cudf::column> &col) { return release_as_jlong(col); });
+  std::transform(right_cols.begin(), right_cols.end(), iter,
+                 [](std::unique_ptr<cudf::column> &col) { return release_as_jlong(col); });
   return outcol_handles.get_jArray();
 }
 
@@ -1061,10 +1058,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_removeNullMasksIfNeeded(J
     cudf::table m_tbl(result);
     std::vector<std::unique_ptr<cudf::column>> cols = m_tbl.release();
     auto results = cudf::jni::native_jlongArray(env, cols.size());
-    int i = 0;
-    for (auto it = cols.begin(); it != cols.end(); it++) {
-      results[i++] = reinterpret_cast<jlong>(it->release());
-    }
+    std::transform(cols.begin(), cols.end(), results.begin(),
+                   [](auto &col) { return release_as_jlong(col); });
     return results.get_jArray();
   }
   CATCH_STD(env, 0);
@@ -2987,9 +2982,8 @@ Java_ai_rapids_cudf_Table_convertToRowsFixedWidthOptimized(JNIEnv *env, jclass, 
         cudf::jni::convert_to_rows_fixed_width_optimized(*n_input_table);
     int num_columns = cols.size();
     cudf::jni::native_jlongArray outcol_handles(env, num_columns);
-    for (int i = 0; i < num_columns; i++) {
-      outcol_handles[i] = reinterpret_cast<jlong>(cols[i].release());
-    }
+    std::transform(cols.begin(), cols.end(), outcol_handles.begin(),
+                   [](auto &col) { return release_as_jlong(col); });
     return outcol_handles.get_jArray();
   }
   CATCH_STD(env, 0);
@@ -3045,9 +3039,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env
     std::vector<std::unique_ptr<cudf::column>> cols = cudf::jni::convert_to_rows(*n_input_table);
     int num_columns = cols.size();
     cudf::jni::native_jlongArray outcol_handles(env, num_columns);
-    for (int i = 0; i < num_columns; i++) {
-      outcol_handles[i] = reinterpret_cast<jlong>(cols[i].release());
-    }
+    std::transform(cols.begin(), cols.end(), outcol_handles.begin(),
+                   [](auto &col) { return release_as_jlong(col); });
     return outcol_handles.get_jArray();
   }
   CATCH_STD(env, 0);
@@ -3064,10 +3057,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRowsFixedWidth
     cudf::lists_column_view list_input(*input);
     cudf::jni::native_jintArray n_types(env, types);
     cudf::jni::native_jintArray n_scale(env, scale);
-    std::vector<cudf::data_type> types_vec;
-    for (int i = 0; i < n_types.size(); i++) {
-      types_vec.emplace_back(cudf::jni::make_data_type(n_types[i], n_scale[i]));
+    if (n_types.size() != n_scale.size()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
+                    NULL);
     }
+    std::vector<cudf::data_type> types_vec;
+    std::transform(n_types.begin(), n_types.end(), n_scale.begin(), std::back_inserter(types_vec),
+                   [](jint type, jint scale) { return cudf::jni::make_data_type(type, scale); });
     std::unique_ptr<cudf::table> result =
         cudf::jni::convert_from_rows_fixed_width_optimized(list_input, types_vec);
     return cudf::jni::convert_table_for_return(env, result);
@@ -3088,10 +3084,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRows(JNIEnv *e
     cudf::lists_column_view list_input(*input);
     cudf::jni::native_jintArray n_types(env, types);
     cudf::jni::native_jintArray n_scale(env, scale);
-    std::vector<cudf::data_type> types_vec;
-    for (int i = 0; i < n_types.size(); i++) {
-      types_vec.emplace_back(cudf::jni::make_data_type(n_types[i], n_scale[i]));
+    if (n_types.size() != n_scale.size()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
+                    NULL);
     }
+    std::vector<cudf::data_type> types_vec;
+    std::transform(n_types.begin(), n_types.end(), n_scale.begin(), std::back_inserter(types_vec),
+                   [](jint type, jint scale) { return cudf::jni::make_data_type(type, scale); });
     std::unique_ptr<cudf::table> result = cudf::jni::convert_from_rows(list_input, types_vec);
     return cudf::jni::convert_table_for_return(env, result);
   }
