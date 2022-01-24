@@ -140,9 +140,7 @@ ConfigureBench(SEARCH_BENCH search/search.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
-ConfigureBench(
-  SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp
-)
+ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -156,8 +154,8 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp
-  reduction/reduce.cpp reduction/scan.cpp reduction/minmax.cpp
+  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/reduce.cpp
+  reduction/scan.cpp reduction/minmax.cpp
 )
 
 # ##################################################################################################
@@ -171,13 +169,8 @@ ConfigureBench(FILL_BENCH filling/repeat.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH
-  groupby/group_sum.cu
-  groupby/group_nth.cu
-  groupby/group_shift.cu
-  groupby/group_struct.cu
-  groupby/group_no_requests.cu
-  groupby/group_scan.cu
+  GROUPBY_BENCH groupby/group_sum.cu groupby/group_nth.cu groupby/group_shift.cu
+  groupby/group_struct.cu groupby/group_no_requests.cu groupby/group_scan.cu
 )
 
 # ##################################################################################################
@@ -226,20 +219,13 @@ ConfigureBench(AST_BENCH ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(
-  BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp
-)
+ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureBench(
-  TEXT_BENCH
-  text/ngrams.cpp
-  text/normalize.cpp
-  text/normalize_spaces.cpp
-  text/replace.cpp
-  text/subword.cpp
-  text/tokenize.cpp
+  TEXT_BENCH text/ngrams.cpp text/normalize.cpp text/normalize_spaces.cpp text/replace.cpp
+  text/subword.cpp text/tokenize.cpp
 )
 
 # ##################################################################################################
