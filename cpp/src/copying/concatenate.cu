@@ -113,7 +113,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
       thrust::upper_bound(
         thrust::seq, output_offsets, output_offsets + number_of_views, mask_index) -
       output_offsets - 1;
-    bool bit_is_set = 1;
+    bool bit_is_set = true;
     if (source_view_index < number_of_views) {
       size_type const column_element_index = mask_index - output_offsets[source_view_index];
       bit_is_set = views[source_view_index].is_valid(column_element_index);

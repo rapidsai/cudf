@@ -163,6 +163,22 @@ class Frame:
 
         return cls._from_data(data, index)
 
+    def _from_columns_like_self(
+        self,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` from a list of columns with metadata from self.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        frame = self.__class__._from_columns(
+            columns, column_names, index_names
+        )
+        return frame._copy_type_metadata(self, include_index=bool(index_names))
+
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
     ) -> Optional[Frame]:

@@ -16,11 +16,15 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+
+#include <thrust/iterator/reverse_iterator.h>
 
 using hash_value_type = uint32_t;
 
@@ -86,12 +90,12 @@ struct MurmurHash3_32 {
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
   {
     return (x << r) | (x >> (32 - r));
   }
 
-  __device__ inline uint32_t fmix32(uint32_t h) const
+  [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
     h *= 0x85ebca6b;
@@ -337,17 +341,21 @@ struct SparkMurmurHash3_32 {
   template <typename TKey>
   result_type __device__ inline compute(TKey const& key) const
   {
-    constexpr int len        = sizeof(TKey);
-    int8_t const* const data = reinterpret_cast<int8_t const*>(&key);
-    constexpr int nblocks    = len / 4;
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(TKey));
+  }
 
-    uint32_t h1           = m_seed;
-    constexpr uint32_t c1 = 0xcc9e2d51;
-    constexpr uint32_t c2 = 0x1b873593;
+  result_type __device__ compute_bytes(std::byte const* const data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type block_size = sizeof(uint32_t) / sizeof(std::byte);
+    cudf::size_type const nblocks        = len / block_size;
+    uint32_t h1                          = m_seed;
+    constexpr uint32_t c1                = 0xcc9e2d51;
+    constexpr uint32_t c2                = 0x1b873593;
+
     //----------
-    // body
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-    for (int i = -nblocks; i; i++) {
+    // Process all four-byte chunks
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data);
+    for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = blocks[i];
       k1 *= c1;
       k1 = rotl32(k1, 15);
@@ -357,9 +365,14 @@ struct SparkMurmurHash3_32 {
       h1 = h1 * 5 + 0xe6546b64;
     }
     //----------
-    // byte by byte tail processing
-    for (int i = nblocks * 4; i < len; i++) {
-      int32_t k1 = data[i];
+    // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
+    // (does not conform to normal MurmurHash3)
+    for (cudf::size_type i = nblocks * 4; i < len; i++) {
+      // We require a two-step cast to get the k1 value from the byte. First,
+      // we must cast to a signed int8_t. Then, the sign bit is preserved when
+      // casting to uint32_t under 2's complement. Java preserves the
+      // signedness when casting byte-to-int, but C++ does not.
+      uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
       k1 = rotl32(k1, 15);
       k1 *= c2;
@@ -427,7 +440,42 @@ template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::operator()(
   numeric::decimal128 const& key) const
 {
-  return this->compute<__int128_t>(key.value());
+  // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
+  // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
+  // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
+  __int128_t const val               = key.value();
+  constexpr cudf::size_type key_size = sizeof(__int128_t);
+  std::byte const* data              = reinterpret_cast<std::byte const*>(&val);
+
+  // Small negative values start with 0xff..., small positive values start with 0x00...
+  bool const is_negative     = val < 0;
+  std::byte const zero_value = is_negative ? std::byte{0xff} : std::byte{0x00};
+
+  // If the value can be represented with a shorter than 16-byte integer, the
+  // leading bytes of the little-endian value are truncated and are not hashed.
+  auto const reverse_begin = thrust::reverse_iterator(data + key_size);
+  auto const reverse_end   = thrust::reverse_iterator(data);
+  auto const first_nonzero_byte =
+    thrust::find_if_not(thrust::seq, reverse_begin, reverse_end, [zero_value](std::byte const& v) {
+      return v == zero_value;
+    }).base();
+  // Max handles special case of 0 and -1 which would shorten to 0 length otherwise
+  cudf::size_type length =
+    std::max(1, static_cast<cudf::size_type>(thrust::distance(data, first_nonzero_byte)));
+
+  // Preserve the 2's complement sign bit by adding a byte back on if necessary.
+  // e.g. 0x0000ff would shorten to 0x00ff. The 0x00 byte is retained to
+  // preserve the sign bit, rather than leaving an "f" at the front which would
+  // change the sign bit. However, 0x00007f would shorten to 0x7f. No extra byte
+  // is needed because the leftmost bit matches the sign bit. Similarly for
+  // negative values: 0xffff00 --> 0xff00 and 0xffff80 --> 0x80.
+  if ((length < key_size) && (is_negative ^ bool(data[length - 1] & std::byte{0x80}))) { ++length; }
+
+  // Convert to big endian by reversing the range of nonzero bytes. Only those bytes are hashed.
+  __int128_t big_endian_value = 0;
+  auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
+  thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
+  return this->compute_bytes(big_endian_data, length);
 }
 
 template <>
@@ -480,7 +528,7 @@ hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operat
   //----------
   // Spark's byte by byte tail processing
   for (int i = nblocks * 4; i < len; i++) {
-    int32_t k1 = data[i];
+    uint32_t k1 = data[i];
     k1 *= c1;
     k1 = rotl32(k1, 15);
     k1 *= c2;
