@@ -15,7 +15,7 @@
  */
 
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
-#include <benchmarks/join/join_benchmark_common.hpp>
+#include <benchmarks/join/join_common.hpp>
 
 void skip_helper(nvbench::state& state)
 {

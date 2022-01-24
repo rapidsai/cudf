@@ -15,7 +15,7 @@
  */
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/groupby/group_benchmark_common.hpp>
+#include <benchmarks/groupby/group_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/detail/iterator.cuh>

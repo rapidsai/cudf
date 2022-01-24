@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "generate_benchmark_input.hpp"
+#include "generate_input.hpp"
 #include "random_distribution_factory.hpp"
 
 #include <cudf/column/column.hpp>

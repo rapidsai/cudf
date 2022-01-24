@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 

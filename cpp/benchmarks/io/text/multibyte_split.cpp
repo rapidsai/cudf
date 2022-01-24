@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/io/cuio_benchmark_common.hpp>
+#include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>

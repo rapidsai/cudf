@@ -22,7 +22,7 @@
 #include <cudf/utilities/traits.hpp>
 
 /**
- * @file generate_benchmark_input.hpp
+ * @file generate_input.hpp
  * @brief Contains declarations of functions that generate columns filled with random data.
  *
  * Also includes the data profile descriptor classes.

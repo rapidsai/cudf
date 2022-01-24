@@ -18,7 +18,7 @@
 #include <synchronization/synchronization.hpp>
 
 #include <benchmark/benchmark.h>
-#include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>

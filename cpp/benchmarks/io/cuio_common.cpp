@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <benchmarks/io/cuio_benchmark_common.hpp>
+#include <benchmarks/io/cuio_common.hpp>
 
 #include <numeric>
 #include <string>

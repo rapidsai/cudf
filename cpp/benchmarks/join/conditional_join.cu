@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <benchmarks/join/join_benchmark_common.hpp>
+#include <benchmarks/join/join_common.hpp>
 
 template <typename key_type, typename payload_type>
 class ConditionalJoin : public cudf::benchmark {
