@@ -29,28 +29,8 @@ def _scalar_kernel_string_from_template(sr, args):
 
     where the `x` are meant to be the values of the series. Since there
     can be only one column, the only thing that varies in the kinds of
-    kernels that we want is the number of extra_args
-
-    def _kernel(retval,
-                size,
-                input_col_0,
-                offset_0,
-                extra_arg_0, # the extra arg `c`
-                extra_arg_1, # the extra arg `k`
-    ):
-        i = cuda.grid(1)
-        ret_data_arr, ret_mask_arr = retval
-
-        if i < size:
-            d_0, m_0 = input_col_0
-            masked_0 = Masked(d_0[i], _mask_get(m_0, i + offset_0)
-
-            ret = f_(masked_0, extra_arg_0, extra_arg_1)
-
-            ret_masked = pack_return(ret)
-            ret_data_arr[i] = ret_masked.value
-            ret_mask_arr[i] = ret_masked.valid
-
+    kernels that we want is the number of extra_args. See templates.py
+    for the full kernel template.
     """
     extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
 

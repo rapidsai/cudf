@@ -76,36 +76,18 @@ def _get_frame_row_type(dtype):
 
 def _row_kernel_string_from_template(frame, row_type, args):
     """
-    The kernel we want to JIT compile looks something like the following,
-    which is an example for two columns that both have nulls present
+    Function to write numba kernels for `DataFrame.apply` as a string.
+    Workaround until numba supports functions that use `*args`
 
-    def _kernel(retval, input_col_0, input_col_1, offset_0, offset_1, size):
-        i = cuda.grid(1)
-        ret_data_arr, ret_mask_arr = retval
-        if i < size:
-            rows = cuda.local.array(1, dtype=row_type)
-            row = rows[0]
+    `DataFrame.apply` expects functions of a dict like row as well as
+    possibly one or more scalar arguments
 
-            d_0, m_0 = input_col_0
-            masked_0 = Masked(d_0[i], _mask_get(m_0, i + offset_0))
-            d_1, m_1 = input_col_1
-            masked_1 = Masked(d_1[i], _mask_get(m_1, i + offset_1))
+    def f(row, c, k):
+        return (row['x'] + c) / k
 
-            row["a"] = masked_0
-            row["b"] = masked_1
-
-            ret = f_(row)
-
-            ret_masked = pack_return(ret)
-            ret_data_arr[i] = ret_masked.value
-            ret_mask_arr[i] = ret_masked.valid
-
-    However we do not always have two columns and columns do not always have
-    an associated mask. Ideally, we would just write one kernel and make use
-    of `*args` - and then one function would work for any number of columns,
-    currently numba does not support `*args` and treats functions it JITs as
-    if `*args` is a singular argument. Thus we are forced to write the right
-    functions dynamically at runtime and define them using `exec`.
+    Both the number of input columns as well as their nullability and any
+    scalar arguments may vary, so the kernels vary significantly. See
+    templates.py for the full row kernel template and more details.
     """
     # Create argument list for kernel
     frame = _supported_cols_from_frame(frame)
