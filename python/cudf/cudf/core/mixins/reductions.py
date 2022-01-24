@@ -20,7 +20,6 @@ Reducible = _create_delegating_mixin(
         "var",
         "std",
         "median",
-        "quantile",
         "argmax",
         "argmin",
         "nunique",

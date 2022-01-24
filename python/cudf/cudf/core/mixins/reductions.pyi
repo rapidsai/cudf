@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Sequence, Union
-
 class Reducible:
     def sum(self, *args, **kwargs):
         ...
@@ -39,9 +37,6 @@ class Reducible:
         ...
 
     def median(self, *args, **kwargs):
-        ...
-
-    def quantile(self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs):
         ...
 
     def argmax(self, *args, **kwargs):

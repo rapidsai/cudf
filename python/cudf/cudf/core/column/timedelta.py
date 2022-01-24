@@ -386,12 +386,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def quantile(
-        self,
-        q: Union[float, Sequence[float]],
-        interpolation: str,
-        exact: bool,
-        *args,
-        **kwargs,
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> "column.ColumnBase":
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
