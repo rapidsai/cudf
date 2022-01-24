@@ -139,10 +139,11 @@ TEST_F(DistinctCount, IgnoringNull)
     expected - 2,
     cudf::unordered_distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
 
-  auto const new_end      = std::unique(input.begin(), input.end());
-  auto const gold_ordered = new_end - input.begin() - 5;
+  auto const new_end = std::unique(input.begin(), input.end());
+  // -1 since `YYY, YYY, XXX` is in the same group of equivalent rows
+  auto const gold_ordered = new_end - input.begin() - 1;
   EXPECT_EQ(gold_ordered,
-            cudf::distinct_count(input_col, null_policy::EXCLUDE, nan_policy::NAN_IS_VALID));
+            cudf::distinct_count(input_col, null_policy::INCLUDE, nan_policy::NAN_IS_VALID));
 }
 
 TEST_F(DistinctCount, WithNansAndNull)

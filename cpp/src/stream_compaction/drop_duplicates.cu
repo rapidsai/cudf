@@ -88,12 +88,12 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 
   auto comp = row_equality_comparator(
     nullate::DYNAMIC{cudf::has_nulls(keys)}, *device_input_table, *device_input_table, nulls_equal);
-  auto result_end = unique_copy(sorted_indices->view().begin<cudf::size_type>(),
-                                sorted_indices->view().end<cudf::size_type>(),
-                                unique_indices.begin<cudf::size_type>(),
-                                comp,
-                                keep,
-                                stream);
+  auto result_end = cudf::detail::unique_copy(sorted_indices->view().begin<cudf::size_type>(),
+                                              sorted_indices->view().end<cudf::size_type>(),
+                                              unique_indices.begin<cudf::size_type>(),
+                                              comp,
+                                              keep,
+                                              stream);
 
   return cudf::detail::slice(column_view(unique_indices),
                              0,
@@ -174,7 +174,7 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
   auto const output_size{key_map.get_size()};
 
   // write unique indices to a numeric column
-  auto unique_indices = make_numeric_column(
+  auto unique_indices = cudf::make_numeric_column(
     data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
   auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
   thrust::copy_if(rmm::exec_policy(stream),

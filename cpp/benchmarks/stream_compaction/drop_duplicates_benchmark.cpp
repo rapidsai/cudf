@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@
 #include <memory>
 #include <random>
 
+// necessary for custom enum types
+// see: https://github.com/NVIDIA/nvbench/blob/main/examples/enums.cu
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   // Enum type:
   cudf::duplicate_keep_option,
   // Callable to generate input strings:
-  // Short identifier used for tables, command-line args, etc.
-  // Used when context is available to figure out the enum type.
   [](cudf::duplicate_keep_option option) {
     switch (option) {
       case cudf::duplicate_keep_option::KEEP_FIRST: return "KEEP_FIRST";
@@ -42,10 +42,6 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     }
   },
   // Callable to generate descriptions:
-  // If non-empty, these are used in `--list` to describe values.
-  // Used when context may not be available to figure out the type from the
-  // input string.
-  // Just use `[](auto) { return std::string{}; }` if you don't want these.
   [](auto) { return std::string{}; })
 
 NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
