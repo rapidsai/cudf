@@ -253,7 +253,7 @@ ConfigureBench(
   string/convert_durations_benchmark.cpp
   string/convert_fixed_point_benchmark.cpp
   string/convert_numerics_benchmark.cpp
-  string/copy_benchmark.cpp
+  string/copy_benchmark.cu
   string/extract_benchmark.cpp
   string/factory_benchmark.cu
   string/filter_benchmark.cpp
