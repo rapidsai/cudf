@@ -4,6 +4,7 @@ import operator
 import numpy as np
 import pytest
 from numba import cuda
+from numba.core.errors import TypingError
 
 import cudf
 from cudf.core.scalar import NA
@@ -538,7 +539,7 @@ def test_masked_udf_unsupported_dtype(unsupported_col):
         return row["unsupported_col"]
 
     # check that we fail when an unsupported type is used within a function
-    with pytest.raises(TypeError):
+    with pytest.raises(TypingError):
         data.apply(func, axis=1)
 
     # also check that a DF containing unsupported dtypes can still run a

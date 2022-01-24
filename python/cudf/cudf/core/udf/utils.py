@@ -3,6 +3,7 @@ from typing import Callable
 import cachetools
 import numpy as np
 from numba import cuda, typeof
+from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import Poison, Tuple, boolean, int64, void
 from nvtx import annotate
@@ -69,7 +70,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
     # because it relies on not finding overloaded operators for types to raise
     # the exception, so we have to explicitly check for that case.
     if isinstance(result, Poison):
-        raise TypeError(str(result))
+        raise TypingError(str(result))
 
     return result
 
