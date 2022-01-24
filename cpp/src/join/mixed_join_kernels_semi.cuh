@@ -27,7 +27,7 @@ namespace cudf {
 namespace detail {
 
 /**
- * @brief Computes the output size of joining the left table to the right table.
+ * @brief Computes the output size of joining the left table to the right table for semi/anti joins.
  *
  * This method probes the hash table with each row in the probe table using a
  * custom equality comparator that also checks that the conditional expression
@@ -57,23 +57,23 @@ namespace detail {
  * probe table has already happened on the host.
  */
 template <int block_size, bool has_nulls>
-__global__ void compute_mixed_join_output_size(
+__global__ void compute_mixed_join_output_size_semi(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
   row_equality const equality_probe,
   join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  cudf::detail::semi_map_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size,
   cudf::device_span<cudf::size_type> matches_per_row);
 
 /**
- * @brief Performs a join using the combination of a hash lookup to identify
- * equal rows between one pair of tables and the evaluation of an expression
- * containing an arbitrary expression.
+ * @brief Performs a semi/anti join using the combination of a hash lookup to
+ * identify equal rows between one pair of tables and the evaluation of an
+ * expression containing an arbitrary expression.
  *
  * This method probes the hash table with each row in the probe table using a
  * custom equality comparator that also checks that the conditional expression
@@ -91,7 +91,6 @@ __global__ void compute_mixed_join_output_size(
  * @param[in] join_type The type of join to be performed
  * @param[in] hash_table_view The hash table built from `build`.
  * @param[out] join_output_l The left result of the join operation
- * @param[out] join_output_r The right result of the join operation
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  * @param[in] join_result_offsets The starting indices in join_output[l|r]
@@ -101,18 +100,17 @@ __global__ void compute_mixed_join_output_size(
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <cudf::size_type block_size, bool has_nulls>
-__global__ void mixed_join(table_device_view left_table,
-                           table_device_view right_table,
-                           table_device_view probe,
-                           table_device_view build,
-                           row_equality const equality_probe,
-                           join_kind const join_type,
-                           cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                           size_type* join_output_l,
-                           size_type* join_output_r,
-                           cudf::ast::detail::expression_device_view device_expression_data,
-                           cudf::size_type const* join_result_offsets,
-                           bool const swap_tables);
+__global__ void mixed_join_semi(table_device_view left_table,
+                                table_device_view right_table,
+                                table_device_view probe,
+                                table_device_view build,
+                                row_equality const equality_probe,
+                                join_kind const join_type,
+                                cudf::detail::semi_map_type::device_view hash_table_view,
+                                size_type* join_output_l,
+                                cudf::ast::detail::expression_device_view device_expression_data,
+                                cudf::size_type const* join_result_offsets,
+                                bool const swap_tables);
 
 }  // namespace detail
 
