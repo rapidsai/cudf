@@ -4,7 +4,6 @@ import operator
 import numpy as np
 import pytest
 from numba import cuda
-from numba.core.errors import TypingError
 
 import cudf
 from cudf.core.scalar import NA
@@ -486,7 +485,7 @@ def test_masked_udf_nested_function_support(op):
         {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
     )
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         gdf.apply(outer, axis=1)
 
     pdf = gdf.to_pandas(nullable=True)
@@ -539,7 +538,7 @@ def test_masked_udf_unsupported_dtype(unsupported_col):
         return row["unsupported_col"]
 
     # check that we fail when an unsupported type is used within a function
-    with pytest.raises(TypingError):
+    with pytest.raises(ValueError):
         data.apply(func, axis=1)
 
     # also check that a DF containing unsupported dtypes can still run a

@@ -768,9 +768,14 @@ class IndexedFrame(Frame):
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        kernel, retty = _compile_or_get(
-            self, func, args, kernel_getter=kernel_getter
-        )
+        try:
+            kernel, retty = _compile_or_get(
+                self, func, args, kernel_getter=kernel_getter
+            )
+        except Exception as e:
+            raise ValueError(
+                "user defined function compilation or execution failed."
+            ) from e
 
         # Mask and data column preallocated
         ans_col = cp.empty(len(self), dtype=retty)
