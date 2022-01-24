@@ -17,6 +17,7 @@
 #include <strings/char_types/is_flags.h>
 #include <strings/utf8.cuh>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 
@@ -60,7 +61,8 @@ struct alignas(8) relist {
 
   CUDF_HOST_DEVICE inline relist() {}
 
-  __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr, u_char* sdata = nullptr)
+  __host__ __device__ inline relist(int16_t insts,
+                                    u_char* data = nullptr)  //, u_char* sdata = nullptr)
     : listsize(insts)
   {
     auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
@@ -68,7 +70,7 @@ struct alignas(8) relist {
     ptr += listsize * sizeof(ranges[0]);
     inst_ids = reinterpret_cast<int16_t*>(ptr);
     ptr += listsize * sizeof(inst_ids[0]);
-    mask = sdata ? sdata : ptr;
+    mask = /*sdata ? sdata :*/ ptr;
     reset();
   }
 
@@ -270,8 +272,8 @@ __device__ inline int32_t reprog_device::regexec(
             expanded    = true;
             break;
           case BOL:
-            if ((pos == 0) ||
-                ((inst->u1.c == '^') && (*(itr - 1) == static_cast<char_utf8>('\n')))) {
+            if ((pos == 0) || ((inst->u1.c == '^') && (pos <= dstr.length()) &&
+                               (*(itr - 1) == static_cast<char_utf8>('\n')))) {
               id_activate = inst->u2.next_id;
               expanded    = true;
             }
@@ -381,23 +383,48 @@ __device__ inline match_result reprog_device::extract(cudf::size_type idx,
            : thrust::nullopt;
 }
 
+__host__ __device__ inline int32_t reprog_device::state_size() const
+{
+  // compute the state block for the instruction count aligned on a 8-byte boundary
+  auto const state_per_inst = cudf::util::round_up_unsafe(relist::data_size_for(_insts_count), 8);
+  return state_per_inst * 2;  // two state blocks needed for evaluation
+}
+
+inline thrust::pair<int32_t, int32_t> reprog_device::shared_memory_block() const
+{
+  auto const inst_stack = state_size();
+  auto const block_size =
+    1 << static_cast<int32_t>(std::log2(std::max(std::min(MAX_SHARED_MEM / inst_stack, 512), 16)));
+  auto const shmem_size = block_size * inst_stack;
+  return {block_size, shmem_size > MAX_SHARED_MEM ? 0 : shmem_size};
+}
+
 template <int stack_size>
 __device__ inline int32_t reprog_device::call_regexec(
   int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
 {
   u_char data1[stack_size], data2[stack_size];
-  __shared__ u_char sd[(256 / 8) * 2 * (stack_size / 10)];
+  relist list1(static_cast<int16_t>(_insts_count), data1);
+  relist list2(static_cast<int16_t>(_insts_count), data2);
 
-  auto const stype = get_inst(_startinst_id)->type;
-  auto const schar = get_inst(_startinst_id)->u1.c;
+  reljunk jnk(&list1, &list2, get_inst(_startinst_id)->type, get_inst(_startinst_id)->u1.c);
+  return regexec(dstr, jnk, begin, end, group_id);
+}
 
-  auto mask1 = &sd[threadIdx.x * ((_insts_count + 7) / 8)];
-  auto mask2 = mask1 + (sizeof(sd) / 2);
+template <>
+__device__ inline int32_t reprog_device::call_regexec<RX_STACK_LARGE>(
+  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+{
+  extern __shared__ u_char sd[];
+  auto const data_size = state_size();
 
-  relist list1(static_cast<int16_t>(_insts_count), data1, mask1);
-  relist list2(static_cast<int16_t>(_insts_count), data2, mask2);
+  auto data1 = sd + (threadIdx.x * data_size);
+  auto data2 = data1 + (data_size / 2);  // two state-blocks per thread
 
-  reljunk jnk(&list1, &list2, stype, schar);
+  relist list1(static_cast<int16_t>(_insts_count), data1);
+  relist list2(static_cast<int16_t>(_insts_count), data2);
+
+  reljunk jnk(&list1, &list2, get_inst(_startinst_id)->type, get_inst(_startinst_id)->u1.c);
   return regexec(dstr, jnk, begin, end, group_id);
 }
 
@@ -405,16 +432,15 @@ template <>
 __device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
   int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
 {
-  auto const stype = get_inst(_startinst_id)->type;
-  auto const schar = get_inst(_startinst_id)->u1.c;
-
   auto const relists_size = static_cast<std::size_t>(relist::alloc_size(_insts_count));
-  u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
+  auto listmem            = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
   listmem += (idx * relists_size * 2L);                               // two relist ptrs in reljunk:
 
   auto* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
   auto* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
 
+  auto const stype = get_inst(_startinst_id)->type;
+  auto const schar = get_inst(_startinst_id)->u1.c;
   reljunk jnk(list1, list2, stype, schar);
   return regexec(dstr, jnk, begin, end, group_id);
 }

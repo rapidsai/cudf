@@ -80,22 +80,21 @@ std::unique_ptr<column> count_matches(
 
   auto begin = thrust::make_counting_iterator<size_type>(0);
   auto end   = thrust::make_counting_iterator<size_type>(d_strings.size());
-
-  // Count matches
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    count_matches_fn<RX_STACK_SMALL> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    count_matches_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    count_matches_fn<RX_STACK_LARGE> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else {
-    count_matches_fn<RX_STACK_ANY> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  }
+  // // Count matches
+  // auto const regex_insts = d_prog.insts_counts();
+  // if (regex_insts <= RX_SMALL_INSTS) {
+  //   count_matches_fn<RX_STACK_SMALL> fn{d_strings, d_prog};
+  //   thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
+  // } else if (regex_insts <= RX_MEDIUM_INSTS) {
+  //   count_matches_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog};
+  //   thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
+  // } else if (regex_insts <= RX_LARGE_INSTS) {
+  //   count_matches_fn<RX_STACK_LARGE> fn{d_strings, d_prog};
+  //   thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
+  // } else {
+  count_matches_fn<RX_STACK_ANY> fn{d_strings, d_prog};
+  thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
+  // }
 
   return counts;
 }

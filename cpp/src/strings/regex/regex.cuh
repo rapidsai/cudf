@@ -42,10 +42,12 @@ class reprog;
 using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
-constexpr int32_t RX_STACK_SMALL  = 120;   ///< fastest stack size 112
-constexpr int32_t RX_STACK_MEDIUM = 1000;  ///< faster stack size  1104
+constexpr int32_t RX_STACK_SMALL  = 112;   ///< fastest stack size 112
+constexpr int32_t RX_STACK_MEDIUM = 1104;  ///< faster stack size  1104
 constexpr int32_t RX_STACK_LARGE  = 2560;  ///< fast stack size    10128
 constexpr int32_t RX_STACK_ANY    = 8;     ///< slowest: uses global memory for everything
+
+constexpr int32_t MAX_SHARED_MEM = 48000;  //< maximum memory per block in Pascal
 
 /**
  * @brief Mapping the number of instructions to device code stack memory size.
@@ -56,9 +58,9 @@ constexpr int32_t RX_STACK_ANY    = 8;     ///< slowest: uses global memory for 
  * Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
  * ```
  */
-constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 10);   // 10
-constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 10);  // 100
-constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 10);   // 920
+constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);   // 10
+constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);  // 100
+constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);   // 920
 
 /**
  * @brief Regex class stored on the device and executed by reprog_device.
@@ -164,6 +166,16 @@ class reprog_device {
    * @brief Returns the start-instruction-ids vector.
    */
   [[nodiscard]] __device__ inline int32_t* startinst_ids() const;
+
+  /**
+   * @brief Returns the state data size needed for this instance.
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE inline int32_t state_size() const;
+
+  /**
+   * @brief Returns the state data size needed for this instance.
+   */
+  [[nodiscard]] inline thrust::pair<int32_t, int32_t> shared_memory_block() const;
 
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.

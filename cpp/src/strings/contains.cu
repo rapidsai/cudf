@@ -14,20 +14,24 @@
  * limitations under the License.
  */
 
+#include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -62,6 +66,13 @@ struct contains_fn {
   }
 };
 
+// template <int stack_size>
+// __global__ void contains_kernel(contains_fn<stack_size> fn, bool* output, size_type size)
+// {
+//   auto idx = threadIdx.x + blockIdx.x * blockDim.x;
+//   if (idx < size) { output[idx] = fn(idx); }
+// }
+
 //
 std::unique_ptr<column> contains_util(
   strings_column_view const& strings,
@@ -91,30 +102,40 @@ std::unique_ptr<column> contains_util(
 
   // fill the output column
   // int regex_insts = d_prog.insts_counts();
-  // if (regex_insts <= RX_SMALL_INSTS)
+  // if (regex_insts <= RX_SMALL_INSTS) {
   //   thrust::transform(rmm::exec_policy(stream),
   //                     thrust::make_counting_iterator<size_type>(0),
   //                     thrust::make_counting_iterator<size_type>(strings_count),
   //                     d_results,
   //                     contains_fn<RX_STACK_SMALL>{d_prog, d_column, beginning_only});
-  // else if (regex_insts <= RX_MEDIUM_INSTS)
+  // } else if (regex_insts <= RX_MEDIUM_INSTS) {
   //   thrust::transform(rmm::exec_policy(stream),
   //                     thrust::make_counting_iterator<size_type>(0),
   //                     thrust::make_counting_iterator<size_type>(strings_count),
   //                     d_results,
   //                     contains_fn<RX_STACK_MEDIUM>{d_prog, d_column, beginning_only});
-  // else if (regex_insts <= RX_LARGE_INSTS)
+  //} else if (regex_insts <= RX_LARGE_INSTS) {
   //   thrust::transform(rmm::exec_policy(stream),
   //                     thrust::make_counting_iterator<size_type>(0),
   //                     thrust::make_counting_iterator<size_type>(strings_count),
   //                     d_results,
   //                     contains_fn<RX_STACK_LARGE>{d_prog, d_column, beginning_only});
-  // else
+  //} else {
+  //  auto const [block_size, shmem_size] = prog->shared_memory_block();
+  //  // printf("  shmem_size = %d\n", shmem_size);
+  //  if (shmem_size) {
+  //    cudf::detail::grid_1d grid{strings_count, block_size};
+  //    contains_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size,
+  //    stream.value()>>>(
+  //      contains_fn<RX_STACK_LARGE>{d_prog, d_column, beginning_only}, d_results, strings_count);
+  //  } else {
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
                     contains_fn<RX_STACK_ANY>{d_prog, d_column, beginning_only});
+  //}
+  //}
 
   results->set_null_count(strings.null_count());
   return results;
@@ -174,7 +195,7 @@ struct count_fn {
   reprog_device prog;
   column_device_view d_strings;
 
-  __device__ int32_t operator()(unsigned int idx)
+  __device__ int32_t operator()(int idx)
   {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
@@ -190,6 +211,13 @@ struct count_fn {
     return find_count;
   }
 };
+
+// template <int stack_size>
+// __global__ void count_kernel(count_fn<stack_size> fn, int32_t* output, size_type size)
+// {
+//   auto idx = threadIdx.x + blockIdx.x * blockDim.x;
+//   if (idx < size) { output[idx] = fn(idx); }
+// }
 
 }  // namespace
 
@@ -219,20 +247,20 @@ std::unique_ptr<column> count_re(
   auto d_results = results->mutable_view().data<int32_t>();
 
   // fill the output column
-  // int regex_insts = d_prog.insts_counts();
-  // if (regex_insts <= RX_SMALL_INSTS)
+  // auto const regex_insts = d_prog.insts_counts();
+  // if (regex_insts <= RX_SMALL_INSTS) {
   //   thrust::transform(rmm::exec_policy(stream),
   //                     thrust::make_counting_iterator<size_type>(0),
   //                     thrust::make_counting_iterator<size_type>(strings_count),
   //                     d_results,
   //                     count_fn<RX_STACK_SMALL>{d_prog, d_column});
-  // else if (regex_insts <= RX_MEDIUM_INSTS)
+  // } else if (regex_insts <= RX_MEDIUM_INSTS) {
   //   thrust::transform(rmm::exec_policy(stream),
   //                     thrust::make_counting_iterator<size_type>(0),
   //                     thrust::make_counting_iterator<size_type>(strings_count),
   //                     d_results,
   //                     count_fn<RX_STACK_MEDIUM>{d_prog, d_column});
-  // else if (regex_insts <= RX_LARGE_INSTS)
+  //} else if (regex_insts <= RX_LARGE_INSTS)
   //   thrust::transform(rmm::exec_policy(stream),
   //                     thrust::make_counting_iterator<size_type>(0),
   //                     thrust::make_counting_iterator<size_type>(strings_count),

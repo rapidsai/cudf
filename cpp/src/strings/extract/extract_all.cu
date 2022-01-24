@@ -147,20 +147,20 @@ std::unique_ptr<column> extract_all(
   auto begin     = thrust::make_counting_iterator<size_type>(0);
 
   // Call the extract functor to fill in the indices vector.
-  auto const regex_insts = d_prog->insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    extract_fn<RX_STACK_SMALL> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    extract_fn<RX_STACK_MEDIUM> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    extract_fn<RX_STACK_LARGE> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else {
-    extract_fn<RX_STACK_ANY> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  }
+  // auto const regex_insts = d_prog->insts_counts();
+  // if (regex_insts <= RX_SMALL_INSTS) {
+  //  extract_fn<RX_STACK_SMALL> fn{*d_strings, *d_prog, d_offsets, d_indices};
+  //  thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
+  //} else if (regex_insts <= RX_MEDIUM_INSTS) {
+  //  extract_fn<RX_STACK_MEDIUM> fn{*d_strings, *d_prog, d_offsets, d_indices};
+  //  thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
+  //} else if (regex_insts <= RX_LARGE_INSTS) {
+  //  extract_fn<RX_STACK_LARGE> fn{*d_strings, *d_prog, d_offsets, d_indices};
+  //  thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
+  //} else {
+  extract_fn<RX_STACK_ANY> fn{*d_strings, *d_prog, d_offsets, d_indices};
+  thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
+  //}
 
   // Build the child strings column from the indices.
   auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
