@@ -15,6 +15,8 @@ def validate_setup():
 
     import warnings
 
+    from cudf.errors import UnsupportedCUDAError
+
     from cuda.cudart import cudaDeviceAttr, cudaError_t
 
     from rmm._cuda.gpu import (
@@ -86,18 +88,14 @@ def validate_setup():
 
         cuda_runtime_version = runtimeGetVersion()
 
-        if cuda_runtime_version >= 10000:
-            # CUDA Runtime Version Check: Runtime version is greater than 10000
-            pass
-        else:
-            from cudf.errors import UnsupportedCUDAError
-
+        if cuda_runtime_version < 11000:
+            # Require CUDA Runtime version 11.0 or greater.
             major_version = cuda_runtime_version // 1000
             minor_version = (cuda_runtime_version % 1000) // 10
             raise UnsupportedCUDAError(
-                f"Detected CUDA Runtime version is "
+                "Detected CUDA Runtime version is "
                 f"{major_version}.{minor_version}. "
-                f"Please update your CUDA Runtime to 11.0 or above."
+                "Please update your CUDA Runtime to 11.0 or above."
             )
 
         cuda_driver_supported_rt_version = driverGetVersion()
@@ -113,15 +111,12 @@ def validate_setup():
         # https://docs.nvidia.com/deploy/cuda-compatibility/index.html
 
         if cuda_driver_supported_rt_version == 0:
-            from cudf.errors import UnsupportedCUDAError
-
             raise UnsupportedCUDAError(
                 "We couldn't detect the GPU driver properly. Please follow "
                 "the installation guide to ensure your driver is properly "
                 "installed: "
                 "https://docs.nvidia.com/cuda/cuda-installation-guide-linux/"
             )
-
         elif cuda_driver_supported_rt_version >= cuda_runtime_version:
             # CUDA Driver Version Check:
             # Driver Runtime version is >= Runtime version
@@ -136,8 +131,6 @@ def validate_setup():
             # version 450.80.02 supports.
             pass
         else:
-            from cudf.errors import UnsupportedCUDAError
-
             raise UnsupportedCUDAError(
                 f"Please update your NVIDIA GPU Driver to support CUDA "
                 f"Runtime.\n"
