@@ -17,7 +17,6 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
 from pandas.io.formats import console
@@ -3021,54 +3020,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
         return out
 
-    def as_gpu_matrix(self, columns=None, order="F"):
-        warnings.warn(
-            "The as_gpu_matrix method will be removed in a future cuDF "
-            "release. Consider using `to_cupy` instead.",
-            FutureWarning,
-        )
-        if columns is None:
-            columns = self._data.names
-
-        cols = [self._data[k] for k in columns]
-        ncol = len(cols)
-        nrow = len(self)
-        if ncol < 1:
-            # This is the case for empty dataframe - construct empty cupy array
-            matrix = cupy.empty(
-                shape=(0, 0), dtype=cudf.dtype("float64"), order=order
-            )
-            return cuda.as_cuda_array(matrix)
-
-        if any(
-            (is_categorical_dtype(c) or np.issubdtype(c, cudf.dtype("object")))
-            for c in cols
-        ):
-            raise TypeError("non-numeric data not yet supported")
-
-        dtype = find_common_type([col.dtype for col in cols])
-        for k, c in self._data.items():
-            if c.has_nulls():
-                raise ValueError(
-                    f"column '{k}' has null values. "
-                    f"hint: use .fillna() to replace null values"
-                )
-        cupy_dtype = dtype
-        if np.issubdtype(cupy_dtype, np.datetime64):
-            cupy_dtype = cudf.dtype("int64")
-
-        if order not in ("F", "C"):
-            raise ValueError(
-                "order parameter should be 'C' for row major or 'F' for"
-                "column major GPU matrix"
-            )
-
-        matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
-        for colidx, inpcol in enumerate(cols):
-            dense = inpcol.astype(cupy_dtype)
-            matrix[:, colidx] = cupy.asarray(dense)
-        return cuda.as_cuda_array(matrix).view(dtype)
-
     def as_matrix(self, columns=None):
         warnings.warn(
             "The as_matrix method will be removed in a future cuDF "
@@ -5536,7 +5487,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                     .fillna(np.nan)
                 )
-        arr = cupy.asarray(prepared.as_gpu_matrix())
+        arr = prepared.to_cupy()
 
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
