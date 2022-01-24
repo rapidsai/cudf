@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -475,6 +475,64 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
   this->template test<cudf::library::operation::LogicalOr>(cudf::binary_operator::LOGICAL_OR);
 }
 
+template <typename T>
+using column_wrapper = std::conditional_t<std::is_same_v<T, std::string>,
+                                          cudf::test::strings_column_wrapper,
+                                          cudf::test::fixed_width_column_wrapper<T>>;
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs, class OP>
+auto NullOp_Result(column_view lhs, column_view rhs)
+{
+  auto [lhs_data, lhs_mask] = cudf::test::to_host<TypeLhs>(lhs);
+  auto [rhs_data, rhs_mask] = cudf::test::to_host<TypeRhs>(rhs);
+  std::vector<TypeOut> result(lhs.size());
+  std::vector<bool> result_mask;
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(lhs.size()),
+                 result.begin(),
+                 [&lhs_data, &lhs_mask, &rhs_data, &rhs_mask, &result_mask](auto i) -> TypeOut {
+                   auto lhs_valid    = lhs_mask.data() and cudf::bit_is_set(lhs_mask.data(), i);
+                   auto rhs_valid    = rhs_mask.data() and cudf::bit_is_set(rhs_mask.data(), i);
+                   bool output_valid = lhs_valid or rhs_valid;
+                   auto result = OP{}(lhs_data[i], rhs_data[i], lhs_valid, rhs_valid, output_valid);
+                   result_mask.push_back(output_valid);
+                   return result;
+                 });
+  return column_wrapper<TypeOut>(result.cbegin(), result.cend(), result_mask.cbegin());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalAnd_Vector_Vector)
+{
+  using TypeOut  = bool;
+  using TypeLhs  = typename TestFixture::TypeLhs;
+  using TypeRhs  = typename TestFixture::TypeRhs;
+  using NULL_AND = cudf::library::operation::NullLogicalAnd<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_AND>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_LOGICAL_AND, data_type(type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Logical, NullLogicalOr_Vector_Vector)
+{
+  using TypeOut = bool;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+  using NULL_OR = cudf::library::operation::NullLogicalOr<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_OR>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_LOGICAL_OR, data_type(type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 // Comparison Operations ==, !=, <, >, <=, >=
 // n<!=>n, t<!=>t, d<!=>d, s<!=>s, dc<!=>dc
 using Comparison_types = cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>,
@@ -553,32 +611,6 @@ template <typename T>
 struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<T> {
 };
 TYPED_TEST_SUITE(BinaryOperationCompiledTest_NullOps, Null_types);
-
-template <typename T>
-using column_wrapper = std::conditional_t<std::is_same_v<T, std::string>,
-                                          cudf::test::strings_column_wrapper,
-                                          cudf::test::fixed_width_column_wrapper<T>>;
-
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, class OP>
-auto NullOp_Result(column_view lhs, column_view rhs)
-{
-  auto [lhs_data, lhs_mask] = cudf::test::to_host<TypeLhs>(lhs);
-  auto [rhs_data, rhs_mask] = cudf::test::to_host<TypeRhs>(rhs);
-  std::vector<TypeOut> result(lhs.size());
-  std::vector<bool> result_mask;
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(lhs.size()),
-                 result.begin(),
-                 [&lhs_data, &lhs_mask, &rhs_data, &rhs_mask, &result_mask](auto i) -> TypeOut {
-                   auto lhs_valid    = lhs_mask.data() and cudf::bit_is_set(lhs_mask.data(), i);
-                   auto rhs_valid    = rhs_mask.data() and cudf::bit_is_set(rhs_mask.data(), i);
-                   bool output_valid = lhs_valid or rhs_valid;
-                   auto result = OP{}(lhs_data[i], rhs_data[i], lhs_valid, rhs_valid, output_valid);
-                   result_mask.push_back(output_valid);
-                   return result;
-                 });
-  return column_wrapper<TypeOut>(result.cbegin(), result.cend(), result_mask.cbegin());
-}
 
 TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullEquals_Vector_Vector)
 {

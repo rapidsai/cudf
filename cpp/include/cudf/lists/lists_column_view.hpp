@@ -63,21 +63,21 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the parent column.
    */
-  column_view parent() const;
+  [[nodiscard]] column_view parent() const;
 
   /**
    * @brief Returns the internal column of offsets
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view offsets() const;
+  [[nodiscard]] column_view offsets() const;
 
   /**
    * @brief Returns the internal child column
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view child() const;
+  [[nodiscard]] column_view child() const;
 
   /**
    * @brief Returns the internal child column, applying any offset from the root.
@@ -89,14 +89,14 @@ class lists_column_view : private column_view {
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view get_sliced_child(rmm::cuda_stream_view stream) const;
+  [[nodiscard]] column_view get_sliced_child(rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Return first offset (accounting for column offset)
    *
    * @return int32_t const* Pointer to the first offset
    */
-  offset_iterator offsets_begin() const noexcept
+  [[nodiscard]] offset_iterator offsets_begin() const noexcept
   {
     return offsets().begin<offset_type>() + offset();
   }
@@ -111,7 +111,10 @@ class lists_column_view : private column_view {
    *
    * @return int32_t const* Pointer to one past the last offset
    */
-  offset_iterator offsets_end() const noexcept { return offsets_begin() + size() + 1; }
+  [[nodiscard]] offset_iterator offsets_end() const noexcept
+  {
+    return offsets_begin() + size() + 1;
+  }
 };
 /** @} */  // end of group
 }  // namespace cudf

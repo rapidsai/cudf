@@ -120,7 +120,7 @@ avro_decode_row(schemadesc_s const* schema,
           if (dataptr != nullptr && row < max_rows) { static_cast<int64_t*>(dataptr)[row] = v; }
         } else {  // string or enum
           size_t count    = 0;
-          const char* ptr = 0;
+          const char* ptr = nullptr;
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
             if (idx < global_dictionary.size()) {
