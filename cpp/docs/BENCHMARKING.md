@@ -1,19 +1,24 @@
 # Unit Benchmarking in libcudf
 
-Unit benchmarks in libcudf are written using [Google Benchmark](https://github.com/google/benchmark).
+Unit benchmarks in libcudf are written using [NVBench](https://github.com/NVIDIA/nvbench).
+While many existing benchmarks are written using
+[Google Benchmark](https://github.com/google/benchmark), new benchmarks should use NVBench.
 
-Google Benchmark provides many options for specifying ranges of parameters to benchmarks to test
-with varying parameters, as well as to control the time unit reported, among other options. Refer to
-other benchmarks in `cpp/benchmarks` to understand the options.
+The NVBench library is similar to Google Benchmark, but has several quality of life improvements
+when doing GPU benchmarking such as displaying the fraction of peak memory bandwidth achieved and
+details about the GPU hardware.
+
+Both NVBench and Google Benchmark provide many options for specifying ranges of parameters to
+benchmark, as well as to control the time unit reported, among other options. Refer to existing
+benchmarks in `cpp/benchmarks` to understand the options.
 
 ## Directory and File Naming
 
 The naming of unit benchmark directories and source files should be consistent with the feature
 being benchmarked. For example, the benchmarks for APIs in `copying.hpp` should live in
-`cudf/cpp/benchmarks/copying`. Each feature (or set of related features) should have its own
-benchmark source file named `<feature>.cu/cpp`. For example,
-`cudf/cpp/src/copying/scatter.cu` has benchmarks in
-`cudf/cpp/benchmarks/copying/scatter.cu`.
+`cpp/benchmarks/copying`. Each feature (or set of related features) should have its own
+benchmark source file named `<feature>.cu/cpp`. For example, `cpp/src/copying/scatter.cu` has
+benchmarks in `cpp/benchmarks/copying/scatter.cu`.
 
 In the interest of improving compile time, whenever possible, test source files should be `.cpp`
 files because `nvcc` is slower than `gcc` in compiling host code. Note that `thrust::device_vector`
