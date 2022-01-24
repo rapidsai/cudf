@@ -2755,7 +2755,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             return lhs._column.cov(rhs._column)
         except AttributeError:
-            raise TypeError(f"cannot perform cov with type {self.dtype}")
+            raise TypeError(
+                f"cannot perform covariance with types {self.dtype}, "
+                f"{other.dtype}"
+            )
 
     def transpose(self):
         """Return the transpose, which is by definition self.
@@ -2794,7 +2797,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             return lhs._column.corr(rhs._column)
         except AttributeError:
-            raise TypeError(f"cannot perform corr with type {self.dtype}")
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
 
     def autocorr(self, lag=1):
         """Compute the lag-N autocorrelation. This method computes the Pearson

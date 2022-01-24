@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -510,9 +509,7 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.corr,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -520,7 +517,5 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.cov,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform covarience with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )
