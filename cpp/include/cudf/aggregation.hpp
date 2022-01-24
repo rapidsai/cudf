@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -299,13 +299,13 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * affects the contribution of the previous values (y_{i-1} ... y_0) in
  * computing the y_i.
  *
- * EWMA aggregations are also parameterized by a boolean `adjust`.
+ * EWMA aggregations are also parameterized by a history `cudf::ewm_history`.
  * Special considerations have to be given to the mathematical treatment of
  * the first value of the input sequence. There are two approaches to this,
  * one which considers the first value of the sequence to be the exponential
  * weighted moving average of some infinite history of data, and one which
  * takes the first value to be the only datapoint known. These assumptions
- * lead to two different formulas for the y_i. `adjust` selects which one.
+ * lead to two different formulas for the y_i. `ewm_history` selects which.
  *
  * EWMA aggregations have special null handling. Nulls have two effects. The
  * first is to propagate forward the last valid value as far as it has been
@@ -321,7 +321,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * @param adjust which assumption to make about the first value
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_ewma_aggregation(double const center_of_mass, ewma_history history);
+std::unique_ptr<Base> make_ewma_aggregation(double const center_of_mass, ewm_history history);
 
 /**
  * @brief Factory to create a RANK aggregation

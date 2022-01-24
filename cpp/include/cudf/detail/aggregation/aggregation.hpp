@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -616,7 +616,7 @@ class ewma_aggregation final : public rolling_aggregation {
   cudf::ewm_history history;
 
   ewma_aggregation(double const center_of_mass, cudf::ewm_history history)
-    : aggregation{EWMA}, com{com}, history{history}
+    : aggregation{EWMA}, center_of_mass{center_of_mass}, history{history}
   {
   }
 
@@ -635,7 +635,7 @@ class ewma_aggregation final : public rolling_aggregation {
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
-    return this->com == other.com and this->history == other.history;
+    return this->center_of_mass == other.center_of_mass and this->history == other.history;
   }
 
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }

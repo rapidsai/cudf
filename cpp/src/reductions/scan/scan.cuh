@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ rmm::device_buffer mask_scan(column_view const& input_view,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> ewma(column_view const& input,
+std::unique_ptr<column> ewm(column_view const& input,
                             std::unique_ptr<aggregation> const& agg,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr);

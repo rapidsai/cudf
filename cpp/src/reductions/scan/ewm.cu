@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -366,11 +366,11 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
   CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Column must be floating point type");
 
   cudf::ewm_history history = ewma_agg->history;
-  T com                     = ewma_agg->com;
+  T center_of_mass          = ewma_agg->center_of_mass;
 
   // center of mass is easier for the user, but the recurrences are
   // better expressed in terms of the derived parameter `beta`
-  T beta = com / (com + 1.0);
+  T beta = center_of_mass / (center_of_mass + 1.0);
 
   auto result = [&]() {
     if (history == cudf::ewm_history::INFINITE) {
