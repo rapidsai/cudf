@@ -127,8 +127,8 @@ ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates.cpp)
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join_nvbench.cu)
+ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
