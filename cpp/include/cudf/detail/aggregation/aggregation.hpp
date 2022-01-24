@@ -612,10 +612,10 @@ class row_number_aggregation final : public rolling_aggregation {
  */
 class ewma_aggregation final : public rolling_aggregation {
  public:
-  double const com;
+  double const center_of_mass;
   cudf::ewm_history history;
 
-  ewma_aggregation(double const com, cudf::ewm_history history)
+  ewma_aggregation(double const center_of_mass, cudf::ewm_history history)
     : aggregation{EWMA}, com{com}, history{history}
   {
   }

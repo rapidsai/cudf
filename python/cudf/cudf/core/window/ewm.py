@@ -44,7 +44,7 @@ class ExponentialMovingWindow(_RollingBase):
 
     Returns
     -------
-    ``ExponentailMovingWindow`` object
+    ``ExponentialMovingWindow`` object
 
     Notes
     -----

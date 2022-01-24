@@ -289,7 +289,8 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
 /**
- * @brief Factory to create a EWMA aggregation
+ * @brief Factory to create an EWMA aggregation
+ *
  * `EWMA` returns a non-nullable column with the same type as the input,
  * whose values are the exponentially weighted moving average of the input
  * sequence. Let these values be known as the y_i.
@@ -301,7 +302,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * EWMA aggregations are also parameterized by a boolean `adjust`.
  * Special considerations have to be given to the mathematical treatment of
  * the first value of the input sequence. There are two approaches to this,
- * one which considers the first value of the sequence to be the expoential
+ * one which considers the first value of the sequence to be the exponential
  * weighted moving average of some infinite history of data, and one which
  * takes the first value to be the only datapoint known. These assumptions
  * lead to two different formulas for the y_i. `adjust` selects which one.
@@ -320,7 +321,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * @param adjust which assumption to make about the first value
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_ewma_aggregation(double const com, ewm_history history);
+std::unique_ptr<Base> make_ewma_aggregation(double const center_of_mass, ewma_history history);
 
 /**
  * @brief Factory to create a RANK aggregation
