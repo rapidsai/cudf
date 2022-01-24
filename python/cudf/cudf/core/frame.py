@@ -1929,6 +1929,10 @@ class Frame:
         a: int64
         b: int64
         index: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
+        index: [[1,2,3]]
         """
         return pa.Table.from_pydict(
             {name: col.to_arrow() for name, col in self._data.items()}

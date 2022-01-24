@@ -4705,10 +4705,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a: int64
         b: int64
         index: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
+        index: [[1,2,3]]
         >>> df.to_arrow(preserve_index=False)
         pyarrow.Table
         a: int64
         b: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
         """
 
         data = self.copy(deep=False)
