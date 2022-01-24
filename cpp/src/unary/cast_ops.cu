@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
@@ -37,7 +38,7 @@ struct unary_cast {
             typename TargetT                                          = _TargetT,
             typename std::enable_if_t<(cudf::is_numeric<SourceT>() &&
                                        cudf::is_numeric<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return static_cast<TargetT>(element);
   }
@@ -46,7 +47,7 @@ struct unary_cast {
             typename TargetT                                            = _TargetT,
             typename std::enable_if_t<(cudf::is_timestamp<SourceT>() &&
                                        cudf::is_timestamp<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     // Convert source tick counts into target tick counts without blindly truncating them
     // by dividing the respective duration time periods (which may not work for time before
@@ -58,7 +59,7 @@ struct unary_cast {
             typename TargetT                                           = _TargetT,
             typename std::enable_if_t<(cudf::is_duration<SourceT>() &&
                                        cudf::is_duration<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element)};
   }
@@ -67,7 +68,7 @@ struct unary_cast {
             typename TargetT                                         = _TargetT,
             typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
                                       cudf::is_duration<TargetT>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{static_cast<typename TargetT::rep>(element)};
   }
@@ -76,7 +77,7 @@ struct unary_cast {
             typename TargetT                                           = _TargetT,
             typename std::enable_if_t<(cudf::is_timestamp<SourceT>() &&
                                        cudf::is_duration<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
@@ -85,7 +86,7 @@ struct unary_cast {
             typename TargetT                                        = _TargetT,
             typename std::enable_if_t<cudf::is_duration<SourceT>() &&
                                       cudf::is_numeric<TargetT>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return static_cast<TargetT>(element.count());
   }
@@ -94,7 +95,7 @@ struct unary_cast {
             typename TargetT                                            = _TargetT,
             typename std::enable_if_t<(cudf::is_duration<SourceT>() &&
                                        cudf::is_timestamp<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT::duration>(element)};
   }
@@ -110,7 +111,7 @@ struct fixed_point_unary_cast {
             typename TargetT                                          = _TargetT,
             typename std::enable_if_t<(cudf::is_fixed_point<_SourceT>() &&
                                        cudf::is_numeric<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(DeviceT const element)
+  __device__ inline TargetT operator()(DeviceT const element)
   {
     auto const fp = SourceT{numeric::scaled_integer<DeviceT>{element, scale}};
     return static_cast<TargetT>(fp);
@@ -120,7 +121,7 @@ struct fixed_point_unary_cast {
             typename TargetT                                              = _TargetT,
             typename std::enable_if_t<(cudf::is_numeric<_SourceT>() &&
                                        cudf::is_fixed_point<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE DeviceT operator()(SourceT const element)
+  __device__ inline DeviceT operator()(SourceT const element)
   {
     return TargetT{element, scale}.value();
   }
@@ -175,15 +176,27 @@ std::unique_ptr<column> rescale(column_view input,
                                 rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
+  using RepType = device_storage_type_t<T>;
 
+  auto const type = cudf::data_type{cudf::type_to_id<T>(), scale};
   if (input.type().scale() >= scale) {
-    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
-    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
   } else {
-    auto const diff   = input.type().scale() - scale;
-    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    auto const diff = input.type().scale() - scale;
+    // The value of fixed point scalar will overflow if the scale difference is larger than the
+    // max digits of underlying integral type. Under this condition, the output values can be
+    // nothing other than zero value. Therefore, we simply return a zero column.
+    if (-diff > cuda::std::numeric_limits<RepType>::digits10) {
+      auto const scalar  = make_fixed_point_scalar<T>(0, scale_type{scale}, stream);
+      auto output_column = make_column_from_scalar(*scalar, input.size(), stream, mr);
+      if (input.nullable()) {
+        auto const null_mask = copy_bitmask(input, stream, mr);
+        output_column->set_null_mask(std::move(null_mask));
+      }
+      return output_column;
+    }
+    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, stream);
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
@@ -290,7 +303,9 @@ struct dispatch_unary_cast_to {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
+    if (input.type() == type) {
+      return std::make_unique<column>(input, stream, mr);  // TODO add test for this
+    }
 
     return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, stream, mr);
   }
@@ -305,28 +320,39 @@ struct dispatch_unary_cast_to {
                                      rmm::mr::device_memory_resource* mr)
   {
     using namespace numeric;
-
-    auto const size = input.size();
-    auto temporary =
-      std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream},
-                               copy_bitmask(input, stream),
-                               input.null_count());
-
     using SourceDeviceT = device_storage_type_t<SourceT>;
     using TargetDeviceT = device_storage_type_t<TargetT>;
 
-    mutable_column_view output_mutable = *temporary;
+    auto casted = [&]() {
+      auto const size = input.size();
+      auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
+                                             size,
+                                             rmm::device_buffer{size * cudf::size_of(type), stream},
+                                             copy_bitmask(input, stream),
+                                             input.null_count());
 
-    thrust::transform(rmm::exec_policy(stream),
-                      input.begin<SourceDeviceT>(),
-                      input.end<SourceDeviceT>(),
-                      output_mutable.begin<TargetDeviceT>(),
-                      device_cast<SourceDeviceT, TargetDeviceT>{});
+      mutable_column_view output_mutable = *output;
 
-    // clearly there is a more efficient way to do this, can optimize in the future
-    return rescale<TargetT>(*temporary, numeric::scale_type{type.scale()}, stream, mr);
+      thrust::transform(rmm::exec_policy(stream),
+                        input.begin<SourceDeviceT>(),
+                        input.end<SourceDeviceT>(),
+                        output_mutable.begin<TargetDeviceT>(),
+                        device_cast<SourceDeviceT, TargetDeviceT>{});
+
+      return output;
+    };
+
+    if (input.type().scale() == type.scale()) return casted();
+
+    if constexpr (sizeof(SourceDeviceT) < sizeof(TargetDeviceT)) {
+      // device_cast BEFORE rescale when SourceDeviceT is < TargetDeviceT
+      auto temporary = casted();
+      return detail::rescale<TargetT>(*temporary, scale_type{type.scale()}, stream, mr);
+    } else {
+      // device_cast AFTER rescale when SourceDeviceT is > TargetDeviceT to avoid overflow
+      auto temporary = detail::rescale<SourceT>(input, scale_type{type.scale()}, stream, mr);
+      return detail::cast(*temporary, type, stream, mr);
+    }
   }
 
   template <typename TargetT,

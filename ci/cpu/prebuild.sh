@@ -3,21 +3,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 set -e
 
-ARCH=$(arch)
-if [ "${ARCH}" = "x86_64" ]; then
-    DEFAULT_CUDA_VER="11.0"
-elif [ "${ARCH}" = "aarch64" ]; then
-    DEFAULT_CUDA_VER="11.2"
-else
-    echo "Unsupported arch ${ARCH}"
-    exit 1
-fi
+DEFAULT_CUDA_VER="11.5"
+DEFAULT_PYTHON_VER="3.8"
 
 #Always upload cudf Python package
 export UPLOAD_CUDF=1
 
 #Upload libcudf once per CUDA
-if [[ "$PYTHON" == "3.7" ]]; then
+if [[ "$PYTHON" == "${DEFAULT_PYTHON_VER}" ]]; then
     export UPLOAD_LIBCUDF=1
 else
     export UPLOAD_LIBCUDF=0
@@ -31,7 +24,7 @@ else
 fi
 
 #We only want to upload libcudf_kafka once per python/CUDA combo
-if [[ "$PYTHON" == "3.7" ]] && [[ "$CUDA" == "${DEFAULT_CUDA_VER}" ]]; then
+if [[ "$PYTHON" == "${DEFAULT_PYTHON_VER}" ]] && [[ "$CUDA" == "${DEFAULT_CUDA_VER}" ]]; then
     export UPLOAD_LIBCUDF_KAFKA=1
 else
     export UPLOAD_LIBCUDF_KAFKA=0

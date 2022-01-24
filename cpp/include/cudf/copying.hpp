@@ -41,8 +41,8 @@ namespace cudf {
  */
 
 enum class out_of_bounds_policy : bool {
-  NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
-  DONT_CHECK  /// No bounds checking is performed, better performance
+  NULLIFY,    ///< Output values corresponding to out-of-bounds indices are null
+  DONT_CHECK  ///< No bounds checking is performed, better performance
 };
 
 /**
@@ -553,8 +553,8 @@ struct packed_columns {
   struct metadata {
     metadata() = default;
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-    uint8_t const* data() const { return data_.data(); }
-    size_t size() const { return data_.size(); }
+    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
+    [[nodiscard]] size_t size() const { return data_.size(); }
 
    private:
     std::vector<uint8_t> data_;
@@ -901,8 +901,8 @@ std::unique_ptr<scalar> get_element(
  * @brief Indicates whether a row can be sampled more than once.
  */
 enum class sample_with_replacement : bool {
-  FALSE,  // A row can be sampled only once
-  TRUE    // A row can be sampled more than once
+  FALSE,  ///< A row can be sampled only once
+  TRUE    ///< A row can be sampled more than once
 };
 
 /**

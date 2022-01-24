@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -115,17 +116,17 @@ struct column_info {
  *
  */
 struct hierarchy_info {
-  hierarchy_info() : simple_per_row_size(0), complex_type_count(0), max_branch_depth(0) {}
+  hierarchy_info() {}
 
   // These two fields act as an optimization. If we find that the entire table
   // is just fixed-width types, we do not need to do the more expensive kernel call that
   // traverses the individual columns. So if complex_type_count is 0, we can just
   // return a column where every row contains the value simple_per_row_size
-  size_type simple_per_row_size;  // in bits
-  size_type complex_type_count;
+  size_type simple_per_row_size{0};  // in bits
+  size_type complex_type_count{0};
 
   // max depth of span branches present in the hierarchy.
-  size_type max_branch_depth;
+  size_type max_branch_depth{0};
 };
 
 /**
@@ -496,12 +497,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
 
   // move stack info to the gpu
-  rmm::device_uvector<column_info> d_info(info.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(d_info.data(),
-                           info.data(),
-                           sizeof(column_info) * info.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<column_info> d_info = cudf::detail::make_device_uvector_async(info, stream);
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer

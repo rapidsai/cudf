@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -23,8 +23,9 @@ function(ConfigureTest test_name)
     ${test_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                             "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>"
   )
-  target_link_libraries(${test_name} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka)
-
+  target_link_libraries(
+    ${test_name} PRIVATE GTest::gmock GTest::gmock_main GTest::gtest_main cudf_kafka
+  )
   add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 

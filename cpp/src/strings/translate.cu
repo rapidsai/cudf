@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -101,12 +102,8 @@ std::unique_ptr<column> translate(
     return lhs.first < rhs.first;
   });
   // copy translate table to device memory
-  rmm::device_uvector<translate_table> table(htable.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(table.data(),
-                           htable.data(),
-                           sizeof(translate_table) * htable.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<translate_table> table =
+    cudf::detail::make_device_uvector_async(htable, stream);
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 

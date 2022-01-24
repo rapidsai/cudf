@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -1312,6 +1313,47 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
       col_size,
       std::vector<cudf::size_type>{idx},
       false);
+  }
+}
+
+TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
+{
+  // it is tricky to actually get the internal repartitioning/load-balancing code to add new splits
+  // inside a validity buffer.  Under almost all situations, the fraction of bytes that validity
+  // represents is so small compared to the bytes for all other data, that those buffers end up not
+  // getting subdivided. this test forces it happen by using a small, single column of int8's, which
+  // keeps the overall fraction that validity takes up large enough to cause a repartition.
+  srand(0);
+  auto rvalids                   = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    return static_cast<float>(rand()) / static_cast<float>(RAND_MAX) < 0.5f ? 0 : 1;
+  });
+  cudf::size_type const num_rows = 2000000;
+  auto col                       = cudf::sequence(num_rows, cudf::numeric_scalar<int8_t>{0});
+  col->set_null_mask(cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows));
+
+  cudf::table_view t({*col});
+  auto result   = cudf::contiguous_split(t, {num_rows / 2});
+  auto expected = cudf::split(t, {num_rows / 2});
+  CUDF_EXPECTS(result.size() == expected.size(),
+               "Mismatch in split results in ValidityRepartition test");
+
+  for (size_t idx = 0; idx < result.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result[idx].table, expected[idx]);
+  }
+}
+
+TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
+{
+  // tests an edge case where the splits cause the final validity data to be copied
+  // to be < 32 full bits, making sure we don't unintentionally read past the end of the input
+  auto col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT32}, 512, cudf::mask_state::ALL_VALID);
+  auto result   = cudf::contiguous_split(cudf::table_view{{*col}}, {510});
+  auto expected = cudf::split(cudf::table_view{{*col}}, {510});
+
+  EXPECT_EQ(expected.size(), result.size());
+  for (unsigned long index = 0; index < result.size(); index++) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index].column(0), result[index].table.column(0));
   }
 }
 

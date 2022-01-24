@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, cast
 
 import cudf
 from cudf import _lib as libcudf
@@ -41,6 +41,8 @@ class Merge:
         right_on,
         left_index,
         right_index,
+        lhs_is_index,
+        rhs_is_index,
         how,
         sort,
         indicator,
@@ -70,6 +72,10 @@ class Merge:
         right_index : bool
             Boolean flag indicating the right index column or coumns
             are to be used as join keys in order.
+        lhs_is_index : bool
+            ``lhs`` is a ``BaseIndex``
+        rhs_is_index : bool
+            ``rhs`` is a ``BaseIndex``
         how : string
             The type of join. Possible values are
             'inner', 'outer', 'left', 'leftsemi' and 'leftanti'
@@ -94,6 +100,8 @@ class Merge:
 
         self.lhs = lhs.copy(deep=False)
         self.rhs = rhs.copy(deep=False)
+        self.lhs_is_index = lhs_is_index
+        self.rhs_is_index = rhs_is_index
         self.how = how
         self.sort = sort
         self.lsuffix, self.rsuffix = suffixes
@@ -201,24 +209,28 @@ class Merge:
         )
 
         gather_index = self._using_left_index or self._using_right_index
+        lkwargs = {
+            "gather_map": left_rows,
+            "nullify": True,
+            "check_bounds": False,
+        }
+        rkwargs = {
+            "gather_map": right_rows,
+            "nullify": True,
+            "check_bounds": False,
+        }
+        if not self.lhs_is_index:
+            lkwargs["keep_index"] = gather_index
+        if not self.rhs_is_index:
+            rkwargs["keep_index"] = gather_index
 
         left_result = (
-            self.lhs._gather(
-                left_rows,
-                nullify=True,
-                keep_index=gather_index,
-                check_bounds=False,
-            )
+            self.lhs._gather(**lkwargs)
             if left_rows is not None
             else cudf.core.frame.Frame()
         )
         right_result = (
-            self.rhs._gather(
-                right_rows,
-                nullify=True,
-                keep_index=gather_index,
-                check_bounds=False,
-            )
+            self.rhs._gather(**rkwargs)
             if right_rows is not None
             else cudf.core.frame.Frame()
         )
@@ -321,11 +333,16 @@ class Merge:
         if by:
             to_sort = cudf.DataFrame._from_data(dict(enumerate(by)))
             sort_order = to_sort.argsort()
-            result = result._gather(
-                sort_order,
-                keep_index=self._using_left_index or self._using_right_index,
-                check_bounds=False,
-            )
+            if isinstance(result, cudf.core._base_index.BaseIndex):
+                result = result._gather(sort_order, check_bounds=False)
+            else:
+                result = cast(cudf.core.indexed_frame.IndexedFrame, result)
+                result = result._gather(
+                    sort_order,
+                    keep_index=self._using_left_index
+                    or self._using_right_index,
+                    check_bounds=False,
+                )
         return result
 
     @staticmethod

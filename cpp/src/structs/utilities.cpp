@@ -322,14 +322,15 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
       reinterpret_cast<bitmask_type const*>(parent_null_mask),
       reinterpret_cast<bitmask_type const*>(current_child_mask)};
     std::vector<size_type> begin_bits{0, 0};
-    cudf::detail::inplace_bitmask_and(
+    auto const valid_count = cudf::detail::inplace_bitmask_and(
       device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
       masks,
       begin_bits,
       child.size(),
       stream,
       mr);
-    child.set_null_count(UNKNOWN_NULL_COUNT);
+    auto const null_count = child.size() - valid_count;
+    child.set_null_count(null_count);
   }
 
   // If the child is also a struct, repeat for all grandchildren.
@@ -430,7 +431,7 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   auto superimposed_columns   = std::vector<column_view>{};
   auto superimposed_nullmasks = std::vector<rmm::device_buffer>{};
   for (auto col : table) {
-    auto [superimposed_col, null_masks] = superimpose_parent_nulls(col);
+    auto [superimposed_col, null_masks] = superimpose_parent_nulls(col, stream, mr);
     superimposed_columns.push_back(superimposed_col);
     superimposed_nullmasks.insert(superimposed_nullmasks.begin(),
                                   std::make_move_iterator(null_masks.begin()),

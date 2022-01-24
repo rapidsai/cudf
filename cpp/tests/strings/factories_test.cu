@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -27,6 +26,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -68,7 +68,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
       strings[idx] = thrust::pair<const char*, cudf::size_type>{nullptr, 0};
       nulls++;
     } else {
-      cudf::size_type length = (cudf::size_type)strlen(str);
+      auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
       strings[idx] = thrust::pair<const char*, cudf::size_type>{d_buffer.data() + offset, length};
       offset += length;
@@ -130,7 +130,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     h_null_mask     = (h_null_mask << 1);
     const char* str = h_test_strings[idx];
     if (str) {
-      cudf::size_type length = (cudf::size_type)strlen(str);
+      auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
       offset += length;
       h_null_mask |= 1;

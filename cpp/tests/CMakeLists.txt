@@ -95,7 +95,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
 )
 
 # ##################################################################################################
@@ -164,7 +164,6 @@ ConfigureTest(
   BINARY_TEST
   binaryop/binop-verify-input-test.cpp
   binaryop/binop-null-test.cpp
-  binaryop/binop-integration-test.cpp
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
@@ -443,6 +442,7 @@ ConfigureTest(
   lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
+  lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
 )
 

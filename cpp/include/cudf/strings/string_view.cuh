@@ -44,7 +44,7 @@ namespace detail {
  */
 __device__ inline size_type characters_in_string(const char* str, size_type bytes)
 {
-  if ((str == 0) || (bytes == 0)) return 0;
+  if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
 #ifndef CUDF_JIT_UDF
   return thrust::count_if(
@@ -80,7 +80,7 @@ static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
  *
  * @return An empty string
  */
-CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view(); }
+CUDF_HOST_DEVICE inline string_view string_view::min() { return string_view(); }
 
 /**
  * @brief Return maximum value associated with the string type
@@ -91,7 +91,7 @@ CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view();
  * @return A string value which represents the highest possible valid UTF-8 encoded
  * character.
  */
-CUDA_HOST_DEVICE_CALLABLE string_view string_view::max()
+CUDF_HOST_DEVICE inline string_view string_view::max()
 {
   const char* psentinel{nullptr};
 #if defined(__CUDA_ARCH__)
@@ -271,9 +271,9 @@ __device__ inline int string_view::compare(const string_view& in) const
 
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
-  size_type const len1      = size_bytes();
-  const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-  const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
+  size_type const len1 = size_bytes();
+  const auto* ptr1     = reinterpret_cast<const unsigned char*>(this->data());
+  const auto* ptr2     = reinterpret_cast<const unsigned char*>(data);
   if ((ptr1 == ptr2) && (bytes == len1)) return 0;
   size_type idx = 0;
   for (; (idx < len1) && (idx < bytes); ++idx) {

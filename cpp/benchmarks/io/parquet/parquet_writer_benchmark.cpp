@@ -40,7 +40,7 @@ void BM_parq_write_varying_inout(benchmark::State& state)
   cudf::size_type const run_length  = state.range(2);
   cudf_io::compression_type const compression =
     state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
-  io_type const sink_type = static_cast<io_type>(state.range(4));
+  auto const sink_type = static_cast<io_type>(state.range(4));
 
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);
@@ -71,8 +71,10 @@ void BM_parq_write_varying_options(benchmark::State& state)
 
   auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                              int32_t(type_group_id::FLOATING_POINT),
+                                             int32_t(type_group_id::FIXED_POINT),
                                              int32_t(type_group_id::TIMESTAMP),
-                                             int32_t(cudf::type_id::STRING)});
+                                             int32_t(cudf::type_id::STRING),
+                                             int32_t(cudf::type_id::LIST)});
 
   auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -85,7 +87,7 @@ void BM_parq_write_varying_options(benchmark::State& state)
       cudf_io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(compression)
         .stats_level(enable_stats)
-        .column_chunks_file_path(file_path);
+        .column_chunks_file_paths({file_path});
     cudf_io::write_parquet(options);
   }
 
@@ -103,6 +105,7 @@ void BM_parq_write_varying_options(benchmark::State& state)
 
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, integral, type_group_id::INTEGRAL);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);

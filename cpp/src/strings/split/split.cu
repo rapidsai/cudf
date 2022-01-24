@@ -490,11 +490,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     });
 
   // the columns_count is the maximum number of tokens for any string
-  auto const columns_count = thrust::reduce(rmm::exec_policy(stream),
-                                            token_counts.begin(),
-                                            token_counts.end(),
-                                            0,
-                                            thrust::maximum<size_type>{});
+  auto const columns_count = thrust::reduce(
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(std::make_unique<column>(
@@ -550,7 +547,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
  */
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
-  __device__ size_type count_tokens(size_type idx) const
+  [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
     const string_view d_str = d_strings.element<string_view>(idx);
@@ -748,11 +745,8 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                     [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
 
   // column count is the maximum number of tokens for any string
-  size_type const columns_count = thrust::reduce(rmm::exec_policy(stream),
-                                                 token_counts.begin(),
-                                                 token_counts.end(),
-                                                 0,
-                                                 thrust::maximum<size_type>{});
+  size_type const columns_count = thrust::reduce(
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
 
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
