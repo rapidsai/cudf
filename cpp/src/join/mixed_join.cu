@@ -255,8 +255,6 @@ mixed_join(
         swap_tables);
   }
 
-  CHECK_CUDA(stream.value());
-
   auto join_indices = std::make_pair(std::move(left_indices), std::move(right_indices));
 
   // For full joins, get the indices in the right table that were not joined to

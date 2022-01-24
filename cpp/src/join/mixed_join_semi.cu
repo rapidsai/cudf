@@ -299,8 +299,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
         swap_tables);
   }
 
-  CHECK_CUDA(stream.value());
-
   return left_indices;
 }
 
