@@ -43,7 +43,7 @@ gpuci_logger "Activate conda env"
 conda activate rapids
 
 # TEMP COMMAND
-conda install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" 'arrow-cpp-proc=*=cuda'
+#mamba install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" 'arrow-cpp-proc=*=cuda'
 
 # Remove rapidsai-nightly channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
@@ -75,6 +75,9 @@ else
   CONDA_CHANNEL="-c $WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 fi
 
+gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc" 'arrow-cpp-proc=*=cuda'
+mamba install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" "orc" 'arrow-cpp-proc=*=cuda'
+  
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS

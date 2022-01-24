@@ -79,8 +79,6 @@ conda list --show-channel-urls
 gpuci_logger "Install dependencies"
 gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
-                  "rapids-build-env=$MINOR_VERSION.*" \
-                  "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
                   "ucx-py=${UCX_PY_VERSION}" \
@@ -94,10 +92,8 @@ conda activate rapids
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
-gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-gpuci_conda_retry install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" 'arrow-cpp-proc=*=cuda' "pyorc" "python-confluent-kafka=1.7.0"
-# gpuci_mamba_retry install -y "your-pkg=1.0.0"
-
+gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc" 'arrow-cpp-proc=*=cuda'
+gpuci_mamba_retry install --force -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" 'arrow-cpp-proc=*=cuda' "pyorc" "orc" "python-confluent-kafka=1.7.0"
 
 gpuci_logger "Check compiler versions"
 python --version
