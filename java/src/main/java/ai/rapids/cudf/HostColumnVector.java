@@ -1215,6 +1215,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((Short) listElement);
       } else if (listElement instanceof BigDecimal) {
         childBuilder.append((BigDecimal) listElement);
+      } else if (listElement instanceof BigInteger) {
+        childBuilder.append((BigInteger) listElement);
       } else if (listElement instanceof List) {
         childBuilder.append((List<?>) listElement);
       } else if (listElement instanceof StructData) {
@@ -1296,17 +1298,20 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
-    public final ColumnBuilder append(BigDecimal value) {
-      growFixedWidthBuffersAndRows();
+    public ColumnBuilder append(BigDecimal value) {
+      return append(value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue());
+    }
+
+    public ColumnBuilder append(BigInteger unscaledVal) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert currentIndex < rows;
-      // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
-      BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
         data.setInt(currentIndex++ << bitShiftBySize, unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
         data.setLong(currentIndex++ << bitShiftBySize, unscaledVal.longValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
-        byte[] unscaledValueBytes = value.unscaledValue().toByteArray();
+        assert currentIndex < rows;
+        byte[] unscaledValueBytes = unscaledVal.toByteArray();
         byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
         data.setBytes(currentIndex++ << bitShiftBySize, result, 0, result.length);
       } else {
