@@ -68,6 +68,12 @@ inline auto make_pool()
  */
 class benchmark : public ::benchmark::Fixture {
  public:
+  benchmark() : ::benchmark::Fixture()
+  {
+    const char* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
+    if (env_iterations) this->Iterations(std::max(0L, atol(env_iterations)));
+  }
+
   void SetUp(const ::benchmark::State& state) override
   {
     mr = make_pool();

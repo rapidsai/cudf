@@ -728,8 +728,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
     std::cout << "sample_strings->size(): " << sample_strings->size() << "\n";
     auto scv = cudf::strings_column_view{sample_strings->view()};
     std::cout << "scv: " << scv.chars().size() << " " << scv.offsets().size() << "\n";
-    cudf::test::print(sample_strings->view());
+    // cudf::test::print(sample_strings->view());
     // cudf::test::print(cudf::bit_cast(scv.chars(), cudf::data_type{cudf::type_id::UINT8}));
+    // cudf::test::print(scv.chars());
     // cudf::test::print(scv.offsets());
     // gather
     auto str_table = cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
