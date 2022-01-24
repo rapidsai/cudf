@@ -775,6 +775,15 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
+            # TODO: Since index is always an Index object at this point, it
+            # should be safe to always set the index via the property and
+            # bypass the complexity of set_index for DataFrame. However, doing
+            # so results in a slight difference in the memory usage observed in
+            # test_memory_usage_multi. The likely culprit is a difference in
+            # copying semantics between the property and set_index that needs
+            # to be resolved before this change can be made. It should be only
+            # the following line once this is fixed:
+            # result.index = index
             if isinstance(result, cudf.Series):
                 result.index = index
             else:
