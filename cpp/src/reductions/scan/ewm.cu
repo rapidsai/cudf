@@ -412,7 +412,7 @@ std::unique_ptr<column> ewma_functor::operator()<double>(std::unique_ptr<aggrega
   return ewma<double>(agg, input, stream, mr);
 }
 
-std::unique_ptr<column> ewm(column_view const& input,
+std::unique_ptr<column> ewma(column_view const& input,
                             std::unique_ptr<aggregation> const& agg,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)

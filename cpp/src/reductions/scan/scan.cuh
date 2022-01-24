@@ -32,7 +32,7 @@ rmm::device_buffer mask_scan(column_view const& input_view,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> ewm(column_view const& input,
+std::unique_ptr<column> ewma(column_view const& input,
                             std::unique_ptr<aggregation> const& agg,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr);
@@ -60,7 +60,7 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
       if (is_fixed_point(input.type())) CUDF_FAIL("decimal32/64/128 cannot support product scan");
       return type_dispatcher<dispatch_storage_type>(
         input.type(), DispatchFn<DeviceProduct>(), input, null_handling, stream, mr);
-    case aggregation::EWMA: return ewm(input, agg, stream, mr);
+    case aggregation::EWMA: return ewma(input, agg, stream, mr);
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
 }
