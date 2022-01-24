@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations, division
 
@@ -1583,7 +1583,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if isinstance(
                 col,
                 (
-                    cudf.core.column.Decimal64Column,
+                    cudf.core.column.DecimalBaseColumn,
                     cudf.core.column.StructColumn,
                 ),
             ):
@@ -2545,11 +2545,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
-    def take(self, indices, axis=0, keep_index=None):
-        axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 is supported.")
-        out = super().take(indices, keep_index)
+    def take(self, indices, axis=0):
+        out = super().take(indices)
         out.columns = self.columns
         return out
 
@@ -6519,7 +6516,7 @@ def _get_union_of_series_names(series_list):
         else:
             names_list.append(series.name)
     if unnamed_count == len(series_list):
-        names_list = [*range(len(series_list))]
+        names_list = range(len(series_list))
 
     return names_list
 

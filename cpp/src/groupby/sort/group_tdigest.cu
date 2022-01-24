@@ -327,7 +327,7 @@ __global__ void generate_cluster_limits_kernel(int delta,
   // compute the first cluster limit
   double nearest_w;
   int nearest_w_index;  // group-relative index into the input stream
-  while (1) {
+  while (true) {
     cur_weight = next_limit < 0 ? 0 : max(cur_weight + 1, nearest_w);
     if (cur_weight >= total_weight) { break; }
 
