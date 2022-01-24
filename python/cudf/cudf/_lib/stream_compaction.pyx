@@ -13,7 +13,7 @@ from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
-    sort_and_drop_duplicates as cpp_sort_and_drop_duplicates,
+    drop_duplicates as cpp_drop_duplicates,
     unordered_distinct_count as cpp_unordered_distinct_count,
 )
 from cudf._lib.cpp.table.table cimport table
@@ -149,7 +149,7 @@ def drop_duplicates(columns: list,
 
     with nogil:
         c_result = move(
-            cpp_sort_and_drop_duplicates(
+            cpp_drop_duplicates(
                 source_table_view,
                 cpp_keys,
                 cpp_keep_option,

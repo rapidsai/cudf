@@ -74,8 +74,8 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
 NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
 
 template <typename Type, cudf::duplicate_keep_option Keep>
-void nvbench_sort_and_drop_duplicates(nvbench::state& state,
-                                      nvbench::type_list<Type, nvbench::enum_type<Keep>>)
+void nvbench_drop_duplicates(nvbench::state& state,
+                             nvbench::type_list<Type, nvbench::enum_type<Keep>>)
 {
   if constexpr (not std::is_same_v<Type, int32_t> and
                 Keep != cudf::duplicate_keep_option::KEEP_FIRST) {
@@ -98,7 +98,7 @@ void nvbench_sort_and_drop_duplicates(nvbench::state& state,
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto result = cudf::detail::sort_and_drop_duplicates(
+    auto result = cudf::detail::drop_duplicates(
       input_table, {0}, Keep, cudf::null_equality::EQUAL, cudf::null_order::BEFORE, stream_view);
   });
 }
@@ -132,8 +132,8 @@ using keep_option = nvbench::enum_type_list<cudf::duplicate_keep_option::KEEP_FI
                                             cudf::duplicate_keep_option::KEEP_LAST,
                                             cudf::duplicate_keep_option::KEEP_NONE>;
 
-NVBENCH_BENCH_TYPES(nvbench_sort_and_drop_duplicates, NVBENCH_TYPE_AXES(data_type, keep_option))
-  .set_name("sort_and_drop_duplicates")
+NVBENCH_BENCH_TYPES(nvbench_drop_duplicates, NVBENCH_TYPE_AXES(data_type, keep_option))
+  .set_name("drop_duplicates")
   .set_type_axes_names({"Type", "KeepOption"})
   .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
 

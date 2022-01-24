@@ -214,34 +214,6 @@ enum class duplicate_keep_option {
 };
 
 /**
- * @brief Eliminates all except one specific row from every consecutive group of equivalent rows.
- *
- * Given an `input` table_view, one specific row from a group of equivalent elements is copied to
- * output table depending on the value of @p keep:
- * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
- * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
- *
- * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
- *
- * @param[in] input           input table_view to copy only unique rows
- * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep first row, last row, or no rows of the found duplicates
- * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
- *                            equal if null_equality::UNEQUAL
- * @param[in] mr              Device memory resource used to allocate the returned table's device
- *                            memory
- *
- * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`.
- */
-std::unique_ptr<table> drop_duplicates(
-  table_view const& input,
-  std::vector<size_type> const& keys,
-  duplicate_keep_option keep,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Create a new table without duplicate rows.
  *
  * The output table is sorted according to the lexicographic ordering of the data in the columns
@@ -266,7 +238,7 @@ std::unique_ptr<table> drop_duplicates(
  *
  * @return Table with sorted unique rows as specified by `keep`.
  */
-std::unique_ptr<table> sort_and_drop_duplicates(
+std::unique_ptr<table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
