@@ -208,6 +208,58 @@ flattened_table flatten_nested_columns(table_view const& input,
   return table_flattener{input, column_order, null_precedence, nullability}();
 }
 
+namespace experimental {
+
+std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> verticalize_nested_columns(
+  table_view input)
+{
+  auto [table, null_masks] = superimpose_parent_nulls(input);
+  std::vector<column_view> verticalized_columns;
+  for (auto const& col : table) {
+    if (is_nested(col.type())) {
+      // convert and insert
+      std::vector<column_view> r_verticalized_columns;
+      std::vector<column_view> flattened;
+      // TODO: Here I added a bogus leaf column at the beginning to help in the while loop below.
+      //       Refactor the while loop so that it can handle the last case.
+      flattened.push_back(make_empty_column(type_id::INT32)->view());
+      std::function<void(column_view)> recursive_child = [&](column_view const& c) {
+        flattened.push_back(c);
+        for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
+          recursive_child(c.child(child_idx));
+        }
+      };
+      recursive_child(col);
+      int curr_col_idx     = flattened.size() - 1;
+      column_view curr_col = flattened[curr_col_idx];
+      while (curr_col_idx > 0) {
+        auto const& prev_col = flattened[curr_col_idx - 1];
+        if (not is_nested(prev_col.type())) {
+          // We hit a column that's a leaf so seal this hierarchy
+          r_verticalized_columns.push_back(curr_col);
+          curr_col = prev_col;
+        } else {
+          curr_col = column_view(prev_col.type(),
+                                 prev_col.size(),
+                                 nullptr,
+                                 prev_col.null_mask(),
+                                 UNKNOWN_NULL_COUNT,
+                                 prev_col.offset(),
+                                 {curr_col});
+        }
+        --curr_col_idx;
+      }
+      verticalized_columns.insert(
+        verticalized_columns.end(), r_verticalized_columns.rbegin(), r_verticalized_columns.rend());
+    } else {
+      verticalized_columns.push_back(col);
+    }
+  }
+  return std::make_tuple(table_view(verticalized_columns), std::move(null_masks));
+}
+
+}  // namespace experimental
+
 namespace {
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using column_index_t    = typename vector_of_columns::size_type;

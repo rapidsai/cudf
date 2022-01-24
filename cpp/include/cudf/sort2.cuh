@@ -61,10 +61,12 @@ std::unique_ptr<column> sorted_order2(
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto device_table = table_device_view::create(input, stream);
+  auto [vertical_table, nullmasks] =
+    cudf::structs::detail::experimental::verticalize_nested_columns(input);
+  auto device_table = table_device_view::create(vertical_table, stream);
   // auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
-  auto const comparator =
-    row_lexicographic_comparator3(nullate::DYNAMIC{true}, *device_table, *device_table);
+  auto const comparator = experimental::row_lexicographic_comparator(
+    nullate::DYNAMIC{true}, *device_table, *device_table);
 
   thrust::sort(rmm::exec_policy(stream),
                mutable_indices_view.begin<size_type>(),

@@ -31,6 +31,7 @@
 #include <limits>
 
 namespace cudf {
+namespace experimental {
 
 /**
  * @brief Result type of the `element_relational_comparator2` function object.
@@ -40,7 +41,7 @@ namespace cudf {
  * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are
  * EQUIVALENT may not necessarily be *equal*.
  */
-enum class weak_ordering3 {
+enum class weak_ordering {
   LESS,        ///< Indicates `a` is less than (ordered before) `b`
   EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
   GREATER      ///< Indicates `a` is greater than (ordered after) `b`
@@ -56,14 +57,14 @@ namespace detail {
  * the `lhs` and `rhs` columns.
  */
 template <typename Element>
-__device__ weak_ordering3 compare_elements3(Element lhs, Element rhs)
+__device__ weak_ordering compare_elements(Element lhs, Element rhs)
 {
   if (lhs < rhs) {
-    return weak_ordering3::LESS;
+    return weak_ordering::LESS;
   } else if (rhs < lhs) {
-    return weak_ordering3::GREATER;
+    return weak_ordering::GREATER;
   }
-  return weak_ordering3::EQUIVALENT;
+  return weak_ordering::EQUIVALENT;
 }
 }  // namespace detail
 
@@ -81,17 +82,17 @@ __device__ weak_ordering3 compare_elements3(Element lhs, Element rhs)
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering3 relational_compare3(Element lhs, Element rhs)
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   if (isnan(lhs) and isnan(rhs)) {
-    return weak_ordering3::EQUIVALENT;
+    return weak_ordering::EQUIVALENT;
   } else if (isnan(rhs)) {
-    return weak_ordering3::LESS;
+    return weak_ordering::LESS;
   } else if (isnan(lhs)) {
-    return weak_ordering3::GREATER;
+    return weak_ordering::GREATER;
   }
 
-  return detail::compare_elements3(lhs, rhs);
+  return detail::compare_elements(lhs, rhs);
 }
 
 /**
@@ -102,16 +103,16 @@ __device__ weak_ordering3 relational_compare3(Element lhs, Element rhs)
  * @param null_precedence null order
  * @return Indicates the relationship between null in lhs and rhs columns.
  */
-inline __device__ auto null_compare3(bool lhs_is_null, bool rhs_is_null, null_order null_precedence)
+inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_order null_precedence)
 {
   if (lhs_is_null and rhs_is_null) {  // null <? null
-    return weak_ordering3::EQUIVALENT;
+    return weak_ordering::EQUIVALENT;
   } else if (lhs_is_null) {  // null <? x
-    return (null_precedence == null_order::BEFORE) ? weak_ordering3::LESS : weak_ordering3::GREATER;
+    return (null_precedence == null_order::BEFORE) ? weak_ordering::LESS : weak_ordering::GREATER;
   } else if (rhs_is_null) {  // x <? null
-    return (null_precedence == null_order::AFTER) ? weak_ordering3::LESS : weak_ordering3::GREATER;
+    return (null_precedence == null_order::AFTER) ? weak_ordering::LESS : weak_ordering::GREATER;
   }
-  return weak_ordering3::EQUIVALENT;
+  return weak_ordering::EQUIVALENT;
 }
 
 /**
@@ -124,9 +125,9 @@ inline __device__ auto null_compare3(bool lhs_is_null, bool rhs_is_null, null_or
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering3 relational_compare3(Element lhs, Element rhs)
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
-  return detail::compare_elements3(lhs, rhs);
+  return detail::compare_elements(lhs, rhs);
 }
 
 /**
@@ -138,7 +139,7 @@ __device__ weak_ordering3 relational_compare3(Element lhs, Element rhs)
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare3(Element lhs, Element rhs)
+__device__ bool equality_compare(Element lhs, Element rhs)
 {
   if (isnan(lhs) and isnan(rhs)) { return true; }
   return lhs == rhs;
@@ -153,7 +154,7 @@ __device__ bool equality_compare3(Element lhs, Element rhs)
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare3(Element const lhs, Element const rhs)
+__device__ bool equality_compare(Element const lhs, Element const rhs)
 {
   return lhs == rhs;
 }
@@ -164,7 +165,7 @@ __device__ bool equality_compare3(Element const lhs, Element const rhs)
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class element_equality_comparator3 {
+class element_equality_comparator {
  public:
   /**
    * @brief Construct type-dispatched function object for comparing equality
@@ -178,10 +179,10 @@ class element_equality_comparator3 {
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
   __host__ __device__
-  element_equality_comparator3(Nullate has_nulls,
-                               column_device_view lhs,
-                               column_device_view rhs,
-                               null_equality nulls_are_equal = null_equality::EQUAL)
+  element_equality_comparator(Nullate has_nulls,
+                              column_device_view lhs,
+                              column_device_view rhs,
+                              null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
   }
@@ -208,8 +209,8 @@ class element_equality_comparator3 {
       }
     }
 
-    return equality_compare3(lhs.element<Element>(lhs_element_index),
-                             rhs.element<Element>(rhs_element_index));
+    return equality_compare(lhs.element<Element>(lhs_element_index),
+                            rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
@@ -228,12 +229,12 @@ class element_equality_comparator3 {
 };
 
 template <typename Nullate>
-class row_equality_comparator3 {
+class row_equality_comparator {
  public:
-  row_equality_comparator3(Nullate has_nulls,
-                           table_device_view lhs,
-                           table_device_view rhs,
-                           null_equality nulls_are_equal = true)
+  row_equality_comparator(Nullate has_nulls,
+                          table_device_view lhs,
+                          table_device_view rhs,
+                          null_equality nulls_are_equal = true)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
@@ -243,7 +244,7 @@ class row_equality_comparator3 {
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(l.type(),
-                                   element_equality_comparator3{nulls, l, r, nulls_are_equal},
+                                   element_equality_comparator{nulls, l, r, nulls_are_equal},
                                    lhs_row_index,
                                    rhs_row_index);
     };
@@ -264,7 +265,7 @@ class row_equality_comparator3 {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class element_relational_comparator3 {
+class element_relational_comparator {
  public:
   /**
    * @brief Construct type-dispatched function object for performing a
@@ -277,17 +278,17 @@ class element_relational_comparator3 {
    * @param has_nulls Indicates if either input column contains nulls.
    * @param null_precedence Indicates how null values are ordered with other values
    */
-  __host__ __device__ element_relational_comparator3(Nullate has_nulls,
-                                                     column_device_view lhs,
-                                                     column_device_view rhs,
-                                                     null_order null_precedence)
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
+                                                    column_device_view rhs,
+                                                    null_order null_precedence)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}
   {
   }
 
-  __host__ __device__ element_relational_comparator3(Nullate has_nulls,
-                                                     column_device_view lhs,
-                                                     column_device_view rhs)
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
+                                                    column_device_view rhs)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}
   {
   }
@@ -302,28 +303,28 @@ class element_relational_comparator3 {
    */
   template <typename Element,
             std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
-  __device__ weak_ordering3 operator()(size_type lhs_element_index,
-                                       size_type rhs_element_index) const noexcept
+  __device__ weak_ordering operator()(size_type lhs_element_index,
+                                      size_type rhs_element_index) const noexcept
   {
     if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
       if (lhs_is_null or rhs_is_null) {  // at least one is null
-        return null_compare3(lhs_is_null, rhs_is_null, null_precedence);
+        return null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }
 
-    return relational_compare3(lhs.element<Element>(lhs_element_index),
-                               rhs.element<Element>(rhs_element_index));
+    return relational_compare(lhs.element<Element>(lhs_element_index),
+                              rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
-  __device__ weak_ordering3 operator()(size_type lhs_element_index, size_type rhs_element_index)
+  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return weak_ordering3::LESS;
+    return weak_ordering::LESS;
   }
 
  private:
@@ -349,7 +350,7 @@ class element_relational_comparator3 {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class row_lexicographic_comparator3 {
+class row_lexicographic_comparator {
  public:
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -369,11 +370,11 @@ class row_lexicographic_comparator3 {
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
    */
-  row_lexicographic_comparator3(Nullate has_nulls,
-                                table_device_view lhs,
-                                table_device_view rhs,
-                                order const* column_order         = nullptr,
-                                null_order const* null_precedence = nullptr)
+  row_lexicographic_comparator(Nullate has_nulls,
+                               table_device_view lhs,
+                               table_device_view rhs,
+                               order const* column_order         = nullptr,
+                               null_order const* null_precedence = nullptr)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
@@ -399,7 +400,7 @@ class row_lexicographic_comparator3 {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
-      weak_ordering3 state{weak_ordering3::EQUIVALENT};
+      weak_ordering state{weak_ordering::EQUIVALENT};
       null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
@@ -410,22 +411,22 @@ class row_lexicographic_comparator3 {
         bool const rhs_is_null{rcol.is_null(rhs_index)};
 
         if (lhs_is_null or rhs_is_null) {  // atleast one is null
-          state = null_compare3(lhs_is_null, rhs_is_null, null_precedence);
-          if (state != weak_ordering3::EQUIVALENT) break;
+          state = null_compare(lhs_is_null, rhs_is_null, null_precedence);
+          if (state != weak_ordering::EQUIVALENT) break;
         }
 
         lcol = lcol.children()[0];
         rcol = rcol.children()[0];
       }
 
-      if (state == weak_ordering3::EQUIVALENT) {
-        auto comparator = element_relational_comparator3{_nulls, lcol, rcol, null_precedence};
+      if (state == weak_ordering::EQUIVALENT) {
+        auto comparator = element_relational_comparator{_nulls, lcol, rcol, null_precedence};
         state           = cudf::type_dispatcher(lcol.type(), comparator, lhs_index, rhs_index);
       }
 
-      if (state == weak_ordering3::EQUIVALENT) { continue; }
+      if (state == weak_ordering::EQUIVALENT) { continue; }
 
-      return state == (ascending ? weak_ordering3::LESS : weak_ordering3::GREATER);
+      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
     return false;
   }
@@ -436,6 +437,7 @@ class row_lexicographic_comparator3 {
   Nullate _nulls{};
   null_order const* _null_precedence{};
   order const* _column_order{};
-};  // class row_lexicographic_comparator3
+};  // class row_lexicographic_comparator
 
+}  // namespace experimental
 }  // namespace cudf

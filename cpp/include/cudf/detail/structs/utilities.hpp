@@ -150,6 +150,11 @@ flattened_table flatten_nested_columns(
   std::vector<null_order> const& null_precedence,
   column_nullability nullability = column_nullability::MATCH_INCOMING);
 
+namespace experimental {
+std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> verticalize_nested_columns(
+  table_view input);
+}
+
 /**
  * @brief Unflatten columns flattened as by `flatten_nested_columns()`,
  *        based on the provided `blueprint`.
