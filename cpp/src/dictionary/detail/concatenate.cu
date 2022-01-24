@@ -219,10 +219,12 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   // this becomes the keys child for the output dictionary column
   auto table_keys = cudf::detail::unordered_drop_duplicates(
     table_view{{all_keys->view()}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
-  std::vector<order> column_order{order::ASCENDING};
-  std::vector<null_order> null_precedence{null_order::BEFORE};
-  auto sorted_keys =
-    cudf::detail::sort(table_keys->view(), column_order, null_precedence, stream, mr)->release();
+  auto sorted_keys = cudf::detail::sort(table_keys->view(),
+                                        std::vector<order>{order::ASCENDING},
+                                        std::vector<null_order>{null_order::BEFORE},
+                                        stream,
+                                        mr)
+                       ->release();
   std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // next, concatenate the indices
