@@ -350,14 +350,21 @@ class DatetimeColumn(column.ColumnBase):
         """Returns the default NA value for this column"""
         return np.datetime64("nat", self.time_unit)
 
-    def mean(self, skipna=None, dtype=np.float64, *args, **kwargs) -> ScalarLike:
+    def mean(
+        self, skipna=None, dtype=np.float64, *args, **kwargs
+    ) -> ScalarLike:
         return pd.Timestamp(
             self.as_numerical.mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64, *args, **kwargs
+        self,
+        skipna: bool = None,
+        ddof: int = 1,
+        dtype: Dtype = np.float64,
+        *args,
+        **kwargs,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
@@ -370,7 +377,12 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs
+        self,
+        q: Union[float, Sequence[float]],
+        interpolation: str,
+        exact: bool,
+        *args,
+        **kwargs,
     ) -> ColumnBase:
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact

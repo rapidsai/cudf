@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Sequence, Union
 
-
 class Reducible:
     def sum(self, *args, **kwargs):
         ...

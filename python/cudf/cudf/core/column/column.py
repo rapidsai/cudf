@@ -687,7 +687,9 @@ class ColumnBase(Column, Serializable, Reducible):
         self,
         q: Union[float, Sequence[float]],
         interpolation: str,
-        exact: bool, *args, **kwargs,
+        exact: bool,
+        *args,
+        **kwargs,
     ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 

@@ -85,7 +85,12 @@ class NumericalBaseColumn(ColumnBase, Reducible):
         return skew
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool, *args, **kwargs
+        self,
+        q: Union[float, Sequence[float]],
+        interpolation: str,
+        exact: bool,
+        *args,
+        **kwargs,
     ) -> NumericalBaseColumn:
         if isinstance(q, Number) or cudf.api.types.is_list_like(q):
             np_array_q = np.asarray(q)
@@ -113,7 +118,9 @@ class NumericalBaseColumn(ColumnBase, Reducible):
     def std(self, dtype=np.float64, *args, **kwargs):
         return self._reduce("std", dtype=dtype, *args, **kwargs)
 
-    def median(self, skipna: bool = None, *args, **kwargs) -> NumericalBaseColumn:
+    def median(
+        self, skipna: bool = None, *args, **kwargs
+    ) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
