@@ -1303,14 +1303,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public ColumnBuilder append(BigInteger unscaledVal) {
-      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      growFixedWidthBuffersAndRows();
       assert currentIndex < rows;
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
         data.setInt(currentIndex++ << bitShiftBySize, unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
         data.setLong(currentIndex++ << bitShiftBySize, unscaledVal.longValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
-        assert currentIndex < rows;
         byte[] unscaledValueBytes = unscaledVal.toByteArray();
         byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
         data.setBytes(currentIndex++ << bitShiftBySize, result, 0, result.length);
