@@ -365,12 +365,12 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
   if (ewma_agg == NULL) { CUDF_FAIL("Expected an EWMA aggregation."); }
   CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Column must be floating point type");
 
-  cudf::ewm_history history = ewma_agg->history;
-  T center_of_mass          = ewma_agg->center_of_mass;
+  cudf::ewm_history const history = ewma_agg->history;
+  T const center_of_mass          = ewma_agg->center_of_mass;
 
   // center of mass is easier for the user, but the recurrences are
   // better expressed in terms of the derived parameter `beta`
-  T beta = center_of_mass / (center_of_mass + 1.0);
+  T const beta = center_of_mass / (center_of_mass + 1.0);
 
   auto result = [&]() {
     if (history == cudf::ewm_history::INFINITE) {
@@ -413,9 +413,9 @@ std::unique_ptr<column> ewma_functor::operator()<double>(std::unique_ptr<aggrega
 }
 
 std::unique_ptr<column> ewma(column_view const& input,
-                            std::unique_ptr<aggregation> const& agg,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+                             std::unique_ptr<aggregation> const& agg,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   return type_dispatcher(input.type(), ewma_functor{}, agg, input, stream, mr);
 }
