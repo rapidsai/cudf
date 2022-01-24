@@ -27,29 +27,6 @@
 #include <memory>
 #include <random>
 
-enum class algorithm { SORT_BASED, HASH_BASED };
-
-// mandatory for enum types
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  // Enum type:
-  algorithm,
-  // Callable to generate input strings:
-  // Short identifier used for tables, command-line args, etc.
-  // Used when context is available to figure out the enum type.
-  [](algorithm algo) {
-    switch (algo) {
-      case algorithm::SORT_BASED: return "SORT_BASED";
-      case algorithm::HASH_BASED: return "HASH_BASED";
-      default: return "ERROR";
-    }
-  },
-  // Callable to generate descriptions:
-  // If non-empty, these are used in `--list` to describe values.
-  // Used when context may not be available to figure out the type from the
-  // input string.
-  // Just use `[](auto) { return std::string{}; }` if you don't want these.
-  [](auto) { return std::string{}; })
-
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   // Enum type:
   cudf::duplicate_keep_option,
