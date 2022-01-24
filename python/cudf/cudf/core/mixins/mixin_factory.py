@@ -98,10 +98,9 @@ def _create_delegating_mixin(
 
             # Generate a signature without the `op` parameter.
             base_operation = getattr(cls, operation_name)
-            signature = inspect.signature(base_operation)
-            new_params = signature.parameters.copy()
-            new_params.pop("op")
-            signature = signature.replace(parameters=new_params.values())
+            base_params = inspect.signature(base_operation).parameters.values()
+            params = [p for p in base_params if p.name != "op"]
+            signature = inspect.Signature(parameters=params)
 
             # Generate the list of arguments forwarded to the base operation.
             arglist = ", ".join(
@@ -111,10 +110,7 @@ def _create_delegating_mixin(
                     if key not in ("self", "args", "kwargs")
                 ]
             )
-            if arglist:
-                arglist += ", *args, **kwargs"
-            else:
-                arglist = "*args, **kwargs"
+            arglist = arglist + (", " if arglist else "") + "*args, **kwargs"
 
             # Apply the formatted docstring of the base operation to the
             # operation being created here.
@@ -125,13 +121,13 @@ def _create_delegating_mixin(
             )
 
             namespace = {}
-            out = f"""
+            exec_str = f"""
 def {operation}{str(signature)}:
     '''{docstring}
     '''
     return self.{operation_name}(op="{operation}", {arglist})
 """
-            exec(out, namespace)
+            exec(exec_str, namespace)
             setattr(cls, operation, namespace[operation])
 
         @classmethod
