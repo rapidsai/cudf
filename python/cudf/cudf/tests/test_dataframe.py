@@ -5470,7 +5470,6 @@ def test_memory_usage_list():
 
 @pytest.mark.parametrize("rows", [10, 100])
 def test_memory_usage_multi(rows):
-    deep = True
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
@@ -5486,7 +5485,7 @@ def test_memory_usage_multi(rows):
     expect += 3 * 8  # Level 0
     expect += 3 * 8  # Level 1
 
-    assert expect == gdf.index.memory_usage(deep=deep)
+    assert expect == gdf.index.memory_usage(deep=True)
 
 
 @pytest.mark.parametrize(
