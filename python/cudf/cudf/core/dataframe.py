@@ -3020,68 +3020,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
         return out
 
-    def label_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
-    ):
-        """Encode labels in a column with label encoding.
-
-        Parameters
-        ----------
-        column : str
-            the source column with binary encoding for the data.
-        prefix : str
-            the new column name prefix.
-        cats : sequence of ints
-            the sequence of categories as integers.
-        prefix_sep : str
-            the separator between the prefix and the category.
-        dtype :
-            the dtype for the outputs; see Series.label_encoding
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        -------
-        A new DataFrame with a new column appended for the coded values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 10, 20]})
-        >>> df
-           a   b
-        0  1  10
-        1  2  10
-        2  3  20
-        >>> df.label_encoding(column="b", prefix="b_col", cats=[10, 20])
-           a   b  b_col_labels
-        0  1  10             0
-        1  2  10             0
-        2  3  20             1
-        """
-
-        warnings.warn(
-            "DataFrame.label_encoding is deprecated and will be removed in "
-            "the future. Consider using cuML's LabelEncoder instead.",
-            FutureWarning,
-        )
-
-        return self._label_encoding(
-            column, prefix, cats, prefix_sep, dtype, na_sentinel
-        )
-
-    def _label_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
-    ):
-        # Private implementation of deprecated public label_encoding method
-        newname = prefix_sep.join([prefix, "labels"])
-        newcol = self[column]._label_encoding(
-            cats=cats, dtype=dtype, na_sentinel=na_sentinel
-        )
-        outdf = self.copy()
-        outdf.insert(len(outdf._data), newname, newcol)
-        return outdf
-
     def agg(self, aggs, axis=None):
         """
         Aggregate using one or more operations over the specified axis.
