@@ -1321,7 +1321,7 @@ class IndexedFrame(Frame):
             *all* null values.
         subset : list, optional
             List of columns to consider when dropping rows.
-        thresh: int, optional
+        thresh : int, optional
             If specified, then drops every row containing
             less than `thresh` non-null values.
         drop_nan: bool
