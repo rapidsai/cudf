@@ -9084,7 +9084,7 @@ def test_dataframe_add_suffix():
         {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
     ],
 )
-@pytest.mark.parametrize("periods", range(-10, 10))
+@pytest.mark.parametrize("periods", (-5, -1, 0, 1, 5))
 def test_diff_dataframe_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
@@ -9105,7 +9105,7 @@ def test_diff_dataframe_numeric_dtypes(data, periods):
 )
 def test_diff_decimal_dtypes(precision, scale, dtype):
     gdf = cudf.DataFrame(
-        np.random.uniform(10.5, 75.5, (10, 6)),
+        np.random.default_rng(seed=42).uniform(10.5, 75.5, (10, 6)),
         dtype=dtype(precision=precision, scale=scale),
     )
     pdf = gdf.to_pandas()
@@ -9120,7 +9120,7 @@ def test_diff_decimal_dtypes(precision, scale, dtype):
 
 def test_diff_dataframe_invalid_axis():
     with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
-        gdf = cudf.DataFrame(np.random.random_sample((4, 4)))
+        gdf = cudf.DataFrame(np.array([1.123, 2.343, 5.890, 0.0]))
         gdf.diff(periods=1, axis=1)
 
 
@@ -9139,7 +9139,7 @@ def test_diff_dataframe_invalid_axis():
 def test_diff_dataframe_non_numeric_dypes(data):
     with pytest.raises(
         NotImplementedError,
-        match="Diff currently only supports numeric dtypes",
+        match="DataFrame.diff only supports numeric dtypes.",
     ):
         gdf = cudf.DataFrame(data)
         gdf.diff(periods=2, axis=0)
