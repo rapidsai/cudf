@@ -2659,7 +2659,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
-            raise NotImplementedError("Only axis=0 is currently supported.")
+            raise NotImplementedError("Only axis=0 is supported.")
 
         if not all(is_numeric_dtype(i) for i in self.dtypes):
             raise NotImplementedError(

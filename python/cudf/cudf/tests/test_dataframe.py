@@ -9139,7 +9139,7 @@ def test_diff_dataframe_invalid_axis():
 def test_diff_dataframe_non_numeric_dypes(data):
     with pytest.raises(
         NotImplementedError,
-        match="DataFrame.diff only supports numeric dtypes.",
+        match="DataFrame.diff only supports numeric dtypes",
     ):
         gdf = cudf.DataFrame(data)
         gdf.diff(periods=2, axis=0)
