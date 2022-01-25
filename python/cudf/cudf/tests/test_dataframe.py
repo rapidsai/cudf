@@ -968,7 +968,7 @@ def test_dataframe_dir_and_getattr():
         df.not_a_column
 
 
-def test_empty_dataframe_to_array():
+def test_empty_dataframe_to_cupy():
     df = cudf.DataFrame()
 
     # Check fully empty dataframe.

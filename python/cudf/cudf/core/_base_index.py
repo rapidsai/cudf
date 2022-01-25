@@ -1243,10 +1243,6 @@ class BaseIndex(Serializable):
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
 
-    # TODO: This method is deprecated and can be removed.
-    def to_array(self, fillna=None):
-        return self._values.to_array(fillna=fillna)
-
     def to_series(self, index=None, name=None):
         """
         Create a Series with both index and values equal to the index keys.

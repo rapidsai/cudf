@@ -946,7 +946,7 @@ class CategoricalColumn(column.ColumnBase):
             col = self
 
         signed_dtype = min_signed_type(len(col.categories))
-        codes = col.codes.astype(signed_dtype).fillna(-1).to_array()
+        codes = col.codes.astype(signed_dtype).fillna(-1).values_host
         if is_interval_dtype(col.categories.dtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.

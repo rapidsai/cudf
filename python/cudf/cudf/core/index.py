@@ -2492,7 +2492,7 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}({self._values.to_array()},"
+            f"{self.__class__.__name__}({self._values.values_host},"
             f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
