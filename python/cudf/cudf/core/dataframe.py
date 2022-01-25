@@ -33,6 +33,7 @@ from cudf.api.types import (
     is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
+    is_integer,
     is_list_dtype,
     is_list_like,
     is_numeric_dtype,
@@ -2614,7 +2615,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         periods : int, default 1
             Periods to shift for calculating difference,
             accepts negative values.
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+        axis : {0 or 'index', 1 or 'columns'}, default 0
             Take difference over rows (0) or columns (1).
             Only row-wise (0) shift is supported.
 
@@ -2651,18 +2652,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         5     2     5    20
 
         """
+        if not is_integer(periods):
+            if not (isinstance(periods, float) and isinstance(periods, int)):
+                raise ValueError("periods must be an integer")
+            periods = int(periods)
 
-        if not axis == 0:
-            raise NotImplementedError("Only axis=0 is supported.")
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is currently supported.")
 
         if not all(is_numeric_dtype(i) for i in self.dtypes):
             raise NotImplementedError(
-                "Diff currently only supports numeric dtypes"
+                "DataFrame.diff only supports numeric dtypes"
             )
 
         if abs(periods) > len(self):
             df = cudf.DataFrame._from_data(
-            {name: column_empty(len(self), dtype=dtype, masked=True) for name, dtype in zip(self.columns, self.dtypes)})
+                {
+                    name: column_empty(len(self), dtype=dtype, masked=True)
+                    for name, dtype in zip(self.columns, self.dtypes)
+                }
+            )
             return df
 
         return self - self.shift(periods=periods)
