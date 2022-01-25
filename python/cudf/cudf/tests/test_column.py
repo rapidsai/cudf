@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -116,9 +117,13 @@ def test_column_slicing(pandas_input, offset, size):
 @pytest.mark.parametrize("size", [50, 10, 0])
 @pytest.mark.parametrize("precision", [2, 3, 5])
 @pytest.mark.parametrize("scale", [0, 1, 2])
-def test_decimal_column_slicing(offset, size, precision, scale):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
+)
+def test_decimal_column_slicing(offset, size, precision, scale, decimal_type):
     col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
-    col = col.astype(cudf.Decimal64Dtype(precision, scale))
+    col = col.astype(decimal_type(precision, scale))
     column_slicing_test(col, offset, size, True)
 
 
@@ -379,7 +384,7 @@ def test_as_column_buffer(data, expected):
         (
             pa.array([100, 200, 300], type=pa.decimal128(3)),
             cudf.core.column.as_column(
-                [100, 200, 300], dtype=cudf.core.dtypes.Decimal64Dtype(3, 0)
+                [100, 200, 300], dtype=cudf.core.dtypes.Decimal128Dtype(3, 0)
             ),
         ),
         (

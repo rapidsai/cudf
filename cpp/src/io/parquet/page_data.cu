@@ -102,7 +102,7 @@ struct page_state_s {
  */
 __device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed = 33)
 {
-  const uint8_t* p  = reinterpret_cast<const uint8_t*>(key);
+  const auto* p     = reinterpret_cast<const uint8_t*>(key);
   uint32_t h1       = seed, k1;
   const uint32_t c1 = 0xcc9e2d51;
   const uint32_t c2 = 0x1b873593;
@@ -513,7 +513,7 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s* s, int target_po
  */
 inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, void* dstv)
 {
-  const char* ptr = NULL;
+  const char* ptr = nullptr;
   size_t len      = 0;
 
   if (s->dict_base) {
@@ -522,10 +522,9 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
                                                sizeof(string_index_pair)
                                            : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      const string_index_pair* src =
-        reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
-      ptr = src->first;
-      len = src->second;
+      const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+      ptr             = src->first;
+      len             = src->second;
     }
   } else {
     // Plain encoding
@@ -540,9 +539,9 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
     *static_cast<uint32_t*>(dstv) = device_str2hash32(ptr, len);
   } else {
     // Output string descriptor
-    string_index_pair* dst = static_cast<string_index_pair*>(dstv);
-    dst->first             = ptr;
-    dst->second            = len;
+    auto* dst   = static_cast<string_index_pair*>(dstv);
+    dst->first  = ptr;
+    dst->second = len;
   }
 }
 
@@ -1016,7 +1015,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       cur += InitLevelSection(s, cur, end, level_type::DEFINITION);
 
       s->dict_bits = 0;
-      s->dict_base = 0;
+      s->dict_base = nullptr;
       s->dict_size = 0;
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
@@ -1133,7 +1132,7 @@ static __device__ void store_validity(PageNestingInfo* pni,
   int bit_offset  = pni->valid_map_offset % 32;
   // if we fit entirely in the output word
   if (bit_offset + value_count <= 32) {
-    uint32_t relevant_mask = static_cast<uint32_t>((static_cast<uint64_t>(1) << value_count) - 1);
+    auto relevant_mask = static_cast<uint32_t>((static_cast<uint64_t>(1) << value_count) - 1);
 
     if (relevant_mask == ~0) {
       pni->valid_map[word_offset] = valid_mask;

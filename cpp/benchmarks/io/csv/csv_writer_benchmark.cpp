@@ -35,8 +35,8 @@ class CsvWrite : public cudf::benchmark {
 
 void BM_csv_write_varying_inout(benchmark::State& state)
 {
-  auto const data_types   = get_type_or_group(state.range(0));
-  io_type const sink_type = static_cast<io_type>(state.range(1));
+  auto const data_types = get_type_or_group(state.range(0));
+  auto const sink_type  = static_cast<io_type>(state.range(1));
 
   auto const tbl  = create_random_table(data_types, num_cols, table_size_bytes{data_size});
   auto const view = tbl->view();

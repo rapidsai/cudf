@@ -55,7 +55,7 @@ struct store_result_functor {
   /**
    * @brief Check if the groupby keys are presorted
    */
-  bool is_presorted() const { return keys_are_sorted == sorted::YES; }
+  [[nodiscard]] bool is_presorted() const { return keys_are_sorted == sorted::YES; }
 
   /**
    * @brief Get the grouped values

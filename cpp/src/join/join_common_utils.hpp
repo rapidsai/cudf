@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
+#include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
 
 #include <limits>
@@ -50,6 +51,18 @@ using multimap_type =
                         cuda::thread_scope_device,
                         hash_table_allocator_type,
                         cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
+
+// Multimap type used for mixed joins. TODO: This is a temporary alias used
+// until the mixed joins are converted to using CGs properly. Right now it's
+// using a cooperative group of size 1.
+using mixed_multimap_type = cuco::static_multimap<hash_value_type,
+                                                  size_type,
+                                                  cuda::thread_scope_device,
+                                                  hash_table_allocator_type,
+                                                  cuco::double_hashing<1, hash_type, hash_type>>;
+
+using semi_map_type = cuco::
+  static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
 using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
