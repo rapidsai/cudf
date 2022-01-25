@@ -12,13 +12,7 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import (
-    BinaryOperand,
-    DatetimeLikeScalar,
-    Dtype,
-    DtypeObj,
-    ScalarLike,
-)
+from cudf._typing import BinaryOperand, DatetimeLikeScalar, Dtype, DtypeObj
 from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -123,7 +117,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
         # Pandas supports only `timedelta64[ns]`, hence the cast.
         pd_series = pd.Series(
-            self.astype("timedelta64[ns]").to_array("NAT"), copy=False
+            self.astype("timedelta64[ns]").fillna("NAT").values_host,
+            copy=False,
         )
 
         if index is not None:
@@ -303,10 +298,6 @@ class TimeDeltaColumn(column.ColumnBase):
                 size=self.size,
             ),
         )
-
-    def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column"""
-        return np.timedelta64("nat", self.time_unit)
 
     @property
     def time_unit(self) -> str:

@@ -314,36 +314,6 @@ class ColumnBase(Column, Serializable):
             n += bitmask_allocation_size_bytes(self.size)
         return n
 
-    def _default_na_value(self) -> Any:
-        raise NotImplementedError()
-
-    # TODO: This method should be removed in favor of the values_host property.
-    # However, at present there are still internal uses that rely on the
-    # ability to fill nulls, so we need to replace those a bit more carefully.
-    def to_array(self, fillna=None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-
-        if fillna:
-            arr = self.fillna(self._default_na_value()).data_array_view
-        else:
-            arr = self.dropna(drop_nan=False).data_array_view
-
-        return arr.copy_to_host()
-
     def _fill(
         self,
         fill_value: ScalarLike,

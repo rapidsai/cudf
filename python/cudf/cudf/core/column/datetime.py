@@ -199,7 +199,7 @@ class DatetimeColumn(column.ColumnBase):
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
         return pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"),
+            self.astype("datetime64[ns]").fillna("NAT").values_host,
             copy=False,
             index=index,
         )
@@ -345,10 +345,6 @@ class DatetimeColumn(column.ColumnBase):
                 "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype="object", masked=False),
             )
-
-    def _default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column"""
-        return np.datetime64("nat", self.time_unit)
 
     def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
         return pd.Timestamp(
