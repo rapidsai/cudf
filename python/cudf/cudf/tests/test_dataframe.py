@@ -9074,12 +9074,11 @@ def test_dataframe_add_suffix():
         np.random.RandomState(seed=10).randint(-50, 50, (25, 30)),
         np.random.RandomState(seed=10).random_sample((4, 4)),
         np.array([1.123, 2.343, 5.890, 0.0]),
-        [np.nan, None, np.nan, None],
         [True, False, True, False, False],
         {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
     ],
 )
-@pytest.mark.parametrize("periods", range(-4, 5))
+@pytest.mark.parametrize("periods", range(-10, 10))
 def test_diff_dataframe_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
@@ -9095,10 +9094,13 @@ def test_diff_dataframe_numeric_dtypes(data, periods):
 @pytest.mark.parametrize(
     ("precision", "scale"), [(5, 2), (4, 3), (8, 5), (3, 1), (6, 4)],
 )
-def test_diff_decimal64_dtype(precision, scale):
+@pytest.mark.parametrize(
+    "dtype", [cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+)
+def test_diff_decimal_dtypes(precision, scale, dtype):
     gdf = cudf.DataFrame(
         np.random.uniform(10.5, 75.5, (10, 6)),
-        dtype=cudf.Decimal64Dtype(precision=precision, scale=scale),
+        dtype=dtype(precision=precision, scale=scale),
     )
     pdf = gdf.to_pandas()
 
@@ -9125,6 +9127,7 @@ def test_diff_dataframe_invalid_axis():
             "string_col": ["a", "b", "c", "d", "e"],
         },
         ["a", "b", "c", "d", "e"],
+        [np.nan, None, np.nan, None],
     ],
 )
 def test_diff_dataframe_non_numeric_dypes(data):
