@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_benchmark_input.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
@@ -33,14 +34,13 @@ template <typename type>
 void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  auto const dtype = cudf::type_to_id<type>();
+  data_profile profile;
+  profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 100);
+  auto const table = create_random_table({dtype}, 1, row_count{column_size}, profile);
+  table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+  cudf::column_view input_column(table->view().column(0));
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
-    data_it, data_it + column_size);
-
-  auto input_column = cudf::column_view(values);
   cudf::data_type output_dtype =
     (agg->kind == cudf::aggregation::MEAN || agg->kind == cudf::aggregation::VARIANCE ||
      agg->kind == cudf::aggregation::STD)
