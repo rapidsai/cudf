@@ -2661,9 +2661,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if abs(periods) > len(self):
-            df = cudf.DataFrame(
-                {name: ([cudf.NA] * len(self)) for name in self.columns}
-            )
+            df = cudf.DataFrame._from_data(
+            {name: column_empty(len(self), dtype=dtype, masked=True) for name, dtype in zip(self.columns, self.dtypes)})
             return df
 
         return self - self.shift(periods=periods)
