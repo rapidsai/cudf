@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <benchmarks/common/generate_benchmark_input.hpp>
+#include <benchmarks/common/generate_input.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
