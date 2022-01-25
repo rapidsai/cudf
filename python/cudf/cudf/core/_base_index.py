@@ -569,17 +569,6 @@ class BaseIndex(Serializable):
 
         return cudf.io.dlpack.to_dlpack(self)
 
-    @property
-    def gpu_values(self):
-        """
-        View the data as a numba device array object
-        """
-        warnings.warn(
-            "The gpu_values property is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._values.data_array_view
-
     def append(self, other):
         """
         Append a collection of Index options together.
