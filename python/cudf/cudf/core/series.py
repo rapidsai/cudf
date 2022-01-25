@@ -2269,16 +2269,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         self.mask(mask, other, inplace=True)
 
-    def reverse(self):
-        warnings.warn(
-            "Series.reverse is deprecated and will be removed in the future.",
-            FutureWarning,
-        )
-        rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
-        return self._from_data(
-            {self.name: self._column[rinds]}, self.index._values[rinds]
-        )
-
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding.
 
