@@ -204,8 +204,10 @@ def output_html(entries, sorted_list, args):
             # format the build-time
             build_time = end - start
             build_time_str = str(build_time) + " ms"
-            if build_time > 60000:
-                build_time_str = "{:.3f} min".format(build_time / 60000)
+            if build_time > 120000:  # 2 minutes
+                minutes = int(build_time / 60000)
+                seconds = int(((build_time / 60000) - minutes) * 60)
+                build_time_str = "{:d}:{:02d} min".format(minutes, seconds)
             elif build_time > 1000:
                 build_time_str = "{:.3f} s".format(build_time / 1000)
 
