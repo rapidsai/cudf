@@ -40,6 +40,9 @@ OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 
 
+# TODO: This function should be removed. Anywhere that it is being used should
+# instead be generating a random boolean array (bytemask) and use the public
+# APIs to set those elements to None.
 def random_bitmask(size):
     """
     Parameters
