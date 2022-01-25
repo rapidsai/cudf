@@ -972,9 +972,9 @@ Write a dataframe to csv.
 >>> import cudf
 >>> filename = 'foo.csv'
 >>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
-                         'y': [1.0, 3.3, 2.2, 4.4],
-                         'z': ['a', 'b', 'c', 'd']})
->>> df = df.set_index([3, 2, 1, 0])
+...                      'y': [1.0, 3.3, 2.2, 4.4],
+...                      'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index(cudf.Series([3, 2, 1, 0]))
 >>> df.to_csv(filename)
 
 """
