@@ -18,6 +18,7 @@
 
 #include "generate_benchmark_input.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <random>
@@ -35,9 +36,13 @@
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 auto make_normal_dist(T upper_bound)
 {
+  // Provided n is large enough, Normal(μ,σ2) is a good approximation for Binomial(n, p)
+  // where μ = np and σ2 = np (1 - p).
   using realT        = std::conditional_t<sizeof(T) * 8 <= 23, float, double>;
-  realT const mean   = static_cast<realT>(upper_bound) / 2;
-  realT const stddev = static_cast<realT>(upper_bound) / 6;
+  realT const mean   = static_cast<realT>(upper_bound) / 2;             // μ = np, p=0.5
+  realT const stddev = std::sqrt(static_cast<realT>(upper_bound) / 4);  // sqrt(np (1 - p))
+  std::cout << "mean: " << mean << " stddev: " << stddev << " upper_bound: " << upper_bound
+            << std::endl;
   return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
@@ -140,7 +145,7 @@ distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
-                         value_generator{upper_bound, lower_bound, engine, dist});
+                         value_generator{lower_bound, upper_bound, engine, dist});
         std::cout << "Tabulate done" << std::endl;
         return result;
       };
@@ -162,7 +167,7 @@ distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
-                         abs_value_generator{upper_bound, lower_bound, engine, dist});
+                         abs_value_generator{lower_bound, upper_bound, engine, dist});
         std::cout << "Tabulate done" << std::endl;
         return result;
       };
@@ -197,6 +202,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
         return result;
       };
     case distribution_id::GEOMETRIC:
+      // kind of exponential distribution from lower_bound to upper_bound.
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
@@ -204,7 +210,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
-                         abs_value_generator{upper_bound, lower_bound, engine, dist});
+                         abs_value_generator{lower_bound, upper_bound, engine, dist});
         std::cout << "Tabulate float" << std::endl;
         return result;
       };
