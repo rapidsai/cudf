@@ -232,27 +232,6 @@ ConfigureBench(
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
   STRINGS_BENCH
-<<<<<<< HEAD
-  string/case_benchmark.cpp
-  string/combine_benchmark.cpp
-  string/contains_benchmark.cpp
-  string/convert_datetime_benchmark.cpp
-  string/convert_durations_benchmark.cpp
-  string/convert_fixed_point_benchmark.cpp
-  string/convert_numerics_benchmark.cpp
-  string/copy_benchmark.cu
-  string/extract_benchmark.cpp
-  string/factory_benchmark.cu
-  string/filter_benchmark.cpp
-  string/find_benchmark.cpp
-  string/repeat_strings_benchmark.cpp
-  string/replace_benchmark.cpp
-  string/replace_re_benchmark.cpp
-  string/split_benchmark.cpp
-  string/substring_benchmark.cpp
-  string/translate_benchmark.cpp
-  string/url_decode_benchmark.cpp
-=======
   string/case.cpp
   string/combine.cpp
   string/contains.cpp
@@ -272,7 +251,6 @@ ConfigureBench(
   string/substring.cpp
   string/translate.cpp
   string/url_decode.cpp
->>>>>>> baff5cfd4cb9deb8f7887d597740c0728cbd4407
 )
 
 # ##################################################################################################
