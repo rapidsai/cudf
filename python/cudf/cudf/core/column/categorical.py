@@ -949,7 +949,11 @@ class CategoricalColumn(column.ColumnBase):
             col = self
 
         signed_dtype = min_signed_type(len(col.categories))
-        codes = col.codes.astype(signed_dtype).fillna(-1).values_host
+        codes = (
+            col.codes.astype(signed_dtype)
+            .fillna(_DEFAULT_CATEGORICAL_VALUE)
+            .values_host
+        )
         if is_interval_dtype(col.categories.dtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
@@ -1601,7 +1605,7 @@ def pandas_categorical_as_column(
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes != codes.dtype.type(-1)
+    valid_codes = codes != codes.dtype.type(_DEFAULT_CATEGORICAL_VALUE)
 
     mask = None
     if not valid_codes.all():

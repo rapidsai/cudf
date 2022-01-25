@@ -199,7 +199,7 @@ class DatetimeColumn(column.ColumnBase):
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
         return pd.Series(
-            self.astype("datetime64[ns]").fillna("NAT").values_host,
+            self.astype("datetime64[ns]").fillna("NaT").values_host,
             copy=False,
             index=index,
         )

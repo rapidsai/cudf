@@ -117,7 +117,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         # Pandas supports only `timedelta64[ns]`, hence the cast.
         pd_series = pd.Series(
-            self.astype("timedelta64[ns]").fillna("NAT").values_host,
+            self.astype("timedelta64[ns]").fillna("NaT").values_host,
             copy=False,
         )
 
