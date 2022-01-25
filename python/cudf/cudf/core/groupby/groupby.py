@@ -985,7 +985,7 @@ class GroupBy(Serializable):
         ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
         ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
         >>> gdf
-        id  val1  val2  val3
+          id  val1  val2  val3
         0  a     5     4     4
         1  a     4     5     5
         2  a     6     6     6
