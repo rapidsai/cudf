@@ -6,6 +6,7 @@ from collections import OrderedDict
 import fastavro
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pyorc
 
 import cudf
@@ -114,6 +115,26 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             meta["value_type"] = random.choice(
                 list(cudf.utils.dtypes.ALL_TYPES - {"category"})
             )
+        elif dtype == "struct":
+            if obj._max_lists_nesting_depth is None:
+                meta["nesting_max_depth"] = np.random.randint(2, 10)
+            else:
+                meta["nesting_max_depth"] = obj._max_lists_nesting_depth
+
+            if obj._max_struct_null_frequency is None:
+                meta["max_null_frequency"] = random.uniform(0, 1)
+            else:
+                meta["max_null_frequency"] = obj._max_struct_null_frequency
+
+            if obj._max_struct_types_at_each_level is None:
+                meta["max_types_at_each_level"] = np.random.randint(
+                    low=1, high=10
+                )
+            else:
+                meta[
+                    "max_types_at_each_level"
+                ] = obj._max_struct_types_at_each_level
+
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
         elif dtype == "decimal32":
@@ -161,6 +182,8 @@ def pyarrow_to_pandas(table):
             df[column._name] = pd.Series(
                 column, dtype=pyarrow_dtypes_to_pandas_dtypes[column.type]
             )
+        elif isinstance(column.type, pa.StructType):
+            df[column._name] = column.to_pandas(integer_object_nulls=True)
         else:
             df[column._name] = column.to_pandas()
 
@@ -196,6 +219,14 @@ def get_orc_dtype_info(dtype):
         )
 
 
+def get_arrow_dtype_info_for_pyorc(dtype):
+    if isinstance(dtype, pa.StructType):
+        return get_orc_schema(df=None, arrow_table_schema=dtype)
+    else:
+        pd_dtype = cudf.dtype(dtype.to_pandas_dtype())
+        return get_orc_dtype_info(pd_dtype)
+
+
 def get_avro_schema(df):
     fields = [
         {"name": col_name, "type": get_avro_dtype_info(col_dtype)}
@@ -205,11 +236,17 @@ def get_avro_schema(df):
     return schema
 
 
-def get_orc_schema(df):
-    ordered_dict = OrderedDict(
-        (col_name, get_orc_dtype_info(col_dtype))
-        for col_name, col_dtype in df.dtypes.items()
-    )
+def get_orc_schema(df, arrow_table_schema=None):
+    if arrow_table_schema is None:
+        ordered_dict = OrderedDict(
+            (col_name, get_orc_dtype_info(col_dtype))
+            for col_name, col_dtype in df.dtypes.items()
+        )
+    else:
+        ordered_dict = OrderedDict(
+            (field.name, get_arrow_dtype_info_for_pyorc(field.type))
+            for field in arrow_table_schema
+        )
 
     schema = pyorc.Struct(**ordered_dict)
     return schema
@@ -255,12 +292,24 @@ def pandas_to_avro(df, file_name=None, file_io_obj=None):
         fastavro.writer(file_io_obj, avro_schema, records)
 
 
-def _preprocess_to_orc_tuple(df):
+def _preprocess_to_orc_tuple(df, arrow_table_schema):
     def _null_to_None(value):
         if value is pd.NA or value is pd.NaT:
             return None
         else:
             return value
+
+    def sanitize(value, struct_type):
+        if value is None:
+            return None
+
+        values_list = []
+        for name, sub_type in struct_type.fields.items():
+            if isinstance(sub_type, cudf.StructDtype):
+                values_list.append(sanitize(value[name], sub_type))
+            else:
+                values_list.append(value[name])
+        return tuple(values_list)
 
     has_nulls_or_nullable_dtype = any(
         [
@@ -271,19 +320,35 @@ def _preprocess_to_orc_tuple(df):
             for col in df.columns
         ]
     )
+    pdf = df.copy(deep=True)
+    for field in arrow_table_schema:
+        if isinstance(field.type, pa.StructType):
+            pdf[field.name] = pdf[field.name].apply(
+                sanitize, args=(cudf.StructDtype.from_arrow(field.type),)
+            )
+        else:
+            pdf[field.name] = pdf[field.name]
 
     tuple_list = [
         tuple(map(_null_to_None, tup)) if has_nulls_or_nullable_dtype else tup
-        for tup in df.itertuples(index=False, name=None)
+        for tup in pdf.itertuples(index=False, name=None)
     ]
 
-    return tuple_list
+    return tuple_list, pdf, df
 
 
-def pandas_to_orc(df, file_name=None, file_io_obj=None, stripe_size=67108864):
-    schema = get_orc_schema(df)
+def pandas_to_orc(
+    df,
+    file_name=None,
+    file_io_obj=None,
+    stripe_size=67108864,
+    arrow_table_schema=None,
+):
+    schema = get_orc_schema(df, arrow_table_schema=arrow_table_schema)
 
-    tuple_list = _preprocess_to_orc_tuple(df)
+    tuple_list, pdf, df = _preprocess_to_orc_tuple(
+        df, arrow_table_schema=arrow_table_schema
+    )
 
     if file_name is not None:
         with open(file_name, "wb") as data:

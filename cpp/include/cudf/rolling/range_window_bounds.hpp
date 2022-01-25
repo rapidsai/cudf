@@ -56,12 +56,12 @@ struct range_window_bounds {
    * @return true If window is unbounded
    * @return false If window is of finite bounds
    */
-  bool is_unbounded() const { return _is_unbounded; }
+  [[nodiscard]] bool is_unbounded() const { return _is_unbounded; }
 
   /**
    * @brief Returns the underlying scalar value for the bounds
    */
-  scalar const& range_scalar() const { return *_range_scalar; }
+  [[nodiscard]] scalar const& range_scalar() const { return *_range_scalar; }
 
   range_window_bounds(range_window_bounds const&) =
     default;                        // Required to return (by copy) from functions.

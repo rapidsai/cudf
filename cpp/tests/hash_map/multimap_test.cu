@@ -66,20 +66,19 @@ class MultimapTest : public cudf::test::BaseFixture {
     rmm::cuda_stream_default.synchronize();
   }
 
-  ~MultimapTest() {}
+  ~MultimapTest() override {}
 };
 
 // Google Test can only do a parameterized typed-test over a single type, so we
 // have to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types<KeyValueTypes<int, int>,
-                         KeyValueTypes<int, long long int>,
-                         KeyValueTypes<int, unsigned long long int>,
-                         KeyValueTypes<unsigned long long int, int>,
-                         KeyValueTypes<unsigned long long int, long long int>,
-                         KeyValueTypes<unsigned long long int, unsigned long long int>>
-  Implementations;
+using Implementations = ::testing::Types<KeyValueTypes<int, int>,
+                                         KeyValueTypes<int, long long>,
+                                         KeyValueTypes<int, unsigned long long>,
+                                         KeyValueTypes<unsigned long long, int>,
+                                         KeyValueTypes<unsigned long long, long long>,
+                                         KeyValueTypes<unsigned long long, unsigned long long>>;
 
 TYPED_TEST_SUITE(MultimapTest, Implementations);
 

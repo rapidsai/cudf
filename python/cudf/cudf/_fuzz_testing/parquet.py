@@ -59,6 +59,7 @@ class ParquetReader(IOFuzz):
                 - {"uint32"}
                 | {"list", "decimal64"}
             )
+
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -80,6 +81,7 @@ class ParquetReader(IOFuzz):
         # https://issues.apache.org/jira/browse/ARROW-10123
 
         # file = io.BytesIO()
+
         df.to_parquet("temp_file")
         # file.seek(0)
         # self._current_buffer = copy.copy(file.read())
