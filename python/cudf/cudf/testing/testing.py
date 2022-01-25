@@ -214,26 +214,25 @@ def assert_column_equal(
         or (is_numeric_dtype(left) and is_string_dtype(right))
     ):
         try:
-            columns_equal = (
-                (
-                    (
-                        cp.all(left.isnull().values == right.isnull().values)
-                        if not (left.dtype.kind == right.dtype.kind == "f")
-                        else (
-                            cp.all(is_nan(left).values == is_nan(right).values)
-                            and cp.all(
-                                left.isnull().values == right.isnull().values
-                            )
-                        )
-                    )
-                    and cp.allclose(
-                        left[left.isnull().unary_operator("not")].values,
-                        right[right.isnull().unary_operator("not")].values,
-                    )
+            # nulls must be in the same places for all dtypes
+            nulls_equal = cp.all(left.isnull().values == right.isnull().values)
+
+            if not check_exact and is_numeric_dtype(left):
+                # non-null values must be the same
+                values_equal = cp.allclose(
+                    left[left.isnull().unary_operator("not")].values,
+                    right[right.isnull().unary_operator("not")].values,
                 )
-                if not check_exact and is_numeric_dtype(left)
-                else left.equals(right)
-            )
+                if not left.dtype.kind == right.dtype.kind == "f":
+                    columns_equal = nulls_equal and values_equal
+                else:
+                    # nans must be the same for float types
+                    nans_equal = cp.all(
+                        is_nan(left).values == is_nan(right).values
+                    )
+                    columns_equal = nulls_equal and values_equal and nans_equal
+            else:
+                columns_equal = left.equals(right)
         except TypeError as e:
             if str(e) != "Categoricals can only compare with the same type":
                 raise e
