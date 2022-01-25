@@ -1536,14 +1536,6 @@ class BaseIndex(Serializable):
                 "`allow_fill` and `fill_value` are unsupported."
             )
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _apply_boolean_mask(self, boolean_mask):

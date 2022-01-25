@@ -267,7 +267,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
-                    df.index = self._frame.index.take(row_selection)
+                    df.index = self._frame.index._apply_boolean_mask(
+                        row_selection
+                    )
                 else:
                     df.index = as_index(row_selection)
         # Step 4: Downcast
