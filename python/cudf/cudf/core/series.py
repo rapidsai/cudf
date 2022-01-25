@@ -559,19 +559,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        if "column" in header:
-            warnings.warn(
-                "Series objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
-            )
-
         index_nframes = header["index_frame_count"]
         obj = super().deserialize(
             header, frames[header["index_frame_count"] :]
