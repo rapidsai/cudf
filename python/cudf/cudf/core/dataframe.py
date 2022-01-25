@@ -2660,6 +2660,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Diff currently only supports numeric dtypes"
             )
 
+        if abs(periods) > len(self):
+            df = cudf.DataFrame(
+                {name: ([cudf.NA] * len(self)) for name in self.columns}
+            )
+            return df
+
         return self - self.shift(periods=periods)
 
     def drop(
