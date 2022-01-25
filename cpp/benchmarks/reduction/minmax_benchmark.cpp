@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_benchmark_input.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
@@ -32,14 +33,10 @@ template <typename type>
 void BM_reduction(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
-
-  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
-    data_it, data_it + column_size);
-
-  auto input_column = cudf::column_view(values);
+  auto const dtype = cudf::type_to_id<type>();
+  auto const table = create_random_table({dtype}, 1, row_count{column_size});
+  table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+  cudf::column_view input_column(table->view().column(0));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
