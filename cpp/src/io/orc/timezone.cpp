@@ -70,8 +70,8 @@ struct timezone_file {
   std::vector<localtime_type_record_s> ttype;
   std::vector<char> posix_tz_string;
 
-  auto timecnt() const { return header.timecnt; }
-  auto typecnt() const { return header.typecnt; }
+  [[nodiscard]] auto timecnt() const { return header.timecnt; }
+  [[nodiscard]] auto typecnt() const { return header.typecnt; }
 
   // Based on https://tools.ietf.org/id/draft-murchison-tzdist-tzif-00.html
   static constexpr auto leap_second_rec_size(bool is_64bit) noexcept
@@ -222,7 +222,7 @@ class posix_parser {
   /**
    * @brief Returns the next character in the input.
    */
-  char next_character() const { return *cur; }
+  [[nodiscard]] char next_character() const { return *cur; }
 
  private:
   typename Container::const_iterator cur;

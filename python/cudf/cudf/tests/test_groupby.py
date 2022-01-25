@@ -2362,6 +2362,28 @@ def test_groupby_get_group(pdf, group, name, obj):
     assert_groupby_results_equal(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        ["a", "b"],
+        pd.Series([2, 1, 1, 2, 2]),
+        pd.Series(["b", "a", "a", "b", "b"]),
+    ],
+)
+@pytest.mark.parametrize("agg", ["sum", "mean", lambda df: df.mean()])
+def test_groupby_transform_aggregation(by, agg):
+    gdf = cudf.DataFrame(
+        {"a": [2, 2, 1, 2, 1], "b": [1, 1, 1, 2, 2], "c": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+
+    expected = pdf.groupby(by).transform(agg)
+    actual = gdf.groupby(by).transform(agg)
+
+    assert_groupby_results_equal(expected, actual)
+
+
 def test_groupby_select_then_ffill():
     pdf = pd.DataFrame(
         {

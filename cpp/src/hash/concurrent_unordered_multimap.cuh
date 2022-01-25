@@ -503,7 +503,7 @@ class concurrent_unordered_multimap {
     if (count_collisions) m_collisions = 0;
   }
 
-  unsigned long long get_num_collisions() const { return m_collisions; }
+  [[nodiscard]] unsigned long long get_num_collisions() const { return m_collisions; }
 
   void print()
   {

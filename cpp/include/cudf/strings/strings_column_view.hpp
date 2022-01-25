@@ -58,14 +58,14 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the parent column.
    */
-  column_view parent() const;
+  [[nodiscard]] column_view parent() const;
 
   /**
    * @brief Returns the internal column of offsets
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view offsets() const;
+  [[nodiscard]] column_view offsets() const;
 
   /**
    * @brief Return an iterator for the offsets child column.
@@ -74,7 +74,7 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing to the first offset value.
    */
-  offset_iterator offsets_begin() const;
+  [[nodiscard]] offset_iterator offsets_begin() const;
 
   /**
    * @brief Return an end iterator for the offsets child column.
@@ -83,14 +83,14 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing 1 past the last offset value.
    */
-  offset_iterator offsets_end() const;
+  [[nodiscard]] offset_iterator offsets_end() const;
 
   /**
    * @brief Returns the internal column of chars
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view chars() const;
+  [[nodiscard]] column_view chars() const;
 
   /**
    * @brief Returns the number of bytes in the chars child column.
@@ -98,7 +98,7 @@ class strings_column_view : private column_view {
    * This accounts for empty columns but does not reflect a sliced parent column
    * view  (i.e.: non-zero offset or reduced row count).
    */
-  size_type chars_size() const noexcept;
+  [[nodiscard]] size_type chars_size() const noexcept;
 
   /**
    * @brief Return an iterator for the chars child column.
@@ -111,7 +111,7 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing to the first char byte.
    */
-  chars_iterator chars_begin() const;
+  [[nodiscard]] chars_iterator chars_begin() const;
 
   /**
    * @brief Return an end iterator for the offsets child column.
@@ -121,7 +121,7 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing 1 past the last char byte.
    */
-  chars_iterator chars_end() const;
+  [[nodiscard]] chars_iterator chars_end() const;
 };
 
 //! Strings column APIs.

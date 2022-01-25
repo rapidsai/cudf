@@ -748,7 +748,10 @@ def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
+@pytest.mark.parametrize("use_python_file_object", [True, False])
+def test_parquet_reader_use_python_file_object(
+    parquet_path_or_buf, use_python_file_object
+):
     # Check that the non-default `use_python_file_object=True`
     # option works as expected
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
@@ -756,11 +759,15 @@ def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
 
     # Pass open fsspec file
     with fs.open(paths[0], mode="rb") as fil:
-        got1 = cudf.read_parquet(fil, use_python_file_object=True)
+        got1 = cudf.read_parquet(
+            fil, use_python_file_object=use_python_file_object
+        )
     assert_eq(expect, got1)
 
     # Pass path only
-    got2 = cudf.read_parquet(paths[0], use_python_file_object=True)
+    got2 = cudf.read_parquet(
+        paths[0], use_python_file_object=use_python_file_object
+    )
     assert_eq(expect, got2)
 
 
