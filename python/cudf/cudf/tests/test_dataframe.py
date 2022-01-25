@@ -9083,3 +9083,11 @@ def test_dataframe_assign_cp_np_array():
     gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
 
     assert_eq(pdf, gdf)
+
+
+def test_dataframe_rename_duplicate_column():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gdf.rename(columns={"a": "b"}, inplace=True)
