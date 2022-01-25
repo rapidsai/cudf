@@ -319,27 +319,6 @@ class ColumnBase(Column, Serializable):
 
     # TODO: This method is deprecated and can be removed when the associated
     # Frame methods are removed.
-    def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        if fillna:
-            return self.fillna(self._default_na_value()).data_array_view
-        else:
-            return self.dropna(drop_nan=False).data_array_view
-
-    # TODO: This method is deprecated and can be removed when the associated
-    # Frame methods are removed.
     def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
@@ -357,7 +336,12 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
 
-        return self.to_gpu_array(fillna=fillna).copy_to_host()
+        if fillna:
+            arr = self.fillna(self._default_na_value()).data_array_view
+        else:
+            arr = self.dropna(drop_nan=False).data_array_view
+
+        return arr.copy_to_host()
 
     def _fill(
         self,
