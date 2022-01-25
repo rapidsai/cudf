@@ -1789,27 +1789,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
-    def as_mask(self):
-        """Convert booleans to bitmask
-
-        Returns
-        -------
-        device array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([True, False, True])
-        >>> s.as_mask()
-        <cudf.core.buffer.Buffer object at 0x...>
-        """
-        if not is_bool_dtype(self.dtype):
-            raise TypeError(
-                f"Series must of boolean dtype, found: {self.dtype}"
-            )
-
-        return self._column.as_mask()
-
     def astype(self, dtype, copy=False, errors="raise"):
         """
         Cast the Series to the given dtype
