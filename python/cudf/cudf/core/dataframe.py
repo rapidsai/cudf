@@ -2606,8 +2606,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         First discrete difference of element.
 
-        Calculates the difference of a Dataframe element compared with another
-        element in the Dataframe (default is element in previous row).
+        Calculates the difference of a DataFrame element compared with another
+        element in the DataFrame (default is element in previous row).
 
         Parameters
         ----------
