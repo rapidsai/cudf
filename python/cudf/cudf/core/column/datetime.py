@@ -488,15 +488,6 @@ class DatetimeColumn(column.ColumnBase):
             return False
 
 
-def binop_offset(lhs, rhs, op):
-    if rhs._is_no_op:
-        return lhs
-    else:
-        rhs = rhs._generate_column(len(lhs), op)
-        out = libcudf.datetime.add_months(lhs, rhs)
-        return out
-
-
 def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
