@@ -317,8 +317,9 @@ class ColumnBase(Column, Serializable):
     def _default_na_value(self) -> Any:
         raise NotImplementedError()
 
-    # TODO: This method is deprecated and can be removed when the associated
-    # Frame methods are removed.
+    # TODO: This method should be removed in favor of the values_host property.
+    # However, at present there are still internal uses that rely on the
+    # ability to fill nulls, so we need to replace those a bit more carefully.
     def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
 

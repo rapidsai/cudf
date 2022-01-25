@@ -1663,15 +1663,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
 
-    # TODO: When this method is removed we can also remove ColumnBase.to_array.
-    def to_array(self, fillna=None):
-        warnings.warn(
-            "The to_array method will be removed in a future cuDF "
-            "release. Consider using `to_numpy` instead.",
-            FutureWarning,
-        )
-        return self._column.to_array(fillna=fillna)
-
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
