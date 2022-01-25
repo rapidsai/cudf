@@ -2631,8 +2631,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         --------
         >>> import cudf
         >>> gdf = cudf.DataFrame({'a': [1, 2, 3, 4, 5, 6],
-                                  'b': [1, 1, 2, 3, 5, 8],
-                                  'c': [1, 4, 9, 16, 25, 36]})
+        ...                       'b': [1, 1, 2, 3, 5, 8],
+        ...                       'c': [1, 4, 9, 16, 25, 36]})
         >>> gdf
            a  b   c
         0  1  1   1
