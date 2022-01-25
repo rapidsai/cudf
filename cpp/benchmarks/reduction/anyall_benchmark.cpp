@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf/column/column_view.hpp>
@@ -31,13 +32,15 @@ template <typename type>
 void BM_reduction_anyall(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
-
-  cudf::test::UniformRandomGenerator<long> rand_gen(
-    (agg->kind == cudf::aggregation::ALL ? 1 : 0), (agg->kind == cudf::aggregation::ANY ? 0 : 100));
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::fixed_width_column_wrapper<type, typename decltype(data_it)::value_type> values(
-    data_it, data_it + column_size);
+  auto const dtype = cudf::type_to_id<type>();
+  data_profile profile;
+  if (agg->kind == cudf::aggregation::ANY)
+    profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 0);
+  else
+    profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 100);
+  auto const table = create_random_table({dtype}, 1, row_count{column_size}, profile);
+  table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+  cudf::column_view values(table->view().column(0));
 
   cudf::data_type output_dtype{cudf::type_id::BOOL8};
 
