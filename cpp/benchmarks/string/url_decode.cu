@@ -15,12 +15,15 @@
  */
 
 #include <benchmark/benchmark.h>
+#include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/templated_benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -28,43 +31,56 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include <algorithm>
-#include <random>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/random.h>
 
 struct url_string_generator {
-  size_t num_chars;
-  std::bernoulli_distribution dist;
-
-  url_string_generator(size_t num_chars, double esc_seq_chance)
-    : num_chars{num_chars}, dist{esc_seq_chance}
+  char* chars;
+  double esc_seq_chance;
+  thrust::minstd_rand engine;
+  thrust::uniform_real_distribution<float> esc_seq_dist;
+  url_string_generator(char* c, double esc_seq_chance, thrust::minstd_rand& engine)
+    : chars(c), esc_seq_chance(esc_seq_chance), engine(engine), esc_seq_dist(0, 1)
   {
   }
 
-  std::string operator()(std::mt19937& engine)
+  __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
   {
-    std::string str;
-    str.reserve(num_chars);
-    while (str.size() < num_chars) {
-      if (str.size() < num_chars - 3 && dist(engine)) {
-        str += "%20";
+    auto begin = thrust::get<0>(str_begin_end);
+    auto end   = thrust::get<1>(str_begin_end);
+    engine.discard(begin);
+    for (auto i = begin; i < end; ++i) {
+      if (esc_seq_dist(engine) < esc_seq_chance and i < end - 3) {
+        chars[i]     = '%';
+        chars[i + 1] = '2';
+        chars[i + 2] = '0';
+        i += 2;
       } else {
-        str.push_back('a');
+        chars[i] = 'a';  // + (i % 26);
       }
     }
-    return str;
   }
 };
 
-cudf::test::strings_column_wrapper generate_column(cudf::size_type num_rows,
-                                                   cudf::size_type chars_per_row,
-                                                   double esc_seq_chance)
+// 120 seconds
+auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, double esc_seq_chance)
 {
-  std::mt19937 engine(1);
-  url_string_generator url_gen(chars_per_row, esc_seq_chance);
-  std::vector<std::string> strings;
-  strings.reserve(num_rows);
-  std::generate_n(std::back_inserter(strings), num_rows, [&]() { return url_gen(engine); });
-  return cudf::test::strings_column_wrapper(strings.begin(), strings.end());
+  std::vector<std::string> strings{std::string(chars_per_row, 'a')};
+  auto col_1a     = cudf::test::strings_column_wrapper(strings.begin(), strings.end());
+  auto table_a    = cudf::repeat(cudf::table_view{{col_1a}}, num_rows);
+  auto result_col = std::move(table_a->release()[0]);  // string column with num_rows  aaa...
+  auto chars_col  = result_col->child(cudf::strings_column_view::chars_column_index).mutable_view();
+  auto offset_col = result_col->child(cudf::strings_column_view::offsets_column_index).view();
+
+  auto engine = thrust::default_random_engine{};
+  thrust::for_each_n(thrust::device,
+                     thrust::make_zip_iterator(offset_col.begin<cudf::size_type>(),
+                                               offset_col.begin<cudf::size_type>() + 1),
+                     num_rows,
+                     url_string_generator{chars_col.begin<char>(), esc_seq_chance, engine});
+  return result_col;
 }
 
 class UrlDecode : public cudf::benchmark {
@@ -77,7 +93,7 @@ void BM_url_decode(benchmark::State& state)
   cudf::size_type const chars_per_row = state.range(1);
 
   auto column       = generate_column(num_rows, chars_per_row, esc_seq_pct / 100.0);
-  auto strings_view = cudf::strings_column_view(column);
+  auto strings_view = cudf::strings_column_view(column->view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
