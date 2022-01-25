@@ -1649,25 +1649,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def fill(self, fill_value, begin=0, end=-1, inplace=False):
-        warnings.warn(
-            "The fill method will be removed in a future cuDF release.",
-            FutureWarning,
-        )
-        fill_values = [fill_value]
-        col_and_fill = zip(self._columns, fill_values)
-
-        if not inplace:
-            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
-            return self.__class__._from_data(
-                zip(self._column_names, data_columns), self._index
-            )
-
-        for (c, v) in col_and_fill:
-            c.fill(v, begin, end, inplace=True)
-
-        return self
-
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
