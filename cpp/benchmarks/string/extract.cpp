@@ -52,11 +52,17 @@ static void BM_extract(benchmark::State& state, int groups)
     pattern += "(\\d+) ";
   }
 
-  std::uniform_int_distribution<int> distribution(0, samples.size() - 1);
-  auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto idx) { return samples.at(distribution(generator)); });
-  cudf::test::strings_column_wrapper input(elements, elements + n_rows);
-  cudf::strings_column_view view(input);
+  cudf::test::strings_column_wrapper samples_column(samples.begin(), samples.end());
+  data_profile profile;
+  profile.set_null_frequency(0.0);
+  profile.set_distribution_params<cudf::size_type>(
+    cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0, samples.size() - 1);
+  auto map_table =
+    create_random_table({cudf::type_to_id<cudf::size_type>()}, 1, row_count{n_rows}, profile);
+  auto input = cudf::gather(cudf::table_view{{samples_column}},
+                            map_table->get_column(0).view(),
+                            cudf::out_of_bounds_policy::DONT_CHECK);
+  cudf::strings_column_view view(input->get_column(0).view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
