@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,8 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <algorithm>
-#include <random>
+
+#include <thrust/shuffle.h>
 
 #include "string_bench_args.hpp"
 
@@ -47,11 +48,14 @@ static void BM_copy(benchmark::State& state, copy_type ct)
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
 
   // scatter indices
-  std::vector<cudf::size_type> host_map_data(n_rows);
-  std::iota(host_map_data.begin(), host_map_data.end(), 0);
-  std::random_shuffle(host_map_data.begin(), host_map_data.end());
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> index_map(host_map_data.begin(),
-                                                                    host_map_data.end());
+  auto index_map_col = make_numeric_column(
+    cudf::data_type{cudf::type_id::INT32}, n_rows, cudf::mask_state::UNALLOCATED);
+  auto index_map = index_map_col->mutable_view();
+  thrust::shuffle_copy(thrust::device,
+                       thrust::counting_iterator<cudf::size_type>(0),
+                       thrust::counting_iterator<cudf::size_type>(n_rows),
+                       index_map.begin<cudf::size_type>(),
+                       thrust::default_random_engine());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
