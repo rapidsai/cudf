@@ -2340,7 +2340,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
     return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
   }
-
   
   /**
    * Returns a list of columns by splitting each string using the specified delimiter.
