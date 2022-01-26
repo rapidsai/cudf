@@ -1351,7 +1351,7 @@ class IndexedFrame(Frame):
                 for col in self._columns
             ]
             if drop_nan
-            else self._columns
+            else list(self._columns)
         )
 
         return self._from_columns_like_self(
