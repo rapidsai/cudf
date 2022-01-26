@@ -750,8 +750,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
     _metadata.get_schema(orc_col_id),
     _use_np_dtypes,
     _timestamp_type.id(),
-    decimal_column_type(
-      _decimal_cols_as_float, decimal128_columns, _metadata, orc_col_id));
+    decimal_column_type(_decimal_cols_as_float, decimal128_columns, _metadata, orc_col_id));
   int32_t scale = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
@@ -959,8 +958,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         _metadata.get_col_type(col.id),
         _use_np_dtypes,
         _timestamp_type.id(),
-        decimal_column_type(
-          _decimal_cols_as_float, decimal128_columns, _metadata, col.id));
+        decimal_column_type(_decimal_cols_as_float, decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
