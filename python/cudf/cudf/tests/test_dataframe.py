@@ -1463,11 +1463,8 @@ def test_nonmatching_index_setitem(nrows):
     test_values = np.random.randint(2147483647, size=nrows)
     gdf["c"] = test_values
     assert len(test_values) == len(gdf["c"])
-    assert (
-        gdf["c"]
-        .to_pandas()
-        .equals(cudf.Series(test_values).set_index(gdf._index).to_pandas())
-    )
+    gdf_series = cudf.Series(test_values, index=gdf.index, name="c")
+    assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
 def test_from_pandas():
@@ -5473,7 +5470,6 @@ def test_memory_usage_list():
 
 @pytest.mark.parametrize("rows", [10, 100])
 def test_memory_usage_multi(rows):
-    deep = True
     # We need to sample without replacement to guarantee that the size of the
     # levels are always the same.
     df = pd.DataFrame(
@@ -5495,7 +5491,7 @@ def test_memory_usage_multi(rows):
     expect += rows * 8  # Level 0
     expect += rows * 8  # Level 1
 
-    assert expect == gdf.index.memory_usage(deep=deep)
+    assert expect == gdf.index.memory_usage(deep=True)
 
 
 @pytest.mark.parametrize(
