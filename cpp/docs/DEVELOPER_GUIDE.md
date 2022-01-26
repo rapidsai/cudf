@@ -347,9 +347,10 @@ implemented using asynchronous APIs on the default stream (e.g., stream 0).
 
 The recommended pattern for doing this is to make the definition of the external API invoke an
 internal API in the `detail` namespace. The internal `detail` API has the same parameters as the
-public API, plus a `rmm::cuda_stream_view` parameter at the end defaulted to
-`rmm::cuda_stream_default`. The implementation should be wholly contained in the `detail` API
-definition and use only asynchronous versions of CUDA APIs with the stream parameter.
+public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. The public
+API will call the detail API and provide `rmm::cuda_stream_default`. The implementation should be
+wholly contained in the `detail` API definition and use only asynchronous versions of CUDA APIs
+with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
@@ -362,14 +363,14 @@ void external_function(...);
 
 // cpp/include/cudf/detail/header.hpp
 namespace detail{
-void external_function(..., rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+void external_function(..., rmm::cuda_stream_view stream)
 } // namespace detail
 
 // cudf/src/implementation.cpp
 namespace detail{
-    // defaulted stream parameter
+    // use stream parameter in detail implementation
     void external_function(..., rmm::cuda_stream_view stream){
-        // implementation uses stream w/ async APIs
+        // implementation uses stream with async APIs
         rmm::device_buffer buff(...,stream);
         CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
@@ -379,7 +380,7 @@ namespace detail{
 
 void external_function(...){
     CUDF_FUNC_RANGE(); // Auto generates NVTX range for lifetime of this function
-    detail::external_function(...);
+    detail::external_function(..., rmm::cuda_stream_default);
 }
 ```
 
