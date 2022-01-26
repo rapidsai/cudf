@@ -1298,9 +1298,7 @@ class IndexedFrame(Frame):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(
-                how=how, subset=subset, thresh=thresh
-            )
+            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1308,9 +1306,7 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(
-        self, how="any", subset=None, thresh=None
-    ):
+    def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
         Drop null rows from `self`.
 
