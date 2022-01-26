@@ -31,15 +31,15 @@ namespace strings {
  * of the target strings are found in each string.
  *
  * The size of the output column is `input.size()`.
- * Each row of the output column is of size `target.size()`.
+ * Each row of the output column is of size `targets.size()`.
  *
- * `output[i,j]` contains the position of `target[j]` in `input[i]`
+ * `output[i,j]` contains the position of `targets[j]` in `input[i]`
  *
  * @code{.pseudo}
  * Example:
- * s = ["abc","def"]
- * t = ["a","c","e"]
- * r = find_multiple(s,t)
+ * s = ["abc", "def"]
+ * t = ["a", "c", "e"]
+ * r = find_multiple(s, t)
  * r is now {[ 0, 2,-1],   // for "abc": "a" at pos 0, "c" at pos 2, "e" not found
  *           [-1,-1, 1 ]}  // for "def": "a" and "b" not found, "e" at  pos 1
  * @endcode
