@@ -57,7 +57,7 @@ class SingleColumnFrame(Frame):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
+        index: cudf.core.index.BaseIndex | None = None,
         name: Any = None,
     ):
 
@@ -118,18 +118,12 @@ class SingleColumnFrame(Frame):
         return self._column.values_host
 
     def to_cupy(
-        self,
-        dtype: Union[Dtype, None] = None,
-        copy: bool = True,
-        na_value=None,
+        self, dtype: Dtype | None = None, copy: bool = True, na_value=None,
     ) -> cupy.ndarray:  # noqa: D102
         return super().to_cupy(dtype, copy, na_value).flatten()
 
     def to_numpy(
-        self,
-        dtype: Union[Dtype, None] = None,
-        copy: bool = True,
-        na_value=None,
+        self, dtype: Dtype | None = None, copy: bool = True, na_value=None,
     ) -> np.ndarray:  # noqa: D102
         return super().to_numpy(dtype, copy, na_value).flatten()
 
@@ -294,7 +288,7 @@ class SingleColumnFrame(Frame):
         reflect: bool = False,
         *args,
         **kwargs,
-    ) -> Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]:
+    ) -> dict[str | None, tuple[ColumnBase, Any, bool, Any]]:
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters

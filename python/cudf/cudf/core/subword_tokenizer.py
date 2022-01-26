@@ -61,7 +61,7 @@ class SubwordTokenizer:
         max_num_rows: int,
         add_special_tokens: bool = True,
         padding: str = "max_length",
-        truncation: Union[bool, str] = False,
+        truncation: bool | str = False,
         stride: int = 0,
         return_tensors: str = "cp",
         return_token_type_ids: bool = False,

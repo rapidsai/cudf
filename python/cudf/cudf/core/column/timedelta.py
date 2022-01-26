@@ -133,7 +133,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def _binary_op_floordiv(
         self, rhs: BinaryOperand
-    ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
+    ) -> tuple[column.ColumnBase, BinaryOperand, DtypeObj]:
         lhs = self  # type: column.ColumnBase
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
@@ -203,7 +203,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def _binary_op_truediv(
         self, rhs: BinaryOperand
-    ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
+    ) -> tuple[column.ColumnBase, BinaryOperand, DtypeObj]:
         lhs = self  # type: column.ColumnBase
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
@@ -229,7 +229,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def binary_operator(
         self, op: str, rhs: BinaryOperand, reflect: bool = False
-    ) -> "column.ColumnBase":
+    ) -> column.ColumnBase:
         lhs, rhs = self, rhs
 
         if op in ("eq", "ne"):
@@ -292,7 +292,7 @@ class TimeDeltaColumn(column.ColumnBase):
             raise TypeError(f"cannot normalize {type(other)}")
 
     @property
-    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
+    def as_numerical(self) -> cudf.core.column.NumericalColumn:
         return cast(
             "cudf.core.column.NumericalColumn",
             column.build_column(
@@ -334,21 +334,21 @@ class TimeDeltaColumn(column.ColumnBase):
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.NumericalColumn":
+    ) -> cudf.core.column.NumericalColumn:
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
         )
 
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DatetimeColumn":
+    ) -> cudf.core.column.DatetimeColumn:
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
-    ) -> "cudf.core.column.StringColumn":
+    ) -> cudf.core.column.StringColumn:
         if format is None:
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%D days %H:%M:%S"
@@ -384,8 +384,8 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "column.ColumnBase":
+        self, q: float | Sequence[float], interpolation: str, exact: bool
+    ) -> column.ColumnBase:
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
         )
@@ -411,7 +411,7 @@ class TimeDeltaColumn(column.ColumnBase):
             unit=self.time_unit,
         )
 
-    def components(self, index=None) -> "cudf.DataFrame":
+    def components(self, index=None) -> cudf.DataFrame:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -505,7 +505,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     @property
-    def days(self) -> "cudf.core.column.NumericalColumn":
+    def days(self) -> cudf.core.column.NumericalColumn:
         """
         Number of days for each element.
 
@@ -518,7 +518,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     @property
-    def seconds(self) -> "cudf.core.column.NumericalColumn":
+    def seconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of seconds (>= 0 and less than 1 day).
 
@@ -541,7 +541,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     @property
-    def microseconds(self) -> "cudf.core.column.NumericalColumn":
+    def microseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of microseconds (>= 0 and less than 1 second).
 
@@ -561,7 +561,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     @property
-    def nanoseconds(self) -> "cudf.core.column.NumericalColumn":
+    def nanoseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
 

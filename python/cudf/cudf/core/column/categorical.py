@@ -110,14 +110,14 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.BaseIndex":
+    def categories(self) -> cudf.core.index.BaseIndex:
         """
         The categories of this categorical.
         """
         return cudf.core.index.as_index(self._column.categories)
 
     @property
-    def codes(self) -> "cudf.Series":
+    def codes(self) -> cudf.Series:
         """
         Return Series of codes as well as the index.
         """
@@ -129,13 +129,13 @@ class CategoricalAccessor(ColumnMethods):
         return cudf.Series(self._column.codes, index=index)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool | None:
         """
         Whether the categories have an ordered relationship.
         """
         return self._column.ordered
 
-    def as_ordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
+    def as_ordered(self, inplace: bool = False) -> SeriesOrIndex | None:
         """
         Set the Categorical to be ordered.
 
@@ -192,7 +192,7 @@ class CategoricalAccessor(ColumnMethods):
             self._column.as_ordered(), inplace=inplace
         )
 
-    def as_unordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
+    def as_unordered(self, inplace: bool = False) -> SeriesOrIndex | None:
         """
         Set the Categorical to be unordered.
 
@@ -262,7 +262,7 @@ class CategoricalAccessor(ColumnMethods):
 
     def add_categories(
         self, new_categories: Any, inplace: bool = False
-    ) -> Optional[SeriesOrIndex]:
+    ) -> SeriesOrIndex | None:
         """
         Add new categories.
 
@@ -347,7 +347,7 @@ class CategoricalAccessor(ColumnMethods):
 
     def remove_categories(
         self, removals: Any, inplace: bool = False,
-    ) -> Optional[SeriesOrIndex]:
+    ) -> SeriesOrIndex | None:
         """
         Remove the specified categories.
 
@@ -441,7 +441,7 @@ class CategoricalAccessor(ColumnMethods):
         ordered: bool = False,
         rename: bool = False,
         inplace: bool = False,
-    ) -> Optional[SeriesOrIndex]:
+    ) -> SeriesOrIndex | None:
         """
         Set the categories to the specified new_categories.
 
@@ -535,7 +535,7 @@ class CategoricalAccessor(ColumnMethods):
         new_categories: Any,
         ordered: bool = False,
         inplace: bool = False,
-    ) -> Optional[SeriesOrIndex]:
+    ) -> SeriesOrIndex | None:
         """
         Reorder categories as specified in new_categories.
 
@@ -624,8 +624,8 @@ class CategoricalColumn(column.ColumnBase):
     """
 
     dtype: cudf.core.dtypes.CategoricalDtype
-    _codes: Optional[NumericalColumn]
-    _children: Tuple[NumericalColumn]
+    _codes: NumericalColumn | None
+    _children: tuple[NumericalColumn]
 
     def __init__(
         self,
@@ -634,7 +634,7 @@ class CategoricalColumn(column.ColumnBase):
         size: int = None,
         offset: int = 0,
         null_count: int = None,
-        children: Tuple["column.ColumnBase", ...] = (),
+        children: tuple[column.ColumnBase, ...] = (),
     ):
 
         if size is None:
@@ -671,8 +671,8 @@ class CategoricalColumn(column.ColumnBase):
             return False
         return self._encode(item) in self.as_numerical
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {}
+    def serialize(self) -> tuple[dict, list]:
+        header: dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"], dtype_frames = self.dtype.serialize()
@@ -729,23 +729,23 @@ class CategoricalColumn(column.ColumnBase):
 
     def _process_values_for_isin(
         self, values: Sequence
-    ) -> Tuple[ColumnBase, ColumnBase]:
+    ) -> tuple[ColumnBase, ColumnBase]:
         lhs = self
         # We need to convert values to same type as self,
         # hence passing dtype=self.dtype
         rhs = cudf.core.column.as_column(values, dtype=self.dtype)
         return lhs, rhs
 
-    def set_base_mask(self, value: Optional[Buffer]):
+    def set_base_mask(self, value: Buffer | None):
         super().set_base_mask(value)
         self._codes = None
 
-    def set_base_children(self, value: Tuple[ColumnBase, ...]):
+    def set_base_children(self, value: tuple[ColumnBase, ...]):
         super().set_base_children(value)
         self._codes = None
 
     @property
-    def children(self) -> Tuple[NumericalColumn]:
+    def children(self) -> tuple[NumericalColumn]:
         if self._children is None:
             codes_column = self.base_children[0]
 
@@ -788,7 +788,7 @@ class CategoricalColumn(column.ColumnBase):
         return cast(cudf.core.column.NumericalColumn, self._codes)
 
     @property
-    def ordered(self) -> Optional[bool]:
+    def ordered(self) -> bool | None:
         return self.dtype.ordered
 
     @ordered.setter
@@ -842,7 +842,7 @@ class CategoricalColumn(column.ColumnBase):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> "column.ColumnBase":
+    ) -> column.ColumnBase:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -858,7 +858,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def slice(
         self, start: int, stop: int, stride: int = None
-    ) -> "column.ColumnBase":
+    ) -> column.ColumnBase:
         codes = self.codes.slice(start, stop, stride)
         return cudf.core.column.build_categorical_column(
             categories=self.categories,
@@ -909,7 +909,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def sort_by_values(
         self, ascending: bool = True, na_position="last"
-    ) -> Tuple[CategoricalColumn, NumericalColumn]:
+    ) -> tuple[CategoricalColumn, NumericalColumn]:
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
@@ -991,7 +991,7 @@ class CategoricalColumn(column.ColumnBase):
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
 
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> "column.ColumnBase":
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> column.ColumnBase:
         return (
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
@@ -1329,7 +1329,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
-    ) -> Optional[ColumnBase]:
+    ) -> ColumnBase | None:
         out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace and isinstance(other_col, CategoricalColumn):
             self._codes = other_col._codes
@@ -1572,7 +1572,7 @@ class CategoricalColumn(column.ColumnBase):
 
 
 def _create_empty_categorical_column(
-    categorical_column: CategoricalColumn, dtype: "CategoricalDtype"
+    categorical_column: CategoricalColumn, dtype: CategoricalDtype
 ) -> CategoricalColumn:
     return column.build_categorical_column(
         categories=column.as_column(dtype.categories),

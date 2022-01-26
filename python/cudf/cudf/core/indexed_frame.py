@@ -135,8 +135,8 @@ class IndexedFrame(Frame):
     """
 
     # mypy can't handle bound type variables as class members
-    _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
-    _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
+    _loc_indexer_type: type[_LocIndexerClass]  # type: ignore
+    _iloc_indexer_type: type[_IlocIndexerClass]  # type: ignore
     _index: cudf.core.index.BaseIndex
 
     def __init__(self, data=None, index=None):
@@ -1486,7 +1486,7 @@ class IndexedFrame(Frame):
 
     def _first_or_last(
         self, offset, idx: int, op: Callable, side: str, slice_func: Callable
-    ) -> "IndexedFrame":
+    ) -> IndexedFrame:
         """Shared code path for ``first`` and ``last``."""
         if not isinstance(self._index, cudf.core.index.DatetimeIndex):
             raise TypeError("'first' only supports a DatetimeIndex index.")

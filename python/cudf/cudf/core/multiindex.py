@@ -255,7 +255,7 @@ class MultiIndex(Frame, BaseIndex):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
+        index: cudf.core.index.BaseIndex | None = None,
         name: Any = None,
     ) -> MultiIndex:
         assert index is None
@@ -781,9 +781,9 @@ class MultiIndex(Frame, BaseIndex):
     def _get_row_major(
         self,
         df: DataFrameOrSeries,
-        row_tuple: Union[
-            numbers.Number, slice, Tuple[Any, ...], List[Tuple[Any, ...]]
-        ],
+        row_tuple: (
+            numbers.Number | slice | tuple[Any, ...] | list[tuple[Any, ...]]
+        ),
     ) -> DataFrameOrSeries:
         if pd.api.types.is_bool_dtype(
             list(row_tuple) if isinstance(row_tuple, tuple) else row_tuple
@@ -805,9 +805,9 @@ class MultiIndex(Frame, BaseIndex):
 
     def _validate_indexer(
         self,
-        indexer: Union[
-            numbers.Number, slice, Tuple[Any, ...], List[Tuple[Any, ...]]
-        ],
+        indexer: (
+            numbers.Number | slice | tuple[Any, ...] | list[tuple[Any, ...]]
+        ),
     ):
         if isinstance(indexer, numbers.Number):
             return

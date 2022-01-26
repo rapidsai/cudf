@@ -39,7 +39,7 @@ class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
     dtype: DtypeObj
-    _accessors: Set[Any] = set()
+    _accessors: set[Any] = set()
     _data: ColumnAccessor
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

@@ -61,7 +61,7 @@ class NumericalColumn(NumericalBaseColumn):
     mask : Buffer, optional
     """
 
-    _nan_count: Optional[int]
+    _nan_count: int | None
 
     def __init__(
         self,
@@ -142,7 +142,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return output
 
-    def unary_operator(self, unaryop: Union[str, Callable]) -> ColumnBase:
+    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
         if callable(unaryop):
             return libcudf.transform.transform(self, unaryop)
 
@@ -179,7 +179,7 @@ class NumericalColumn(NumericalBaseColumn):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
             if isinstance(rhs, cudf.core.column.Decimal128Column):
-                lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
+                lhs: ScalarLike | ColumnBase = self.as_decimal_column(
                     Decimal128Dtype(Decimal128Dtype.MAX_PRECISION, 0)
                 )
                 return lhs.binary_operator(binop, rhs)
@@ -226,7 +226,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> ColumnBase | ScalarLike:
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
@@ -259,7 +259,7 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def int2ip(self) -> "cudf.core.column.StringColumn":
+    def int2ip(self) -> cudf.core.column.StringColumn:
         if self.dtype != cudf.dtype("int64"):
             raise TypeError("Only int64 type can be converted to ip")
 
@@ -267,7 +267,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
-    ) -> "cudf.core.column.StringColumn":
+    ) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
@@ -279,7 +279,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DatetimeColumn":
+    ) -> cudf.core.column.DatetimeColumn:
         return cast(
             "cudf.core.column.DatetimeColumn",
             build_column(
@@ -293,7 +293,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.TimeDeltaColumn":
+    ) -> cudf.core.column.TimeDeltaColumn:
         return cast(
             "cudf.core.column.TimeDeltaColumn",
             build_column(
@@ -307,7 +307,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalBaseColumn":
+    ) -> cudf.core.column.DecimalBaseColumn:
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
@@ -327,7 +327,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _process_values_for_isin(
         self, values: Sequence
-    ) -> Tuple[ColumnBase, ColumnBase]:
+    ) -> tuple[ColumnBase, ColumnBase]:
         lhs = cast("cudf.core.column.ColumnBase", self)
         rhs = as_column(values, nan_as_null=False)
 
@@ -346,7 +346,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> ColumnBase | ScalarLike:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
@@ -642,7 +642,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
-    ) -> "pd.Series":
+    ) -> pd.Series:
         if nullable and self.dtype in np_dtypes_to_pandas_dtypes:
             pandas_nullable_dtype = np_dtypes_to_pandas_dtypes[self.dtype]
             arrow_array = self.to_arrow()
@@ -670,7 +670,7 @@ class NumericalColumn(NumericalBaseColumn):
 
 
 def _normalize_find_and_replace_input(
-    input_column_dtype: DtypeObj, col_to_normalize: Union[ColumnBase, list]
+    input_column_dtype: DtypeObj, col_to_normalize: ColumnBase | list
 ) -> ColumnBase:
     normalized_column = column.as_column(
         col_to_normalize,

@@ -51,7 +51,7 @@ class ColumnMethods:
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> Optional[ParentType]:
+    ) -> ParentType | None:
         ...
 
     def _return_or_inplace(

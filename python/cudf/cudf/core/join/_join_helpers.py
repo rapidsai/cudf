@@ -57,7 +57,7 @@ class _IndexIndexer(_Indexer):
 
 def _match_join_keys(
     lcol: ColumnBase, rcol: ColumnBase, how: str
-) -> Tuple[ColumnBase, ColumnBase]:
+) -> tuple[ColumnBase, ColumnBase]:
     # Casts lcol and rcol to a common dtype for use as join keys. If no casting
     # is necessary, they are returned as is.
 
@@ -118,7 +118,7 @@ def _match_join_keys(
 
 def _match_categorical_dtypes_both(
     lcol: CategoricalColumn, rcol: CategoricalColumn, how: str
-) -> Tuple[ColumnBase, ColumnBase]:
+) -> tuple[ColumnBase, ColumnBase]:
     ltype, rtype = lcol.dtype, rcol.dtype
 
     # when both are ordered and both have the same categories,
