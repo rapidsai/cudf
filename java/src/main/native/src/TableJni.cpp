@@ -2735,20 +2735,19 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(JNIEnv *env, jc
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
-    cudf::column_view *n_part_column = reinterpret_cast<cudf::column_view *>(partition_column);
+    auto n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    auto n_part_column = reinterpret_cast<cudf::column_view *>(partition_column);
+
+    auto [partitioned_table, partition_offsets] =
+        cudf::partition(*n_input_table, *n_part_column, number_of_partitions);
+
+    // for what ever reason partition returns the length of the result at then
+    // end and hash partition/round robin do not, so skip the last entry for
+    // consistency
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
+    std::copy(partition_offsets.begin(), partition_offsets.end() - 1, n_output_offsets.begin());
 
-    auto result = cudf::partition(*n_input_table, *n_part_column, number_of_partitions);
-
-    for (size_t i = 0; i < result.second.size() - 1; i++) {
-      // for what ever reason partition returns the length of the result at then
-      // end and hash partition/round robin do not, so skip the last entry for
-      // consistency
-      n_output_offsets[i] = result.second[i];
-    }
-
-    return convert_table_for_return(env, result.first);
+    return convert_table_for_return(env, partitioned_table);
   }
   CATCH_STD(env, NULL);
 }
@@ -2764,26 +2763,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::hash_id hash_func = static_cast<cudf::hash_id>(hash_function);
-    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    auto hash_func = static_cast<cudf::hash_id>(hash_function);
+    auto n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     cudf::jni::native_jintArray n_columns_to_hash(env, columns_to_hash);
-    cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
-
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
 
-    std::vector<cudf::size_type> columns_to_hash_vec(n_columns_to_hash.size());
-    for (int i = 0; i < n_columns_to_hash.size(); i++) {
-      columns_to_hash_vec[i] = n_columns_to_hash[i];
-    }
+    std::vector<cudf::size_type> columns_to_hash_vec(n_columns_to_hash.begin(),
+                                                     n_columns_to_hash.end());
 
-    std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> result =
+    auto [partitioned_table, partition_offsets] =
         cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions, hash_func);
 
-    for (size_t i = 0; i < result.second.size(); i++) {
-      n_output_offsets[i] = result.second[i];
-    }
+    cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
+    std::copy(partition_offsets.begin(), partition_offsets.end(), n_output_offsets.begin());
 
-    return convert_table_for_return(env, result.first);
+    return convert_table_for_return(env, partitioned_table);
   }
   CATCH_STD(env, NULL);
 }
@@ -2799,15 +2793,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
   try {
     cudf::jni::auto_set_device(env);
     auto n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+
+    auto [partitioned_table, partition_offsets] =
+        cudf::round_robin_partition(*n_input_table, num_partitions, start_partition);
+
     cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
+    std::copy(partition_offsets.begin(), partition_offsets.end(), n_output_offsets.begin());
 
-    auto result = cudf::round_robin_partition(*n_input_table, num_partitions, start_partition);
-
-    for (size_t i = 0; i < result.second.size(); i++) {
-      n_output_offsets[i] = result.second[i];
-    }
-
-    return convert_table_for_return(env, result.first);
+    return convert_table_for_return(env, partitioned_table);
   }
   CATCH_STD(env, NULL);
 }
