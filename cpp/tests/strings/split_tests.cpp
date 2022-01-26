@@ -654,6 +654,11 @@ TEST_F(StringsSplitTest, InvalidParameter)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::rsplit(strings_view, cudf::string_scalar("", false)),
                cudf::logic_error);
+  EXPECT_THROW(cudf::strings::split_record(strings_view, cudf::string_scalar("", false)),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::rsplit_record(strings_view, cudf::string_scalar("", false)),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::split_record_re(strings_view, ""), cudf::logic_error);
   EXPECT_THROW(cudf::strings::partition(strings_view, cudf::string_scalar("", false)),
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::rpartition(strings_view, cudf::string_scalar("", false)),
