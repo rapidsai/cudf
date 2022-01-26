@@ -566,7 +566,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
   JNI_NULL_CHECK(env, delimiter_ptr, "string scalar delimiter is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::strings_column_view scv{*reinterpret_cast<cudf::column_view *>(column_view)};
+    cudf::strings_column_view const scv{*reinterpret_cast<cudf::column_view *>(column_view)};
     auto delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_ptr);
 
     return cudf::jni::convert_table_for_return(env, cudf::strings::split(scv, *delimiter));
@@ -1407,7 +1407,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::strings_column_view strings_column{*reinterpret_cast<cudf::column_view *>(j_view_handle)};
+    cudf::strings_column_view const strings_column{
+        *reinterpret_cast<cudf::column_view *>(j_view_handle)};
     cudf::jni::native_jstring pattern(env, patternObj);
 
     return cudf::jni::convert_table_for_return(
