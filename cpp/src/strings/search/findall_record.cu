@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ struct findall_fn {
   offset_type const* d_offsets;
   string_index_pair* d_indices;
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx)
   {
     if (d_strings.is_null(idx)) { return; }
     auto const d_str = d_strings.element<string_view>(idx);
@@ -97,7 +97,11 @@ std::unique_ptr<column> findall_record(
 
   // Compute null output rows
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_offsets, d_offsets + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
+    d_offsets,
+    d_offsets + strings_count,
+    [] __device__(auto const v) { return v > 0; },
+    stream,
+    mr);
 
   auto const valid_count = strings_count - null_count;
   // Return an empty lists column if there are no valid rows
