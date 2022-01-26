@@ -42,7 +42,7 @@ namespace detail {
 #endif
 
 template <typename T>
-constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits()
+constexpr CUDF_HOST_DEVICE inline std::size_t size_in_bits()
 {
   static_assert(CHAR_BIT == 8, "Size of a byte must be 8 bits.");
   return sizeof(T) * CHAR_BIT;
@@ -58,7 +58,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits()
 /**
  * @brief Returns the index of the word containing the specified bit.
  */
-constexpr CUDA_HOST_DEVICE_CALLABLE size_type word_index(size_type bit_index)
+constexpr CUDF_HOST_DEVICE inline size_type word_index(size_type bit_index)
 {
   return bit_index / detail::size_in_bits<bitmask_type>();
 }
@@ -66,7 +66,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE size_type word_index(size_type bit_index)
 /**
  * @brief Returns the position within a word of the specified bit.
  */
-constexpr CUDA_HOST_DEVICE_CALLABLE size_type intra_word_index(size_type bit_index)
+constexpr CUDF_HOST_DEVICE inline size_type intra_word_index(size_type bit_index)
 {
   return bit_index % detail::size_in_bits<bitmask_type>();
 }
@@ -80,7 +80,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE size_type intra_word_index(size_type bit_ind
  * @param bitmask The bitmask containing the bit to set
  * @param bit_index Index of the bit to set
  */
-CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
+CUDF_HOST_DEVICE inline void set_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
 {
   assert(nullptr != bitmask);
   bitmask[word_index(bit_index)] |= (bitmask_type{1} << intra_word_index(bit_index));
@@ -95,7 +95,7 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bitmask_type* bitmask, size_type b
  * @param bitmask The bitmask containing the bit to clear
  * @param bit_index The index of the bit to clear
  */
-CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
+CUDF_HOST_DEVICE inline void clear_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
 {
   assert(nullptr != bitmask);
   bitmask[word_index(bit_index)] &= ~(bitmask_type{1} << intra_word_index(bit_index));
@@ -109,7 +109,7 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask, size_type
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
  */
-CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask, size_type bit_index)
+CUDF_HOST_DEVICE inline bool bit_is_set(bitmask_type const* bitmask, size_type bit_index)
 {
   assert(nullptr != bitmask);
   return bitmask[word_index(bit_index)] & (bitmask_type{1} << intra_word_index(bit_index));
@@ -125,9 +125,9 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask, size_type
  * @return false  The specified bit is `0`
  * @return `default_value` if `bitmask` is nullptr
  */
-CUDA_HOST_DEVICE_CALLABLE bool bit_value_or(bitmask_type const* bitmask,
-                                            size_type bit_index,
-                                            bool default_value)
+CUDF_HOST_DEVICE inline bool bit_value_or(bitmask_type const* bitmask,
+                                          size_type bit_index,
+                                          bool default_value)
 {
   return bitmask != nullptr ? bit_is_set(bitmask, bit_index) : default_value;
 }
@@ -140,7 +140,7 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_value_or(bitmask_type const* bitmask,
  * @param n The number of least significant bits to set
  * @return A bitmask word with `n` least significant bits set
  */
-constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size_type n)
+constexpr CUDF_HOST_DEVICE inline bitmask_type set_least_significant_bits(size_type n)
 {
   constexpr_assert(0 <= n && n < static_cast<size_type>(detail::size_in_bits<bitmask_type>()));
   return ((bitmask_type{1} << n) - 1);
@@ -154,7 +154,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size
  * @param n The number of most significant bits to set
  * @return A bitmask word with `n` most significant bits set
  */
-constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_most_significant_bits(size_type n)
+constexpr CUDF_HOST_DEVICE inline bitmask_type set_most_significant_bits(size_type n)
 {
   constexpr size_type word_size{detail::size_in_bits<bitmask_type>()};
   constexpr_assert(0 <= n && n < word_size);
