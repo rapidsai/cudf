@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/split/partition.hpp>
 #include <cudf/strings/split/split.hpp>
+#include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
@@ -336,6 +337,40 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"Héllo", "thesé  "}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{}},
                validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, SplitRecordRegex)
+{
+  std::vector<const char*> h_strings{" Héllo thesé", nullptr, "are some  ", "tést String", ""};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
+  auto sv = cudf::strings_column_view(input);
+
+  auto result = cudf::strings::split_record_re(sv, "[eé]");
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected(
+    {LCW{" H", "llo th", "s", ""}, LCW{}, LCW{"ar", " som", "  "}, LCW{"t", "st String"}, LCW{""}},
+    validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, SplitRecordRegexWithMaxSplit)
+{
+  std::vector<const char*> h_strings{" Héllo\tthesé", nullptr, "are\nsome  ", "tést\rString", ""};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
+  auto sv = cudf::strings_column_view(input);
+
+  auto result = cudf::strings::split_record_re(sv, "\\s", 1);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected(
+    {LCW{"", "Héllo\tthesé"}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{""}},
+    validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
