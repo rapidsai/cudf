@@ -15,8 +15,6 @@ def validate_setup():
 
     import warnings
 
-    from cudf.errors import UnsupportedCUDAError
-
     from cuda.cudart import cudaDeviceAttr, cudaError_t
 
     from rmm._cuda.gpu import (
@@ -27,6 +25,8 @@ def validate_setup():
         getDeviceCount,
         runtimeGetVersion,
     )
+
+    from cudf.errors import UnsupportedCUDAError
 
     notify_caller_errors = {
         cudaError_t.cudaErrorInitializationError,
@@ -132,14 +132,11 @@ def validate_setup():
             pass
         else:
             raise UnsupportedCUDAError(
-                f"Please update your NVIDIA GPU Driver to support CUDA "
-                f"Runtime.\n"
-                f"Detected CUDA Runtime version : {cuda_runtime_version}"
-                f"\n"
-                f"Latest version of CUDA supported by current "
+                "Please update your NVIDIA GPU Driver to support CUDA "
+                "Runtime.\n"
+                f"Detected CUDA Runtime version : {cuda_runtime_version}\n"
+                "Latest version of CUDA supported by current "
                 f"NVIDIA GPU Driver : {cuda_driver_supported_rt_version}"
             )
-
     else:
-
         warnings.warn("No NVIDIA GPU detected")
