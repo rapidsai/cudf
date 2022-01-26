@@ -395,8 +395,8 @@ public:
 
   T **data() { return reinterpret_cast<T **>(wrapped.data()); }
 
-  T const *begin() const { return data(); }
-  T const *end() const { return data() + size(); }
+  T *const *begin() const { return data(); }
+  T *const *end() const { return data() + size(); }
 
   const jlongArray get_jArray() const { return wrapped.get_jArray(); }
 
