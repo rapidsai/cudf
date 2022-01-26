@@ -69,7 +69,9 @@ def generate_cache_key(frame, func: Callable):
     - The existence of the input columns masks
     """
     return (
-        *cudautils.make_cache_key(func, all_dtypes_from_frame(frame).values()),
+        *cudautils.make_cache_key(
+            func, tuple(all_dtypes_from_frame(frame).values())
+        ),
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),
     )
