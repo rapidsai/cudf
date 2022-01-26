@@ -20,6 +20,7 @@ import pyarrow as pa
 from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
+from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
@@ -33,7 +34,6 @@ from cudf.api.types import (
     is_datetime_dtype,
     is_dict_like,
     is_dtype_equal,
-    is_integer,
     is_list_dtype,
     is_list_like,
     is_numeric_dtype,
@@ -2653,7 +2653,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         """
         if not is_integer(periods):
-            if not (isinstance(periods, float) and isinstance(periods, int)):
+            if not (is_float(periods) and periods.is_integer()):
                 raise ValueError("periods must be an integer")
             periods = int(periods)
 
