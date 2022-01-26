@@ -262,17 +262,15 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
                            cudaMemcpyHostToDevice,
                            stream.value()));
 
-  auto cp_metadata = detail::get_codepoint_metadata(stream);
-  result.cp_metadata =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT32},
-                                   static_cast<cudf::size_type>(cp_metadata.size()),
-                                   cp_metadata.release());
+  auto cp_metadata            = detail::get_codepoint_metadata(stream);
+  auto const cp_metadata_size = static_cast<cudf::size_type>(cp_metadata.size());
+  result.cp_metadata          = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::UINT32}, cp_metadata_size, cp_metadata.release());
 
-  auto aux_cp_table = detail::get_aux_codepoint_data(stream);
-  result.aux_cp_table =
-    std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
-                                   static_cast<cudf::size_type>(aux_cp_table.size()),
-                                   aux_cp_table.release());
+  auto aux_cp_table            = detail::get_aux_codepoint_data(stream);
+  auto const aux_cp_table_size = static_cast<cudf::size_type>(aux_cp_table.size());
+  result.aux_cp_table          = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::UINT64}, aux_cp_table_size, aux_cp_table.release());
 
   return std::make_unique<hashed_vocabulary>(std::move(result));
 }
