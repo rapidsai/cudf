@@ -1412,22 +1412,14 @@ class MultiIndex(Frame, BaseIndex):
         )
 
     def memory_usage(self, deep=False):
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-
-        n = 0
-        for col in self._data.columns:
-            n += col.memory_usage()
+        usage = sum(super().memory_usage(deep=deep).values())
         if self.levels:
             for level in self.levels:
-                n += level.memory_usage(deep=deep)
+                usage += level.memory_usage(deep=deep)
         if self.codes:
             for col in self.codes._data.columns:
-                n += col.memory_usage()
-        return n
+                usage += col.memory_usage()
+        return usage
 
     def difference(self, other, sort=None):
         if hasattr(other, "to_pandas"):
