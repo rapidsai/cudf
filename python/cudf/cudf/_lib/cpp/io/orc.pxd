@@ -37,7 +37,6 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
         void set_decimal_cols_as_float(vector[string] val) except+
-        void enable_decimal128(bool val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
