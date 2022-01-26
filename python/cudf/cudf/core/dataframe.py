@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division
+from __future__ import annotations
 
 import functools
 import inspect
@@ -4347,7 +4347,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 dtype = self.dtypes.iloc[i]
                 col = pprint_thing(col)
 
-                line_no = _put_str(" {num}".format(num=i), space_num)
+                line_no = _put_str(f" {i}", space_num)
                 count = ""
                 if show_counts:
                     count = counts[i]
@@ -5694,9 +5694,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if issubclass(dtype.type, e_dtype):
                         exclude_subtypes.add(dtype.type)
 
-        include_all = set(
-            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
-        )
+        include_all = {cudf_dtype_from_pydata_dtype(d) for d in self.dtypes}
 
         if include:
             inclusion = include_all & include_subtypes
@@ -6416,8 +6414,8 @@ def _align_indices(lhs, rhs):
         lhs_out = DataFrame(index=df.index)
         rhs_out = DataFrame(index=df.index)
         common = set(lhs.columns) & set(rhs.columns)
-        common_x = set(["{}_x".format(x) for x in common])
-        common_y = set(["{}_y".format(x) for x in common])
+        common_x = {f"{x}_x" for x in common}
+        common_y = {f"{x}_y" for x in common}
         for col in df.columns:
             if col in common_x:
                 lhs_out[col[:-2]] = df[col]

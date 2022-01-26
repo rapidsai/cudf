@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 
-class IOFuzz(object):
+class IOFuzz:
     def __init__(
         self,
         dirs=None,
@@ -59,7 +59,7 @@ class IOFuzz(object):
         self._current_buffer = None
 
     def _load_params(self, path):
-        with open(path, "r") as f:
+        with open(path) as f:
             params = json.load(f)
         self._inputs.append(params)
 

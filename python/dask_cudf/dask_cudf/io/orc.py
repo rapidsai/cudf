@@ -79,7 +79,9 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
         ex = set(columns) - set(schema)
         if ex:
             raise ValueError(
-                "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
+                "Requested columns ({}) not in schema ({})".format(
+                    ex, set(schema)
+                )
             )
     else:
         columns = list(schema)

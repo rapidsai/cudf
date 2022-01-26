@@ -33,7 +33,7 @@ output_fmt = args.fmt
 
 # build a map of the log entries
 entries = {}
-with open(log_file, "r") as log:
+with open(log_file) as log:
     for line in log:
         entry = line.split()
         if len(entry) > 4:

@@ -845,7 +845,7 @@ def test_dataframe_to_string_wide(monkeypatch):
     # Test basic
     df = cudf.DataFrame()
     for i in range(100):
-        df["a{}".format(i)] = list(range(3))
+        df[f"a{i}"] = list(range(3))
     pd.options.display.max_columns = 0
     got = df.to_string()
 
@@ -1163,7 +1163,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     gdf = cudf.DataFrame()
     keycols = []
     for i in range(nkeys):
-        keyname = "key{}".format(i)
+        keyname = f"key{i}"
         gdf[keyname] = np.random.randint(0, 7 - i, nrows)
         keycols.append(keyname)
     gdf["val1"] = np.random.randint(0, nrows * 2, nrows)

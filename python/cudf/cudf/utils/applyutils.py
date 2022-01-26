@@ -125,7 +125,7 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
     return out_mask
 
 
-class ApplyKernelCompilerBase(object):
+class ApplyKernelCompilerBase:
     def __init__(
         self, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
     ):
@@ -251,7 +251,7 @@ def row_wise_kernel({args}):
                 srcidx.format(a=a, start=start, stop=stop, stride=stride)
             )
 
-    body.append("inner({})".format(args))
+    body.append(f"inner({args})")
 
     indented = ["{}{}".format(" " * 4, ln) for ln in body]
     # Finalize source
@@ -307,7 +307,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     slicedargs = {}
     for a in argnames:
         if a not in extras:
-            slicedargs[a] = "{}[start:stop]".format(a)
+            slicedargs[a] = f"{a}[start:stop]"
         else:
             slicedargs[a] = str(a)
     body.append(
@@ -359,4 +359,4 @@ def _load_cache_or_make_chunk_wise_kernel(func, *args, **kwargs):
 
 def _mangle_user(name):
     """Mangle user variable name"""
-    return "__user_{}".format(name)
+    return f"__user_{name}"

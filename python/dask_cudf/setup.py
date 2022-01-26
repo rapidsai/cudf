@@ -34,7 +34,7 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
     cuda_version = None
 
     with open(
-        os.path.join(cuda_include_dir, "cuda.h"), "r", encoding="utf-8"
+        os.path.join(cuda_include_dir, "cuda.h"), encoding="utf-8"
     ) as f:
         for line in f.readlines():
             if re.search(r"#define CUDA_VERSION ", line) is not None:

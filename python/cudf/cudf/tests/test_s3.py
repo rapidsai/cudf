@@ -147,7 +147,7 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             use_python_file_object=False,
@@ -157,7 +157,7 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     # Use Arrow PythonFile object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             use_python_file_object=True,
@@ -174,7 +174,7 @@ def test_read_csv_arrow_nativefile(s3_base, s3so, pdf):
         fs = pa_fs.S3FileSystem(
             endpoint_override=s3so["client_kwargs"]["endpoint_url"],
         )
-        with fs.open_input_file("{}/{}".format(bname, fname)) as fil:
+        with fs.open_input_file(f"{bname}/{fname}") as fil:
             got = cudf.read_csv(fil)
 
     assert_eq(pdf, got)
@@ -193,7 +193,7 @@ def test_read_csv_byte_range(
     # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             storage_options=s3so,
             byte_range=(74, 73),
             bytes_per_thread=bytes_per_thread,
@@ -213,15 +213,15 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
     gdf = cudf.from_pandas(pdf)
     with s3_context(s3_base=s3_base, bucket=bname) as s3fs:
         gdf.to_csv(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             index=False,
             chunksize=chunksize,
             storage_options=s3so,
         )
-        assert s3fs.exists("s3://{}/{}".format(bname, fname))
+        assert s3fs.exists(f"s3://{bname}/{fname}")
 
         # TODO: Update to use `storage_options` from pandas v1.2.0
-        got = pd.read_csv(s3fs.open("s3://{}/{}".format(bname, fname)))
+        got = pd.read_csv(s3fs.open(f"s3://{bname}/{fname}"))
 
     assert_eq(pdf, got)
 
@@ -248,7 +248,7 @@ def test_read_parquet(
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got1 = cudf.read_parquet(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             open_file_options=(
                 {"precache_options": {"method": precache}}
                 if use_python_file_object
@@ -266,9 +266,9 @@ def test_read_parquet(
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         fs = get_fs_token_paths(
-            "s3://{}/{}".format(bname, fname), storage_options=s3so
+            f"s3://{bname}/{fname}", storage_options=s3so
         )[0]
-        with fs.open("s3://{}/{}".format(bname, fname), mode="rb") as f:
+        with fs.open(f"s3://{bname}/{fname}", mode="rb") as f:
             got2 = cudf.read_parquet(
                 f,
                 bytes_per_thread=bytes_per_thread,
@@ -297,7 +297,7 @@ def test_read_parquet_ext(
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got1 = cudf.read_parquet(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             footer_sample_size=3200,
@@ -326,7 +326,7 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
         fs = pa_fs.S3FileSystem(
             endpoint_override=s3so["client_kwargs"]["endpoint_url"],
         )
-        with fs.open_input_file("{}/{}".format(bname, fname)) as fil:
+        with fs.open_input_file(f"{bname}/{fname}") as fil:
             got = cudf.read_parquet(fil, columns=columns)
 
     expect = pdf[columns] if columns else pdf
@@ -343,7 +343,7 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
     filters = [("String", "==", "Omega")]
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_parquet(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             storage_options=s3so,
             filters=filters,
             open_file_options={"precache_options": {"method": precache}},
@@ -360,13 +360,13 @@ def test_write_parquet(s3_base, s3so, pdf, partition_cols):
     gdf = cudf.from_pandas(pdf)
     with s3_context(s3_base=s3_base, bucket=bname) as s3fs:
         gdf.to_parquet(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             partition_cols=partition_cols,
             storage_options=s3so,
         )
-        assert s3fs.exists("s3://{}/{}".format(bname, fname))
+        assert s3fs.exists(f"s3://{bname}/{fname}")
 
-        got = pd.read_parquet(s3fs.open("s3://{}/{}".format(bname, fname)))
+        got = pd.read_parquet(s3fs.open(f"s3://{bname}/{fname}"))
 
     assert_eq(pdf, got)
 
@@ -383,7 +383,7 @@ def test_read_json(s3_base, s3so):
 
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_json(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             engine="cudf",
             orient="records",
             lines=True,
@@ -407,7 +407,7 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
 
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_orc(
-            "s3://{}/{}".format(bname, fname),
+            f"s3://{bname}/{fname}",
             columns=columns,
             storage_options=s3so,
             use_python_file_object=use_python_file_object,
@@ -432,7 +432,7 @@ def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
         fs = pa_fs.S3FileSystem(
             endpoint_override=s3so["client_kwargs"]["endpoint_url"],
         )
-        with fs.open_input_file("{}/{}".format(bname, fname)) as fil:
+        with fs.open_input_file(f"{bname}/{fname}") as fil:
             got = cudf.read_orc(fil, columns=columns)
 
     if columns:
@@ -445,10 +445,10 @@ def test_write_orc(s3_base, s3so, pdf):
     bname = "orc"
     gdf = cudf.from_pandas(pdf)
     with s3_context(s3_base=s3_base, bucket=bname) as s3fs:
-        gdf.to_orc("s3://{}/{}".format(bname, fname), storage_options=s3so)
-        assert s3fs.exists("s3://{}/{}".format(bname, fname))
+        gdf.to_orc(f"s3://{bname}/{fname}", storage_options=s3so)
+        assert s3fs.exists(f"s3://{bname}/{fname}")
 
-        with s3fs.open("s3://{}/{}".format(bname, fname)) as f:
+        with s3fs.open(f"s3://{bname}/{fname}") as f:
             got = pa.orc.ORCFile(f).read().to_pandas()
 
     assert_eq(pdf, got)

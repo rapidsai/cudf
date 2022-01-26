@@ -85,8 +85,7 @@ def make_frame(
 
 
 def get_nelem():
-    for elem in [2, 3, 1000]:
-        yield elem
+    yield from [2, 3, 1000]
 
 
 @pytest.fixture
