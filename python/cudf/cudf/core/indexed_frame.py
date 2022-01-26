@@ -1321,9 +1321,11 @@ class IndexedFrame(Frame):
             *all* null values.
         subset : list, optional
             List of columns to consider when dropping rows.
-        thresh: int, optional
+        thresh : int, optional
             If specified, then drops every row containing
             less than `thresh` non-null values.
+        drop_nan: bool
+            `nan` is also considered as `NA`
         """
         if subset is None:
             subset = self._column_names
@@ -1341,17 +1343,20 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        if drop_nan:
-            data_columns = [
+        data_columns = (
+            [
                 col.nans_to_nulls()
                 if isinstance(col, cudf.core.column.NumericalColumn)
                 else col
                 for col in self._columns
             ]
+            if drop_nan
+            else self._columns
+        )
 
         return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
-                list(self._index._data.columns) + data_columns,
+                [*self._index._data.columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(
                     subset, offset_by_index_columns=True
