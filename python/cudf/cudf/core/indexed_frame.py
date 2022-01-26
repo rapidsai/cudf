@@ -1351,12 +1351,12 @@ class IndexedFrame(Frame):
                 for col in self._columns
             ]
             if drop_nan
-            else list(self._columns)
+            else self._columns
         )
 
         return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
-                list(self._index._data.columns) + data_columns,
+                [*self._index._data.columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(
                     subset, offset_by_index_columns=True
