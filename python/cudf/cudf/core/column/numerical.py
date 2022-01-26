@@ -217,6 +217,13 @@ class NumericalColumn(NumericalBaseColumn):
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 
+    def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
+        # Only floats can contain nan.
+        if self.dtype.kind != "f" or self.nan_count == 0:
+            return self
+        newmask = libcudf.transform.nans_to_nulls(self)
+        return self.set_mask(newmask)
+
     def normalize_binop_value(
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:
