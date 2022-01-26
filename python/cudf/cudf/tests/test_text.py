@@ -807,4 +807,4 @@ def test_read_text_byte_range(datadir):
 
     actual = cudf.concat([actual_0, actual_1, actual_2])
 
-    assert_eq(expected, actual, check_index_type=False)
+    assert_eq(expected.reset_index(drop=True), actual.reset_index(drop=True))
