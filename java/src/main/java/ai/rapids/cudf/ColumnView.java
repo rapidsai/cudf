@@ -2331,13 +2331,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null string entries return corresponding null output columns.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter) {
+  public final Table stringSplit(Scalar delimiter, int maxSplit) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
+  }
+
+  
+  /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public final Table stringSplit(Scalar delimiter) {
+    return stringSplit(delimiter, -1);
   }
 
   /**
@@ -2349,7 +2364,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Table stringSplit() {
     try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplit(emptyString);
+      return stringSplit(emptyString, -1);
     }
   }
 
@@ -2362,7 +2377,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
   public final ColumnVector stringSplitRecord(int maxSplit) {
     try (Scalar emptyString = Scalar.fromString("")) {
@@ -2384,7 +2399,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * string using the specified delimiter.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
   public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
@@ -3490,8 +3505,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * delimiter.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
-  private static native long[] stringSplit(long columnView, long delimiter);
+  private static native long[] stringSplit(long columnView, long delimiter, int maxSplit);
 
   private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
 
