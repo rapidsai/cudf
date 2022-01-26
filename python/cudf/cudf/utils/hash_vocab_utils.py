@@ -79,9 +79,7 @@ def _pick_initial_a_b(data, max_constant, init_bins):
         longest = _new_bin_length(_longest_bin_length(bins))
 
         if score <= max_constant and longest <= MAX_SIZE_FOR_INITIAL_BIN:
-            print(
-                f"Attempting to build table using {score:.6f}n space"
-            )
+            print(f"Attempting to build table using {score:.6f}n space")
             print(f"Longest bin was {longest}")
             break
 

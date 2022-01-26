@@ -265,9 +265,9 @@ def test_read_parquet(
     # Check fsspec file-object handling
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
-        fs = get_fs_token_paths(
-            f"s3://{bname}/{fname}", storage_options=s3so
-        )[0]
+        fs = get_fs_token_paths(f"s3://{bname}/{fname}", storage_options=s3so)[
+            0
+        ]
         with fs.open(f"s3://{bname}/{fname}", mode="rb") as f:
             got2 = cudf.read_parquet(
                 f,
