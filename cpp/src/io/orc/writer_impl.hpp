@@ -62,14 +62,14 @@ struct orc_table_view {
   rmm::device_uvector<uint32_t> d_string_column_indices;
 
   auto num_columns() const noexcept { return columns.size(); }
-  size_type num_rows() const noexcept;
+  [[nodiscard]] size_type num_rows() const noexcept;
   auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
   auto& column(uint32_t idx) { return columns.at(idx); }
-  auto const& column(uint32_t idx) const { return columns.at(idx); }
+  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
 
   auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
-  auto const& string_column(uint32_t idx) const
+  [[nodiscard]] auto const& string_column(uint32_t idx) const
   {
     return columns.at(string_column_indices.at(idx));
   }
@@ -85,8 +85,8 @@ struct stripe_rowgroups {
   uint32_t first;  // first rowgroup in the stripe
   uint32_t size;   // number of rowgroups in the stripe
   stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
-  auto cbegin() const { return thrust::make_counting_iterator(first); }
-  auto cend() const { return thrust::make_counting_iterator(first + size); }
+  [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
+  [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
 
 /**
@@ -123,10 +123,10 @@ class orc_streams {
     std::vector<size_t> offsets;
     size_t non_rle_data_size = 0;
     size_t rle_data_size     = 0;
-    auto data_size() const { return non_rle_data_size + rle_data_size; }
+    [[nodiscard]] auto data_size() const { return non_rle_data_size + rle_data_size; }
   };
-  orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
-                                     size_t num_rowgroups) const;
+  [[nodiscard]] orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
+                                                   size_t num_rowgroups) const;
 
   operator std::vector<Stream> const &() const { return streams; }
 
@@ -284,17 +284,24 @@ class writer::impl {
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
+  struct encoded_statistics {
+    std::vector<ColStatsBlob> rowgroup_level;
+    std::vector<ColStatsBlob> stripe_level;
+    std::vector<ColStatsBlob> file_level;
+  };
+
   /**
-   * @brief Returns per-stripe and per-file column statistics encoded
-   * in ORC protobuf format.
+   * @brief Returns column statistics encoded in ORC protobuf format.
    *
+   * @param statistics_freq Frequency of statistics to be included in the output file
    * @param orc_table Table information to be written
    * @param columns List of columns
    * @param segmentation stripe and rowgroup ranges
    * @return The statistic blobs
    */
-  std::vector<std::vector<uint8_t>> gather_statistic_blobs(orc_table_view const& orc_table,
-                                                           file_segmentation const& segmentation);
+  encoded_statistics gather_statistic_blobs(statistics_freq statistics_freq,
+                                            orc_table_view const& orc_table,
+                                            file_segmentation const& segmentation);
 
   /**
    * @brief Writes the specified column's row index stream.
@@ -302,10 +309,11 @@ class writer::impl {
    * @param[in] stripe_id Stripe's identifier
    * @param[in] stream_id Stream identifier (column id + 1)
    * @param[in] columns List of columns
-   * @param[in] rowgroups_range Indexes of rowgroups in the stripe
+   * @param[in] segmentation stripe and rowgroup ranges
    * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in] strm_desc List of stream descriptors
    * @param[in] comp_out Output status for compressed streams
+   * @param[in] rg_stats row group level statistics
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
    * @param[in,out] pbw Protobuf writer
@@ -313,10 +321,11 @@ class writer::impl {
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
                           host_span<orc_column_view const> columns,
-                          stripe_rowgroups const& rowgroups_range,
+                          file_segmentation const& segmentation,
                           host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                           host_2dspan<gpu::StripeStream const> strm_desc,
                           host_span<gpu_inflate_status_s const> comp_out,
+                          std::vector<ColStatsBlob> const& rg_stats,
                           StripeInformation* stripe,
                           orc_streams* streams,
                           ProtobufWriter* pbw);
@@ -356,8 +365,8 @@ class writer::impl {
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
-  bool enable_dictionary_ = true;
-  bool enable_statistics_ = true;
+  bool enable_dictionary_     = true;
+  statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;
 
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter ff;

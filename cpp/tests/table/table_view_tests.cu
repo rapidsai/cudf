@@ -123,7 +123,7 @@ TEST_F(TableViewTest, SelectOutOfBounds)
   fixed_width_column_wrapper<int64_t> col4{{4, 5, 6, 7}};
   cudf::table_view t{{col1, col2}};
 
-  EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
+  EXPECT_THROW((void)t.select({2, 3, 4}), std::out_of_range);
 }
 
 TEST_F(TableViewTest, SelectNoColumns)
