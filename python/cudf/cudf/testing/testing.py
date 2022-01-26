@@ -239,7 +239,7 @@ def assert_index_equal(
     right,
     exact="equiv",
     check_names: bool = True,
-    check_less_precise: bool | int = False,
+    check_less_precise: Union[bool, int] = False,
     check_exact: bool = True,
     check_categorical: bool = True,
     check_order: bool = True,

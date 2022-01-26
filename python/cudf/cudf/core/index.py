@@ -60,8 +60,10 @@ T = TypeVar("T", bound="Frame")
 
 
 def _lexsorted_equal_range(
-    idx: GenericIndex | cudf.MultiIndex, key_as_table: Frame, is_sorted: bool,
-) -> tuple[int, int, ColumnBase | None]:
+    idx: Union[GenericIndex, cudf.MultiIndex],
+    key_as_table: Frame,
+    is_sorted: bool,
+) -> Tuple[int, int, Optional[ColumnBase]]:
     """Get equal range for key in lexicographically sorted index. If index
     is not sorted when called, a sort will take place and `sort_inds` is
     returned. Otherwise `None` is returned in that position.
@@ -92,8 +94,8 @@ def _index_from_data(data: MutableMapping, name: Any = None):
 
         if isinstance(values, NumericalColumn):
             try:
-                index_class_type: type[
-                    GenericIndex | cudf.MultiIndex
+                index_class_type: Type[
+                    Union[GenericIndex, cudf.MultiIndex]
                 ] = _dtype_to_index[values.dtype.type]
             except KeyError:
                 index_class_type = GenericIndex
@@ -113,7 +115,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
 
 
 def _index_from_columns(
-    columns: list[cudf.core.column.ColumnBase], name: Any = None
+    columns: List[cudf.core.column.ColumnBase], name: Any = None
 ):
     """Construct an index from ``columns``, with levels named 0, 1, 2..."""
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
@@ -1211,7 +1213,7 @@ class NumericIndex(GenericIndex):
     """
 
     # Subclasses must define the dtype they are associated with.
-    _dtype: None | type[np.number] = None
+    _dtype: Union[None, Type[np.number]] = None
 
     def __init__(self, data=None, dtype=None, copy=False, name=None):
 
@@ -2244,7 +2246,7 @@ class CategoricalIndex(GenericIndex):
 
 def interval_range(
     start=None, end=None, periods=None, freq=None, name=None, closed="right",
-) -> IntervalIndex:
+) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
 
@@ -2591,7 +2593,7 @@ def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     )
 
 
-_dtype_to_index: dict[Any, type[NumericIndex]] = {
+_dtype_to_index: Dict[Any, Type[NumericIndex]] = {
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
@@ -2702,7 +2704,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
             return cudf.MultiIndex.from_arrow(obj)
 
 
-def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
+def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
     """
     An internal Utility function to concat RangeIndex objects.
     """
@@ -2742,7 +2744,7 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
     return RangeIndex(start, stop, step)
 
 
-def _extended_gcd(a: int, b: int) -> tuple[int, int, int]:
+def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
     """
     Extended Euclidean algorithms to solve Bezout's identity:
        a*x + b*y = gcd(x, y)

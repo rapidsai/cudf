@@ -65,11 +65,11 @@ class Frame:
         A Frame representing the (optional) index columns.
     """
 
-    _data: ColumnAccessor
+    _data: "ColumnAccessor"
     # TODO: Once all dependence on Frame having an index is removed, this
     # attribute should be moved to IndexedFrame.
-    _index: cudf.core.index.BaseIndex | None
-    _names: list | None
+    _index: Optional[cudf.core.index.BaseIndex]
+    _names: Optional[List]
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -90,11 +90,11 @@ class Frame:
         return len(self._data.columns[0])
 
     @property
-    def _column_names(self) -> list[Any]:  # TODO: List[str]?
+    def _column_names(self) -> List[Any]:  # TODO: List[str]?
         return self._data.names
 
     @property
-    def _index_names(self) -> list[Any]:  # TODO: List[str]?
+    def _index_names(self) -> List[Any]:  # TODO: List[str]?
         # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
         # by returning an empty list where one is not expected.
         return (
@@ -104,7 +104,7 @@ class Frame:
         )
 
     @property
-    def _columns(self) -> list[Any]:  # TODO: List[Column]?
+    def _columns(self) -> List[Any]:  # TODO: List[Column]?
         return self._data.columns
 
     def serialize(self):
@@ -126,7 +126,7 @@ class Frame:
     def _from_data(
         cls,
         data: MutableMapping,
-        index: cudf.core.index.BaseIndex | None = None,
+        index: Optional[cudf.core.index.BaseIndex] = None,
     ):
         obj = cls.__new__(cls)
         Frame.__init__(obj, data, index)
@@ -135,9 +135,9 @@ class Frame:
     @classmethod
     def _from_columns(
         cls,
-        columns: list[ColumnBase],
-        column_names: list[str],
-        index_names: list[str] | None = None,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` object from a list of columns.
 
@@ -165,9 +165,9 @@ class Frame:
 
     def _from_columns_like_self(
         self,
-        columns: list[ColumnBase],
-        column_names: list[str],
-        index_names: list[str] | None = None,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
 
@@ -181,7 +181,7 @@ class Frame:
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
-    ) -> Frame | None:
+    ) -> Optional[Frame]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -616,9 +616,9 @@ class Frame:
         self,
         get_column_values: Callable,
         make_empty_matrix: Callable,
-        dtype: Dtype | None = None,
+        dtype: Union[Dtype, None] = None,
         na_value=None,
-    ) -> cupy.ndarray | np.ndarray:
+    ) -> Union[cupy.ndarray, np.ndarray]:
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
@@ -650,7 +650,10 @@ class Frame:
         return matrix
 
     def to_cupy(
-        self, dtype: Dtype | None = None, copy: bool = False, na_value=None,
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = False,
+        na_value=None,
     ) -> cupy.ndarray:
         """Convert the Frame to a CuPy array.
 
@@ -681,7 +684,10 @@ class Frame:
         )
 
     def to_numpy(
-        self, dtype: Dtype | None = None, copy: bool = True, na_value=None,
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = True,
+        na_value=None,
     ) -> np.ndarray:
         """Convert the Frame to a NumPy array.
 
@@ -3434,7 +3440,7 @@ class Frame:
     @classmethod
     def _colwise_binop(
         cls,
-        operands: dict[str | None, tuple[ColumnBase, Any, bool, Any]],
+        operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
         fn: str,
     ):
         """Implement binary ops between two frame-like objects.
@@ -6432,8 +6438,8 @@ class Frame:
 
 
 def _get_replacement_values_for_columns(
-    to_replace: Any, value: Any, columns_dtype_map: dict[Any, Any]
-) -> tuple[dict[Any, bool], dict[Any, Any], dict[Any, Any]]:
+    to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
+) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
     """
     Returns a per column mapping for the values to be replaced, new
     values to be replaced with and if all the values are empty.
@@ -6458,9 +6464,9 @@ def _get_replacement_values_for_columns(
         A dict mapping of all columns and the corresponding values
         to be replaced with.
     """
-    to_replace_columns: dict[Any, Any] = {}
-    values_columns: dict[Any, Any] = {}
-    all_na_columns: dict[Any, Any] = {}
+    to_replace_columns: Dict[Any, Any] = {}
+    values_columns: Dict[Any, Any] = {}
+    all_na_columns: Dict[Any, Any] = {}
 
     if is_scalar(to_replace) and is_scalar(value):
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
@@ -6597,8 +6603,8 @@ def _is_series(obj):
 
 def _drop_rows_by_labels(
     obj: DataFrameOrSeries,
-    labels: ColumnLike | abc.Iterable | str,
-    level: int | str,
+    labels: Union[ColumnLike, abc.Iterable, str],
+    level: Union[int, str],
     errors: str,
 ) -> DataFrameOrSeries:
     """Remove rows specified by `labels`. If `errors=True`, an error is raised

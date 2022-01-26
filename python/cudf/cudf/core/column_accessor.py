@@ -94,13 +94,13 @@ class ColumnAccessor(MutableMapping):
         may be passe.
     """
 
-    _data: dict[Any, ColumnBase]
+    _data: "Dict[Any, ColumnBase]"
     multiindex: bool
-    _level_names: tuple[Any, ...]
+    _level_names: Tuple[Any, ...]
 
     def __init__(
         self,
-        data: MutableMapping | ColumnAccessor = None,
+        data: Union[MutableMapping, ColumnAccessor] = None,
         multiindex: bool = False,
         level_names=None,
     ):
@@ -137,7 +137,7 @@ class ColumnAccessor(MutableMapping):
     @classmethod
     def _create_unsafe(
         cls,
-        data: dict[Any, ColumnBase],
+        data: Dict[Any, ColumnBase],
         multiindex: bool = False,
         level_names=None,
     ) -> ColumnAccessor:
@@ -177,7 +177,7 @@ class ColumnAccessor(MutableMapping):
         return f"{type_info}\n{column_info}"
 
     @property
-    def level_names(self) -> tuple[Any, ...]:
+    def level_names(self) -> Tuple[Any, ...]:
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
@@ -206,11 +206,11 @@ class ColumnAccessor(MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
-    def names(self) -> tuple[Any, ...]:
+    def names(self) -> Tuple[Any, ...]:
         return tuple(self.keys())
 
     @cached_property
-    def columns(self) -> tuple[ColumnBase, ...]:
+    def columns(self) -> Tuple[ColumnBase, ...]:
         return tuple(self.values())
 
     @cached_property
@@ -463,7 +463,7 @@ class ColumnAccessor(MutableMapping):
         return key + (pad_value,) * (self.nlevels - len(key))
 
     def rename_levels(
-        self, mapper: Mapping[Any, Any] | Callable, level: int | None
+        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
     ) -> ColumnAccessor:
         """
         Rename the specified levels of the given ColumnAccessor

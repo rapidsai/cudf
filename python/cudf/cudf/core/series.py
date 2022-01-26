@@ -156,7 +156,7 @@ class _SeriesLocIndexer(_FrameIndexer):
     Label-based selection
     """
 
-    def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
+    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -281,7 +281,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If ``False``, leaves ``np.nan`` values as is.
     """
 
-    _accessors: set[Any] = set()
+    _accessors: Set[Any] = set()
     _loc_indexer_type = _SeriesLocIndexer
     _iloc_indexer_type = _SeriesIlocIndexer
 
@@ -450,7 +450,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: BaseIndex | None = None,
+        index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
         """
@@ -1049,7 +1049,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             kwargs,
         )
 
-    def map(self, arg, na_action=None) -> Series:
+    def map(self, arg, na_action=None) -> "Series":
         """
         Map values of Series according to input correspondence.
 

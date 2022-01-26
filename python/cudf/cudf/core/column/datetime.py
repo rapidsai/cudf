@@ -193,7 +193,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
-    ) -> cudf.Series:
+    ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
@@ -264,7 +264,7 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError(f"cannot normalize {type(other)}")
 
     @property
-    def as_numerical(self) -> cudf.core.column.NumericalColumn:
+    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn",
             column.build_column(
@@ -311,21 +311,21 @@ class DatetimeColumn(column.ColumnBase):
 
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.TimeDeltaColumn:
+    ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
             f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.NumericalColumn:
+    ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
         )
 
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
-    ) -> cudf.core.column.StringColumn:
+    ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
@@ -370,7 +370,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def quantile(
-        self, q: float | Sequence[float], interpolation: str, exact: bool
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
@@ -380,11 +380,14 @@ class DatetimeColumn(column.ColumnBase):
         return result.astype(self.dtype)
 
     def binary_operator(
-        self, op: str, rhs: ColumnBase | cudf.Scalar, reflect: bool = False,
+        self,
+        op: str,
+        rhs: Union[ColumnBase, "cudf.Scalar"],
+        reflect: bool = False,
     ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
             return rhs._datetime_binop(self, op, reflect=reflect)
-        lhs: ScalarLike | ColumnBase = self
+        lhs: Union[ScalarLike, ColumnBase] = self
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = cudf.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):

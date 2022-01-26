@@ -257,7 +257,7 @@ class StringMethods(ColumnMethods):
     @overload
     def cat(
         self, others, sep: str = None, na_rep: str = None
-    ) -> SeriesOrIndex | cudf.core.column.string.StringColumn:
+    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]:
         ...
 
     def cat(self, others=None, sep=None, na_rep=None):
@@ -630,7 +630,7 @@ class StringMethods(ColumnMethods):
 
     def contains(
         self,
-        pat: str | Sequence,
+        pat: Union[str, Sequence],
         case: bool = True,
         flags: int = 0,
         na=np.nan,
@@ -771,7 +771,7 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(self, repeats: int | Sequence,) -> SeriesOrIndex:
+    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
         """
         Duplicate each string in the Series or Index.
         Equivalent to `str.repeat()
@@ -826,8 +826,8 @@ class StringMethods(ColumnMethods):
 
     def replace(
         self,
-        pat: str | Sequence,
-        repl: str | Sequence,
+        pat: Union[str, Sequence],
+        repl: Union[str, Sequence],
         n: int = -1,
         case=None,
         flags: int = 0,
@@ -1988,7 +1988,7 @@ class StringMethods(ColumnMethods):
         )
 
     def slice_from(
-        self, starts: cudf.Series, stops: cudf.Series
+        self, starts: "cudf.Series", stops: "cudf.Series"
     ) -> SeriesOrIndex:
         """
         Return substring of each string using positions for each string.
@@ -3608,7 +3608,7 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(result_col)
 
-    def startswith(self, pat: str | Sequence) -> SeriesOrIndex:
+    def startswith(self, pat: Union[str, Sequence]) -> SeriesOrIndex:
         """
         Test if the start of each string element matches a pattern.
 
@@ -4285,7 +4285,7 @@ class StringMethods(ColumnMethods):
             )
 
     def detokenize(
-        self, indices: cudf.Series, separator: str = " "
+        self, indices: "cudf.Series", separator: str = " "
     ) -> SeriesOrIndex:
         """
         Combines tokens into strings by concatenating them in the order
@@ -4958,9 +4958,9 @@ class StringColumn(column.ColumnBase):
         respectively
     """
 
-    _start_offset: int | None
-    _end_offset: int | None
-    _cached_sizeof: int | None
+    _start_offset: Optional[int]
+    _end_offset: Optional[int]
+    _cached_sizeof: Optional[int]
 
     def __init__(
         self,
@@ -4968,7 +4968,7 @@ class StringColumn(column.ColumnBase):
         size: int = None,  # TODO: make non-optional
         offset: int = 0,
         null_count: int = None,
-        children: tuple[column.ColumnBase, ...] = (),
+        children: Tuple["column.ColumnBase", ...] = (),
     ):
         dtype = cudf.dtype("object")
 
@@ -5123,7 +5123,7 @@ class StringColumn(column.ColumnBase):
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.NumericalColumn:
+    ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.dtype(dtype)
         string_col = self
         if out_dtype.kind in {"i", "u"}:
@@ -5165,7 +5165,7 @@ class StringColumn(column.ColumnBase):
 
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.DatetimeColumn:
+    ) -> "cudf.core.column.DatetimeColumn":
         out_dtype = cudf.dtype(dtype)
 
         # infer on host from the first not na element
@@ -5189,14 +5189,14 @@ class StringColumn(column.ColumnBase):
 
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.TimeDeltaColumn:
+    ) -> "cudf.core.column.TimeDeltaColumn":
         out_dtype = cudf.dtype(dtype)
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.DecimalBaseColumn:
+    ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
@@ -5240,7 +5240,7 @@ class StringColumn(column.ColumnBase):
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
-    ) -> pd.Series:
+    ) -> "pd.Series":
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)
@@ -5251,8 +5251,8 @@ class StringColumn(column.ColumnBase):
             pd_series.index = index
         return pd_series
 
-    def serialize(self) -> tuple[dict, list]:
-        header: dict[Any, Any] = {"null_count": self.null_count}
+    def serialize(self) -> Tuple[dict, list]:
+        header: Dict[Any, Any] = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 
@@ -5366,7 +5366,7 @@ class StringColumn(column.ColumnBase):
         else:
             return super().fillna(method=method)
 
-    def _find_first_and_last(self, value: ScalarLike) -> tuple[int, int]:
+    def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = libcudf.search.contains(
             self, column.as_column([value], dtype=self.dtype)
         )
@@ -5383,7 +5383,7 @@ class StringColumn(column.ColumnBase):
     def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         return self._find_first_and_last(value)[1]
 
-    def normalize_binop_value(self, other) -> column.ColumnBase:
+    def normalize_binop_value(self, other) -> "column.ColumnBase":
         # fastpath: gpu scalar
         if isinstance(other, cudf.Scalar) and other.dtype == "object":
             return column.as_column(other, length=len(self))
@@ -5407,7 +5407,7 @@ class StringColumn(column.ColumnBase):
 
     def binary_operator(
         self, op: builtins.str, rhs, reflect: bool = False
-    ) -> column.ColumnBase:
+    ) -> "column.ColumnBase":
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
@@ -5431,7 +5431,7 @@ class StringColumn(column.ColumnBase):
         )
 
     @copy_docstring(column.ColumnBase.view)
-    def view(self, dtype) -> cudf.core.column.ColumnBase:
+    def view(self, dtype) -> "cudf.core.column.ColumnBase":
         if self.null_count > 0:
             raise ValueError(
                 "Can not produce a view of a string column with nulls"

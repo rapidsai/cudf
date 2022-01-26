@@ -129,7 +129,7 @@ class NumericalBaseColumn(ColumnBase):
         return skew
 
     def quantile(
-        self, q: float | Sequence[float], interpolation: str, exact: bool
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         if isinstance(q, Number) or cudf.api.types.is_list_like(q):
             np_array_q = np.asarray(q)
@@ -158,7 +158,7 @@ class NumericalBaseColumn(ColumnBase):
         return self.quantile(0.5, interpolation="linear", exact=True)
 
     def _numeric_quantile(
-        self, q: float | Sequence[float], interpolation: str, exact: bool
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls

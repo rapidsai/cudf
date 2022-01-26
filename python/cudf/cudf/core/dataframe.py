@@ -503,7 +503,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     """
 
     _PROTECTED_KEYS = frozenset(("_data", "_index"))
-    _accessors: set[Any] = set()
+    _accessors: Set[Any] = set()
     _loc_indexer_type = _DataFrameLocIndexer
     _iloc_indexer_type = _DataFrameIlocIndexer
 
@@ -822,7 +822,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: BaseIndex | None = None,
+        index: Optional[BaseIndex] = None,
         columns: Any = None,
     ) -> DataFrame:
         out = super()._from_data(data, index)
@@ -6433,7 +6433,7 @@ def _setitem_with_dataframe(
     input_df: DataFrame,
     replace_df: DataFrame,
     input_cols: Any = None,
-    mask: cudf.core.column.ColumnBase | None = None,
+    mask: Optional[cudf.core.column.ColumnBase] = None,
     ignore_index: bool = False,
 ):
     """

@@ -83,7 +83,7 @@ T = TypeVar("T", bound="ColumnBase")
 
 
 class ColumnBase(Column, Serializable):
-    def as_frame(self) -> cudf.core.frame.Frame:
+    def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
         """
@@ -92,14 +92,14 @@ class ColumnBase(Column, Serializable):
         )
 
     @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
+    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
         View the data as a device array object
         """
         return cuda.as_cuda_array(self.data).view(self.dtype)
 
     @property
-    def mask_array_view(self) -> cuda.devicearray.DeviceNDArray:
+    def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
         """
@@ -115,7 +115,7 @@ class ColumnBase(Column, Serializable):
             f"dtype: {self.dtype}"
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
@@ -134,7 +134,7 @@ class ColumnBase(Column, Serializable):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
-    def values_host(self) -> np.ndarray:
+    def values_host(self) -> "np.ndarray":
         """
         Return a numpy representation of the Column.
         """
@@ -147,7 +147,7 @@ class ColumnBase(Column, Serializable):
         return self.data_array_view.copy_to_host()
 
     @property
-    def values(self) -> cupy.ndarray:
+    def values(self) -> "cupy.ndarray":
         """
         Return a CuPy representation of the Column.
         """
@@ -319,7 +319,7 @@ class ColumnBase(Column, Serializable):
 
     # TODO: This method is deprecated and can be removed when the associated
     # Frame methods are removed.
-    def to_gpu_array(self, fillna=None) -> cuda.devicearray.DeviceNDArray:
+    def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
 
         Parameters
@@ -365,7 +365,7 @@ class ColumnBase(Column, Serializable):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> ColumnBase | None:
+    ) -> Optional[ColumnBase]:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -517,7 +517,7 @@ class ColumnBase(Column, Serializable):
             )
             return self.take(gather_map)
 
-    def __getitem__(self, arg) -> ScalarLike | ColumnBase:
+    def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
         if _is_scalar_or_zero_d_array(arg):
             return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
@@ -677,7 +677,7 @@ class ColumnBase(Column, Serializable):
 
     def quantile(
         self,
-        q: float | Sequence[float],
+        q: Union[float, Sequence[float]],
         interpolation: builtins.str,
         exact: bool,
     ) -> ColumnBase:
@@ -740,7 +740,7 @@ class ColumnBase(Column, Serializable):
 
     def _process_values_for_isin(
         self, values: Sequence
-    ) -> tuple[ColumnBase, ColumnBase]:
+    ) -> Tuple[ColumnBase, ColumnBase]:
         """
         Helper function for `isin` which pre-process `values` based on `self`.
         """
@@ -752,7 +752,7 @@ class ColumnBase(Column, Serializable):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
-    def _isin_earlystop(self, rhs: ColumnBase) -> ColumnBase | None:
+    def _isin_earlystop(self, rhs: ColumnBase) -> Union[ColumnBase, None]:
         """
         Helper function for `isin` which determines possibility of
         early-stopping or not.
@@ -847,7 +847,7 @@ class ColumnBase(Column, Serializable):
         self: ColumnBase,
         ascending: bool = True,
         na_position: builtins.str = "last",
-    ) -> tuple[ColumnBase, cudf.core.column.NumericalColumn]:
+    ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
@@ -960,47 +960,47 @@ class ColumnBase(Column, Serializable):
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.NumericalColumn:
+    ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.DatetimeColumn:
+    ) -> "cudf.core.column.DatetimeColumn":
         raise NotImplementedError
 
     def as_interval_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.IntervalColumn:
+    ) -> "cudf.core.column.IntervalColumn":
         raise NotImplementedError
 
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.TimeDeltaColumn:
+    ) -> "cudf.core.column.TimeDeltaColumn":
         raise NotImplementedError
 
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
-    ) -> cudf.core.column.StringColumn:
+    ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.decimal.DecimalBaseColumn:
+    ) -> Union["cudf.core.column.decimal.DecimalBaseColumn"]:
         raise NotImplementedError
 
     def as_decimal128_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.Decimal128Column:
+    ) -> "cudf.core.column.Decimal128Column":
         raise NotImplementedError
 
     def as_decimal64_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.Decimal64Column:
+    ) -> "cudf.core.column.Decimal64Column":
         raise NotImplementedError
 
     def as_decimal32_column(
         self, dtype: Dtype, **kwargs
-    ) -> cudf.core.column.Decimal32Column:
+    ) -> "cudf.core.column.Decimal32Column":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
@@ -1110,8 +1110,8 @@ class ColumnBase(Column, Serializable):
 
         return drop_duplicates([self], keep="first")[0]
 
-    def serialize(self) -> tuple[dict, list]:
-        header: dict[Any, Any] = {}
+    def serialize(self) -> Tuple[dict, list]:
+        header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
@@ -1155,7 +1155,7 @@ class ColumnBase(Column, Serializable):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> ColumnBase | ScalarLike:
+    ) -> Union[ColumnBase, ScalarLike]:
         raise NotImplementedError
 
     def _minmax(self, skipna: bool = None):
@@ -1217,7 +1217,7 @@ class ColumnBase(Column, Serializable):
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
-    ) -> ColumnBase | ScalarLike:
+    ) -> Union[ColumnBase, ScalarLike]:
         skipna = True if skipna is None else skipna
 
         if skipna:
@@ -1347,14 +1347,14 @@ def column_empty(
 
 
 def build_column(
-    data: Buffer | None,
+    data: Union[Buffer, None],
     dtype: Dtype,
     *,
     size: int = None,
     mask: Buffer = None,
     offset: int = 0,
     null_count: int = None,
-    children: tuple[ColumnBase, ...] = (),
+    children: Tuple[ColumnBase, ...] = (),
 ) -> ColumnBase:
     """
     Build a Column of the appropriate type from the given parameters
@@ -1516,7 +1516,7 @@ def build_categorical_column(
     offset: int = 0,
     null_count: int = None,
     ordered: bool = None,
-) -> cudf.core.column.CategoricalColumn:
+) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
 
@@ -1606,7 +1606,7 @@ def build_list_column(
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-) -> cudf.core.column.ListColumn:
+) -> "cudf.core.column.ListColumn":
     """
     Build a ListColumn
 
@@ -1638,13 +1638,13 @@ def build_list_column(
 
 def build_struct_column(
     names: Sequence[str],
-    children: tuple[ColumnBase, ...],
-    dtype: Dtype | None = None,
+    children: Tuple[ColumnBase, ...],
+    dtype: Optional[Dtype] = None,
     mask: Buffer = None,
     size: int = None,
     offset: int = 0,
     null_count: int = None,
-) -> cudf.core.column.StructColumn:
+) -> "cudf.core.column.StructColumn":
     """
     Build a StructColumn
 
@@ -2177,8 +2177,8 @@ def as_column(
 
 
 def _construct_array(
-    arbitrary: Any, dtype: Dtype | None
-) -> np.ndarray | cupy.ndarray:
+    arbitrary: Any, dtype: Optional[Dtype]
+) -> Union[np.ndarray, cupy.ndarray]:
     """
     Construct a CuPy or NumPy array from `arbitrary`
     """
@@ -2212,7 +2212,7 @@ def _data_from_cuda_array_interface_desc(obj) -> Buffer:
     return data
 
 
-def _mask_from_cuda_array_interface_desc(obj) -> Buffer | None:
+def _mask_from_cuda_array_interface_desc(obj) -> Union[Buffer, None]:
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -2235,7 +2235,7 @@ def _mask_from_cuda_array_interface_desc(obj) -> Buffer | None:
     return mask
 
 
-def serialize_columns(columns) -> tuple[list[dict], list]:
+def serialize_columns(columns) -> Tuple[List[dict], List]:
     """
     Return the headers and frames resulting
     from serializing a list of Column
@@ -2250,7 +2250,7 @@ def serialize_columns(columns) -> tuple[list[dict], list]:
     frames : list
         list of frames
     """
-    headers: list[dict[Any, Any]] = []
+    headers: List[Dict[Any, Any]] = []
     frames = []
 
     if len(columns) > 0:
@@ -2262,7 +2262,7 @@ def serialize_columns(columns) -> tuple[list[dict], list]:
     return headers, frames
 
 
-def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
+def deserialize_columns(headers: List[dict], frames: List) -> List[ColumnBase]:
     """
     Construct a list of Columns from a list of headers
     and frames.
@@ -2281,9 +2281,9 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 
 
 def arange(
-    start: int | float,
-    stop: int | float = None,
-    step: int | float = 1,
+    start: Union[int, float],
+    stop: Union[int, float] = None,
+    step: Union[int, float] = 1,
     dtype=None,
 ) -> ColumnBase:
     """
@@ -2372,7 +2372,7 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
-def concat_columns(objs: MutableSequence[ColumnBase]) -> ColumnBase:
+def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         dtype = cudf.dtype(None)

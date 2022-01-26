@@ -38,7 +38,7 @@ class Buffer(Serializable):
     _owner: Any
 
     def __init__(
-        self, data: Any = None, size: int | None = None, owner: Any = None
+        self, data: Any = None, size: Optional[int] = None, owner: Any = None
     ):
 
         if isinstance(data, Buffer):
@@ -117,7 +117,7 @@ class Buffer(Serializable):
                 f"Cannot construct Buffer from {data.__class__.__name__}"
             )
 
-    def serialize(self) -> tuple[dict, list]:
+    def serialize(self) -> Tuple[dict, list]:
         header = {}  # type: Dict[Any, Any]
         header["type-serialized"] = pickle.dumps(type(self))
         header["constructor-kwargs"] = {}
