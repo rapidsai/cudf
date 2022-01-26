@@ -157,7 +157,7 @@ def _generate_cache_key(frame, func: Callable):
     """
     return (
         *cudautils.make_cache_key(
-            func, _all_dtypes_from_frame(frame).values()
+            func, tuple(_all_dtypes_from_frame(frame).values())
         ),
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),

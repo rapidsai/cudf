@@ -290,3 +290,17 @@ def test_dropna_multiindex_2(data, how):
     got = gi.dropna(how)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("drop_nan", [True, False])
+def test_drop_na_rows_dropnan(drop_nan):
+    col1 = cudf.Series([1, 2, np.nan], nan_as_null=False, dtype="float64")
+    gdf = cudf.DataFrame({"a": col1})
+
+    if drop_nan:
+        got = cudf.DataFrame({"a": [1, 2]}, dtype="float64")
+    else:
+        got = cudf.DataFrame({"a": col1})
+    expected = gdf._drop_na_rows(how="any", drop_nan=drop_nan)
+
+    assert_eq(expected, got)
