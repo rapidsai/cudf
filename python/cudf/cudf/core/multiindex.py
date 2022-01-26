@@ -775,7 +775,7 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
-            result = result.set_index(index)
+            result.index = index
         return result
 
     def _get_row_major(
