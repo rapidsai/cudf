@@ -123,7 +123,7 @@ TEST_F(NewRowOp, SampleStructTest)
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
   std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 100);
+  std::uniform_int_distribution<int> distribution(0, 20);
 
   const cudf::size_type n_rows{1 << 6};
   const cudf::size_type n_cols{3};
@@ -135,7 +135,7 @@ TEST_F(NewRowOp, SampleStructTest)
     auto elements = cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return distribution(generator); });
     auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 3 == 0 ? false : true; });
+      0, [](auto i) { return i % 5 == 0 ? false : true; });
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
