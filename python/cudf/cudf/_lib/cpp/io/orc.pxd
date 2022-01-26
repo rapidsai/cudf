@@ -58,7 +58,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& decimal_cols_as_float(
             vector[string] val
         ) except+
-        orc_reader_options_builder& decimal128(bool val) except+
 
         orc_reader_options build() except+
 
