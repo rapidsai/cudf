@@ -33,17 +33,17 @@ namespace cudf {
 namespace strings {
 namespace detail {
 std::unique_ptr<column> find_multiple(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   strings_column_view const& targets,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const strings_count = strings.size();
+  auto const strings_count = input.size();
   auto const targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
   CUDF_EXPECTS(!targets.has_nulls(), "Search targets cannot contain null strings");
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
   auto targets_column = column_device_view::create(targets.parent(), stream);
   auto d_targets      = *targets_column;
@@ -85,12 +85,12 @@ std::unique_ptr<column> find_multiple(
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> find_multiple(strings_column_view const& strings,
+std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       strings_column_view const& targets,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(strings, targets, rmm::cuda_stream_default, mr);
+  return detail::find_multiple(input, targets, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
