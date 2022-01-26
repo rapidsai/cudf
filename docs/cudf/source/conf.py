@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
