@@ -586,3 +586,13 @@ def test_listcol_setitem_error_cases(data, item, error):
     sr = cudf.Series(data)
     with pytest.raises(BaseException, match=error):
         sr[1] = item
+
+
+def test_listcol_setitem_retain_dtype():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([["a", "b"], []]), "b": [1, 2], "c": [123, 321]}
+    )
+    df1 = df[df.b.isna()]
+    df1["b"] = df1["c"]
+    df2 = df1.drop(["c"], axis=1)
+    assert df2.a.dtype == df.a.dtype
