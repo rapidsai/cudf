@@ -747,9 +747,8 @@ def test_dataframe_take_with_multiIndex(ntake):
     assert_eq(actual, expected)
 
 
-@pytest.mark.parametrize("keep_index", [True, False])
 @pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
-def test_series_take(ntake, keep_index):
+def test_series_take(ntake):
     np.random.seed(0)
     nelem = 123
 
@@ -758,11 +757,8 @@ def test_series_take(ntake, keep_index):
 
     take_indices = np.random.randint(0, len(gsr), ntake)
 
-    actual = gsr.take(take_indices, keep_index=keep_index)
+    actual = gsr.take(take_indices)
     expected = psr.take(take_indices)
-
-    if not keep_index:
-        expected = expected.reset_index(drop=True)
 
     assert_eq(actual, expected)
 
@@ -775,7 +771,7 @@ def test_series_take_positional():
     take_indices = [1, 2, 0, 3]
 
     expect = psr.take(take_indices)
-    got = gsr.take(take_indices, keep_index=True)
+    got = gsr.take(take_indices)
 
     assert_eq(expect, got)
 

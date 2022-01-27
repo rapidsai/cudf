@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import decimal
 
 import numpy as np
@@ -32,7 +33,7 @@ class Scalar(object):
     >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
     Scalar(63, dtype=int64)
     >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-    >>> y = cudf.Scalar(21, dtype='timedelta64[ns])
+    >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
     >>> x - y
     Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
     >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
@@ -145,12 +146,12 @@ class Scalar(object):
             else:
                 return NA, dtype
 
-        if isinstance(dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype)):
+        if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
             ).as_py()
         if isinstance(value, decimal.Decimal) and dtype is None:
-            dtype = cudf.Decimal64Dtype._from_decimal(value)
+            dtype = cudf.Decimal128Dtype._from_decimal(value)
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
 
@@ -171,7 +172,7 @@ class Scalar(object):
             else:
                 dtype = value.dtype
 
-        if not isinstance(dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype)):
+        if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             dtype = cudf.dtype(dtype)
 
         if not valid:

@@ -98,15 +98,9 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
-    ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -1481,3 +1475,33 @@ def test_empty_series_name():
     gs = cudf.from_pandas(ps)
 
     assert ps.__repr__() == gs.__repr__()
+
+
+def test_repr_struct_after_concat():
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series(
+                [
+                    {"sa": 2056831253},
+                    {"sa": -1463792165},
+                    {"sa": 1735783038},
+                    {"sa": 103774433},
+                    {"sa": -1413247520},
+                ]
+                * 13
+            ),
+            "b": cudf.Series(
+                [
+                    {"sa": {"ssa": 1140062029}},
+                    None,
+                    {"sa": {"ssa": 1998862860}},
+                    {"sa": None},
+                    {"sa": {"ssa": -395088502}},
+                ]
+                * 13
+            ),
+        }
+    )
+    pdf = df.to_pandas()
+
+    assert df.__repr__() == pdf.__repr__()

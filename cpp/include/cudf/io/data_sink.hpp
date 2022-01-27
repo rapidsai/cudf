@@ -120,7 +120,7 @@ class data_sink {
    *
    * @return bool If this writer supports device_write() calls.
    */
-  virtual bool supports_device_write() const { return false; }
+  [[nodiscard]] virtual bool supports_device_write() const { return false; }
 
   /**
    * @brief Estimates whether a direct device write would be more optimal for the given size.
@@ -128,7 +128,10 @@ class data_sink {
    * @param size Number of bytes to write
    * @return whether the device write is expected to be more performant for the given size
    */
-  virtual bool is_device_write_preferred(size_t size) const { return supports_device_write(); }
+  [[nodiscard]] virtual bool is_device_write_preferred(size_t size) const
+  {
+    return supports_device_write();
+  }
 
   /**
    * @brief Append the buffer content to the sink from a gpu address

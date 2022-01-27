@@ -34,6 +34,7 @@ Function application
    SeriesGroupBy.aggregate
    DataFrameGroupBy.aggregate
    GroupBy.pipe
+   GroupBy.transform
 
 Computations / descriptive stats
 --------------------------------

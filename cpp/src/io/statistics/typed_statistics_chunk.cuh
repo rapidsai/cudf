@@ -92,24 +92,20 @@ struct typed_statistics_chunk<T, true> {
   using E = typename detail::extrema_type<T>::type;
   using A = typename detail::aggregation_type<T>::type;
 
-  uint32_t non_nulls;   //!< number of non-null values in chunk
-  uint32_t null_count;  //!< number of null values in chunk
+  uint32_t non_nulls{0};   //!< number of non-null values in chunk
+  uint32_t null_count{0};  //!< number of null values in chunk
 
   E minimum_value;
   E maximum_value;
   A aggregate;
 
-  uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
-  uint8_t has_sum;     //!< Nonzero if sum is valid
+  uint8_t has_minmax{false};  //!< Nonzero if min_value and max_values are valid
+  uint8_t has_sum{false};     //!< Nonzero if sum is valid
 
   __device__ typed_statistics_chunk()
-    : non_nulls(0),
-      null_count(0),
-      minimum_value(detail::minimum_identity<E>()),
+    : minimum_value(detail::minimum_identity<E>()),
       maximum_value(detail::maximum_identity<E>()),
-      aggregate(0),
-      has_minmax(false),
-      has_sum(false)  // Set to true when storing
+      aggregate(0)
   {
   }
 
@@ -140,22 +136,17 @@ template <typename T>
 struct typed_statistics_chunk<T, false> {
   using E = typename detail::extrema_type<T>::type;
 
-  uint32_t non_nulls;   //!< number of non-null values in chunk
-  uint32_t null_count;  //!< number of null values in chunk
+  uint32_t non_nulls{0};   //!< number of non-null values in chunk
+  uint32_t null_count{0};  //!< number of null values in chunk
 
   E minimum_value;
   E maximum_value;
 
-  uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
-  uint8_t has_sum;     //!< Nonzero if sum is valid
+  uint8_t has_minmax{false};  //!< Nonzero if min_value and max_values are valid
+  uint8_t has_sum{false};     //!< Nonzero if sum is valid
 
   __device__ typed_statistics_chunk()
-    : non_nulls(0),
-      null_count(0),
-      minimum_value(detail::minimum_identity<E>()),
-      maximum_value(detail::maximum_identity<E>()),
-      has_minmax(false),
-      has_sum(false)  // Set to true when storing
+    : minimum_value(detail::minimum_identity<E>()), maximum_value(detail::maximum_identity<E>())
   {
   }
 
