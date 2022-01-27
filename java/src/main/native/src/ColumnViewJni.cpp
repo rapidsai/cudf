@@ -570,7 +570,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
     cudf::strings_column_view const scv{*reinterpret_cast<cudf::column_view *>(column_view)};
     auto delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_ptr);
 
-    return cudf::jni::convert_table_for_return(env, cudf::strings::split(scv, *delimiter, max_split));
+    return cudf::jni::convert_table_for_return(env,
+                                               cudf::strings::split(scv, *delimiter, max_split));
   }
   CATCH_STD(env, 0);
 }
