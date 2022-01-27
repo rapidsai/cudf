@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <strings/count_matches.hpp>
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
@@ -42,30 +43,23 @@ using string_index_pair = thrust::pair<const char*, size_type>;
 namespace {
 
 /**
- * @brief Compute the number of tokens for the `idx'th` string element of `d_strings`.
+ * @brief Convert match counts to token counts.
+ *
+ * The matches are the delimiters and the tokens are what is left:
+ * `token1, delimiter, token2, delimiter, token3, etc`
+ * Usually `token_count = match_count + 1` even with empty strings.
+ * However, we need to account for the max_tokens and null rows.
  */
-template <int stack_size>
-struct token_counter_fn {
-  column_device_view const d_strings;  // strings to split
-  reprog_device prog;
+struct match_to_token_count_fn {
+  column_device_view const d_strings;
+  size_type const* d_counts;
   size_type const max_tokens;
 
   __device__ size_type operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) { return 0; }
-
-    auto const d_str      = d_strings.element<string_view>(idx);
-    size_type token_count = 0;
-
-    int32_t begin = 0;
-    int32_t end   = -1;
-    while (token_count < max_tokens - 1) {
-      if (prog.find<stack_size>(idx, d_str, begin, end) <= 0) { break; }
-      token_count++;
-      begin = end + (begin == end);
-      end   = -1;
-    }
-    return token_count + 1;  // always at least one token
+    auto const match_count = d_counts[idx];
+    return std::min(match_count, max_tokens) + 1;
   }
 };
 
@@ -130,34 +124,23 @@ std::unique_ptr<column> split_record_re(
 {
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
 
-  auto const max_tokens    = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
+  auto const max_tokens    = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
   auto const strings_count = input.size();
 
   auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto offsets = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
   auto d_offsets = offsets->mutable_view().data<int32_t>();
 
   auto const begin = thrust::make_counting_iterator<size_type>(0);
   auto const end   = thrust::make_counting_iterator<size_type>(strings_count);
-
-  // create offsets column by counting the number of tokens per string
-  auto const regex_insts = d_prog->insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    token_counter_fn<RX_STACK_SMALL> counter{*d_strings, *d_prog, max_tokens};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_offsets, counter);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    token_counter_fn<RX_STACK_MEDIUM> counter{*d_strings, *d_prog, max_tokens};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_offsets, counter);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    token_counter_fn<RX_STACK_LARGE> counter{*d_strings, *d_prog, max_tokens};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_offsets, counter);
-  } else {
-    token_counter_fn<RX_STACK_ANY> counter{*d_strings, *d_prog, max_tokens};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_offsets, counter);
-  }
+  // convert match counts to tokens
+  thrust::transform(rmm::exec_policy(stream),
+                    begin,
+                    end,
+                    d_offsets,
+                    match_to_token_count_fn{*d_strings, d_offsets, max_tokens});
   // convert counts into offsets
   thrust::exclusive_scan(
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
@@ -165,13 +148,9 @@ std::unique_ptr<column> split_record_re(
   // last entry is the total number of tokens to be generated
   auto total_tokens = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
 
-  printf("instruction = %d\ntotal_tokens = %d\nbegin,end = %d,%d\n",
-         regex_insts,
-         total_tokens,
-         *begin,
-         *end);
   // split each string into an array of index-pair values
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
+  auto const regex_insts = d_prog->insts_counts();
   if (regex_insts <= RX_SMALL_INSTS) {
     token_reader_fn<RX_STACK_SMALL> reader{*d_strings, *d_prog, d_offsets, tokens.data()};
     thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, reader);
