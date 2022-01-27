@@ -1153,8 +1153,7 @@ struct optional_accessor {
   optional_accessor(column_device_view const& _col, Nullate with_nulls)
     : col{_col}, has_nulls{with_nulls}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
-                 "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()), "data type mismatch");
     if (with_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
