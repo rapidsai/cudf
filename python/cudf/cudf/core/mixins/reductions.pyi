@@ -3,71 +3,68 @@
 from __future__ import annotations
 
 class Reducible:
-    def sum(self, *args, **kwargs):
+    def sum(self):
         ...
 
-    def product(self, *args, **kwargs):
+    def product(self):
         ...
 
-    def min(self, *args, **kwargs):
+    def min(self):
         ...
 
-    def max(self, *args, **kwargs):
+    def max(self):
         ...
 
-    def count(self, *args, **kwargs):
+    def count(self):
         ...
 
-    def any(self, *args, **kwargs):
+    def any(self):
         ...
 
-    def all(self, *args, **kwargs):
+    def all(self):
         ...
 
-    def sum_of_squares(self, *args, **kwargs):
+    def sum_of_squares(self):
         ...
 
-    def mean(self, *args, **kwargs):
+    def mean(self):
         ...
 
-    def var(self, *args, **kwargs):
+    def var(self):
         ...
 
-    def std(self, *args, **kwargs):
+    def std(self):
         ...
 
-    def median(self, *args, **kwargs):
+    def median(self):
         ...
 
-    def argmax(self, *args, **kwargs):
+    def argmax(self):
         ...
 
-    def argmin(self, *args, **kwargs):
+    def argmin(self):
         ...
 
-    def nunique(self, *args, **kwargs):
+    def nunique(self):
         ...
 
-    def nth(self, *args, **kwargs):
+    def nth(self):
         ...
 
-    def collect(self, *args, **kwargs):
+    def collect(self):
         ...
 
-    def unique(self, *args, **kwargs):
+    def prod(self):
         ...
 
-    def prod(self, *args, **kwargs):
+    def idxmin(self):
         ...
 
-    def idxmin(self, *args, **kwargs):
+    def idxmax(self):
         ...
 
-    def idxmax(self, *args, **kwargs):
+    def first(self):
         ...
 
-    def first(self, *args, **kwargs):
-        ...
-
-    def last(self, *args, **kwargs):
+    def last(self):
         ...

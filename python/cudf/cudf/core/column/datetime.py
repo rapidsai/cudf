@@ -350,9 +350,7 @@ class DatetimeColumn(column.ColumnBase):
         """Returns the default NA value for this column"""
         return np.datetime64("nat", self.time_unit)
 
-    def mean(
-        self, skipna=None, dtype=np.float64, *args, **kwargs
-    ) -> ScalarLike:
+    def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
         return pd.Timestamp(
             self.as_numerical.mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
@@ -371,7 +369,7 @@ class DatetimeColumn(column.ColumnBase):
             * _numpy_to_pandas_conversion[self.time_unit],
         )
 
-    def median(self, skipna: bool = None, *args, **kwargs) -> pd.Timestamp:
+    def median(self, skipna: bool = None) -> pd.Timestamp:
         return pd.Timestamp(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )

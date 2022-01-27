@@ -112,9 +112,7 @@ class NumericalBaseColumn(ColumnBase):
     def std(self, dtype=np.float64, *args, **kwargs):
         return self._reduce("std", dtype=dtype, *args, **kwargs)
 
-    def median(
-        self, skipna: bool = None, *args, **kwargs
-    ) -> NumericalBaseColumn:
+    def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):

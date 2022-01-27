@@ -187,7 +187,7 @@ class ColumnBase(Column, Serializable, Reducible):
             return False
         return self.binary_operator("NULL_EQUALS", other).all()
 
-    def all(self, skipna: bool = True, *args, **kwargs) -> bool:
+    def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
         # is empty.
         result_col = self.nans_to_nulls() if skipna else self
@@ -200,7 +200,7 @@ class ColumnBase(Column, Serializable, Reducible):
 
         return result_col
 
-    def any(self, skipna: bool = True, *args, **kwargs) -> bool:
+    def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
         result_col = self.nans_to_nulls() if skipna else self
         if not skipna and result_col.has_nulls():
@@ -688,9 +688,6 @@ class ColumnBase(Column, Serializable, Reducible):
     ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
-    def median(self, skipna: bool = None, *args, **kwargs) -> ScalarLike:
-        raise TypeError(f"cannot perform median with type {self.dtype}")
-
     def take(
         self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
     ) -> T:
@@ -1103,7 +1100,7 @@ class ColumnBase(Column, Serializable, Reducible):
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self, *args, **kwargs) -> ColumnBase:
+    def unique(self) -> ColumnBase:
         """
         Get unique values in the data
         """
