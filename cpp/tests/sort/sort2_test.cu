@@ -14,12 +14,12 @@
 
 #include <vector>
 
-struct NewRowOp : public cudf::test::BaseFixture {
+struct NewRowOpTest : public cudf::test::BaseFixture {
 };
 
 #include <cudf/sort2.cuh>
 
-TEST_F(NewRowOp, BasicTest)
+TEST_F(NewRowOpTest, DeepStruct)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
@@ -64,14 +64,16 @@ TEST_F(NewRowOp, BasicTest)
   // auto input = cudf::table_view({struct_col});
   auto input = cudf::table(std::move(child_cols));
 
-  auto result1 = cudf::sorted_order(input);
-  // cudf::test::print(result1->view());
-  auto result2 = cudf::detail::sorted_order2(input);
-  // cudf::test::print(result2->view());
+  auto sliced_input = cudf::slice(input, {7, input.num_rows() - 12});
+
+  auto result1 = cudf::sorted_order(sliced_input);
+  cudf::test::print(result1->view());
+  auto result2 = cudf::detail::sorted_order2(sliced_input);
+  cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
 
-TEST_F(NewRowOp, StructTwoChildTest)
+TEST_F(NewRowOpTest, StructTwoChildTest)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
@@ -118,15 +120,15 @@ TEST_F(NewRowOp, StructTwoChildTest)
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
 
-TEST_F(NewRowOp, SampleStructTest)
+TEST_F(NewRowOpTest, SampleStructTest)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
   std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 20);
+  std::uniform_int_distribution<int> distribution(0, 10);
 
   const cudf::size_type n_rows{1 << 6};
-  const cudf::size_type n_cols{3};
+  const cudf::size_type n_cols{6};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
@@ -135,7 +137,7 @@ TEST_F(NewRowOp, SampleStructTest)
     auto elements = cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return distribution(generator); });
     auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 5 == 0 ? false : true; });
+      0, [](auto i) { return i % 7 == 0 ? false : true; });
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
@@ -165,9 +167,21 @@ TEST_F(NewRowOp, SampleStructTest)
 
   cudf::test::print(s1->view());
 
+  std::vector<std::unique_ptr<cudf::column>> s22_children;
+  s22_children.push_back(std::move(cols[3]));
+  s22_children.push_back(std::move(cols[4]));
+  auto s22 = make_struct(std::move(s22_children), 1);
+
+  std::vector<std::unique_ptr<cudf::column>> s12_children;
+  s12_children.push_back(std::move(cols[5]));
+  s12_children.push_back(std::move(s22));
+  auto s12 = make_struct(std::move(s12_children), 2);
+
+  cudf::test::print(s1->view());
+
   // // Create table view
   // auto input = cudf::table_view({struct_col});
-  auto input = cudf::table_view({s1->view()});
+  auto input = cudf::table_view({s1->view(), s12->view()});
 
   auto result1 = cudf::sorted_order(input);
   cudf::test::print(result1->view());
