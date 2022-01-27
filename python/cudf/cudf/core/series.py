@@ -3282,6 +3282,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
+        warnings.warn(
+            "Series.merge is deprecated and will be removed in a future "
+            "release. Use cudf.merge instead.",
+            FutureWarning,
+        )
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
