@@ -247,33 +247,13 @@ TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::split(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 1);
-  cudf::test::expect_strings_empty(results->get_column(0));
+  EXPECT_TRUE(results->num_rows() == 0);
   results = cudf::strings::rsplit(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 1);
-  cudf::test::expect_strings_empty(results->get_column(0));
-}
-
-// This test specifically for https://github.com/rapidsai/custrings/issues/119
-TEST_F(StringsSplitTest, AllNullsCase)
-{
-  std::vector<const char*> h_strings{nullptr, nullptr, nullptr};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-
-  auto results = cudf::strings::split(cudf::strings_column_view(strings));
+  EXPECT_TRUE(results->num_rows() == 0);
+  results = cudf::strings::split_re(zero_size_strings_column, "\\s");
   EXPECT_TRUE(results->num_columns() == 1);
-  auto column = results->get_column(0).view();
-  EXPECT_TRUE(column.size() == 3);
-  EXPECT_TRUE(column.has_nulls());
-  EXPECT_TRUE(column.null_count() == column.size());
-  results = cudf::strings::split(cudf::strings_column_view(strings), cudf::string_scalar("-"));
-  EXPECT_TRUE(results->num_columns() == 1);
-  column = results->get_column(0);
-  EXPECT_TRUE(column.size() == 3);
-  EXPECT_TRUE(column.has_nulls());
-  EXPECT_TRUE(column.null_count() == column.size());
+  EXPECT_TRUE(results->num_rows() == 0);
 }
 
 TEST_F(StringsSplitTest, SplitRecord)
@@ -338,6 +318,54 @@ TEST_F(StringsSplitTest, SplitRecordWhitespaceWithMaxSplit)
   LCW expected({LCW{"Héllo", "thesé  "}, LCW{}, LCW{"are", "some  "}, LCW{"tést", "String"}, LCW{}},
                validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(StringsSplitTest, SplitRegex)
+{
+  std::vector<const char*> h_strings{" Héllo thesé", nullptr, "are some  ", "tést String", ""};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
+  auto sv = cudf::strings_column_view(input);
+
+  {
+    auto result = cudf::strings::split_re(sv, "\\s+");
+
+    cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""}, {1, 0, 1, 1, 1});
+    cudf::test::strings_column_wrapper col1({"Héllo", "", "some", "String", ""}, {1, 0, 1, 1, 0});
+    cudf::test::strings_column_wrapper col2({"thesé", "", "", "", ""}, {1, 0, 1, 0, 0});
+    auto expected = cudf::table_view({col0, col1, col2});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
+  }
+
+  {
+    auto result = cudf::strings::split_re(sv, "[eé]");
+
+    cudf::test::strings_column_wrapper col0({" H", "", "ar", "t", ""}, {1, 0, 1, 1, 1});
+    cudf::test::strings_column_wrapper col1({"llo th", "", " som", "st String", ""},
+                                            {1, 0, 1, 1, 0});
+    cudf::test::strings_column_wrapper col2({"s", "", "  ", "", ""}, {1, 0, 1, 0, 0});
+    cudf::test::strings_column_wrapper col3({"", "", "", "", ""}, {1, 0, 0, 0, 0});
+    auto expected = cudf::table_view({col0, col1, col2, col3});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
+  }
+}
+
+TEST_F(StringsSplitTest, SplitRegexWithMaxSplit)
+{
+  std::vector<const char*> h_strings{" Héllo\tthesé", nullptr, "are\nsome  ", "tést\rString", ""};
+  auto validity =
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper input(h_strings.begin(), h_strings.end(), validity);
+  auto sv = cudf::strings_column_view(input);
+
+  auto result = cudf::strings::split_re(sv, "\\s+", 1);
+
+  cudf::test::strings_column_wrapper col0({"", "", "are", "tést", ""}, {1, 0, 1, 1, 1});
+  cudf::test::strings_column_wrapper col1({"Héllo\tthesé", "", "some  ", "String", ""},
+                                          {1, 0, 1, 1, 0});
+  auto expected = cudf::table_view({col0, col1});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, SplitRecordRegex)
@@ -469,10 +497,35 @@ TEST_F(StringsSplitTest, SplitRecordZeroSizeStringsColumns)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto split_record_result = cudf::strings::split_record(zero_size_strings_column);
-  EXPECT_TRUE(split_record_result->size() == 0);
-  auto rsplit_record_result = cudf::strings::rsplit_record(zero_size_strings_column);
-  EXPECT_TRUE(rsplit_record_result->size() == 0);
+  auto result = cudf::strings::split_record(zero_size_strings_column);
+  EXPECT_TRUE(result->size() == 0);
+  result = cudf::strings::rsplit_record(zero_size_strings_column);
+  EXPECT_TRUE(result->size() == 0);
+  result = cudf::strings::split_record_re(zero_size_strings_column, "\\s");
+  EXPECT_TRUE(result->size() == 0);
+}
+
+// This test specifically for https://github.com/rapidsai/custrings/issues/119
+TEST_F(StringsSplitTest, AllNullsCase)
+{
+  cudf::test::strings_column_wrapper input({"", "", ""}, {0, 0, 0});
+  auto sv = cudf::strings_column_view(input);
+
+  auto results = cudf::strings::split(sv);
+  EXPECT_TRUE(results->num_columns() == 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
+  results = cudf::strings::split(sv, cudf::string_scalar("-"));
+  EXPECT_TRUE(results->num_columns() == 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
+  results = cudf::strings::rsplit(sv);
+  EXPECT_TRUE(results->num_columns() == 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
+  results = cudf::strings::rsplit(sv, cudf::string_scalar("-"));
+  EXPECT_TRUE(results->num_columns() == 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
+  results = cudf::strings::split_re(sv, "-");
+  EXPECT_TRUE(results->num_columns() == 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
 }
 
 TEST_F(StringsSplitTest, Partition)
@@ -658,6 +711,7 @@ TEST_F(StringsSplitTest, InvalidParameter)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::rsplit_record(strings_view, cudf::string_scalar("", false)),
                cudf::logic_error);
+  EXPECT_THROW(cudf::strings::split_re(strings_view, ""), cudf::logic_error);
   EXPECT_THROW(cudf::strings::split_record_re(strings_view, ""), cudf::logic_error);
   EXPECT_THROW(cudf::strings::partition(strings_view, cudf::string_scalar("", false)),
                cudf::logic_error);
