@@ -1298,9 +1298,7 @@ class IndexedFrame(Frame):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(
-                how=how, subset=subset, thresh=thresh, drop_nan=True
-            )
+            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1308,9 +1306,7 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(
-        self, how="any", subset=None, thresh=None, drop_nan=False
-    ):
+    def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
         Drop null rows from `self`.
 
@@ -1324,8 +1320,6 @@ class IndexedFrame(Frame):
         thresh : int, optional
             If specified, then drops every row containing
             less than `thresh` non-null values.
-        drop_nan: bool
-            `nan` is also considered as `NA`
         """
         if subset is None:
             subset = self._column_names
@@ -1343,16 +1337,12 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        data_columns = (
-            [
-                col.nans_to_nulls()
-                if isinstance(col, cudf.core.column.NumericalColumn)
-                else col
-                for col in self._columns
-            ]
-            if drop_nan
-            else self._columns
-        )
+        data_columns = [
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col
+            for col in self._columns
+        ]
 
         return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(

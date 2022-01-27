@@ -291,7 +291,12 @@ def read_orc(
     **kwargs,
 ):
     """{docstring}"""
-
+    if decimal_cols_as_float is not None:
+        warnings.warn(
+            "`decimal_cols_as_float` is deprecated and will be removed in "
+            "the future",
+            FutureWarning,
+        )
     from cudf import DataFrame
 
     # Multiple sources are passed as a list. If a single source is passed,

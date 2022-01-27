@@ -561,7 +561,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
                                                                         jlong column_view,
-                                                                        jlong delimiter) {
+                                                                        jlong delimiter,
+                                                                        jint max_split) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
   try {
@@ -570,7 +571,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
     cudf::strings_column_view scv(*cv);
     cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);
 
-    std::unique_ptr<cudf::table> table_result = cudf::strings::split(scv, *ss_scalar);
+    std::unique_ptr<cudf::table> table_result = cudf::strings::split(scv, *ss_scalar, max_split);
     return cudf::jni::convert_table_for_return(env, table_result);
   }
   CATCH_STD(env, 0);
