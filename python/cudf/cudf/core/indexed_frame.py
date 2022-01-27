@@ -1298,9 +1298,7 @@ class IndexedFrame(Frame):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(
-                how=how, subset=subset, thresh=thresh, drop_nan=True
-            )
+            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1308,9 +1306,7 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(
-        self, how="any", subset=None, thresh=None, drop_nan=False
-    ):
+    def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
         Drop null rows from `self`.
 
@@ -1321,7 +1317,7 @@ class IndexedFrame(Frame):
             *all* null values.
         subset : list, optional
             List of columns to consider when dropping rows.
-        thresh: int, optional
+        thresh : int, optional
             If specified, then drops every row containing
             less than `thresh` non-null values.
         """
@@ -1341,17 +1337,16 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        if drop_nan:
-            data_columns = [
-                col.nans_to_nulls()
-                if isinstance(col, cudf.core.column.NumericalColumn)
-                else col
-                for col in self._columns
-            ]
+        data_columns = [
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col
+            for col in self._columns
+        ]
 
         return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
-                list(self._index._data.columns) + data_columns,
+                [*self._index._data.columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(
                     subset, offset_by_index_columns=True

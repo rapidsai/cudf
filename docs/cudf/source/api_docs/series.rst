@@ -174,7 +174,6 @@ Reindexing / selection / label manipulation
    Series.reset_index
    Series.reverse
    Series.sample
-   Series.set_index
    Series.set_mask
    Series.take
    Series.tail
