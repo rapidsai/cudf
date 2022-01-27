@@ -13,6 +13,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
+from cudf.core.udf.pipeline import precompiled
 from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
 
 
@@ -612,3 +613,16 @@ def test_masked_udf_caching():
     expect = data ** 3
     got = data.applymap(lambda x: x ** 3)
     assert_eq(expect, got, check_dtype=False)
+
+    # make sure we get a hit when reapplying
+    def f(x):
+        return x + 1
+
+    precompiled.clear()
+    assert precompiled.currsize == 0
+    data.apply(f)
+
+    assert precompiled.currsize == 1
+    data.apply(f)
+
+    assert precompiled.currsize == 1
