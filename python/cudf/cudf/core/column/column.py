@@ -1316,6 +1316,12 @@ def column_empty(
             column_empty(row_count, field_dtype)
             for field_dtype in dtype.fields.values()
         )
+    elif is_list_dtype(dtype):
+        data = None
+        children = (
+            full(row_count + 1, 0, dtype="int32"),
+            column_empty(row_count, dtype=dtype.element_type),
+        )
     elif is_categorical_dtype(dtype):
         data = None
         children = (
