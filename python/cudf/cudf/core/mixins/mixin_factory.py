@@ -31,6 +31,12 @@ def _create_delegating_mixin(
 
     Parameters
     ----------
+    mixin_name : str
+        The name of the class. This argument should be the same as the object
+        that this function's output is assigned to, e.g.
+        :code:`Baz = _create_delegating_mixin("Baz", ...)`.
+    docstring : str
+        The documentation string for the mixin class.
     category_name : str
         The category of operations for which a mixin is being created. This
         name will be used to define the following attributes as shown in the

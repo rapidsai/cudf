@@ -12,10 +12,9 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
-from cudf.core.mixins import Reducible
 
 
-class NumericalBaseColumn(ColumnBase, Reducible):
+class NumericalBaseColumn(ColumnBase):
     """A column composed of numerical data.
 
     This class encodes a standard interface for different types of columns
