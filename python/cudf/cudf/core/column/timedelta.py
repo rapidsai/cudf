@@ -369,15 +369,13 @@ class TimeDeltaColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(
-        self, skipna=None, dtype: Dtype = np.float64, *args, **kwargs
-    ) -> pd.Timedelta:
+    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
         )
 
-    def median(self, skipna: bool = None, *args, **kwargs) -> pd.Timedelta:
+    def median(self, skipna: bool = None) -> pd.Timedelta:
         return pd.Timedelta(
             self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
