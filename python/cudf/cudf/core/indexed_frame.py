@@ -769,7 +769,7 @@ class IndexedFrame(Frame):
             )
         except Exception as e:
             raise ValueError(
-                "user defined function compilation or execution failed."
+                "user defined function compilation failed."
             ) from e
 
         # Mask and data column preallocated
@@ -790,7 +790,11 @@ class IndexedFrame(Frame):
             offsets.append(col.offset)
         launch_args += offsets
         launch_args += list(args)
-        kernel.forall(len(self))(*launch_args)
+
+        try:
+            kernel.forall(len(self))(*launch_args)
+        except Exception as e:
+            raise RuntimeError("UDF kernel execution failed.") from e
 
         col = as_column(ans_col)
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
