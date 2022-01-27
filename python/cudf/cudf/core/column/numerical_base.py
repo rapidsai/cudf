@@ -103,14 +103,24 @@ class NumericalBaseColumn(ColumnBase):
             )
         return result
 
-    def mean(self, dtype=np.float64, *args, **kwargs):
-        return self._reduce("mean", dtype=dtype, *args, **kwargs)
+    def mean(self, skipna: bool = None, min_count: int = 0, dtype=np.float64):
+        return self._reduce(
+            "mean", skipna=skipna, min_count=min_count, dtype=dtype
+        )
 
-    def var(self, dtype=np.float64, *args, **kwargs):
-        return self._reduce("var", dtype=dtype, *args, **kwargs)
+    def var(
+        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+    ):
+        return self._reduce(
+            "var", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+        )
 
-    def std(self, dtype=np.float64, *args, **kwargs):
-        return self._reduce("std", dtype=dtype, *args, **kwargs)
+    def std(
+        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+    ):
+        return self._reduce(
+            "std", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+        )
 
     def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
