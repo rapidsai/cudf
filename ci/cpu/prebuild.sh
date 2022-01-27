@@ -3,9 +3,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 set -e
 
-DEFAULT_CUDA_VER="11.5"
-DEFAULT_PYTHON_VER="3.8"
-
 #Always upload cudf packages
 export UPLOAD_CUDF=1
 export UPLOAD_LIBCUDF=1
