@@ -2490,11 +2490,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
-    def take(self, indices, axis=0):
-        out = super().take(indices)
-        out.columns = self.columns
-        return out
-
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value, nan_as_null=None):
         """Add a column to DataFrame at the index specified by loc.
