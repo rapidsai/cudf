@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
 
 namespace cudf {
 namespace strings {
@@ -25,6 +26,59 @@ namespace strings {
  * @{
  * @file
  */
+
+/**
+ * @brief Splits individual strings elements into a table of strings columns
+ * using a regex pattern to delimit each string.
+ *
+ * Each element generates an array of strings that are stored in corresponding
+ * rows in the output table.
+ *
+ * The number of elements in the output table will be the same as the number of
+ * elements in the input column. The row for each column will contain the
+ * new strings produced from that input row.
+ *
+ * The resulting number of columns will be the maximum number of tokens found
+ * in any input row.
+ *
+ * The `pattern` is used to identify the separation points within a string
+ * and splitting stops when either `maxsplit` or the end of the string is reached.
+ *
+ * An empty input string will produce a corresponding empty string in the
+ * corresponding row in the first column.
+ *
+ * A null row will produce a corresponding null rows in the output table.
+ *
+ * @code{.pseudo}
+ * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
+ * s1 = split_re(s, "[_ ]")
+ * s1 is a table of strings columns:
+ *     [ ["a", "a", "", "ab"],
+ *       ["bc", "", "ab", "cd"],
+ *       ["def", "bc", "cd", ""],
+ *       ["g", null, null, null] ]
+ * s2 = split_re(s, "[ _]", 1)
+ * s2 is a table of strings columns:
+ *     [ ["a", "a", "", "ab"],
+ *       ["bc def_g", "_bc", "ab_cd", "cd "] ]
+ * @endcode
+ *
+ * @throw cudf:logic_error if `pattern` is empty.
+ *
+ * @param strings A column of string elements to be split.
+ * @param pattern The regex pattern for delimiting characters within each string.
+ * @param maxsplit Maximum number of splits to perform.
+ *        Default of -1 indicates all possible splits on each string.
+ * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @return Lists column of strings
+ *         Each vector of the lists column holds splits from a single row
+ *         element of the input column.
+ */
+std::unique_ptr<table> split_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Splits individual strings elements into a list of strings
@@ -54,10 +108,10 @@ namespace strings {
  *       ["ab", "cd", ""] ]
  * s2 = split_record(s, "[ _]", 1)
  * s2 is a lists column of strings:
- *     [ ["a", "bc_def_g"],
+ *     [ ["a", "bc def_g"],
  *       ["a", "_bc"],
- *       ["", "ab_cd"],
- *       ["ab", "cd_"] ]
+ *       ["", "ab cd"],
+ *       ["ab", "cd "] ]
  * @endcode
  *
  * @throw cudf:logic_error if `pattern` is empty.
