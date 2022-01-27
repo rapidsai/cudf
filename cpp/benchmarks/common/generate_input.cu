@@ -227,10 +227,15 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
     auto ints = dist(engine, size);
     rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
     // Clamp the generated random value to the specified range
-    return thrust::transform(
-      thrust::device, ints.begin(), ints.end(), result.begin(), [=] __device__(auto int_value) {
-        return T{std::max(std::min(int_value, upper_bound), lower_bound), *scale};
-      });
+    thrust::transform(thrust::device,
+                      ints.begin(),
+                      ints.end(),
+                      result.begin(),
+                      [scale       = *(this->scale),
+                       upper_bound = this->upper_bound,
+                       lower_bound = this->lower_bound] __device__(auto int_value) {
+                        return T{std::max(std::min(int_value, upper_bound), lower_bound), scale};
+                      });
     return result;
   }
 };
@@ -365,7 +370,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    thrust::minstd_rand& engine,
                                                    cudf::size_type num_rows)
 {
-  if constexpr (cudf::is_numeric<T>() or cudf::is_chrono<T>()) {
+  if constexpr (cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_fixed_point<T>()) {
     // Working around vector<bool> and storing bools as int8_t
     using stored_Type = typename stored_as<T>::type;
     // bernoulli_distribution

@@ -33,7 +33,9 @@
 /**
  * @brief Generates a normal(binomial) distribution between zero and upper_bound.
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T,
+          typename std::enable_if_t<std::is_integral<T>::value or std::is_same_v<__int128_t, T>,
+                                    T>* = nullptr>
 auto make_normal_dist(T upper_bound)
 {
   // Provided n is large enough, Normal(μ,σ2) is a good approximation for Binomial(n, p)
@@ -41,8 +43,8 @@ auto make_normal_dist(T upper_bound)
   using realT        = std::conditional_t<sizeof(T) * 8 <= 23, float, double>;
   realT const mean   = static_cast<realT>(upper_bound) / 2;             // μ = np, p=0.5
   realT const stddev = std::sqrt(static_cast<realT>(upper_bound) / 4);  // sqrt(np (1 - p))
-  std::cout << "mean: " << mean << " stddev: " << stddev << " upper_bound: " << upper_bound
-            << std::endl;
+  // std::cout << "mean: " << mean << " stddev: " << stddev << " upper_bound: " << upper_bound <<
+  // std::endl;
   return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
@@ -57,7 +59,9 @@ auto make_normal_dist(T upper_bound)
   return thrust::random::normal_distribution<T>(mean, stddev);
 }
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T,
+          typename std::enable_if_t<std::is_integral<T>::value or std::is_same_v<__int128_t, T>,
+                                    T>* = nullptr>
 auto make_uniform_dist(T range_start, T range_end)
 {
   return thrust::uniform_int_distribution<T>(range_start, range_end);
@@ -133,7 +137,9 @@ struct abs_value_generator : value_generator<T, Generator> {
 template <typename T>
 using distribution_fn = std::function<rmm::device_uvector<T>(thrust::minstd_rand&, size_t)>;
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T,
+          typename std::enable_if_t<std::is_integral<T>::value or std::is_same_v<__int128_t, T>,
+                                    T>* = nullptr>
 distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper_bound)
 {
   switch (did) {
