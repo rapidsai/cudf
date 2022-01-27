@@ -805,6 +805,6 @@ def test_read_text_byte_range(datadir):
     actual_1 = cudf.read_text(chess_file, delimiter=delimiter, byte_range=[byte_range_size * 1, byte_range_size])
     actual_2 = cudf.read_text(chess_file, delimiter=delimiter, byte_range=[byte_range_size * 2, byte_range_size])
 
-    actual = cudf.concat([actual_0, actual_1, actual_2])
+    actual = cudf.concat([actual_0, actual_1, actual_2], ignore_index=True)
 
-    assert_eq(expected.reset_index(drop=True), actual.reset_index(drop=True))
+    assert_eq(expected, actual)
