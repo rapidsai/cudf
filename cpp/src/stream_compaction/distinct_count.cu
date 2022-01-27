@@ -220,15 +220,13 @@ cudf::size_type distinct_count(column_view const& input,
       auto const is_nan  = nan_is_null and should_check_nan
                              ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i)
                              : false;
-      if (count_nulls) {
-        if (nan_is_null and (is_nan or is_null)) {
-          auto const prev_is_nan =
-            should_check_nan
-              ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1)
-              : false;
-          return (i == 0 or not(device_view.is_null(i - 1) or prev_is_nan));
-        }
-      } else if (is_null or (nan_is_null and is_nan)) {
+      if (count_nulls and nan_is_null and (is_nan or is_null)) {
+        auto const prev_is_nan =
+          should_check_nan
+            ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1)
+            : false;
+        return (i == 0 or not(device_view.is_null(i - 1) or prev_is_nan));
+      } else if (not count_nulls and (is_null or (nan_is_null and is_nan))) {
         return false;
       }
       return (i == 0 or not comp(i, i - 1));
