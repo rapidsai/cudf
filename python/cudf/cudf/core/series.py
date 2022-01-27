@@ -2947,7 +2947,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.distinct_count(method, dropna)
+        return super().nunique(method, dropna)
 
     def value_counts(
         self,

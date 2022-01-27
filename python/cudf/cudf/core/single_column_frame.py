@@ -336,3 +336,21 @@ class SingleColumnFrame(Frame):
                 return NotImplemented
 
         return {result_name: (self._column, other, reflect, fill_value)}
+
+    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+        """
+        Returns count of unique values for the column.
+
+        Parameters
+        ----------
+        method : builtins.str, default "sort"
+            Method used by cpp_distinct_count
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        int
+            Number of unique values in the column.
+        """
+        return sum(super().nunique(method=method, dropna=dropna).values())

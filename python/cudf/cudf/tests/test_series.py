@@ -1517,3 +1517,27 @@ def test_series_transpose(data):
     assert_eq(pd_transposed, cudf_transposed)
     assert_eq(pd_property, cudf_property)
     assert_eq(cudf_transposed, csr)
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.nunique()
+    expected = pd_s.nunique()
+
+    assert_eq(expected, actual)
+    
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique_index(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.index.nunique()
+    expected = pd_s.index.nunique()
+
+    assert_eq(expected, actual)

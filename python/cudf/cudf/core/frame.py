@@ -6420,6 +6420,27 @@ class Frame:
             other=other, fn="ge", fill_value=fill_value, can_reindex=True
         )
 
+    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+        """
+        Returns a per column mapping with counts of unique values for
+        each column.
+
+        Parameters
+        ----------
+        method : builtins.str, default "sort"
+            Method used by cpp_distinct_count
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        dict
+            Name and unique value counts of each column in frame.
+        """
+        return {
+            name: col.distinct_count(method=method, dropna=dropna) 
+                for name, col in self._data.items()
+        }
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
