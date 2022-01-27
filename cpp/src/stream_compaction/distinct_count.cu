@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <stream_compaction/stream_compaction_common.cuh>
-#include <stream_compaction/stream_compaction_common.hpp>
+#include "stream_compaction_common.cuh"
+#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -35,6 +35,11 @@
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/logical.h>
+
+#include <cmath>
+#include <cstddef>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -115,38 +120,19 @@ struct has_nans {
 };
 
 /**
- * @brief A functor to be used along with type_dispatcher to determine if the device
- * `check_nan` functor should be used.
- */
-struct check_nan_predicate {
-  // Check `NaN` for floating point type columns
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  bool operator()()
-  {
-    return true;
-  }
-  // Non-floating point type columns can never have `NaN`, so it will always return false.
-  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
-  bool operator()()
-  {
-    return false;
-  }
-};
-
-/**
  * @brief A functor to be used along with device type_dispatcher to check if
  * the row `index` of `column_device_view` is `NaN`.
  */
 struct check_nan {
   // Check if it's `NaN` for floating point type columns
   template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  __device__ __forceinline__ bool operator()(column_device_view const& input, size_type index)
+  __device__ inline bool operator()(column_device_view const& input, size_type index)
   {
     return std::isnan(input.data<T>()[index]);
   }
   // Non-floating point type columns can never have `NaN`, so it will always return false.
   template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
-  __device__ __forceinline__ bool operator()(column_device_view const&, size_type)
+  __device__ inline bool operator()(column_device_view const&, size_type)
   {
     return false;
   }
@@ -215,7 +201,7 @@ cudf::size_type distinct_count(column_view const& input,
 
   auto const count_nulls      = null_handling == null_policy::INCLUDE;
   auto const nan_is_null      = nan_handling == nan_policy::NAN_IS_NULL;
-  auto const should_check_nan = cudf::type_dispatcher(input.type(), check_nan_predicate{});
+  auto const should_check_nan = cudf::is_floating_point(input.type());
   auto input_device_view      = cudf::column_device_view::create(input, stream);
   auto device_view            = *input_device_view;
   auto input_table_view       = table_view{{input}};
@@ -230,21 +216,20 @@ cudf::size_type distinct_count(column_view const& input,
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(num_rows),
     [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {
-      bool is_nan  = false;
-      bool is_null = device_view.is_null(i);
-      if (nan_is_null and should_check_nan) {
-        is_nan = cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i);
-      }
+      auto const is_null = device_view.is_null(i);
+      auto const is_nan  = nan_is_null and should_check_nan
+                             ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i)
+                             : false;
       if (count_nulls) {
         if (nan_is_null and (is_nan or is_null)) {
-          auto prev_is_nan =
+          auto const prev_is_nan =
             should_check_nan
               ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1)
               : false;
           return (i == 0 or not(device_view.is_null(i - 1) or prev_is_nan));
         }
-      } else {
-        if (is_null or (nan_is_null and is_nan)) { return false; }
+      } else if (is_null or (nan_is_null and is_nan)) {
+        return false;
       }
       return (i == 0 or not comp(i, i - 1));
     });
@@ -257,32 +242,21 @@ cudf::size_type unordered_distinct_count(column_view const& input,
 {
   if (0 == input.size() or input.null_count() == input.size()) { return 0; }
 
-  auto const has_null = input.has_nulls();
-
-  bool has_nan = false;
   // Check for Nans
   // Checking for nulls in input and flag nan_handling, as the count will
   // only get affected if these two conditions are true. NaN will only be
   // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
   // will increase the count by 1.
-  if (nan_handling == nan_policy::NAN_IS_NULL) {
-    has_nan = cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
-  }
+  auto const has_nan_as_null = (nan_handling == nan_policy::NAN_IS_NULL) and
+                               cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
+  auto const has_null = input.has_nulls();
 
   auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // if nan is considered null and there are already null values
-  if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and has_null) { --count; }
-  if (not has_null and has_nan and null_handling == null_policy::EXCLUDE and
-      nan_handling == nan_policy::NAN_IS_NULL) {
-    --count;
-  }
-
-  if (null_handling == null_policy::EXCLUDE and has_null) {
-    return --count;
-  } else {
-    return count;
-  }
+  if (has_nan_as_null and (has_null or null_handling == null_policy::EXCLUDE)) { --count; }
+  if (null_handling == null_policy::EXCLUDE and has_null) { --count; }
+  return count;
 }
 }  // namespace detail
 

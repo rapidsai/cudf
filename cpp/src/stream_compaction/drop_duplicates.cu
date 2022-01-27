@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <stream_compaction/drop_duplicates.cuh>
-#include <stream_compaction/stream_compaction_common.cuh>
-#include <stream_compaction/stream_compaction_common.hpp>
+#include "drop_duplicates.cuh"
+#include "stream_compaction_common.cuh"
+#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -40,6 +40,7 @@
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -139,7 +140,7 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
+  if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
     return empty_like(input);
   }
 

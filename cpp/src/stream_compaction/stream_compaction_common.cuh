@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <stream_compaction/stream_compaction_common.hpp>
+#include "stream_compaction_common.hpp"
 
 namespace cudf {
 namespace detail {
@@ -28,7 +28,7 @@ class compaction_hash {
  public:
   compaction_hash(Nullate has_nulls, table_device_view t) : _hash{has_nulls, t} {}
 
-  __device__ __forceinline__ auto operator()(size_type i) const noexcept
+  __device__ inline auto operator()(size_type i) const noexcept
   {
     auto hash = _hash(i);
     return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
@@ -39,13 +39,13 @@ class compaction_hash {
 };
 
 /**
- * @brief Device functor to determine if a row is valid.
- */
+￼ * @brief Device functor to determine if a row is valid.
+￼ */
 class row_validity {
  public:
   row_validity(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  __device__ inline bool operator()(const size_type& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
