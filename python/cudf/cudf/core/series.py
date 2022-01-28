@@ -559,19 +559,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        if "column" in header:
-            warnings.warn(
-                "Series objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
-            )
-
         index_nframes = header["index_frame_count"]
         obj = super().deserialize(
             header, frames[header["index_frame_count"] :]
@@ -964,15 +951,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             col = self.name
 
         return cudf.DataFrame({col: self._column}, index=self.index)
-
-    def set_mask(self, mask, null_count=None):
-        warnings.warn(
-            "Series.set_mask is deprecated and will be removed in the future.",
-            FutureWarning,
-        )
-        return self._from_data(
-            {self.name: self._column.set_mask(mask)}, self._index
-        )
 
     def memory_usage(self, index=True, deep=False):
         """
@@ -1623,25 +1601,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def fill(self, fill_value, begin=0, end=-1, inplace=False):
-        warnings.warn(
-            "The fill method will be removed in a future cuDF release.",
-            FutureWarning,
-        )
-        fill_values = [fill_value]
-        col_and_fill = zip(self._columns, fill_values)
-
-        if not inplace:
-            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
-            return self.__class__._from_data(
-                zip(self._column_names, data_columns), self._index
-            )
-
-        for (c, v) in col_and_fill:
-            c.fill(v, begin, end, inplace=True)
-
-        return self
-
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
@@ -1664,15 +1623,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
-
-    # TODO: When this method is removed we can also remove ColumnBase.to_array.
-    def to_array(self, fillna=None):
-        warnings.warn(
-            "The to_array method will be removed in a future cuDF "
-            "release. Consider using `to_numpy` instead.",
-            FutureWarning,
-        )
-        return self._column.to_array(fillna=fillna)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
@@ -1781,27 +1731,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def nullmask(self):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
-
-    def as_mask(self):
-        """Convert booleans to bitmask
-
-        Returns
-        -------
-        device array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([True, False, True])
-        >>> s.as_mask()
-        <cudf.core.buffer.Buffer object at 0x...>
-        """
-        if not is_bool_dtype(self.dtype):
-            raise TypeError(
-                f"Series must of boolean dtype, found: {self.dtype}"
-            )
-
-        return self._column.as_mask()
 
     def astype(self, dtype, copy=False, errors="raise"):
         """
@@ -2242,76 +2171,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         mask = other.notna()
 
         self.mask(mask, other, inplace=True)
-
-    def reverse(self):
-        warnings.warn(
-            "Series.reverse is deprecated and will be removed in the future.",
-            FutureWarning,
-        )
-        rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
-        return self._from_data(
-            {self.name: self._column[rinds]}, self.index._values[rinds]
-        )
-
-    def label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        """Perform label encoding.
-
-        Parameters
-        ----------
-        values : sequence of input values
-        dtype : numpy.dtype; optional
-            Specifies the output dtype.  If `None` is given, the
-            smallest possible integer dtype (starting with np.int8)
-            is used.
-        na_sentinel : number, default -1
-            Value to indicate missing category.
-
-        Returns
-        -------
-        A sequence of encoded labels with value between 0 and n-1 classes(cats)
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 10])
-        >>> s.label_encoding([2, 3])
-        0   -1
-        1    0
-        2    1
-        3   -1
-        4   -1
-        dtype: int8
-
-        `na_sentinel` parameter can be used to
-        control the value when there is no encoding.
-
-        >>> s.label_encoding([2, 3], na_sentinel=10)
-        0    10
-        1     0
-        2     1
-        3    10
-        4    10
-        dtype: int8
-
-        When none of `cats` values exist in s, entire
-        Series will be `na_sentinel`.
-
-        >>> s.label_encoding(['a', 'b', 'c'])
-        0   -1
-        1   -1
-        2   -1
-        3   -1
-        4   -1
-        dtype: int8
-        """
-
-        warnings.warn(
-            "Series.label_encoding is deprecated and will be removed in the "
-            "future. Consider using cuML's LabelEncoder instead.",
-            FutureWarning,
-        )
-
-        return self._label_encoding(cats, dtype, na_sentinel)
 
     def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
         # Private implementation of deprecated public label_encoding method
