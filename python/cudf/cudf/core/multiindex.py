@@ -775,7 +775,7 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
-            result = result.set_index(index)
+            result.index = index
         return result
 
     def _get_row_major(
@@ -859,28 +859,8 @@ class MultiIndex(Frame, BaseIndex):
 
     @classmethod
     def deserialize(cls, header, frames):
-        if "names" in header:
-            warnings.warn(
-                "MultiIndex objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["column_names"] = header["names"]
-        column_names = pickle.loads(header["column_names"])
-        if "source_data" in header:
-            warnings.warn(
-                "MultiIndex objects serialized in cudf version "
-                "21.08 or older will no longer be deserializable "
-                "after version 21.10. Please load and resave any "
-                "pickles before upgrading to version 21.12.",
-                FutureWarning,
-            )
-            df = cudf.DataFrame.deserialize(header["source_data"], frames)
-            return cls.from_frame(df)._set_names(column_names)
-
         # Spoof the column names to construct the frame, then set manually.
+        column_names = pickle.loads(header["column_names"])
         header["column_names"] = pickle.dumps(range(0, len(column_names)))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
