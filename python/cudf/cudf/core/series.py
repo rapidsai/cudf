@@ -14,7 +14,6 @@ from typing import Any, MutableMapping, Optional, Set, Union
 import cupy
 import numpy as np
 import pandas as pd
-from numba import cuda
 from pandas._config import get_option
 
 import cudf
@@ -67,6 +66,7 @@ from cudf.core.indexed_frame import (
     doc_reset_index_template,
 )
 from cudf.core.single_column_frame import SingleColumnFrame
+from cudf.core.udf.scalar_function import _get_scalar_kernel
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -2374,7 +2374,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             by numba based on the function logic and argument types.
             See examples for details.
         args : tuple
-            Not supported
+            Positional arguments passed to func after the series value.
         **kwargs
             Not supported
 
@@ -2440,20 +2440,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
         """
-        if args or kwargs:
-            raise ValueError(
-                "UDFs using *args or **kwargs are not yet supported."
-            )
-
-        # these functions are generally written as functions of scalar
-        # values rather than rows. Rather than writing an entirely separate
-        # numba kernel that is not built around a row object, its simpler
-        # to just turn this into the equivalent single column dataframe case
-        name = self.name or "__temp_srname"
-        df = cudf.DataFrame({name: self})
-        f_ = cuda.jit(device=True)(func)
-
-        return df.apply(lambda row: f_(row[name]))
+        if convert_dtype is not True:
+            raise ValueError("Series.apply only supports convert_dtype=True")
+        return self._apply(func, _get_scalar_kernel, *args, **kwargs)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.

@@ -24,11 +24,12 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
-from cudf.core.column import arange
+from cudf.core.column import arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
+from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
@@ -755,6 +756,51 @@ class IndexedFrame(Frame):
             "`IndexedFrame.add_suffix` not currently implemented. \
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func, kernel_getter, *args, **kwargs):
+        """Apply `func` across the rows of the frame."""
+        if kwargs:
+            raise ValueError("UDFs using **kwargs are not yet supported.")
+
+        try:
+            kernel, retty = _compile_or_get(
+                self, func, args, kernel_getter=kernel_getter
+            )
+        except Exception as e:
+            raise ValueError(
+                "user defined function compilation failed."
+            ) from e
+
+        # Mask and data column preallocated
+        ans_col = cp.empty(len(self), dtype=retty)
+        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        launch_args = [(ans_col, ans_mask), len(self)]
+        offsets = []
+
+        # if _compile_or_get succeeds, it is safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for col in _supported_cols_from_frame(self).values():
+            data = col.data
+            mask = col.mask
+            if mask is None:
+                launch_args.append(data)
+            else:
+                launch_args.append((data, mask))
+            offsets.append(col.offset)
+        launch_args += offsets
+        launch_args += list(args)
+
+        try:
+            kernel.forall(len(self))(*launch_args)
+        except Exception as e:
+            raise RuntimeError("UDF kernel execution failed.") from e
+
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
+
+        return result
 
     def sort_values(
         self,
