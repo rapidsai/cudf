@@ -210,12 +210,16 @@ flattened_table flatten_nested_columns(table_view const& input,
 
 namespace experimental {
 
-std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> verticalize_nested_columns(
-  table_view input)
+flattened_table verticalize_nested_columns(table_view input,
+                                           std::vector<order> const& column_order,
+                                           std::vector<null_order> const& null_precedence)
 {
   auto [table, null_masks] = superimpose_parent_nulls(input);
   std::vector<column_view> verticalized_columns;
-  for (auto const& col : table) {
+  std::vector<order> new_column_order;
+  std::vector<null_order> new_null_precedence;
+  for (size_type col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
+    auto const& col = table.column(col_idx);
     if (is_nested(col.type())) {
       // convert and insert
       std::vector<column_view> r_verticalized_columns;
@@ -251,11 +255,23 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> verticalize_nested
       }
       verticalized_columns.insert(
         verticalized_columns.end(), r_verticalized_columns.rbegin(), r_verticalized_columns.rend());
+      if (not column_order.empty()) {
+        new_column_order.insert(
+          new_column_order.end(), r_verticalized_columns.size(), column_order[col_idx]);
+      }
+      if (not null_precedence.empty()) {
+        new_null_precedence.insert(
+          new_null_precedence.end(), r_verticalized_columns.size(), null_precedence[col_idx]);
+      }
     } else {
       verticalized_columns.push_back(col);
     }
   }
-  return std::make_tuple(table_view(verticalized_columns), std::move(null_masks));
+  return flattened_table(table_view(verticalized_columns),
+                         new_column_order,
+                         new_null_precedence,
+                         {},
+                         std::move(null_masks));
 }
 
 }  // namespace experimental

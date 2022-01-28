@@ -46,8 +46,10 @@ namespace detail {
 template <bool stable = false>
 std::unique_ptr<column> sorted_order2(
   table_view input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource())
 {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0);
@@ -61,12 +63,18 @@ std::unique_ptr<column> sorted_order2(
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto [vertical_table, nullmasks] =
-    cudf::structs::detail::experimental::verticalize_nested_columns(input);
-  auto device_table = table_device_view::create(vertical_table, stream);
+  auto verticalized = cudf::structs::detail::experimental::verticalize_nested_columns(
+    input, column_order, null_precedence);
+  auto device_table         = table_device_view::create(verticalized.flattened_columns(), stream);
+  auto const d_column_order = make_device_uvector_async(verticalized.orders(), stream);
+  auto const d_null_precedence = make_device_uvector_async(verticalized.null_orders(), stream);
+
   // auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
-  auto const comparator = experimental::row_lexicographic_comparator(
-    nullate::DYNAMIC{true}, *device_table, *device_table);
+  auto const comparator = experimental::row_lexicographic_comparator(nullate::DYNAMIC{true},
+                                                                     *device_table,
+                                                                     *device_table,
+                                                                     d_column_order.data(),
+                                                                     d_null_precedence.data());
 
   thrust::sort(rmm::exec_policy(stream),
                mutable_indices_view.begin<size_type>(),

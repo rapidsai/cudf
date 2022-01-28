@@ -19,6 +19,53 @@ struct NewRowOpTest : public cudf::test::BaseFixture {
 
 #include <cudf/sort2.cuh>
 
+TEST_F(NewRowOpTest, BasicStructTwoChild)
+{
+  using Type           = int;
+  using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
+  std::default_random_engine generator;
+  std::uniform_int_distribution<int> distribution(0, 100);
+
+  const cudf::size_type n_rows{1 << 2};
+  const cudf::size_type n_cols{2};
+
+  // Create columns with values in the range [0,100)
+  std::vector<column_wrapper> columns;
+  columns.reserve(n_cols);
+  std::generate_n(std::back_inserter(columns), n_cols, [&]() {
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      0, [&](auto row) { return distribution(generator); });
+    return column_wrapper(elements, elements + n_rows);
+  });
+
+  std::vector<std::unique_ptr<cudf::column>> cols;
+  std::transform(columns.begin(), columns.end(), std::back_inserter(cols), [](column_wrapper& col) {
+    return col.release();
+  });
+
+  auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols) {
+    cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
+    return struct_col.release();
+  };
+
+  std::vector<std::unique_ptr<cudf::column>> s2_children;
+  s2_children.push_back(std::move(cols[0]));
+  s2_children.push_back(std::move(cols[1]));
+  auto s2 = make_struct(std::move(s2_children));
+
+  cudf::test::print(s2->view());
+
+  // // Create table view
+  // auto input = cudf::table_view({struct_col});
+  auto input = cudf::table_view({s2->view()});
+
+  auto result1 = cudf::sorted_order(input);
+  cudf::test::print(result1->view());
+  auto result2 = cudf::detail::sorted_order2(input);
+  cudf::test::print(result2->view());
+  cudf::test::expect_columns_equal(result1->view(), result2->view());
+}
+
 TEST_F(NewRowOpTest, DeepStruct)
 {
   using Type           = int;
@@ -69,53 +116,6 @@ TEST_F(NewRowOpTest, DeepStruct)
   auto result1 = cudf::sorted_order(sliced_input);
   cudf::test::print(result1->view());
   auto result2 = cudf::detail::sorted_order2(sliced_input);
-  cudf::test::print(result2->view());
-  cudf::test::expect_columns_equal(result1->view(), result2->view());
-}
-
-TEST_F(NewRowOpTest, StructTwoChildTest)
-{
-  using Type           = int;
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 100);
-
-  const cudf::size_type n_rows{1 << 2};
-  const cudf::size_type n_cols{2};
-
-  // Create columns with values in the range [0,100)
-  std::vector<column_wrapper> columns;
-  columns.reserve(n_cols);
-  std::generate_n(std::back_inserter(columns), n_cols, [&]() {
-    auto elements = cudf::detail::make_counting_transform_iterator(
-      0, [&](auto row) { return distribution(generator); });
-    return column_wrapper(elements, elements + n_rows);
-  });
-
-  std::vector<std::unique_ptr<cudf::column>> cols;
-  std::transform(columns.begin(), columns.end(), std::back_inserter(cols), [](column_wrapper& col) {
-    return col.release();
-  });
-
-  auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols) {
-    cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
-    return struct_col.release();
-  };
-
-  std::vector<std::unique_ptr<cudf::column>> s2_children;
-  s2_children.push_back(std::move(cols[0]));
-  s2_children.push_back(std::move(cols[1]));
-  auto s2 = make_struct(std::move(s2_children));
-
-  cudf::test::print(s2->view());
-
-  // // Create table view
-  // auto input = cudf::table_view({struct_col});
-  auto input = cudf::table_view({s2->view()});
-
-  auto result1 = cudf::sorted_order(input);
-  cudf::test::print(result1->view());
-  auto result2 = cudf::detail::sorted_order2(input);
   cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
@@ -186,6 +186,14 @@ TEST_F(NewRowOpTest, SampleStructTest)
   auto result1 = cudf::sorted_order(input);
   cudf::test::print(result1->view());
   auto result2 = cudf::detail::sorted_order2(input);
+  cudf::test::print(result2->view());
+  cudf::test::expect_columns_equal(result1->view(), result2->view());
+
+  std::vector<cudf::order> col_order       = {cudf::order::DESCENDING, cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_order = {cudf::null_order::BEFORE, cudf::null_order::AFTER};
+  result1                                  = cudf::sorted_order(input, col_order, null_order);
+  result2 = cudf::detail::sorted_order2(input, col_order, null_order);
+  cudf::test::print(result1->view());
   cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
