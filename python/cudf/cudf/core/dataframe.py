@@ -42,6 +42,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    CategoricalColumn,
     as_column,
     build_categorical_column,
     build_column,
@@ -5022,6 +5023,56 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         falcon      True       True
         dog        False      False
         """
+        # Preprocess different input types into a mapping from column names to
+        # a list of values to check.
+        if isinstance(values, (Series, DataFrame)):
+            values = values.reindex(self.index)
+            result = {}
+
+            if isinstance(values, Series):
+                # TODO: propagate nulls through isin
+                # https://github.com/rapidsai/cudf/issues/7556
+                obj_dtype = cudf.dtype("object")
+                for col in self._data.names:
+                    # If one column is categorical but not the other the
+                    # equality comparator will fail so we need to manually set
+                    # to False. Same goes for object dtypes.
+                    self_col = self._data[col]
+                    other_col = values._column
+                    self_is_cat = isinstance(self_col, CategoricalColumn)
+                    other_is_cat = isinstance(other_col, CategoricalColumn)
+                    # issubdtype will fail on a categorical column
+                    self_is_obj = not self_is_cat and np.issubdtype(
+                        self_col, obj_dtype
+                    )
+                    other_is_obj = not other_is_cat and np.issubdtype(
+                        other_col, obj_dtype
+                    )
+
+                    if (
+                        (self_is_cat != other_is_cat)
+                        or self_is_obj
+                        or other_is_obj
+                    ):
+                        result[col] = utils.scalar_broadcast_to(
+                            False, len(self)
+                        )
+                    else:
+                        result[col] = (self._data[col] == other_col).fillna(
+                            False
+                        )
+            else:
+                for col in self._data.names:
+                    if col in values.columns:
+                        result[col] = (
+                            self._data[col] == values[col]._column
+                        ).fillna(False)
+                    else:
+                        result[col] = utils.scalar_broadcast_to(
+                            False, len(self)
+                        )
+            return DataFrame._from_data(result, index=self.index)
+
         if isinstance(values, dict):
 
             result_df = DataFrame()
@@ -5037,52 +5088,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             result_df.index = self.index
             return result_df
-        elif isinstance(values, Series):
-            values = values.reindex(self.index)
-
-            result = DataFrame()
-            # TODO: propagate nulls through isin
-            # https://github.com/rapidsai/cudf/issues/7556
-            for col in self._data.names:
-                if isinstance(
-                    self[col]._column, cudf.core.column.CategoricalColumn
-                ) and isinstance(
-                    values._column, cudf.core.column.CategoricalColumn
-                ):
-                    res = (self._data[col] == values._column).fillna(False)
-                    result[col] = res
-                elif (
-                    isinstance(
-                        self[col]._column, cudf.core.column.CategoricalColumn
-                    )
-                    or np.issubdtype(self[col].dtype, cudf.dtype("object"))
-                ) or (
-                    isinstance(
-                        values._column, cudf.core.column.CategoricalColumn
-                    )
-                    or np.issubdtype(values.dtype, cudf.dtype("object"))
-                ):
-                    result[col] = utils.scalar_broadcast_to(False, len(self))
-                else:
-                    result[col] = (self._data[col] == values._column).fillna(
-                        False
-                    )
-
-            result.index = self.index
-            return result
-        elif isinstance(values, DataFrame):
-            values = values.reindex(self.index)
-
-            result = DataFrame()
-            for col in self._data.names:
-                if col in values.columns:
-                    result[col] = (
-                        self._data[col] == values[col]._column
-                    ).fillna(False)
-                else:
-                    result[col] = utils.scalar_broadcast_to(False, len(self))
-            result.index = self.index
-            return result
         else:
             if not is_list_like(values):
                 raise TypeError(
