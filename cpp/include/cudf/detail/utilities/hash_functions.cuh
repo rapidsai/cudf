@@ -105,6 +105,14 @@ struct MurmurHash3_32 {
     return h;
   }
 
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
+  {
+    // Individual byte reads for unaligned accesses (very likely for strings)
+    auto const q = reinterpret_cast<uint8_t const*>(data + offset);
+    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+  }
+
   /* Copyright 2005-2014 Daniel James.
    *
    * Use, modification and distribution is subject to the Boost Software
@@ -122,7 +130,7 @@ struct MurmurHash3_32 {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  __device__ inline result_type hash_combine(result_type lhs, result_type rhs)
+  [[nodiscard]] __device__ inline result_type hash_combine(result_type lhs, result_type rhs)
   {
     result_type combined{lhs};
 
@@ -131,7 +139,10 @@ struct MurmurHash3_32 {
     return combined;
   }
 
-  result_type __device__ inline operator()(Key const& key) const { return compute(key); }
+  [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
+  {
+    return compute(key);
+  }
 
   // compute wrapper for floating point types
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
@@ -147,33 +158,27 @@ struct MurmurHash3_32 {
     }
   }
 
-  template <typename TKey>
-  result_type __device__ inline compute(TKey const& key) const
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
   {
-    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(TKey));
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
   }
 
-  result_type __device__ compute_bytes(std::byte const* const data, cudf::size_type const len) const
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
   {
-    cudf::size_type const nblocks     = len / 4;
-    cudf::size_type const tail_offset = nblocks * 4;
-    result_type h1                    = m_seed;
-    constexpr uint32_t c1             = 0xcc9e2d51;
-    constexpr uint32_t c2             = 0x1b873593;
-    constexpr uint32_t c3             = 0xe6546b64;
-    constexpr uint32_t rot_c1         = 15;
-    constexpr uint32_t rot_c2         = 13;
-    auto getblock32                   = [] __device__(uint32_t const* p, int i) -> uint32_t {
-      // Individual byte reads for unaligned accesses (very likely for strings)
-      auto q = (uint8_t const*)(p + i);
-      return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-    };
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
+    result_type h1                       = m_seed;
+    constexpr uint32_t c1                = 0xcc9e2d51;
+    constexpr uint32_t c2                = 0x1b873593;
+    constexpr uint32_t c3                = 0xe6546b64;
+    constexpr uint32_t rot_c1            = 15;
+    constexpr uint32_t rot_c2            = 13;
 
-    //----------
-    // body
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data);
-    for (int i = 0; i < nblocks; i++) {
-      uint32_t k1 = getblock32(blocks, i);
+    // Process all four-byte chunks.
+    for (cudf::size_type i = 0; i < nblocks; i++) {
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
       k1 = rotl32(k1, rot_c1);
       k1 *= c2;
@@ -181,10 +186,10 @@ struct MurmurHash3_32 {
       h1 = rotl32(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
-    //----------
-    // tail
+
+    // Process remaining bytes that do not fill a four-byte chunk.
     uint32_t k1 = 0;
-    switch (len & 3) {
+    switch (len % 4) {
       case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16;
       case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8;
       case 1:
@@ -194,8 +199,8 @@ struct MurmurHash3_32 {
         k1 *= c2;
         h1 ^= k1;
     };
-    //----------
-    // finalization
+
+    // Finalize hash.
     h1 ^= len;
     h1 = fmix32(h1);
     return h1;
@@ -218,7 +223,9 @@ template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
-  return this->compute_bytes(reinterpret_cast<std::byte const*>(key.data()), key.size_bytes());
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
@@ -307,32 +314,34 @@ struct SparkMurmurHash3_32 {
     }
   }
 
-  template <typename TKey>
-  result_type __device__ inline compute(TKey const& key) const
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
   {
-    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(TKey));
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
   }
 
-  result_type __device__ compute_bytes(std::byte const* const data, cudf::size_type const len) const
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
   {
-    cudf::size_type const nblocks = len / 4;
-    uint32_t h1                   = m_seed;
-    constexpr uint32_t c1         = 0xcc9e2d51;
-    constexpr uint32_t c2         = 0x1b873593;
-    constexpr uint32_t c3         = 0xe6546b64;
-    constexpr uint32_t rot_c1     = 15;
-    constexpr uint32_t rot_c2     = 13;
-    auto getblock32               = [] __device__(uint32_t const* p, int i) -> uint32_t {
-      // Individual byte reads for unaligned accesses (very likely for strings)
-      auto q = (uint8_t const*)(p + i);
-      return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-    };
+    // Individual byte reads for unaligned accesses (very likely for strings)
+    auto q = reinterpret_cast<uint8_t const*>(data + offset);
+    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+  }
 
-    //----------
-    // Process all four-byte chunks
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data);
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    result_type h1                       = m_seed;
+    constexpr uint32_t c1                = 0xcc9e2d51;
+    constexpr uint32_t c2                = 0x1b873593;
+    constexpr uint32_t c3                = 0xe6546b64;
+    constexpr uint32_t rot_c1            = 15;
+    constexpr uint32_t rot_c2            = 13;
+
+    // Process all four-byte chunks.
     for (cudf::size_type i = 0; i < nblocks; i++) {
-      uint32_t k1 = getblock32(blocks, i);
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
       k1 = rotl32(k1, rot_c1);
       k1 *= c2;
@@ -340,9 +349,9 @@ struct SparkMurmurHash3_32 {
       h1 = rotl32(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
-    //----------
+
     // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
-    // (does not conform to normal MurmurHash3)
+    // (does not conform to normal MurmurHash3).
     for (cudf::size_type i = nblocks * 4; i < len; i++) {
       // We require a two-step cast to get the k1 value from the byte. First,
       // we must cast to a signed int8_t. Then, the sign bit is preserved when
@@ -356,8 +365,8 @@ struct SparkMurmurHash3_32 {
       h1 = rotl32(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
-    //----------
-    // finalization
+
+    // Finalize hash.
     h1 ^= len;
     h1 = fmix32(h1);
     return h1;
@@ -477,7 +486,9 @@ template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
-  return this->compute_bytes(reinterpret_cast<std::byte const*>(key.data()), key.size_bytes());
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
