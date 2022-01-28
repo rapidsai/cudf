@@ -5033,34 +5033,36 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # TODO: propagate nulls through isin
                 # https://github.com/rapidsai/cudf/issues/7556
                 obj_dtype = cudf.dtype("object")
+
                 for col in self._data.names:
-                    # If one column is categorical but not the other the
-                    # equality comparator will fail so we need to manually set
-                    # to False. Same goes for object dtypes.
                     self_col = self._data[col]
                     other_col = values._column
                     self_is_cat = isinstance(self_col, CategoricalColumn)
                     other_is_cat = isinstance(other_col, CategoricalColumn)
-                    # issubdtype will fail on a categorical column
-                    self_is_obj = not self_is_cat and np.issubdtype(
-                        self_col, obj_dtype
-                    )
-                    other_is_obj = not other_is_cat and np.issubdtype(
-                        other_col, obj_dtype
-                    )
 
-                    if (
-                        (self_is_cat != other_is_cat)
-                        or self_is_obj
-                        or other_is_obj
-                    ):
+                    if self_is_cat != other_is_cat:
+                        # Categoricals can try to compare based on the
+                        # dtype of the levels.
+                        if self_is_cat:
+                            self_col = self_col._get_decategorized_column()
+                        else:
+                            other_col = other_col._get_decategorized_column()
+
+                    if self_is_cat and other_is_cat:
+                        self_is_obj = other_is_obj = False
+                    else:
+                        self_is_obj = np.issubdtype(self_col.dtype, obj_dtype)
+                        other_is_obj = np.issubdtype(
+                            other_col.dtype, obj_dtype
+                        )
+
+                    if self_is_obj != other_is_obj:
+                        # Strings can't compare to anything else.
                         result[col] = utils.scalar_broadcast_to(
                             False, len(self)
                         )
                     else:
-                        result[col] = (self._data[col] == other_col).fillna(
-                            False
-                        )
+                        result[col] = (self_col == other_col).fillna(False)
             else:
                 for col in self._data.names:
                     if col in values.columns:
