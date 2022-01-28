@@ -4275,6 +4275,7 @@ def test_value_counts():
             }
         ),
         pd.DataFrame({"a": ["a", "b", "c"]}, dtype="category"),
+        pd.DataFrame({"a": ["a", "b", "c"]}),
     ],
 )
 @pytest.mark.parametrize(
@@ -4304,6 +4305,7 @@ def test_value_counts():
         "abc",
         123,
         pd.Series(["a", "b", "c"]),
+        pd.Series(["a", "b", "c"], dtype="category"),
     ],
 )
 def test_isin_dataframe(data, values):
