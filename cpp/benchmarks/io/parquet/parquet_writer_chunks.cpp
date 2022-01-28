@@ -59,7 +59,7 @@ void PQ_write(benchmark::State& state)
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["encoded_file_size"]         = source_sink.size();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 void PQ_write_chunked(benchmark::State& state)
@@ -88,7 +88,7 @@ void PQ_write_chunked(benchmark::State& state)
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["encoded_file_size"]         = source_sink.size();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 #define PWBM_BENCHMARK_DEFINE(name, size, num_columns)                                    \
