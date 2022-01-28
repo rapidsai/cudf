@@ -219,17 +219,18 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
+  auto const stream = rmm::cuda_stream_default;
+  auto grouped_keys = helper().sorted_keys(stream, mr);
 
-  auto const& group_offsets       = helper().group_offsets(rmm::cuda_stream_default);
+  auto const& group_offsets       = helper().group_offsets(stream);
   auto const group_offsets_vector = detail::make_std_vector_sync(group_offsets, stream);
 
-  if (values.num_columns()) {
+  if (not values.is_empty()) {
     auto grouped_values = cudf::detail::gather(values,
-                                               helper().key_sort_order(rmm::cuda_stream_default),
+                                               helper().key_sort_order(stream),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                               rmm::cuda_stream_default,
+                                               stream,
                                                mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
