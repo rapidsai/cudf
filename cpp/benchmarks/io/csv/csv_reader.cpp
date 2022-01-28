@@ -57,7 +57,7 @@ void BM_csv_read_varying_input(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["file_size"]         = source_sink.size();
+  state.counters["encoded_file_size"]         = source_sink.size();
 }
 
 void BM_csv_read_varying_options(benchmark::State& state)
@@ -130,7 +130,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
-  state.counters["file_size"]         = source_sink.size();
+  state.counters["encoded_file_size"]         = source_sink.size();
 }
 
 #define CSV_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)       \
