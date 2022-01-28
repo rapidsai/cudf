@@ -319,6 +319,35 @@ class element_relational_comparator2 {
   null_order null_precedence;
 };
 
+template <typename T>
+struct device_stack {
+  __device__ device_stack(T* stack_storage, int capacity)
+    : stack(stack_storage), capacity(capacity), size(0)
+  {
+  }
+  __device__ void push(T const& val)
+  {
+    cudf_assert(size < capacity and "Stack overflow");
+    stack[size++] = val;
+  }
+  __device__ T pop()
+  {
+    cudf_assert(size > 0 and "Stack underflow");
+    return stack[--size];
+  }
+  __device__ T top()
+  {
+    cudf_assert(size > 0 and "Stack underflow");
+    return stack[size - 1];
+  }
+  __device__ bool empty() { return size == 0; }
+
+ private:
+  T* stack;
+  int capacity;
+  int size;
+};
+
 /**
  * @brief Computes whether one row is lexicographically *less* than another row.
  *
@@ -376,31 +405,59 @@ class row_lexicographic_comparator2 {
    */
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
+    using stack_value_type =
+      thrust::tuple<column_device_view const*, column_device_view const*, size_t>;
+    stack_value_type stack_storage[10];
+
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      device_stack<stack_value_type> stack(stack_storage, 9);
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
       weak_ordering2 state{weak_ordering2::EQUIVALENT};
       null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
-      column_device_view lcol = _lhs.column(i);
-      column_device_view rcol = _rhs.column(i);
-      while (lcol.type().id() == type_id::STRUCT) {
-        bool const lhs_is_null{lcol.is_null(lhs_index)};
-        bool const rhs_is_null{rcol.is_null(rhs_index)};
+      column_device_view const* lcol = _lhs.begin() + i;
+      column_device_view const* rcol = _rhs.begin() + i;
+      size_t curr_child              = 0;
+
+      while (true) {
+        bool const lhs_is_null{lcol->is_null(lhs_index)};
+        bool const rhs_is_null{rcol->is_null(rhs_index)};
 
         if (lhs_is_null or rhs_is_null) {  // atleast one is null
           state = null_compare2(lhs_is_null, rhs_is_null, null_precedence);
           if (state != weak_ordering2::EQUIVALENT) break;
+        } else if (lcol->type().id() != type_id::STRUCT) {
+          auto comparator =
+            element_relational_comparator2<has_nulls>{*lcol, *rcol, null_precedence};
+          state = cudf::type_dispatcher(lcol->type(), comparator, lhs_index, rhs_index);
+          if (state != weak_ordering2::EQUIVALENT) break;
         }
 
-        lcol = lcol.children()[0];
-        rcol = rcol.children()[0];
-      }
+        // Reaching here means the nullability was same and we need to continue comparing
+        if (lcol->type().id() == type_id::STRUCT) {
+          stack.push({lcol, rcol, 0});
+        } else {
+          // unwind stack until we reach a struct level with children still left to compare
+          bool completed_comparison = false;
+          do {
+            if (stack.empty()) {
+              completed_comparison = true;
+              break;
+            }
+            thrust::tie(lcol, rcol, curr_child) = stack.pop();
+          } while (lcol->num_child_columns() <= curr_child + 1);
+          if (completed_comparison) { break; }
+          stack.push({lcol, rcol, curr_child + 1});
+          // break;
+        }
 
-      if (state == weak_ordering2::EQUIVALENT) {
-        auto comparator = element_relational_comparator2<has_nulls>{lcol, rcol, null_precedence};
-        state           = cudf::type_dispatcher(lcol.type(), comparator, lhs_index, rhs_index);
+        // The top of the stack now is where we have to continue comparing from
+        thrust::tie(lcol, rcol, curr_child) = stack.top();
+
+        lcol = &lcol->children()[curr_child];
+        rcol = &rcol->children()[curr_child];
       }
 
       if (state == weak_ordering2::EQUIVALENT) { continue; }
