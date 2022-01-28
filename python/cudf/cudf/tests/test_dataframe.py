@@ -4252,272 +4252,6 @@ def test_value_counts():
 @pytest.mark.parametrize(
     "data",
     [
-        [],
-        [0, 12, 14],
-        [0, 14, 12, 12, 3, 10, 12, 14],
-        np.random.randint(-100, 100, 200),
-        pd.Series([0.0, 1.0, None, 10.0]),
-        [None, None, None, None],
-        [np.nan, None, -1, 2, 3],
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        np.random.randint(-100, 100, 10),
-        [],
-        [np.nan, None, -1, 2, 3],
-        [1.0, 12.0, None, None, 120],
-        [0, 14, 12, 12, 3, 10, 12, 14, None],
-        [None, None, None],
-        ["0", "12", "14"],
-        ["0", "12", "14", "a"],
-    ],
-)
-def test_isin_numeric(data, values):
-    index = np.random.randint(0, 100, len(data))
-    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
-    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
-
-    expected = psr.isin(values)
-    got = gsr.isin(values)
-
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(
-            ["2018-01-01", "2019-04-03", None, "2019-12-30"],
-            dtype="datetime64[ns]",
-        ),
-        pd.Series(
-            [
-                "2018-01-01",
-                "2019-04-03",
-                None,
-                "2019-12-30",
-                "2018-01-01",
-                "2018-01-01",
-            ],
-            dtype="datetime64[ns]",
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        [1514764800000000000, 1577664000000000000],
-        [
-            1514764800000000000,
-            1577664000000000000,
-            1577664000000000000,
-            1577664000000000000,
-            1514764800000000000,
-        ],
-        ["2019-04-03", "2019-12-30", "2012-01-01"],
-        [
-            "2012-01-01",
-            "2012-01-01",
-            "2012-01-01",
-            "2019-04-03",
-            "2019-12-30",
-            "2012-01-01",
-        ],
-    ],
-)
-def test_isin_datetime(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(["this", "is", None, "a", "test"]),
-        pd.Series(["test", "this", "test", "is", None, "test", "a", "test"]),
-        pd.Series(["0", "12", "14"]),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["this", "is"],
-        [None, None, None],
-        ["12", "14", "19"],
-        pytest.param(
-            [12, 14, 19],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_120,
-                reason="pandas's failure here seems like a bug(in < 1.2) "
-                "given the reverse succeeds",
-            ),
-        ),
-        ["is", "this", "is", "this", "is"],
-    ],
-)
-def test_isin_string(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
-        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
-        pd.Series([0, 3, 10, 12], dtype="category"),
-        pd.Series([0, 3, 10, 12, 0, 10, 3, 0, 0, 3, 3], dtype="category"),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["a", "b", None, "f", "words"],
-        ["0", "12", None, "14"],
-        [0, 10, 12, None, 39, 40, 1000],
-        [0, 0, 0, 0, 3, 3, 3, None, 1, 2, 3],
-    ],
-)
-def test_isin_categorical(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(
-            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
-        ),
-        pd.Series([0, 15, 10], index=[0, None, 9]),
-        pd.Series(
-            range(25),
-            index=pd.date_range(
-                start="2019-01-01", end="2019-01-02", freq="H"
-            ),
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["this", "is"],
-        [0, 19, 13],
-        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
-    ],
-)
-def test_isin_index(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.index.isin(values)
-    expected = psr.index.isin(values)
-
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        pd.MultiIndex.from_arrays(
-            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
-        ),
-        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
-        pd.MultiIndex.from_arrays(
-            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
-            names=("number", "color"),
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values,level,err",
-    [
-        (["red", "orange", "yellow"], "color", None),
-        (["red", "white", "yellow"], "color", None),
-        ([0, 1, 2, 10, 11, 15], "number", None),
-        ([0, 1, 2, 10, 11, 15], None, TypeError),
-        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
-        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
-        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
-        (pd.Index(["red", "white", "yellow"]), "color", None),
-        ([(1, "red"), (3, "red")], None, None),
-        (((1, "red"), (3, "red")), None, None),
-        (
-            pd.MultiIndex.from_arrays(
-                [[1, 2, 3], ["red", "blue", "green"]],
-                names=("number", "color"),
-            ),
-            None,
-            None,
-        ),
-        (
-            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
-            None,
-            None,
-        ),
-        (
-            pd.MultiIndex.from_arrays(
-                [
-                    [1, 2, 3, 10, 100],
-                    ["red", "blue", "green", "pink", "white"],
-                ],
-                names=("number", "color"),
-            ),
-            None,
-            None,
-        ),
-    ],
-)
-def test_isin_multiindex(data, values, level, err):
-    pmdx = data
-    gmdx = cudf.from_pandas(data)
-
-    if err is None:
-        expected = pmdx.isin(values, level=level)
-        if isinstance(values, pd.MultiIndex):
-            values = cudf.from_pandas(values)
-        got = gmdx.isin(values, level=level)
-
-        assert_eq(got, expected)
-    else:
-        assert_exceptions_equal(
-            lfunc=pmdx.isin,
-            rfunc=gmdx.isin,
-            lfunc_args_and_kwargs=([values], {"level": level}),
-            rfunc_args_and_kwargs=([values], {"level": level}),
-            check_exception_type=False,
-            expected_error_message=re.escape(
-                "values need to be a Multi-Index or set/list-like tuple "
-                "squences  when `level=None`."
-            ),
-        )
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
         pd.DataFrame(
             {
                 "num_legs": [2, 4],
@@ -4540,6 +4274,7 @@ def test_isin_multiindex(data, values, level, err):
                 "num_wings": [2, 0, 2, 1, 2, 4, -1],
             }
         ),
+        pd.DataFrame({"a": ["a", "b", "c"]}, dtype="category"),
     ],
 )
 @pytest.mark.parametrize(
@@ -4568,6 +4303,7 @@ def test_isin_multiindex(data, values, level, err):
         pd.Series([1, 2, 3, 4, 5]),
         "abc",
         123,
+        pd.Series(["a", "b", "c"]),
     ],
 )
 def test_isin_dataframe(data, values):
@@ -4590,6 +4326,13 @@ def test_isin_dataframe(data, values):
                     not PANDAS_GE_110,
                     "https://github.com/pandas-dev/pandas/issues/34256",
                 )
+        except TypeError as e:
+            # Can't do isin with different categories
+            if str(e) == (
+                "Categoricals can only be compared if 'categories' "
+                "are the same."
+            ):
+                return
 
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = cudf.from_pandas(values)
