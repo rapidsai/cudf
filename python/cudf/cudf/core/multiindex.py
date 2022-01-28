@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
-import warnings
 from collections.abc import Sequence
 from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
