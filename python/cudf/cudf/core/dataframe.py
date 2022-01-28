@@ -5026,8 +5026,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: propagate nulls through isin
         # https://github.com/rapidsai/cudf/issues/7556
 
+        def make_false_column_like_self():
+            return column.full(size=len(self), fill_value=False, dtype="bool")
+
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
+        result = {}
         if isinstance(values, (Series, DataFrame)):
             obj_dtype = cudf.dtype("object")
 
@@ -5044,7 +5048,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if isinstance(values, DataFrame)
                 else {name: values._column for name in self._data}
             )
-            result = {}
             for col, self_col in self._data.items():
                 if col in other_cols:
                     other_col = other_cols[col]
@@ -5074,45 +5077,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                     if self_is_obj != other_is_obj:
                         # Strings can't compare to anything else.
-                        result[col] = utils.scalar_broadcast_to(
-                            False, len(self)
-                        )
+                        result[col] = make_false_column_like_self()
                     else:
                         result[col] = (self_col == other_col).fillna(False)
                 else:
-                    result[col] = utils.scalar_broadcast_to(False, len(self))
-            return DataFrame._from_data(result, index=self.index)
-
-        if isinstance(values, dict):
-
-            result_df = DataFrame()
-
-            for col in self._data.names:
-                if col in values:
-                    val = values[col]
-                    result_df[col] = self._data[col].isin(val)
+                    result[col] = make_false_column_like_self()
+        elif is_dict_like(values):
+            for name, col in self._data.items():
+                if name in values:
+                    result[name] = col.isin(values[name])
                 else:
-                    result_df[col] = column.full(
-                        size=len(self), fill_value=False, dtype="bool"
-                    )
-
-            result_df.index = self.index
-            return result_df
+                    result[name] = make_false_column_like_self()
+        elif is_list_like(values):
+            for name, col in self._data.items():
+                result[name] = col.isin(values)
         else:
-            if not is_list_like(values):
-                raise TypeError(
-                    f"only list-like or dict-like objects are "
-                    f"allowed to be passed to DataFrame.isin(), "
-                    f"you passed a "
-                    f"'{type(values).__name__}'"
-                )
+            raise TypeError(
+                f"only list-like or dict-like objects are "
+                f"allowed to be passed to DataFrame.isin(), "
+                f"you passed a "
+                f"'{type(values).__name__}'"
+            )
 
-            result_df = DataFrame()
-
-            for col in self._data.names:
-                result_df[col] = self._data[col].isin(values)
-            result_df.index = self.index
-            return result_df
+        return DataFrame._from_data(result, self.index)
 
     #
     # Stats

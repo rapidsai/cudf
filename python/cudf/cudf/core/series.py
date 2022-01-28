@@ -2680,7 +2680,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: bool
         """
 
-        if is_scalar(values):
+        if not is_list_like(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
                 f"to isin(), you passed a [{type(values).__name__}]"
