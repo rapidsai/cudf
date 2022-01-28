@@ -1665,7 +1665,7 @@ def build_struct_column(
     """
     if dtype is None:
         dtype = StructDtype(
-            fields={name: col.dtype for name, col in zip(names, children)}
+            fields={str(name): col.dtype for name, col in zip(names, children)}
         )
 
     result = build_column(
