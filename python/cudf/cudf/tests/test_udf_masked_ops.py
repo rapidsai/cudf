@@ -13,7 +13,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.pipeline import precompiled
+from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
 
 
@@ -486,7 +486,7 @@ def test_masked_udf_nested_function_support(op):
         {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
     )
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         gdf.apply(outer, axis=1)
 
     pdf = gdf.to_pandas(nullable=True)
@@ -539,7 +539,7 @@ def test_masked_udf_unsupported_dtype(unsupported_col):
         return row["unsupported_col"]
 
     # check that we fail when an unsupported type is used within a function
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         data.apply(func, axis=1)
 
     # also check that a DF containing unsupported dtypes can still run a
@@ -594,6 +594,44 @@ def test_masked_udf_scalar_args_binops_multiple(data, op):
         return y
 
     run_masked_udf_test(func, data, args=(1, 2), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, cudf.NA, 3],
+        [0.5, 2.0, cudf.NA, cudf.NA, 5.0],
+        [True, False, cudf.NA],
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_mask_udf_scalar_args_binops_series(data, op):
+    data = cudf.Series(data)
+
+    def func(x, c):
+        return x + c
+
+    run_masked_udf_series(func, data, args=(1,), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, cudf.NA, 3],
+        [0.5, 2.0, cudf.NA, cudf.NA, 5.0],
+        [True, False, cudf.NA],
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_scalar_args_binops_multiple_series(data, op):
+    data = cudf.Series(data)
+
+    def func(data, c, k):
+        x = op(data, c)
+        y = op(x, k)
+        return y
+
+    run_masked_udf_series(func, data, args=(1, 2), check_dtype=False)
 
 
 def test_masked_udf_caching():

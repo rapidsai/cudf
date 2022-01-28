@@ -4703,13 +4703,21 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testStringSplit() {
-    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
-         Table expected = new Table.TestBuilder().column("Héllo", "thésé", null, "", "ARé", "test")
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "", "ARé some things", "test strings here");
+         Table expectedSplitOnce = new Table.TestBuilder()
+         .column("Héllo", "thésé", null, "", "ARé", "test")
+         .column("there all", null, null, null, "some things", "strings here")
+         .build();
+         Table expectedSplitAll = new Table.TestBuilder()
+         .column("Héllo", "thésé", null, "", "ARé", "test")
          .column("there", null, null, null, "some", "strings")
+         .column("all", null, null, null, "things", "here")
          .build();
          Scalar pattern = Scalar.fromString(" ");
-         Table result = v.stringSplit(pattern)) {
-      assertTablesAreEqual(expected, result);
+         Table resultSplitOnce = v.stringSplit(pattern, 1);
+         Table resultSplitAll = v.stringSplit(pattern)) {
+          assertTablesAreEqual(expectedSplitOnce, resultSplitOnce);
+          assertTablesAreEqual(expectedSplitAll, resultSplitAll);      
     }
   }
 
