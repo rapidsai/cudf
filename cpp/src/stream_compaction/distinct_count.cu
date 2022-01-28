@@ -169,12 +169,8 @@ cudf::size_type unordered_distinct_count(table_view const& keys,
 
   compaction_hash hash_key{has_null, *table_ptr};
   row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
-  auto iter = cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
-    // TODO: cuco::make_pair currently requires rvalue references. We
-    // create a copy to avoid double-move invoking undefined behavior.
-    auto ii = i;
-    return cuco::make_pair(std::move(i), std::move(ii));
-  });
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
 
   // when nulls are equal, insert non-null rows only to improve efficiency
   if (nulls_equal == null_equality::EQUAL and has_null) {
