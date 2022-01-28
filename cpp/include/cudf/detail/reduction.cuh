@@ -104,7 +104,6 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   CUDF_FAIL(
     "This function should never be called. fixed_point reduce should always go through the reduce "
     "for the corresponding device_storage_type_t");
-  ;
 }
 
 // @brief string_view specialization of simple reduction

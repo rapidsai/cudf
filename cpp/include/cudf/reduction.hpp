@@ -101,9 +101,9 @@ std::unique_ptr<scalar> reduce(
  * @param offsets Indices to segment boundaries
  * @param agg Aggregation operator applied by the reduction
  * @param output_dtype  The computation and output precision.
- * @param null_handling If `INCLUDE`, all elements in a segment must be valid
- * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
+ * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid, otherwise null.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output column with results of segmented reduction.
  */
