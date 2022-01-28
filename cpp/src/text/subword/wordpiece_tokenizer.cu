@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -394,10 +394,11 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
                                          uint32_t stride,
                                          bool do_truncate,
                                          bool do_lower_case,
-                                         rmm::cuda_stream_view stream,
                                          uint32_t max_word_length)
   : vocab_table(vocab_table),
-    normalizer(stream, do_lower_case),
+    normalizer(vocab_table.cp_metadata->view().data<codepoint_metadata_type>(),
+               vocab_table.aux_cp_table->view().data<aux_codepoint_data_type>(),
+               do_lower_case),
     max_sequence_length{max_sequence_length},
     stride(stride),
     do_truncate(do_truncate),
