@@ -26,6 +26,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -222,10 +223,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
   auto const& group_offsets = helper().group_offsets(rmm::cuda_stream_default);
-  std::vector<size_type> group_offsets_vector(group_offsets.size());
-  thrust::copy(thrust::device_pointer_cast(group_offsets.begin()),
-               thrust::device_pointer_cast(group_offsets.end()),
-               group_offsets_vector.begin());
+  auto const group_offsets_vector = detail::make_std_vector_sync(group_offsets, stream);
 
   if (values.num_columns()) {
     auto grouped_values = cudf::detail::gather(values,
