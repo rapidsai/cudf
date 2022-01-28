@@ -369,9 +369,9 @@ void external_function(..., rmm::cuda_stream_view stream)
 
 // cudf/src/implementation.cpp
 namespace detail{
-    // Use stream parameter in detail implementation.
+    // Use the stream parameter in the detail implementation.
     void external_function(..., rmm::cuda_stream_view stream){
-        // Implementation uses stream with async APIs.
+        // Implementation uses the stream with async APIs.
         rmm::device_buffer buff(...,stream);
         CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
@@ -380,7 +380,7 @@ namespace detail{
 } // namespace detail
 
 void external_function(...){
-    CUDF_FUNC_RANGE(); // Generates NVTX range for lifetime of this function.
+    CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
     detail::external_function(..., rmm::cuda_stream_default);
 }
 ```
