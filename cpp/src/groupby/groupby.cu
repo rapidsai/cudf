@@ -221,7 +221,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   CUDF_FUNC_RANGE();
   auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
-  auto const& group_offsets = helper().group_offsets(rmm::cuda_stream_default);
+  auto const& group_offsets       = helper().group_offsets(rmm::cuda_stream_default);
   auto const group_offsets_vector = detail::make_std_vector_sync(group_offsets, stream);
 
   if (values.num_columns()) {
