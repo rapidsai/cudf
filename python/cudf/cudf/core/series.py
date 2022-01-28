@@ -2680,14 +2680,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: bool
         """
 
-        if not is_list_like(values):
+        # Even though only list-like objects are supposed to be passed, only
+        # scalars throw errors. Other types (like dicts) just transparently
+        # return False (see the implementation of ColumnBase.isin).
+        if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        return Series(
-            self._column.isin(values), index=self.index, name=self.name
+        return Series._from_data(
+            {self.name: self._column.isin(values)}, index=self.index
         )
 
     def unique(self):

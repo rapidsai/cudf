@@ -3,7 +3,6 @@
 from __future__ import annotations, division, print_function
 
 import pickle
-import warnings
 from typing import Any, Set
 
 import pandas as pd
@@ -1347,6 +1346,15 @@ class BaseIndex(Serializable):
         >>> idx.isin([1, 4])
         array([ True, False, False])
         """
+
+        # Even though only list-like objects are supposed to be passed, only
+        # scalars throw errors. Other types (like dicts) just transparently
+        # return False (see the implementation of ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a [{type(values).__name__}]"
+            )
 
         return self._values.isin(values).values
 
