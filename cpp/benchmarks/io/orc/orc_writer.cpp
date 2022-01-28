@@ -62,6 +62,7 @@ void BM_orc_write_varying_inout(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["file_size"]         = source_sink.size();
 }
 
 void BM_orc_write_varying_options(benchmark::State& state)
@@ -98,6 +99,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["file_size"]         = source_sink.size();
 }
 
 #define ORC_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                               \

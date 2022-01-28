@@ -66,13 +66,13 @@ void BM_orc_read_varying_input(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["file_size"]         = source_sink.size();
 }
 
-std::vector<std::string> get_col_names(std::vector<char> const& orc_data)
+std::vector<std::string> get_col_names(cudf_io::source_info const& source)
 {
   cudf_io::orc_reader_options const read_options =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
-      .num_rows(1);
+    cudf_io::orc_reader_options::builder(source).num_rows(1);
   return cudf_io::read_orc(read_options).metadata.column_names;
 }
 
@@ -99,14 +99,15 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  std::vector<char> orc_data;
+  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   cudf_io::orc_writer_options options =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&orc_data}, view);
+    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view);
   cudf_io::write_orc(options);
 
-  auto const cols_to_read = select_column_names(get_col_names(orc_data), col_sel);
+  auto const cols_to_read =
+    select_column_names(get_col_names(source_sink.make_source_info()), col_sel);
   cudf_io::orc_reader_options read_options =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
+    cudf_io::orc_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)
       .use_index(use_index)
       .use_np_dtypes(use_np_dtypes)
@@ -148,6 +149,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["file_size"]         = source_sink.size();
 }
 
 #define ORC_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                               \
