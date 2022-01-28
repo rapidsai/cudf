@@ -37,8 +37,8 @@ namespace detail {
 template <typename T>
 T __device__ inline normalize_nans_and_zeros(T const& key)
 {
-  if constexpr (is_floating_point<T>()) {
-    if (isnan(key)) {
+  if constexpr (cudf::is_floating_point<T>()) {
+    if (std::isnan(key)) {
       return std::numeric_limits<T>::quiet_NaN();
     } else if (key == T{0.0}) {
       return T{0.0};
@@ -84,8 +84,7 @@ void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destinatio
 // non-native version will be less than optimal.
 template <typename Key>
 struct MurmurHash3_32 {
-  using argument_type = Key;
-  using result_type   = hash_value_type;
+  using result_type = hash_value_type;
 
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
@@ -108,7 +107,8 @@ struct MurmurHash3_32 {
   [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
                                                       cudf::size_type offset) const
   {
-    // Individual byte reads for unaligned accesses (very likely for strings)
+    // Read a 4-byte value from the data pointer as individual bytes for safe
+    // unaligned access (very likely for string types).
     auto const q = reinterpret_cast<uint8_t const*>(data + offset);
     return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
   }
@@ -139,6 +139,7 @@ struct MurmurHash3_32 {
     return combined;
   }
 
+  // TODO Do we need this operator() and/or compute? Probably not both.
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
     return compute(key);
@@ -150,7 +151,7 @@ struct MurmurHash3_32 {
   {
     if (key == T{0.0}) {
       return compute(T{0.0});
-    } else if (isnan(key)) {
+    } else if (std::isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
@@ -279,8 +280,7 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
 
 template <typename Key>
 struct SparkMurmurHash3_32 {
-  using argument_type = Key;
-  using result_type   = hash_value_type;
+  using result_type = hash_value_type;
 
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
@@ -306,7 +306,7 @@ struct SparkMurmurHash3_32 {
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
-    if (isnan(key)) {
+    if (std::isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
