@@ -109,7 +109,7 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
  */
 template <typename Op>
 struct bool_result_column_dispatcher {
-  template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>::value>* = nullptr>
+  template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      column_view const& offsets,
                                      null_policy null_handling,
@@ -120,8 +120,7 @@ struct bool_result_column_dispatcher {
       col, offsets, null_handling, stream, mr);
   }
 
-  template <typename ElementType,
-            std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
+  template <typename ElementType, std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      column_view const&,
                                      null_policy,
