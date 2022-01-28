@@ -4306,6 +4306,7 @@ def test_value_counts():
         123,
         pd.Series(["a", "b", "c"]),
         pd.Series(["a", "b", "c"], dtype="category"),
+        pd.DataFrame({"a": ["a", "b", "c"]}, dtype="category"),
     ],
 )
 def test_isin_dataframe(data, values):

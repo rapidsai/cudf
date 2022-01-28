@@ -5023,34 +5023,50 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         falcon      True       True
         dog        False      False
         """
+        # TODO: propagate nulls through isin
+        # https://github.com/rapidsai/cudf/issues/7556
+
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
         if isinstance(values, (Series, DataFrame)):
+            obj_dtype = cudf.dtype("object")
+
+            # Note: In the case where values is a Series, computing some
+            # information about the values column outside the loop may result
+            # in performance gains.  However, since categorical conversion
+            # depends on the current column in the loop, using the correct
+            # precomputed variables inside the loop requires nontrivial logic.
+            # This optimization could be attempted if `isin` ever becomes a
+            # bottleneck.
             values = values.reindex(self.index)
+            other_cols = (
+                values._data
+                if isinstance(values, DataFrame)
+                else {name: values._column for name in self._data}
+            )
             result = {}
-
-            if isinstance(values, Series):
-                # TODO: propagate nulls through isin
-                # https://github.com/rapidsai/cudf/issues/7556
-                obj_dtype = cudf.dtype("object")
-
-                for col in self._data.names:
-                    self_col = self._data[col]
-                    other_col = values._column
+            for col, self_col in self._data.items():
+                if col in other_cols:
+                    other_col = other_cols[col]
                     self_is_cat = isinstance(self_col, CategoricalColumn)
                     other_is_cat = isinstance(other_col, CategoricalColumn)
 
                     if self_is_cat != other_is_cat:
-                        # Categoricals can try to compare based on the
-                        # dtype of the levels.
+                        # It is valid to compare the levels of a categorical
+                        # column to a non-categorical column.
                         if self_is_cat:
                             self_col = self_col._get_decategorized_column()
                         else:
                             other_col = other_col._get_decategorized_column()
 
+                    # We use the type checks from _before_ the conversion
+                    # because if only one was categorical then it's already
+                    # been converted and we have to check if they're strings.
                     if self_is_cat and other_is_cat:
                         self_is_obj = other_is_obj = False
                     else:
+                        # These checks must happen after the conversions above
+                        # since numpy can't handle categorical dtypes.
                         self_is_obj = np.issubdtype(self_col.dtype, obj_dtype)
                         other_is_obj = np.issubdtype(
                             other_col.dtype, obj_dtype
@@ -5063,16 +5079,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                     else:
                         result[col] = (self_col == other_col).fillna(False)
-            else:
-                for col in self._data.names:
-                    if col in values.columns:
-                        result[col] = (
-                            self._data[col] == values[col]._column
-                        ).fillna(False)
-                    else:
-                        result[col] = utils.scalar_broadcast_to(
-                            False, len(self)
-                        )
+                else:
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
             return DataFrame._from_data(result, index=self.index)
 
         if isinstance(values, dict):
