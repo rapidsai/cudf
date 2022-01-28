@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,8 +179,8 @@ struct PyMod {
     std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
   {
-    double x1 = static_cast<double>(x);
-    double y1 = static_cast<double>(y);
+    auto x1 = static_cast<double>(x);
+    auto y1 = static_cast<double>(y);
     return fmod(fmod(x1, y1) + y1, y1);
   }
 
@@ -413,6 +413,38 @@ struct NullMin {
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
     -> decltype(static_cast<common_t>(static_cast<common_t>(x) < static_cast<common_t>(y) ? x : y));
+};
+
+struct NullLogicalAnd {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x && y)
+  {
+    bool lhs_false  = lhs_valid && !x;
+    bool rhs_false  = rhs_valid && !y;
+    bool both_valid = lhs_valid && rhs_valid;
+    output_valid    = lhs_false || rhs_false || both_valid;
+    return both_valid && !lhs_false && !rhs_false;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y);
+};
+
+struct NullLogicalOr {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x || y)
+  {
+    bool lhs_true   = lhs_valid && x;
+    bool rhs_true   = rhs_valid && y;
+    bool both_valid = lhs_valid && rhs_valid;
+    output_valid    = lhs_true || rhs_true || both_valid;
+    return lhs_true || rhs_true;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y);
 };
 
 }  // namespace ops

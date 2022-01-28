@@ -190,7 +190,7 @@ class MultiIndex(Frame, BaseIndex):
         Renaming each levels of a MultiIndex to specified name:
 
         >>> midx = cudf.MultiIndex.from_product(
-                [('A', 'B'), (2020, 2021)], names=['c1', 'c2'])
+        ...     [('A', 'B'), (2020, 2021)], names=['c1', 'c2'])
         >>> midx.rename(['lv1', 'lv2'])
         MultiIndex([('A', 2020),
                     ('A', 2021),
@@ -775,7 +775,7 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
-            result = result.set_index(index)
+            result.index = index
         return result
 
     def _get_row_major(
@@ -1086,7 +1086,7 @@ class MultiIndex(Frame, BaseIndex):
             [4, 2],
             [5, 1]])
         >>> type(midx.values)
-        <class 'cupy.core.core.ndarray'>
+        <class 'cupy._core.core.ndarray'>
         """
         return self.to_frame(index=False).values
 
@@ -1587,13 +1587,13 @@ class MultiIndex(Frame, BaseIndex):
         --------
         >>> import cudf
         >>> mi = cudf.MultiIndex.from_tuples(
-            [('a', 'd'), ('b', 'e'), ('b', 'f')])
+        ...     [('a', 'd'), ('b', 'e'), ('b', 'f')])
         >>> mi.get_loc('b')
         slice(1, 3, None)
         >>> mi.get_loc(('b', 'e'))
         1
         >>> non_monotonic_non_unique_idx = cudf.MultiIndex.from_tuples(
-            [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
+        ...     [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
         >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
         slice(1, 4, 2)
 
@@ -1609,10 +1609,10 @@ class MultiIndex(Frame, BaseIndex):
 
                 >>> import pandas as pd
                 >>> import cudf
-                >>> x = pd.MultiIndex.from_tuples(
-                            [(2, 1, 1), (1, 2, 3), (1, 2, 1),
-                                (1, 1, 1), (1, 1, 1), (2, 2, 1)]
-                        )
+                >>> x = pd.MultiIndex.from_tuples([
+                ...     (2, 1, 1), (1, 2, 3), (1, 2, 1),
+                ...     (1, 1, 1), (1, 1, 1), (2, 2, 1),
+                ... ])
                 >>> x.get_loc(1)
                 array([False,  True,  True,  True,  True, False])
                 >>> cudf.from_pandas(x).get_loc(1)
@@ -1743,6 +1743,13 @@ class MultiIndex(Frame, BaseIndex):
         if sort is None and len(other):
             return midx.sort_values()
         return midx
+
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> Frame:
+        res = super()._copy_type_metadata(other, include_index=include_index)
+        res._names = other._names
+        return res
 
     def _split_columns_by_levels(self, levels):
         # This function assumes that for levels with duplicate names, they are

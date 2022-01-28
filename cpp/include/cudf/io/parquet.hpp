@@ -96,33 +96,36 @@ class parquet_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns true/false depending on whether strings should be converted to categories or
    * not.
    */
-  bool is_enabled_convert_strings_to_categories() const { return _convert_strings_to_categories; }
+  [[nodiscard]] bool is_enabled_convert_strings_to_categories() const
+  {
+    return _convert_strings_to_categories;
+  }
 
   /**
    * @brief Returns true/false depending whether to use pandas metadata or not while reading.
    */
-  bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
+  [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
    * @brief Returns number of rows to skip from the start.
    */
-  size_type get_skip_rows() const { return _skip_rows; }
+  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
    */
-  size_type get_num_rows() const { return _num_rows; }
+  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Returns names of column to be read.
    */
-  std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns list of individual row groups to be read.
@@ -421,32 +424,32 @@ class parquet_writer_options {
   /**
    * @brief Returns sink info.
    */
-  sink_info const& get_sink() const { return _sink; }
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression format used.
    */
-  compression_type get_compression() const { return _compression; }
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns level of statistics requested in output file.
    */
-  statistics_freq get_stats_level() const { return _stats_level; }
+  [[nodiscard]] statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
    * @brief Returns table_view.
    */
-  table_view get_table() const { return _table; }
+  [[nodiscard]] table_view get_table() const { return _table; }
 
   /**
    * @brief Returns partitions.
    */
-  std::vector<partition_info> const& get_partitions() const { return _partitions; }
+  [[nodiscard]] std::vector<partition_info> const& get_partitions() const { return _partitions; }
 
   /**
    * @brief Returns associated metadata.
    */
-  table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -801,22 +804,22 @@ class chunked_parquet_writer_options {
   /**
    * @brief Returns sink info.
    */
-  sink_info const& get_sink() const { return _sink; }
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression format used.
    */
-  compression_type get_compression() const { return _compression; }
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns level of statistics requested in output file.
    */
-  statistics_freq get_stats_level() const { return _stats_level; }
+  [[nodiscard]] statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
    * @brief Returns metadata information.
    */
-  table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
