@@ -97,4 +97,11 @@ public final class ScanAggregation {
   public static ScanAggregation denseRank() {
     return new ScanAggregation(Aggregation.denseRank());
   }
+
+  /**
+   * Get the row's percent rank.
+   */
+  public static ScanAggregation percentRank() {
+    return new ScanAggregation(Aggregation.percentRank());
+  }
 }

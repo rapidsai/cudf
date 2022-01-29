@@ -79,6 +79,7 @@ class aggregation {
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     RANK,            ///< get rank       of current index
     DENSE_RANK,      ///< get dense rank of current index
+    PERCENT_RANK,    ///< get percent rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -389,6 +390,9 @@ std::unique_ptr<Base> make_rank_aggregation();
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_dense_rank_aggregation();
+
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_percent_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

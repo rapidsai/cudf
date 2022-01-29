@@ -90,7 +90,7 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
   return rank_generator(
     order_by,
     has_nested_nulls(table_view{{order_by}}),
-    [] __device__(bool equality, auto row_index) { return equality; },
+    [] __device__(bool unequal, auto row_index) { return unequal; },
     DeviceSum{},
     stream,
     mr);
@@ -105,10 +105,28 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
   return rank_generator(
     order_by,
     has_nested_nulls(table_view{{order_by}}),
-    [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
+    [] __device__(bool unequal, auto row_index) { return unequal ? row_index + 1 : 0; },
     DeviceMax{},
     stream,
     mr);
+}
+
+std::unique_ptr<column> inclusive_percent_rank_scan(column_view const& order_by,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto const rank_column   = inclusive_rank_scan(order_by, stream, mr);
+  auto const rank          = rank_column->view();
+  auto percent_rank_result = cudf::make_fixed_width_column(
+    data_type{type_to_id<double>()}, rank.size(), mask_state::UNALLOCATED, stream, mr);
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    rank.begin<size_type>(),
+    rank.end<size_type>(),
+    percent_rank_result->mutable_view().begin<double>(),
+    [n_rows = rank.size()] __device__(auto const& rank) { return (rank - 1.0) / (n_rows - 1); });
+  return percent_rank_result;
 }
 
 }  // namespace detail

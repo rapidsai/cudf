@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/row_operators.cuh>
@@ -98,7 +99,9 @@ std::unique_ptr<column> rank_scan(column_view const& order_by,
     order_by,
     group_labels,
     group_offsets,
-    [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
+    [] __device__(bool unequal, auto row_index_in_group) {
+      return unequal ? row_index_in_group + 1 : 0;
+    },
     DeviceMax{},
     has_nested_nulls(table_view{{order_by}}),
     stream,
@@ -115,11 +118,44 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
     order_by,
     group_labels,
     group_offsets,
-    [] __device__(bool equality, auto row_index) { return equality; },
+    [] __device__(bool unequal, auto row_index_in_group) { return unequal; },
     DeviceSum{},
     has_nested_nulls(table_view{{order_by}}),
     stream,
     mr);
+}
+
+std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
+                                          device_span<size_type const> group_labels,
+                                          device_span<size_type const> group_offsets,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  auto const rank_column     = rank_scan(order_by, group_labels, group_offsets, stream, mr);
+  auto const rank            = rank_column->view();
+  auto const group_size_iter = cudf::detail::make_counting_transform_iterator(
+    0,
+    [labels  = group_labels.begin(),
+     offsets = group_offsets.begin()] __device__(size_type row_index) {
+      auto const group_label = labels[row_index];
+      auto const group_start = offsets[group_label];
+      auto const group_end   = offsets[group_label + 1];
+      return group_end - group_start;
+    });
+
+  auto percent_rank_result = cudf::make_fixed_width_column(
+    data_type{type_to_id<double>()}, rank.size(), mask_state::UNALLOCATED, stream, mr);
+
+  thrust::transform(rmm::exec_policy(stream),
+                    rank.begin<size_type>(),
+                    rank.end<size_type>(),
+                    group_size_iter,
+                    percent_rank_result->mutable_view().begin<double>(),
+                    [] __device__(auto const& rank, auto const& group_size) {
+                      return group_size == 1 ? 0.0 : (rank - 1.0) / (group_size - 1);
+                    });
+
+  return percent_rank_result;
 }
 
 }  // namespace detail

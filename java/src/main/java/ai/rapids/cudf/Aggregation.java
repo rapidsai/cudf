@@ -66,8 +66,9 @@ abstract class Aggregation {
         MERGE_M2(27),
         RANK(28),
         DENSE_RANK(29),
-        TDIGEST(30), // This can take a delta argument for accuracy level
-        MERGE_TDIGEST(31); // This can take a delta argument for accuracy level
+        PERCENT_RANK(30),
+        TDIGEST(31), // This can take a delta argument for accuracy level
+        MERGE_TDIGEST(32); // This can take a delta argument for accuracy level
 
         final int nativeId;
 
@@ -752,6 +753,19 @@ abstract class Aggregation {
      */
     static DenseRankAggregation denseRank() {
         return new DenseRankAggregation();
+    }
+
+    static final class PercentRankAggregation extends NoParamAggregation {
+        private PercentRankAggregation() {
+            super(Kind.PERCENT_RANK);
+        }
+    }
+
+    /**
+     * Get the row's percent ranking.
+     */
+    static PercentRankAggregation percentRank() {
+        return new PercentRankAggregation();
     }
 
     /**

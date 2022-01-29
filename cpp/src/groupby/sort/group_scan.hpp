@@ -116,6 +116,11 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 
+std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
+                                          device_span<size_type const> group_labels,
+                                          device_span<size_type const> group_offsets,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

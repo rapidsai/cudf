@@ -115,4 +115,11 @@ public final class GroupByScanAggregation {
   public static GroupByScanAggregation denseRank() {
     return new GroupByScanAggregation(Aggregation.denseRank());
   }
+
+  /**
+   * Get the row's percent ranking.
+   */
+  public static GroupByScanAggregation percentRank() {
+    return new GroupByScanAggregation(Aggregation.percentRank());
+  }
 }
