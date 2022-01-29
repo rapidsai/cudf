@@ -346,6 +346,8 @@ TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
+// TODO: add tests for null rows for lists column.
+
 #undef XXX
 
 }  // namespace test
