@@ -22,7 +22,7 @@ namespace cudf {
 namespace reduction {
 
 std::unique_ptr<cudf::column> segmented_product(column_view const& col,
-                                                column_view const& offsets,
+                                                device_span<size_type const> offsets,
                                                 cudf::data_type const output_dtype,
                                                 null_policy null_handling,
                                                 rmm::cuda_stream_view stream,

@@ -58,7 +58,7 @@ namespace detail {
  */
 template <typename InputType, typename ResultType, typename Op>
 std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
-                                                   column_view const& offsets,
+                                                   device_span<size_type const> offsets,
                                                    null_policy null_handling,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
@@ -73,19 +73,19 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
       auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
       return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin<size_type>(), num_segments, simple_op, stream, mr);
+        it, offsets.begin(), num_segments, simple_op, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
       return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin<size_type>(), num_segments, simple_op, stream, mr);
+        it, offsets.begin(), num_segments, simple_op, stream, mr);
     }
   }();
 
   // Compute the output null mask
   auto const bitmask                 = col.null_mask();
-  auto const first_bit_indices_begin = offsets.begin<size_type>();
-  auto const first_bit_indices_end   = offsets.end<size_type>() - 1;
+  auto const first_bit_indices_begin = offsets.begin();
+  auto const first_bit_indices_end   = offsets.end() - 1;
   auto const last_bit_indices_begin  = first_bit_indices_begin + 1;
   auto const [output_null_mask, output_null_count] =
     cudf::detail::segmented_null_mask_reduction(bitmask,
@@ -111,7 +111,7 @@ template <typename Op>
 struct bool_result_column_dispatcher {
   template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
-                                     column_view const& offsets,
+                                     device_span<size_type const> offsets,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -122,7 +122,7 @@ struct bool_result_column_dispatcher {
 
   template <typename ElementType, std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
-                                     column_view const&,
+                                     device_span<size_type const>,
                                      null_policy,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
@@ -153,7 +153,7 @@ struct same_column_type_dispatcher {
             std::enable_if_t<is_supported<ElementType>() &&
                              not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
-                                     column_view const& offsets,
+                                     device_span<size_type const> offsets,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -166,7 +166,7 @@ struct same_column_type_dispatcher {
             std::enable_if_t<not is_supported<ElementType>() or
                              cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
-                                     column_view const&,
+                                     device_span<size_type const>,
                                      null_policy,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
@@ -192,7 +192,7 @@ struct column_type_dispatcher {
   template <typename ElementType,
             typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
-                                         column_view const& offsets,
+                                         device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
                                          rmm::cuda_stream_view stream,
@@ -211,7 +211,7 @@ struct column_type_dispatcher {
   template <typename ElementType,
             typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
-                                         column_view const& offsets,
+                                         device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
                                          rmm::cuda_stream_view stream,
@@ -241,7 +241,7 @@ struct column_type_dispatcher {
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
-                                     column_view const& offsets,
+                                     device_span<size_type const> offsets,
                                      data_type const output_type,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
@@ -258,7 +258,7 @@ struct column_type_dispatcher {
   template <typename ElementType,
             typename std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
-                                     column_view const&,
+                                     device_span<size_type const>,
                                      data_type const,
                                      null_policy,
                                      rmm::cuda_stream_view,

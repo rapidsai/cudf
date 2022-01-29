@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/quantiles.hpp>
 #include <cudf/detail/reduction_functions.hpp>
@@ -33,14 +34,14 @@ namespace cudf {
 namespace detail {
 struct segmented_reduce_dispatch_functor {
   column_view const col;
-  column_view const offsets;
+  device_span<size_type const> offsets;
   data_type output_dtype;
   null_policy null_handling;
   rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
 
   segmented_reduce_dispatch_functor(column_view const& col,
-                                    column_view const& offsets,
+                                    device_span<size_type const> offsets,
                                     data_type output_dtype,
                                     null_policy null_handling,
                                     rmm::cuda_stream_view stream,
@@ -76,31 +77,50 @@ struct segmented_reduce_dispatch_functor {
       case aggregation::ALL:
         return reduction::segmented_all(col, offsets, output_dtype, null_handling, stream, mr);
         break;
+      // TODO: Support compound_ops for segmented reductions
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
 };
 
-std::unique_ptr<column> segmented_reduce(
-  column_view const& col,
-  column_view const& offsets,
-  std::unique_ptr<aggregation> const& agg,
-  data_type output_dtype,
-  null_policy null_handling,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> segmented_reduce(lists_column_view const& col,
+                                         std::unique_ptr<aggregation> const& agg,
+                                         data_type output_dtype,
+                                         null_policy null_handling,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
-  // TODO: handle invalid inputs.
+  auto const child   = col.child();
+  auto const offsets = col.offsets();
+  auto const offsets_device_span =
+    device_span<size_type const>(offsets.data<size_type const>(), offsets.size());
+  auto result =
+    aggregation_dispatcher(agg->kind,
+                           segmented_reduce_dispatch_functor{
+                             child, offsets_device_span, output_dtype, null_handling, stream, mr},
+                           agg);
 
-  return aggregation_dispatcher(
-    agg->kind,
-    segmented_reduce_dispatch_functor{col, offsets, output_dtype, null_handling, stream, mr},
-    agg);
+  if (col.has_nulls()) {
+    // Compute the bitmask-and of the reduced result with lists column's parent null mask.
+    auto size         = result->size();
+    auto result_mview = result->mutable_view();
+    std::vector<bitmask_type const*> mask{result_mview.null_mask(), col.null_mask()};
+    std::vector<size_type> begin_bits{0, 0};
+    size_type valid_count = cudf::detail::inplace_bitmask_and(
+      device_span<bitmask_type>(result_mview.null_mask(), num_bitmask_words(size)),
+      mask,
+      begin_bits,
+      size,
+      stream,
+      mr);
+    result_mview.set_null_count(size - valid_count);
+  }
+
+  return result;
 }
 }  // namespace detail
 
-std::unique_ptr<column> segmented_reduce(column_view const& col,
-                                         column_view const& offsets,
+std::unique_ptr<column> segmented_reduce(lists_column_view const& col,
                                          std::unique_ptr<aggregation> const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
@@ -108,7 +128,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& col,
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_reduce(
-    col, offsets, agg, output_dtype, null_handling, rmm::cuda_stream_default, mr);
+    col, agg, output_dtype, null_handling, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

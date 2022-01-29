@@ -274,7 +274,7 @@ std::unique_ptr<scalar> nth_element(
  */
 std::unique_ptr<column> segmented_sum(
   column_view const& col,
-  column_view const& offsets,
+  device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -300,7 +300,7 @@ std::unique_ptr<column> segmented_sum(
  */
 std::unique_ptr<column> segmented_product(
   column_view const& col,
-  column_view const& offsets,
+  device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -325,7 +325,7 @@ std::unique_ptr<column> segmented_product(
  */
 std::unique_ptr<column> segmented_min(
   column_view const& col,
-  column_view const& offsets,
+  device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -350,7 +350,7 @@ std::unique_ptr<column> segmented_min(
  */
 std::unique_ptr<column> segmented_max(
   column_view const& col,
-  column_view const& offsets,
+  device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -376,7 +376,7 @@ std::unique_ptr<column> segmented_max(
  */
 std::unique_ptr<column> segmented_any(
   column_view const& col,
-  column_view const& offsets,
+  device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -402,7 +402,7 @@ std::unique_ptr<column> segmented_any(
  */
 std::unique_ptr<column> segmented_all(
   column_view const& col,
-  column_view const& offsets,
+  device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
