@@ -5866,8 +5866,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -----
         Note that a copy of the columns is made.
         """
+        if not all(isinstance(name, str) for name in self._data.names):
+            warnings.warn(
+                "DataFrame contains non-string column name(s). Struct column "
+                "require string as field name. Non-string column names will "
+                "be casted to string as the field name."
+            )
+            field_names = [str(name) for name in self._data.names]
+        else:
+            field_names = self._data.names
+
         col = cudf.core.column.build_struct_column(
-            names=self._data.names, children=self._data.columns, size=len(self)
+            names=field_names, children=self._data.columns, size=len(self)
         )
         return cudf.Series._from_data(
             cudf.core.column_accessor.ColumnAccessor(
