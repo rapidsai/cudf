@@ -199,7 +199,7 @@ class DatetimeColumn(column.ColumnBase):
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
         return pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"),
+            self.astype("datetime64[ns]").fillna("NaT").values_host,
             copy=False,
             index=index,
         )
@@ -345,10 +345,6 @@ class DatetimeColumn(column.ColumnBase):
                 "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype="object", masked=False),
             )
-
-    def _default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column"""
-        return np.datetime64("nat", self.time_unit)
 
     def mean(
         self, skipna=None, min_count: int = 0, dtype=np.float64
@@ -496,15 +492,6 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
-
-
-def binop_offset(lhs, rhs, op):
-    if rhs._is_no_op:
-        return lhs
-    else:
-        rhs = rhs._generate_column(len(lhs), op)
-        out = libcudf.datetime.add_months(lhs, rhs)
-        return out
 
 
 def infer_format(element: str, **kwargs) -> str:
