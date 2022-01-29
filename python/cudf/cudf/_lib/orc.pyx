@@ -8,6 +8,12 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from collections import OrderedDict
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.column cimport Column
@@ -123,8 +129,59 @@ cpdef read_orc(object filepaths_or_buffers,
         c_result = move(libcudf_read_orc(c_orc_reader_options))
 
     names = [name.decode() for name in c_result.metadata.column_names]
+    cdef map[string, string] user_data = c_result.metadata.user_data
+    json_str = user_data[b'pandas'].decode('utf-8')
+    meta = None
+    index_col = None
+    is_range_index = False
+    reset_index_name = False
+    range_idx = None
+    if json_str != "":
+        meta = json.loads(json_str)
 
-    data, index = data_from_unique_ptr(move(c_result.tbl), names)
+        if 'index_columns' in meta and len(meta['index_columns']) > 0:
+            index_col = meta['index_columns']
+            if isinstance(index_col[0], dict) and \
+                    index_col[0]['kind'] == 'range':
+                is_range_index = True
+            else:
+                index_col_names = OrderedDict()
+                for idx_col in index_col:
+                    for c in meta['columns']:
+                        if c['field_name'] == idx_col:
+                            index_col_names[idx_col] = \
+                                c['name'] or c['field_name']
+                            if c['name'] is None:
+                                reset_index_name = True
+
+    actual_index_names = None
+    if index_col is not None and len(index_col) > 0:
+        if is_range_index:
+            range_index_meta = index_col[0]
+            range_idx = cudf.RangeIndex(
+                start=range_index_meta['start'],
+                stop=range_index_meta['stop'],
+                step=range_index_meta['step'],
+                name=range_index_meta['name']
+            )
+            if skip_rows is not None:
+                range_idx = range_idx[skip_rows:]
+            if num_rows is not None:
+                range_idx = range_idx[:num_rows]
+        else:
+            actual_index_names = list(index_col_names.values())
+            names = names[len(actual_index_names):]
+
+    data, index = data_from_unique_ptr(
+        move(c_result.tbl),
+        names,
+        actual_index_names
+    )
+
+    if is_range_index:
+        index = range_idx
+    elif reset_index_name:
+        index.names = [None] * len(index.names)
 
     data = {
         name: update_column_struct_field_names(
@@ -180,6 +237,10 @@ cpdef write_orc(table,
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
     cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef map[string, string] user_data
+    pandas_metadata = generate_pandas_metadata(table, None)
+
+    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
     if not isinstance(table._index, cudf.RangeIndex):
         tv = table_view_from_table(table)
@@ -204,8 +265,9 @@ cpdef write_orc(table,
 
     cdef orc_writer_options c_orc_writer_options = move(
         orc_writer_options.builder(
-            sink_info_c, table_view_from_table(table, ignore_index=True)
+            sink_info_c, tv
         ).metadata(tbl_meta.get())
+        .key_value_metadata(move(user_data))
         .compression(compression_)
         .enable_statistics(_get_orc_stat_freq(statistics))
         .build()
