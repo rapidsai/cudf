@@ -64,7 +64,7 @@ struct token_reader_fn {
 
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
-    auto d_result           = d_tokens + token_offset;  // store tokens here
+    auto const d_result     = d_tokens + token_offset;  // store tokens here
 
     size_type token_idx = 0;
     size_type begin     = 0;  // characters
@@ -72,7 +72,8 @@ struct token_reader_fn {
     size_type last_pos  = 0;  // bytes
     while (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
       // get the token (characters just before this match)
-      auto token = string_index_pair{d_str.data() + last_pos, d_str.byte_offset(begin) - last_pos};
+      auto const token =
+        string_index_pair{d_str.data() + last_pos, d_str.byte_offset(begin) - last_pos};
       // store it if we have space
       if (token_idx < token_count - 1) {
         d_result[token_idx++] = token;
@@ -90,13 +91,10 @@ struct token_reader_fn {
     }
 
     // set the last token to the remainder of the string
-    if (last_pos <= d_str.size_bytes()) {
-      d_result[token_idx] =
-        string_index_pair{d_str.data() + last_pos, d_str.size_bytes() - last_pos};
-    }
+    d_result[token_idx] = string_index_pair{d_str.data() + last_pos, d_str.size_bytes() - last_pos};
 
     if (direction == split_direction::BACKWARD) {
-      // update first entry -- this happens when max-tokens is hit before the end
+      // update first entry -- this happens when max-tokens is hit before the end of the string
       auto const first_offset =
         d_result[0].first
           ? static_cast<size_type>(thrust::distance(d_str.data(), d_result[0].first))
@@ -127,11 +125,11 @@ rmm::device_uvector<string_index_pair> split_utility(column_device_view const& d
                                                      mutable_column_view& offsets,
                                                      rmm::cuda_stream_view stream)
 {
-  auto d_offsets           = offsets.data<offset_type>();
   auto const strings_count = d_strings.size();
 
-  auto const begin = thrust::make_counting_iterator<size_type>(0);
-  auto const end   = thrust::make_counting_iterator<size_type>(strings_count);
+  auto const begin     = thrust::make_counting_iterator<size_type>(0);
+  auto const end       = thrust::make_counting_iterator<size_type>(strings_count);
+  auto const d_offsets = offsets.data<offset_type>();
 
   // convert match counts to token offsets
   auto map_fn = [d_strings, d_offsets, max_tokens] __device__(auto idx) {
@@ -140,7 +138,7 @@ rmm::device_uvector<string_index_pair> split_utility(column_device_view const& d
   thrust::transform_exclusive_scan(
     rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<offset_type>{});
 
-  // the last entry is the total number of tokens to be generated
+  // the last offset entry is the total number of tokens to be generated
   auto const total_tokens = cudf::detail::get_value<offset_type>(offsets, strings_count, stream);
 
   // generate tokens for each string
@@ -204,14 +202,16 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
     return std::make_unique<table>(std::move(results));
   }
 
+  // create the regex device prog from the given pattern
   auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
   auto d_strings = column_device_view::create(input.parent(), stream);
 
+  // count the number of delimiters matched in each string
   auto offsets = count_matches(*d_strings, *d_prog, stream, rmm::mr::get_current_device_resource());
   auto offsets_view = offsets->mutable_view();
   auto d_offsets    = offsets_view.data<offset_type>();
 
-  // get split tokens from the input column
+  // get the split tokens from the input column
   auto tokens = split_utility(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
 
   // the columns_count is the maximum number of tokens for any string in the input column
@@ -265,13 +265,15 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto const max_tokens    = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
   auto const strings_count = input.size();
 
+  // create the regex device prog from the given pattern
   auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
   auto d_strings = column_device_view::create(input.parent(), stream);
 
+  // count the number of delimiters matched in each string
   auto offsets      = count_matches(*d_strings, *d_prog, stream, mr);
   auto offsets_view = offsets->mutable_view();
 
-  // get split tokens from the input column
+  // get the split tokens from the input column
   auto tokens = split_utility(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
 
   // convert the tokens into one big strings column
