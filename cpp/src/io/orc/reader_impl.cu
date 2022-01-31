@@ -286,7 +286,7 @@ __global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
-    stats[tid].status        = static_cast<uint32_t>(nvcomp_stats[tid]);
+    stats[tid].status = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
     stats[tid].bytes_written = actual_uncompressed_sizes[tid];
   }
 }
@@ -451,7 +451,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   compinfo.device_to_host(stream, true);
 
   // We can check on host after stream synchronize
-  CUDF_EXPECTS(any_block_failure[0] == false, "Error during snappy decompression");
+  CUDF_EXPECTS(any_block_failure[0] == false, "Error during decompression");
 
   const size_t num_columns = chunks.size().second;
 

@@ -1060,7 +1060,9 @@ __global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
                                       device_span<gpu_inflate_status_s> stats)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) { stats[tid].status = static_cast<uint32_t>(nvcomp_stats[tid]); }
+  if (tid < stats.size()) {
+    stats[tid].status = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
+  }
 }
 
 void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
@@ -1259,7 +1261,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   decompress_check(inflate_out_view, stream, any_block_failure.device_ptr());
   any_block_failure.device_to_host(stream, true);  // synchronizes stream
-  CUDF_EXPECTS(any_block_failure[0] == false, "Error during snappy decompression");
+  CUDF_EXPECTS(any_block_failure[0] == false, "Error during decompression");
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
