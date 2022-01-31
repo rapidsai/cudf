@@ -541,14 +541,14 @@ TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
   EXPECT_TRUE(results->num_columns() == 1);
   EXPECT_TRUE(results->num_rows() == 0);
 
-  auto result = cudf::strings::split_record(zero_size_strings_column);
-  EXPECT_TRUE(result->size() == 0);
-  result = cudf::strings::rsplit_record(zero_size_strings_column);
-  EXPECT_TRUE(result->size() == 0);
-  result = cudf::strings::split_record_re(zero_size_strings_column, "\\s");
-  EXPECT_TRUE(result->size() == 0);
-  result = cudf::strings::rsplit_record_re(zero_size_strings_column, "\\s");
-  EXPECT_TRUE(result->size() == 0);
+  auto list_result = cudf::strings::split_record(zero_size_strings_column);
+  EXPECT_TRUE(list_result->size() == 0);
+  list_result = cudf::strings::rsplit_record(zero_size_strings_column);
+  EXPECT_TRUE(list_result->size() == 0);
+  list_result = cudf::strings::split_record_re(zero_size_strings_column, "\\s");
+  EXPECT_TRUE(list_result->size() == 0);
+  list_result = cudf::strings::rsplit_record_re(zero_size_strings_column, "\\s");
+  EXPECT_TRUE(list_result->size() == 0);
 }
 
 // This test specifically for https://github.com/rapidsai/custrings/issues/119
@@ -576,16 +576,16 @@ TEST_F(StringsSplitTest, AllNullsCase)
   EXPECT_TRUE(results->num_columns() == 1);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->get_column(0).view(), input);
 
-  auto result = cudf::strings::split_record(sv);
-  using LCW   = cudf::test::lists_column_wrapper<cudf::string_view>;
+  auto list_result = cudf::strings::split_record(sv);
+  using LCW        = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{}, LCW{}, LCW{}}, cudf::test::iterators::all_nulls());
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
-  result = cudf::strings::rsplit_record(sv);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
-  result = cudf::strings::split_record_re(sv, "-");
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
-  result = cudf::strings::rsplit_record_re(sv, "-");
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
+  list_result = cudf::strings::rsplit_record(sv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
+  list_result = cudf::strings::split_record_re(sv, "-");
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
+  list_result = cudf::strings::rsplit_record_re(sv, "-");
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_result->view(), expected);
 }
 
 TEST_F(StringsSplitTest, Partition)
@@ -773,6 +773,8 @@ TEST_F(StringsSplitTest, InvalidParameter)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::split_re(strings_view, ""), cudf::logic_error);
   EXPECT_THROW(cudf::strings::split_record_re(strings_view, ""), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::rsplit_re(strings_view, ""), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::rsplit_record_re(strings_view, ""), cudf::logic_error);
   EXPECT_THROW(cudf::strings::partition(strings_view, cudf::string_scalar("", false)),
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::rpartition(strings_view, cudf::string_scalar("", false)),
