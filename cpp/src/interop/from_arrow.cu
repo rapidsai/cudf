@@ -55,7 +55,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::DOUBLE: return data_type(type_id::FLOAT64);
     case arrow::Type::DATE32: return data_type(type_id::TIMESTAMP_DAYS);
     case arrow::Type::TIMESTAMP: {
-      auto type = static_cast<arrow::TimestampType const*>(&arrow_type);
+      auto type = dynamic_cast<arrow::TimestampType const*>(&arrow_type);
       switch (type->unit()) {
         case arrow::TimeUnit::type::SECOND: return data_type(type_id::TIMESTAMP_SECONDS);
         case arrow::TimeUnit::type::MILLI: return data_type(type_id::TIMESTAMP_MILLISECONDS);
@@ -65,7 +65,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
       }
     }
     case arrow::Type::DURATION: {
-      auto type = static_cast<arrow::DurationType const*>(&arrow_type);
+      auto type = dynamic_cast<arrow::DurationType const*>(&arrow_type);
       switch (type->unit()) {
         case arrow::TimeUnit::type::SECOND: return data_type(type_id::DURATION_SECONDS);
         case arrow::TimeUnit::type::MILLI: return data_type(type_id::DURATION_MILLISECONDS);
@@ -78,7 +78,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
     case arrow::Type::DECIMAL: {
-      auto const type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
+      auto const type = dynamic_cast<arrow::Decimal128Type const*>(&arrow_type);
       return data_type{type_id::DECIMAL128, -type->scale()};
     }
     case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
@@ -298,7 +298,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto dict_array  = static_cast<arrow::DictionaryArray const*>(&array);
+  auto dict_array  = dynamic_cast<arrow::DictionaryArray const*>(&array);
   auto dict_type   = arrow_to_cudf_type(*(dict_array->dictionary()->type()));
   auto keys_column = get_column(*(dict_array->dictionary()), dict_type, true, stream, mr);
   auto ind_type    = arrow_to_cudf_type(*(dict_array->indices()->type()));
@@ -328,7 +328,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto struct_array = static_cast<arrow::StructArray const*>(&array);
+  auto struct_array = dynamic_cast<arrow::StructArray const*>(&array);
   std::vector<std::unique_ptr<column>> child_columns;
   // Offsets have already been applied to child
   arrow::ArrayVector array_children = struct_array->fields();

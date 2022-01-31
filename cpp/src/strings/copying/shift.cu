@@ -92,7 +92,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  auto d_fill_str = static_cast<string_scalar const&>(fill_value).value(stream);
+  auto d_fill_str = dynamic_cast<string_scalar const&>(fill_value).value(stream);
 
   // output offsets column is the same size as the input
   auto const input_offsets =

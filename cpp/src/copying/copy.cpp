@@ -62,7 +62,7 @@ template <>
 struct scalar_empty_like_functor_impl<cudf::list_view> {
   std::unique_ptr<column> operator()(scalar const& input)
   {
-    auto ls = static_cast<list_scalar const*>(&input);
+    auto ls = dynamic_cast<list_scalar const*>(&input);
 
     // TODO:  add a manual constructor for lists_column_view.
     column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr};
@@ -79,7 +79,7 @@ template <>
 struct scalar_empty_like_functor_impl<cudf::struct_view> {
   std::unique_ptr<column> operator()(scalar const& input)
   {
-    auto ss = static_cast<struct_scalar const*>(&input);
+    auto ss = dynamic_cast<struct_scalar const*>(&input);
 
     // TODO: add a manual constructor for structs_column_view
     // TODO: add cudf::get_element() support for structs
