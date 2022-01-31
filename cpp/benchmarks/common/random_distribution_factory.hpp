@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "generate_benchmark_input.hpp"
+#include "generate_input.hpp"
 
 #include <memory>
 #include <random>

@@ -59,17 +59,10 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
-    # Only need to pass byte_ranges to get_filepath_or_buffer
-    # if `use_python_file_object=False`
-    byte_ranges = None
-    if not use_python_file_object and byte_range:
-        byte_ranges = [byte_range]
-
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
-        byte_ranges=byte_ranges,
         use_python_file_object=use_python_file_object,
         **kwargs,
     )

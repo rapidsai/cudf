@@ -72,22 +72,22 @@ enum class parse_result {
  */
 class parser {
  protected:
-  CUDA_HOST_DEVICE_CALLABLE parser() : input(nullptr), input_len(0), pos(nullptr) {}
-  CUDA_HOST_DEVICE_CALLABLE parser(const char* _input, int64_t _input_len)
+  CUDF_HOST_DEVICE inline parser() {}
+  CUDF_HOST_DEVICE inline parser(const char* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
     parse_whitespace();
   }
 
-  CUDA_HOST_DEVICE_CALLABLE parser(parser const& p)
+  CUDF_HOST_DEVICE inline parser(parser const& p)
     : input(p.input), input_len(p.input_len), pos(p.pos)
   {
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool eof(const char* p) { return p - input >= input_len; }
-  CUDA_HOST_DEVICE_CALLABLE bool eof() { return eof(pos); }
+  CUDF_HOST_DEVICE inline bool eof(const char* p) { return p - input >= input_len; }
+  CUDF_HOST_DEVICE inline bool eof() { return eof(pos); }
 
-  CUDA_HOST_DEVICE_CALLABLE bool parse_whitespace()
+  CUDF_HOST_DEVICE inline bool parse_whitespace()
   {
     while (!eof()) {
       if (is_whitespace(*pos)) {
@@ -99,12 +99,12 @@ class parser {
     return false;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool is_hex_digit(char c)
+  CUDF_HOST_DEVICE inline bool is_hex_digit(char c)
   {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
   }
 
-  CUDA_HOST_DEVICE_CALLABLE int64_t chars_left() { return input_len - ((pos - input) + 1); }
+  CUDF_HOST_DEVICE inline int64_t chars_left() { return input_len - ((pos - input) + 1); }
 
   /**
    * @brief Parse an escape sequence.
@@ -114,7 +114,7 @@ class parser {
    *
    * @returns True on success or false on fail.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool parse_escape_seq()
+  CUDF_HOST_DEVICE inline bool parse_escape_seq()
   {
     if (*pos != '\\') { return false; }
     char c = *++pos;
@@ -147,9 +147,7 @@ class parser {
    * indicates allowing either single or double quotes (but not a mixture of both).
    * @returns A result code indicating success, failure or other result.
    */
-  CUDA_HOST_DEVICE_CALLABLE parse_result parse_string(string_view& str,
-                                                      bool can_be_empty,
-                                                      char quote)
+  CUDF_HOST_DEVICE inline parse_result parse_string(string_view& str, bool can_be_empty, char quote)
   {
     str = string_view(nullptr, 0);
 
@@ -179,11 +177,11 @@ class parser {
   }
 
  protected:
-  char const* input;
-  int64_t input_len;
-  char const* pos;
+  char const* input{nullptr};
+  int64_t input_len{0};
+  char const* pos{nullptr};
 
-  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c <= ' '; }
+  CUDF_HOST_DEVICE inline bool is_whitespace(char c) { return c <= ' '; }
 };
 
 /**
@@ -222,18 +220,10 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
  */
 class json_state : private parser {
  public:
-  __device__ json_state()
-    : parser(),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE)
-  {
-  }
+  __device__ json_state() : parser() {}
   __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE),
+
       options(_options)
   {
   }
@@ -342,7 +332,7 @@ class json_state : private parser {
       // next
       parse_result result = next_element_internal(false);
       if (result != parse_result::SUCCESS) { return result; }
-    } while (1);
+    } while (true);
 
     return parse_result::ERROR;
   }
@@ -370,7 +360,7 @@ class json_state : private parser {
    * to not be present.
    * @returns A result code indicating success, failure or other result.
    */
-  CUDA_HOST_DEVICE_CALLABLE parse_result parse_name(string_view& name, bool can_be_empty)
+  CUDF_HOST_DEVICE inline parse_result parse_name(string_view& name, bool can_be_empty)
   {
     char const quote = options.get_allow_single_quotes() ? 0 : '\"';
 
@@ -399,7 +389,7 @@ class json_state : private parser {
    * @param val (Output) The string containing the parsed value
    * @returns A result code indicating success, failure or other result.
    */
-  CUDA_HOST_DEVICE_CALLABLE parse_result parse_non_string_value(string_view& val)
+  CUDF_HOST_DEVICE inline parse_result parse_non_string_value(string_view& val)
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
 
@@ -483,17 +473,17 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool is_quote(char c)
+  CUDF_HOST_DEVICE inline bool is_quote(char c)
   {
     return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
   }
 
-  const char* cur_el_start;          // pointer to the first character of the -value- of the current
-                                     // element - not the name
-  string_view cur_el_name;           // name of the current element (if applicable)
-  json_element_type cur_el_type;     // type of the current element
-  json_element_type parent_el_type;  // parent element type
-  get_json_object_options options;   // behavior options
+  const char* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
+                                      // current element - not the name
+  string_view cur_el_name;            // name of the current element (if applicable)
+  json_element_type cur_el_type{json_element_type::NONE};     // type of the current element
+  json_element_type parent_el_type{json_element_type::NONE};  // parent element type
+  get_json_object_options options;                            // behavior options
 };
 
 enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
@@ -503,26 +493,23 @@ enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR,
  * an array of these operators applied to the incoming json string,
  */
 struct path_operator {
-  CUDA_HOST_DEVICE_CALLABLE path_operator()
-    : type(path_operator_type::ERROR), index(-1), expected_type{NONE}
-  {
-  }
-  CUDA_HOST_DEVICE_CALLABLE path_operator(path_operator_type _type,
-                                          json_element_type _expected_type = NONE)
-    : type(_type), index(-1), expected_type{_expected_type}
+  CUDF_HOST_DEVICE inline path_operator() {}
+  CUDF_HOST_DEVICE inline path_operator(path_operator_type _type,
+                                        json_element_type _expected_type = NONE)
+    : type(_type), expected_type{_expected_type}
   {
   }
 
-  path_operator_type type;  // operator type
+  path_operator_type type{path_operator_type::ERROR};  // operator type
   // the expected element type we're applying this operation to.
   // for example:
   //    - you cannot retrieve a subscripted field (eg [5]) from an object.
   //    - you cannot retrieve a field by name (eg  .book) from an array.
   //    - you -can- use .* for both arrays and objects
   // a value of NONE imples any type accepted
-  json_element_type expected_type;  // the expected type of the element we're working with
-  string_view name;                 // name to match against (if applicable)
-  int index;                        // index for subscript operator
+  json_element_type expected_type{NONE};  // the expected type of the element we're working with
+  string_view name;                       // name to match against (if applicable)
+  int index{-1};                          // index for subscript operator
 };
 
 /**

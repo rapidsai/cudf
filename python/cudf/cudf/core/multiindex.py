@@ -190,7 +190,7 @@ class MultiIndex(Frame, BaseIndex):
         Renaming each levels of a MultiIndex to specified name:
 
         >>> midx = cudf.MultiIndex.from_product(
-                [('A', 'B'), (2020, 2021)], names=['c1', 'c2'])
+        ...     [('A', 'B'), (2020, 2021)], names=['c1', 'c2'])
         >>> midx.rename(['lv1', 'lv2'])
         MultiIndex([('A', 2020),
                     ('A', 2021),
@@ -775,7 +775,7 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
-            result = result.set_index(index)
+            result.index = index
         return result
 
     def _get_row_major(
@@ -859,28 +859,8 @@ class MultiIndex(Frame, BaseIndex):
 
     @classmethod
     def deserialize(cls, header, frames):
-        if "names" in header:
-            warnings.warn(
-                "MultiIndex objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["column_names"] = header["names"]
-        column_names = pickle.loads(header["column_names"])
-        if "source_data" in header:
-            warnings.warn(
-                "MultiIndex objects serialized in cudf version "
-                "21.08 or older will no longer be deserializable "
-                "after version 21.10. Please load and resave any "
-                "pickles before upgrading to version 21.12.",
-                FutureWarning,
-            )
-            df = cudf.DataFrame.deserialize(header["source_data"], frames)
-            return cls.from_frame(df)._set_names(column_names)
-
         # Spoof the column names to construct the frame, then set manually.
+        column_names = pickle.loads(header["column_names"])
         header["column_names"] = pickle.dumps(range(0, len(column_names)))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
@@ -1086,7 +1066,7 @@ class MultiIndex(Frame, BaseIndex):
             [4, 2],
             [5, 1]])
         >>> type(midx.values)
-        <class 'cupy.core.core.ndarray'>
+        <class 'cupy._core.core.ndarray'>
         """
         return self.to_frame(index=False).values
 
@@ -1587,13 +1567,13 @@ class MultiIndex(Frame, BaseIndex):
         --------
         >>> import cudf
         >>> mi = cudf.MultiIndex.from_tuples(
-            [('a', 'd'), ('b', 'e'), ('b', 'f')])
+        ...     [('a', 'd'), ('b', 'e'), ('b', 'f')])
         >>> mi.get_loc('b')
         slice(1, 3, None)
         >>> mi.get_loc(('b', 'e'))
         1
         >>> non_monotonic_non_unique_idx = cudf.MultiIndex.from_tuples(
-            [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
+        ...     [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
         >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
         slice(1, 4, 2)
 
@@ -1609,10 +1589,10 @@ class MultiIndex(Frame, BaseIndex):
 
                 >>> import pandas as pd
                 >>> import cudf
-                >>> x = pd.MultiIndex.from_tuples(
-                            [(2, 1, 1), (1, 2, 3), (1, 2, 1),
-                                (1, 1, 1), (1, 1, 1), (2, 2, 1)]
-                        )
+                >>> x = pd.MultiIndex.from_tuples([
+                ...     (2, 1, 1), (1, 2, 3), (1, 2, 1),
+                ...     (1, 1, 1), (1, 1, 1), (2, 2, 1),
+                ... ])
                 >>> x.get_loc(1)
                 array([False,  True,  True,  True,  True, False])
                 >>> cudf.from_pandas(x).get_loc(1)
@@ -1743,3 +1723,46 @@ class MultiIndex(Frame, BaseIndex):
         if sort is None and len(other):
             return midx.sort_values()
         return midx
+
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> Frame:
+        res = super()._copy_type_metadata(other, include_index=include_index)
+        res._names = other._names
+        return res
+
+    def _split_columns_by_levels(self, levels):
+        # This function assumes that for levels with duplicate names, they are
+        # specified by indices, not name by ``levels``. E.g. [None, None] can
+        # only be specified by 0, 1, not "None".
+
+        if levels is None:
+            return (
+                list(self._data.columns),
+                [],
+                [
+                    f"level_{i}" if name is None else name
+                    for i, name in enumerate(self.names)
+                ],
+                [],
+            )
+
+        # Normalize named levels into indices
+        level_names = list(self.names)
+        level_indices = {
+            lv if isinstance(lv, int) else level_names.index(lv)
+            for lv in levels
+        }
+
+        # Split the columns
+        data_columns, index_columns = [], []
+        data_names, index_names = [], []
+        for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
+            if i in level_indices:
+                name = f"level_{i}" if name is None else name
+                data_columns.append(col)
+                data_names.append(name)
+            else:
+                index_columns.append(col)
+                index_names.append(name)
+        return data_columns, index_columns, data_names, index_names

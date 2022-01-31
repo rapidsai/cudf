@@ -31,10 +31,10 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
+export DASK_DISTRIBUTED_GIT_TAG='2022.01.0'
 
 # ucx-py version
-export UCX_PY_VERSION='0.24.*'
+export UCX_PY_VERSION='0.25.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -89,7 +89,7 @@ gpuci_mamba_retry install -y \
                   "ucx-py=${UCX_PY_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
@@ -124,7 +124,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
     else
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
@@ -181,12 +181,10 @@ else
     done
 
     # Copy libcudf build time results
-    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
-    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
         gpuci_logger "Copying build time results"
         cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
-        mkdir -p "$WORKSPACE/build-metrics"
-        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
     fi
 
     ################################################################################
@@ -224,7 +222,7 @@ else
     install_dask
 
     gpuci_logger "Build python libs from source"
-    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka --ptds
     else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds

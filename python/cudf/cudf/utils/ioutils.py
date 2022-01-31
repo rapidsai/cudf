@@ -3,6 +3,7 @@
 import datetime
 import os
 import urllib
+import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
@@ -16,6 +17,13 @@ from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
+
+try:
+    import fsspec.parquet as fsspec_parquet
+
+except ImportError:
+    fsspec_parquet = None
+
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -160,10 +168,17 @@ categorical_partitions : boolean, default True
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
-use_python_file_object : boolean, default False
+use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger parquet files.
+    AbstractBufferedFile objects at IO time. Setting this argument to `False`
+    will require the entire file to be copied to host memory, and is highly
+    discouraged.
+open_file_options : dict, optional
+    Dictionary of key-value pairs to pass to the function used to open remote
+    files. By default, this will be `fsspec.parquet.open_parquet_file`. To
+    deactivate optimized precaching, set the "method" to `None` under the
+    "precache_options" key. Note that the `open_file_func` key can also be
+    used to specify a custom file-open function.
 
 Returns
 -------
@@ -198,9 +213,10 @@ Write a DataFrame to the parquet format.
 
 Parameters
 ----------
-path : str
+path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
-    while writing a partitioned dataset.
+    while writing a partitioned dataset. Use list of str with partition_offsets
+    to write parts of the dataframe to different files.
 compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
@@ -218,6 +234,16 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+partition_offsets : list, optional, default None
+    Offsets to partition the dataframe by. Should be used when path is list
+    of str. Should be a list of integers of size ``len(path) + 1``
+statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+    Level at which column statistics should be included in file.
+metadata_file_path : str, optional, default None
+    If specified, this function will return a binary blob containing the footer
+    metadata of the written parquet file. The returned blob will have the
+    ``chunk.file_path`` field set to the ``metadata_file_path`` for each chunk.
+    When using with ``partition_offsets``, should be same size as ``len(path)``
 int96_timestamps : bool, default False
     If ``True``, write timestamps in int96 format. This will convert
     timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
@@ -230,6 +256,9 @@ row_group_size_bytes: integer or None, default None
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
+**kwargs
+    To request metadata binary blob when using with ``partition_cols``, Pass
+    ``return_metadata=True`` instead of specifying ``metadata_file_path``
 
 
 See Also
@@ -958,9 +987,9 @@ Write a dataframe to csv.
 >>> import cudf
 >>> filename = 'foo.csv'
 >>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
-                         'y': [1.0, 3.3, 2.2, 4.4],
-                         'z': ['a', 'b', 'c', 'd']})
->>> df = df.set_index([3, 2, 1, 0])
+...                      'y': [1.0, 3.3, 2.2, 4.4],
+...                      'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index(cudf.Series([3, 2, 1, 0]))
 >>> df.to_csv(filename)
 
 """
@@ -1206,6 +1235,100 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
     return fs, return_paths
 
 
+def _set_context(obj, stack):
+    # Helper function to place open file on context stack
+    if stack is None:
+        return obj
+    return stack.enter_context(obj)
+
+
+def _open_remote_files(
+    paths,
+    fs,
+    context_stack=None,
+    open_file_func=None,
+    precache_options=None,
+    **kwargs,
+):
+    """Return a list of open file-like objects given
+    a list of remote file paths.
+
+    Parameters
+    ----------
+    paths : list(str)
+        List of file-path strings.
+    fs : fsspec.AbstractFileSystem
+        Fsspec file-system object.
+    context_stack : contextlib.ExitStack, Optional
+        Context manager to use for open files.
+    open_file_func : Callable, Optional
+        Call-back function to use for opening. If this argument
+        is specified, all other arguments will be ignored.
+    precache_options : dict, optional
+        Dictionary of key-word arguments to pass to use for
+        precaching. Unless the input contains ``{"method": None}``,
+        ``fsspec.parquet.open_parquet_file`` will be used for remote
+        storage.
+    **kwargs :
+        Key-word arguments to be passed to format-specific
+        open functions.
+    """
+
+    # Just use call-back function if one was specified
+    if open_file_func is not None:
+        return [
+            _set_context(open_file_func(path, **kwargs), context_stack)
+            for path in paths
+        ]
+
+    # Check if the "precache" option is supported.
+    # In the future, fsspec should do this check for us
+    precache_options = (precache_options or {}).copy()
+    precache = precache_options.pop("method", None)
+    if precache not in ("parquet", None):
+        raise ValueError(f"{precache} not a supported `precache` option.")
+
+    # Check that "parts" caching (used for all format-aware file handling)
+    # is supported by the installed fsspec/s3fs version
+    if precache == "parquet" and not fsspec_parquet:
+        warnings.warn(
+            f"This version of fsspec ({fsspec.__version__}) does "
+            f"not support parquet-optimized precaching. Please upgrade "
+            f"to the latest fsspec version for better performance."
+        )
+        precache = None
+
+    if precache == "parquet":
+        # Use fsspec.parquet module.
+        # TODO: Use `cat_ranges` to collect "known"
+        # parts for all files at once.
+        row_groups = precache_options.pop("row_groups", None) or (
+            [None] * len(paths)
+        )
+        return [
+            ArrowPythonFile(
+                _set_context(
+                    fsspec_parquet.open_parquet_file(
+                        path,
+                        fs=fs,
+                        row_groups=rgs,
+                        **precache_options,
+                        **kwargs,
+                    ),
+                    context_stack,
+                )
+            )
+            for path, rgs in zip(paths, row_groups)
+        ]
+
+    # Default open - Use pyarrow filesystem API
+    pa_fs = PyFileSystem(FSSpecHandler(fs))
+    return [
+        _set_context(pa_fs.open_input_file(fpath), context_stack)
+        for fpath in paths
+    ]
+
+
 def get_filepath_or_buffer(
     path_or_data,
     compression,
@@ -1214,6 +1337,7 @@ def get_filepath_or_buffer(
     iotypes=(BytesIO, NativeFile),
     byte_ranges=None,
     use_python_file_object=False,
+    open_file_options=None,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1235,6 +1359,9 @@ def get_filepath_or_buffer(
     use_python_file_object : boolean, default False
         If True, Arrow-backed PythonFile objects will be used in place
         of fsspec AbstractBufferedFile objects.
+    open_file_options : dict, optional
+        Optional dictionary of key-word arguments to pass to
+        `_open_remote_files` (used for remote storage only).
 
     Returns
     -------
@@ -1268,19 +1395,14 @@ def get_filepath_or_buffer(
 
         else:
             if use_python_file_object:
-                pa_fs = PyFileSystem(FSSpecHandler(fs))
-                path_or_data = [
-                    pa_fs.open_input_file(fpath) for fpath in paths
-                ]
+                path_or_data = _open_remote_files(
+                    paths, fs, **(open_file_options or {}),
+                )
             else:
                 path_or_data = [
                     BytesIO(
                         _fsspec_data_transfer(
-                            fpath,
-                            fs=fs,
-                            mode=mode,
-                            byte_ranges=byte_ranges,
-                            **kwargs,
+                            fpath, fs=fs, mode=mode, **kwargs,
                         )
                     )
                     for fpath in paths
@@ -1295,9 +1417,7 @@ def get_filepath_or_buffer(
             path_or_data = ArrowPythonFile(path_or_data)
         else:
             path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, byte_ranges=byte_ranges, **kwargs
-                )
+                _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
             )
 
     return path_or_data, compression
@@ -1531,10 +1651,7 @@ def _ensure_filesystem(passed_filesystem, path, **kwargs):
 def _fsspec_data_transfer(
     path_or_fob,
     fs=None,
-    byte_ranges=None,
-    footer=None,
     file_size=None,
-    add_par1_magic=None,
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
@@ -1554,48 +1671,22 @@ def _fsspec_data_transfer(
     file_size = file_size or fs.size(path_or_fob)
 
     # Check if a direct read makes the most sense
-    if not byte_ranges and bytes_per_thread >= file_size:
+    if bytes_per_thread >= file_size:
         if file_like:
             return path_or_fob.read()
         else:
-            return fs.open(path_or_fob, mode=mode, cache_type="none").read()
+            return fs.open(path_or_fob, mode=mode, cache_type="all").read()
 
     # Threaded read into "local" buffer
     buf = np.zeros(file_size, dtype="b")
-    if byte_ranges:
 
-        # Optimize/merge the ranges
-        byte_ranges = _merge_ranges(
-            byte_ranges, max_block=bytes_per_thread, max_gap=max_gap,
-        )
-
-        # Call multi-threaded data transfer of
-        # remote byte-ranges to local buffer
-        _read_byte_ranges(
-            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
-        )
-
-        # Add Header & Footer bytes
-        if footer is not None:
-            footer_size = len(footer)
-            buf[-footer_size:] = np.frombuffer(
-                footer[-footer_size:], dtype="b"
-            )
-
-        # Add parquet magic bytes (optional)
-        if add_par1_magic:
-            buf[:4] = np.frombuffer(b"PAR1", dtype="b")
-            if footer is None:
-                buf[-4:] = np.frombuffer(b"PAR1", dtype="b")
-
-    else:
-        byte_ranges = [
-            (b, min(bytes_per_thread, file_size - b))
-            for b in range(0, file_size, bytes_per_thread)
-        ]
-        _read_byte_ranges(
-            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
-        )
+    byte_ranges = [
+        (b, min(bytes_per_thread, file_size - b))
+        for b in range(0, file_size, bytes_per_thread)
+    ]
+    _read_byte_ranges(
+        path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+    )
 
     return buf.tobytes()
 

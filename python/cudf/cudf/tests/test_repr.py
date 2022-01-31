@@ -20,10 +20,8 @@ repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
     size = 5
-    mask = utils.random_bitmask(size)
-    data = cudf.Series(np.random.randint(1, 9, size))
-    column = data.set_mask(mask)
-    sr = cudf.Series(column).astype(dtype)
+    sr = cudf.Series(np.random.randint(1, 9, size)).astype(dtype)
+    sr[np.random.choice([False, True], size=size)] = None
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view.copy_to_host(),
@@ -62,10 +60,8 @@ def test_null_dataframe(ncols):
     size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(dtype_categories):
-        mask = utils.random_bitmask(size)
-        data = cudf.Series(np.random.randint(0, 128, size))
-        column = data.set_mask(mask)
-        sr = cudf.Series(column).astype(dtype)
+        sr = cudf.Series(np.random.randint(0, 128, size)).astype(dtype)
+        sr[np.random.choice([False, True], size=size)] = None
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
@@ -1475,3 +1471,33 @@ def test_empty_series_name():
     gs = cudf.from_pandas(ps)
 
     assert ps.__repr__() == gs.__repr__()
+
+
+def test_repr_struct_after_concat():
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series(
+                [
+                    {"sa": 2056831253},
+                    {"sa": -1463792165},
+                    {"sa": 1735783038},
+                    {"sa": 103774433},
+                    {"sa": -1413247520},
+                ]
+                * 13
+            ),
+            "b": cudf.Series(
+                [
+                    {"sa": {"ssa": 1140062029}},
+                    None,
+                    {"sa": {"ssa": 1998862860}},
+                    {"sa": None},
+                    {"sa": {"ssa": -395088502}},
+                ]
+                * 13
+            ),
+        }
+    )
+    pdf = df.to_pandas()
+
+    assert df.__repr__() == pdf.__repr__()
