@@ -353,4 +353,4 @@ class SingleColumnFrame(Frame):
         int
             Number of unique values in the column.
         """
-        return sum(super().nunique(method=method, dropna=dropna).values())
+        return self._column.distinct_count(method=method, dropna=dropna)
