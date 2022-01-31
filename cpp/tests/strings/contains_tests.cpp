@@ -274,6 +274,15 @@ TEST_F(StringsContainsTests, EmbeddedNullCharacter)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
+TEST_F(StringsContainsTests, Errors)
+{
+  cudf::test::strings_column_wrapper input({"3", "33"});
+  auto strings_view = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "(3?)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "3?+"), cudf::logic_error);
+}
+
 TEST_F(StringsContainsTests, CountTest)
 {
   std::vector<const char*> h_strings{
