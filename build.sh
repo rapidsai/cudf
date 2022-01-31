@@ -185,12 +185,9 @@ if buildAll || hasArg libcudf; then
     fi
 
     # get the current count before the compile starts
-    FILES_IN_CCACHE=""
-    if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v ccache)" ]]; then
-        FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
-        echo "$FILES_IN_CCACHE"
-        # zero the ccache statistics
-        ccache -z
+    if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
+        # zero the sccache statistics
+        sccache --zero-stats
     fi
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
@@ -216,11 +213,12 @@ if buildAll || hasArg libcudf; then
         echo "Formatting build metrics"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         MSG="<p>"
-        # get some ccache stats after the compile
-        if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v ccache)" ]]; then
-           MSG="${MSG}<br/>$FILES_IN_CCACHE"
-           HIT_RATE=$(ccache -s | grep "cache hit rate")
-           MSG="${MSG}<br/>${HIT_RATE}"
+        # get some sccache stats after the compile
+        if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v sccache)" ]]; then
+           COMPILE_REQUESTS=$(sccache -s | grep "Compile requests  " | awk '{ print $NF }') # "grep" cmd has 2 spaces to avoid matching "Compile requests executed"
+           CACHE_HITS=$(sccache -s | grep "Cache hits" | awk '{ print $NF }')
+           HIT_RATE=$(echo "scale=2; $CACHE_HITS/$COMPILE_REQUESTS*100" | bc)
+           MSG="${MSG}<br/>cache hit rate ${HIT_RATE} %"
         fi
         MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
         MSG="${MSG}<br/>parallel build time: $compile_total seconds"
