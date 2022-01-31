@@ -408,7 +408,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
             gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         }
         break;
-      default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
+      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
   }
   if (num_uncompressed_blocks > 0) {

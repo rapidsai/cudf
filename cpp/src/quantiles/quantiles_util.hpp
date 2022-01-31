@@ -144,13 +144,13 @@ CUDF_HOST_DEVICE inline Result select_quantile(ValueAccessor get_value,
 
     case interpolation::NEAREST: return static_cast<Result>(get_value(idx.nearest));
 
-    default:
-#if defined(__CUDA_ARCH__)
-      cudf_assert(false && "Invalid interpolation operation for quantiles");
-      return Result();
-#else
+    default: {
+#ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid interpolation operation for quantiles.");
+#else
+      CUDF_UNREACHABLE("Invalid interpolation operation for quantiles");
 #endif
+    }
   }
 }
 
@@ -176,14 +176,14 @@ CUDF_HOST_DEVICE inline Result select_quantile_data(Iterator begin,
 
     case interpolation::MIDPOINT:
       return interpolate::midpoint<Result>(*(begin + idx.lower), *(begin + idx.higher));
-  }
-
-#if defined(__CUDA_ARCH__)
-  cudf_assert(false && "Invalid interpolation operation for quantiles");
-  return Result();
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid interpolation operation for quantiles.");
 #else
-  CUDF_FAIL("Invalid interpolation operation for quantiles.");
+      CUDF_UNREACHABLE("Invalid interpolation operation for quantiles");
 #endif
+    }
+  }
 }
 
 template <typename Iterator>
@@ -203,14 +203,14 @@ CUDF_HOST_DEVICE inline bool select_quantile_validity(Iterator begin,
 
     case interpolation::LINEAR:
     case interpolation::MIDPOINT: return *(begin + idx.lower) and *(begin + idx.higher);
-  }
-
-#if defined(__CUDA_ARCH__)
-  cudf_assert(false && "Invalid interpolation operation for quantiles");
-  return false;
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid interpolation operation for quantiles.");
 #else
-  CUDF_FAIL("Invalid interpolation operation for quantiles.");
+      CUDF_UNREACHABLE("Invalid interpolation operation for quantiles");
 #endif
+    }
+  }
 }
 
 }  // namespace detail

@@ -161,7 +161,7 @@ __global__ void __launch_bounds__(block_size, 1)
               }
             case Type::FIXED_LEN_BYTE_ARRAY:
               if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
-            default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
+            default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
           }
         }();
       }

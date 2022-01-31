@@ -71,9 +71,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
-    default:
-      CUDF_EXPECTS(false, "Unsupported compression type");
-      return parquet::Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type"); return parquet::Compression::UNCOMPRESSED;
   }
 }
 
