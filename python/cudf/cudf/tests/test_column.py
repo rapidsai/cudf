@@ -406,29 +406,22 @@ def test_as_column_buffer(data, expected):
 
 
 @pytest.mark.parametrize(
-    "data,expected",
+    "data,pyarrow_kwargs,cudf_kwargs",
     [
         (
-            pa.array([100, 200, 300], type=pa.decimal128(3)),
-            cudf.core.column.as_column(
-                [100, 200, 300], dtype=cudf.core.dtypes.Decimal128Dtype(3, 0)
-            ),
+            [100, 200, 300],
+            dict(type=pa.decimal128(3)),
+            dict(dtype=cudf.core.dtypes.Decimal128Dtype(3, 0)),
         ),
-        (
-            pa.array([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
-            cudf.core.column.as_column([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
-        ),
-        (
-            pa.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]),
-            cudf.core.column.as_column(
-                [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
-            ),
-        ),
+        ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], dict(), dict(),),
+        ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dict(), dict(),),
     ],
 )
-def test_as_column_arrow_array(data, expected):
-    actual_column = cudf.core.column.as_column(data)
-    assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
+    pyarrow_data = pa.array(data, **pyarrow_kwargs)
+    cudf_from_pyarrow = cudf.core.column.as_column(pyarrow_data)
+    expected = cudf.core.column.as_column(data, **cudf_kwargs)
+    assert_eq(cudf.Series(cudf_from_pyarrow), cudf.Series(expected))
 
 
 @pytest.mark.parametrize(
