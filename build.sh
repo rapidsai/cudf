@@ -218,7 +218,7 @@ if buildAll || hasArg libcudf; then
         if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
            COMPILE_REQUESTS=$(sccache -s | grep "Compile requests  " | awk '{ print $NF }') # "grep" cmd has 2 spaces to avoid matching "Compile requests executed"
            CACHE_HITS=$(sccache -s | grep "Cache hits" | awk '{ print $NF }')
-           HIT_RATE=$(echo "scale=2; $CACHE_HITS/$COMPILE_REQUESTS*100" | bc)
+           HIT_RATE=$(echo - | awk "{printf \"%.2f\n\", $CACHE_HITS / $COMPILE_REQUESTS * 100}")
            MSG="${MSG}<br/>cache hit rate ${HIT_RATE} %"
         fi
         MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
