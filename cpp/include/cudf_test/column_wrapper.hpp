@@ -140,8 +140,8 @@ inline rmm::device_buffer make_device_elements(InputIterator begin, InputIterato
 {
   auto const size = cudf::distance(begin, end);
 #ifdef __CUDACC__
-  if constexpr (std::is_same<typename thrust::iterator_system<InputIterator>::type,
-                             thrust::device_system_tag>::value) {
+  if constexpr (std::is_same_v<typename thrust::iterator_system<InputIterator>::type,
+                               thrust::device_system_tag>) {
     rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
     thrust::copy(thrust::device, begin, end, elements.begin());
     return elements.release();
@@ -229,8 +229,8 @@ template <typename ValidityIterator>
 rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
 {
 #ifdef __CUDACC__
-  if constexpr (std::is_same<typename thrust::iterator_system<ValidityIterator>::type,
-                             thrust::device_system_tag>::value) {
+  if constexpr (std::is_same_v<typename thrust::iterator_system<ValidityIterator>::type,
+                               thrust::device_system_tag>) {
     return cudf::detail::valid_if(begin, end, thrust::identity<bool>{}, rmm::cuda_stream_default)
       .first;
   }

@@ -22,6 +22,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/detail/tagged_iterator.h>
 #include <thrust/random.h>
 
@@ -47,8 +48,12 @@ void BM_contiguous_split_common(benchmark::State& state,
     splits.push_back(std::min(idx + split_stride, static_cast<cudf::size_type>(num_rows)));
   }
 
-  for (auto&& c : columns)
-    c->null_count();
+  for (auto&& c : columns) {
+    // computing the null count is not a part of the benchmark's target code path, and we want the
+    // property to be pre-computed so that we measure the performance of only the intended code path
+    [[maybe_unused]] auto const nulls = c->null_count();
+  }
+
   cudf::table src_table(std::move(columns));
 
   for (auto _ : state) {
@@ -73,10 +78,8 @@ void BM_contiguous_split(benchmark::State& state)
   int64_t num_rows        = total_desired_bytes / (num_cols * el_size);
 
   // generate input table
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(cudf::size_type i) { return true; });
-  std::vector<std::unique_ptr<cudf::column>> src_cols;
-  src_cols.reserve(num_cols);
+  auto valids = thrust::constant_iterator<bool>(true);
+  std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);
   for (int idx = 0; idx < num_cols; idx++) {
     auto rand_elements = make_tagged_iterator<thrust::device_system_tag>(
       cudf::detail::make_counting_transform_iterator(0u, [idx] __device__(uint32_t i) {
@@ -86,13 +89,13 @@ void BM_contiguous_split(benchmark::State& state)
         return dist(rng);
       }));
     if (include_validity) {
-      src_cols.push_back(
+      src_cols[idx] =
         cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows, valids)
-          .release());
+          .release();
     } else {
-      src_cols.push_back(
+      src_cols[idx] =
         cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows)
-          .release());
+          .release();
     }
   }
 
@@ -128,8 +131,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
   int64_t num_rows            = col_len_bytes / string_len;
 
   // generate input table
-  std::vector<std::unique_ptr<cudf::column>> src_cols;
-  src_cols.reserve(num_cols);
+  std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);
   for (int64_t idx = 0; idx < num_cols; idx++) {
     // fill in a random set of strings
     auto rand_elements = make_tagged_iterator<thrust::device_system_tag>(
@@ -145,7 +147,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
     auto d_table = cudf::gather(
       cudf::table_view({d_strings}), d_elements, cudf::out_of_bounds_policy::DONT_CHECK);
     if (!include_validity) d_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
-    src_cols.push_back(std::move(d_table->release()[0]));
+    src_cols[idx] = std::move(d_table->release()[0]);
   }
 
   size_t total_bytes = total_desired_bytes + (num_rows * sizeof(cudf::size_type));
