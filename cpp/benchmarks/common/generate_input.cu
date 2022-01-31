@@ -375,7 +375,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     // Working around vector<bool> and storing bools as int8_t
     using stored_Type = typename stored_as<T>::type;
     // bernoulli_distribution
-    // TODO get_null_frequency == 0
+    // get_null_frequency < 0 no null mask, ==0 all valids. //TODO remove unused computations
     auto valid_dist =
       random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
     auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
@@ -483,7 +483,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
       cudf::data_type{cudf::type_to_id<T>()},
       num_rows,
       data.release(),
-      profile.get_null_frequency() == 0 ? rmm::device_buffer{} : std::move(result_bitmask));
+      profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(result_bitmask));
   } else {
     std::cout << static_cast<int>(cudf::type_to_id<T>()) << std::endl;
     CUDF_FAIL("unsupported column type da");
@@ -556,7 +556,10 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column2(data_profile con
   auto [result_bitmask, null_count] =
     cudf::detail::valid_if(null_mask.begin(), null_mask.end() - 1, thrust::identity<bool>{});
   return cudf::make_strings_column(
-    num_rows, std::move(offsets), std::move(chars), std::move(result_bitmask));
+    num_rows,
+    std::move(offsets),
+    std::move(chars),
+    profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(result_bitmask));
 }
 
 /**
@@ -711,10 +714,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
     // cudf::test::print(scv.chars());
     // cudf::test::print(scv.offsets());
     // gather
-    auto str_table = cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
-                                          sample_indices,
-                                          cudf::out_of_bounds_policy::NULLIFY,
-                                          cudf::detail::negative_index_policy::ALLOWED);
+    auto str_table =
+      cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
+                           sample_indices,
+                           cudf::out_of_bounds_policy::DONT_CHECK,  // TODO ensure no memory errors.
+                           cudf::detail::negative_index_policy::NOT_ALLOWED);
     std::cout << "line " << __LINE__ << "\n";
     return std::move(str_table->release()[0]);
   }
@@ -816,11 +820,12 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
     auto [null_mask, null_count] =
       cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
-    list_column = cudf::make_lists_column(num_rows,
-                                          std::move(offsets_column),
-                                          std::move(current_child_column),
-                                          null_count,  // cudf::UNKNOWN_NULL_COUNT,
-                                          std::move(null_mask));
+    list_column = cudf::make_lists_column(
+      num_rows,
+      std::move(offsets_column),
+      std::move(current_child_column),
+      profile.get_null_frequency() < 0 ? 0 : null_count,  // cudf::UNKNOWN_NULL_COUNT,
+      profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(null_mask));
     std::cout << "line " << __LINE__ << "\n";
   }
   std::cout << "line " << __LINE__ << "\n";
