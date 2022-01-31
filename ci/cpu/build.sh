@@ -78,9 +78,12 @@ fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
+  sccache --zero-stats
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
+  gpuci_logger "sccache stats"
+  sccache --show-stats
 
   # Copy libcudf build metrics results
   LIBCUDF_BUILD_DIR=$CONDA_BLD_DIR/libcudf/work/cpp/build
