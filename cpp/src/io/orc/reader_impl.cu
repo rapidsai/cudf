@@ -286,7 +286,7 @@ __global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
-    stats[tid].status = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
+    stats[tid].status        = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
     stats[tid].bytes_written = actual_uncompressed_sizes[tid];
   }
 }
