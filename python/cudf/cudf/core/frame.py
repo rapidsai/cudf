@@ -3199,9 +3199,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.ceil and DataFrame.ceil are deprecated and will be "
+            "removed in the future",
+            FutureWarning,
         )
 
         return self._unaryop("ceil")
@@ -3238,9 +3238,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.floor and DataFrame.floor are deprecated and will be "
+            "removed in the future.",
+            FutureWarning,
         )
 
         return self._unaryop("floor")
