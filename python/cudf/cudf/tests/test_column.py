@@ -43,6 +43,8 @@ def pandas_input(request):
     except TypeError:
         if dtype == "category":
             data = random_ints(np.int64, size)
+        else:
+            raise
     else:
         if dtype.kind == "b":
             data = np.random.choice([False, True], size=size)
