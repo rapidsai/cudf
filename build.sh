@@ -214,7 +214,7 @@ if buildAll || hasArg libcudf; then
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         MSG="<p>"
         # get some sccache stats after the compile
-        if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v sccache)" ]]; then
+        if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
            COMPILE_REQUESTS=$(sccache -s | grep "Compile requests  " | awk '{ print $NF }') # "grep" cmd has 2 spaces to avoid matching "Compile requests executed"
            CACHE_HITS=$(sccache -s | grep "Cache hits" | awk '{ print $NF }')
            HIT_RATE=$(echo "scale=2; $CACHE_HITS/$COMPILE_REQUESTS*100" | bc)
