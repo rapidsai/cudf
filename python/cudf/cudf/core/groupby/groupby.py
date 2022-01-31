@@ -11,6 +11,7 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.reshape import interleave_columns
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
@@ -958,6 +959,7 @@ class GroupBy(Serializable):
 
         return res
 
+    @annotate("GROUPBY_COV", color="red")
     def cov(self, min_periods=0, ddof=1):
         """
         Compute pairwise covariance of columns, excluding NA/null values.
@@ -1016,10 +1018,22 @@ class GroupBy(Serializable):
         len_cols = len(column_names)
 
         column_pair_structs = {}
-        for x, y in itertools.combinations_with_replacement(column_names, 2):
-            column_pair_structs[(x, y)] = cudf.DataFrame._from_data(
-                {"x": self.obj._data[x], "y": self.obj._data[y]}
-            ).to_struct()
+        column_size = len(self.obj)
+
+        with annotate("construct_pair_struct"):
+            for x, y in itertools.combinations_with_replacement(
+                column_names, 2
+            ):
+                # column_pair_structs[(x, y)] = cudf.DataFrame._from_data(
+                #     {"x": self.obj._data[x], "y": self.obj._data[y]}
+                # ).to_struct()
+                column_pair_structs[
+                    (x, y)
+                ] = cudf.core.column.build_struct_column(
+                    names=(x, y),
+                    children=(self.obj._data[x], self.obj._data[y]),
+                    size=column_size,
+                )
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
         ).groupby(by=self.grouping.keys)
@@ -1045,14 +1059,20 @@ class GroupBy(Serializable):
             for i in range(0, len(cols_list), len_cols)
         ]
 
+        def combine_columns(gb_cov, ys):
+            list_of_columns = list(map(gb_cov._data.__getitem__, ys))
+            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
+            return interleave_columns(frame)
+
         # interleave: combine the correlation results for each column-pair
         # into a single column
-        res = cudf.DataFrame._from_data(
-            {
-                x: gb_cov.loc[:, i].interleave_columns()
-                for i, x in zip(cols_split, column_names)
-            }
-        )
+        with annotate("combine_columns"):
+            res = cudf.DataFrame._from_data(
+                {
+                    x: combine_columns(gb_cov, ys)
+                    for ys, x in zip(cols_split, column_names)
+                }
+            )
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
