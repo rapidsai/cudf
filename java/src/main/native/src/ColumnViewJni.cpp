@@ -1790,16 +1790,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize(JNIEnv *env,
-                                                                                 jobject j_object,
-                                                                                 jint size) {
-  try {
-    cudf::jni::auto_set_device(env);
-    return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
-  }
-  CATCH_STD(env, 0);
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
                                                                            jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);

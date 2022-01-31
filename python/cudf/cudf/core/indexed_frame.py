@@ -1459,18 +1459,9 @@ class IndexedFrame(Frame):
         0  1.0  a
         2  3.0  c
         """
-        axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
+        if self._get_axis_from_axis_arg(axis) != 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sequence.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -31,37 +33,32 @@ namespace cudf {
 namespace strings {
 namespace detail {
 std::unique_ptr<column> find_multiple(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   strings_column_view const& targets,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::INT32);
-  auto targets_count = targets.size();
+  auto const strings_count = input.size();
+  auto const targets_count = targets.size();
   CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
   CUDF_EXPECTS(!targets.has_nulls(), "Search targets cannot contain null strings");
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
   auto targets_column = column_device_view::create(targets.parent(), stream);
   auto d_targets      = *targets_column;
 
+  auto const total_count = strings_count * targets_count;
+
   // create output column
-  auto total_count  = strings_count * targets_count;
-  auto results      = make_numeric_column(data_type{type_id::INT32},
-                                     total_count,
-                                     rmm::device_buffer{0, stream, mr},
-                                     0,
-                                     stream,
-                                     mr);  // no nulls
-  auto results_view = results->mutable_view();
-  auto d_results    = results_view.data<int32_t>();
+  auto results = make_numeric_column(
+    data_type{type_id::INT32}, total_count, rmm::device_buffer{0, stream, mr}, 0, stream, mr);
+
   // fill output column with position values
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(total_count),
-                    d_results,
+                    results->mutable_view().begin<int32_t>(),
                     [d_strings, d_targets, targets_count] __device__(size_type idx) {
                       size_type str_idx = idx / targets_count;
                       if (d_strings.is_null(str_idx)) return -1;
@@ -70,18 +67,30 @@ std::unique_ptr<column> find_multiple(
                       return d_str.find(d_tgt);
                     });
   results->set_null_count(0);
-  return results;
+
+  auto offsets = cudf::detail::sequence(strings_count + 1,
+                                        numeric_scalar<offset_type>(0),
+                                        numeric_scalar<offset_type>(targets_count),
+                                        stream,
+                                        mr);
+  return make_lists_column(strings_count,
+                           std::move(offsets),
+                           std::move(results),
+                           0,
+                           rmm::device_buffer{0, stream, mr},
+                           stream,
+                           mr);
 }
 
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> find_multiple(strings_column_view const& strings,
+std::unique_ptr<column> find_multiple(strings_column_view const& input,
                                       strings_column_view const& targets,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(strings, targets, rmm::cuda_stream_default, mr);
+  return detail::find_multiple(input, targets, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
