@@ -569,17 +569,6 @@ class BaseIndex(Serializable):
 
         return cudf.io.dlpack.to_dlpack(self)
 
-    @property
-    def gpu_values(self):
-        """
-        View the data as a numba device array object
-        """
-        warnings.warn(
-            "The gpu_values property is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._values.data_array_view
-
     def append(self, other):
         """
         Append a collection of Index options together.
@@ -1254,10 +1243,6 @@ class BaseIndex(Serializable):
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
 
-    # TODO: This method is deprecated and can be removed.
-    def to_array(self, fillna=None):
-        return self._values.to_array(fillna=fillna)
-
     def to_series(self, index=None, name=None):
         """
         Create a Series with both index and values equal to the index keys.
@@ -1536,14 +1521,6 @@ class BaseIndex(Serializable):
                 "`allow_fill` and `fill_value` are unsupported."
             )
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _apply_boolean_mask(self, boolean_mask):

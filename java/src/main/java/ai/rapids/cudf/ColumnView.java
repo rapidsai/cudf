@@ -3248,7 +3248,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The index is set to null if one of the following is true: 
    * 1. The search key row is null.
    * 2. The list row is null.
-   * @param key ColumnView of search keys.
+   * @param keys ColumnView of search keys.
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
    */
@@ -3282,6 +3282,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Scalar getScalarElement(int index) {
     return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
+  /**
+   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
+   * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
+   */
+  static long getValidityBufferSize(int numRows) {
+    // number of bytes required = Math.ceil(number of bits / 8)
+    long actualBytes = ((long) numRows + 7) >> 3;
+    // padding to the multiplies of the padding boundary(64 bytes)
+    return ((actualBytes + 63) >> 6) << 6;
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3701,7 +3712,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method to find the first (or last) index of each search key in the specified column,
    * in each row of a list column.
    * @param nativeView the column view handle of the list
-   * @param scalarColumnHandle handle to the search key column
+   * @param keyColumnHandle handle to the search key column
    * @param isFindFirst Whether to find the first index of the key, or the last.
    * @return column handle of the resultant column of int32 indices
    */
@@ -3881,11 +3892,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
                                                              long boolColumnViewHandle) throws CudfException;
 
-  /**
-   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
-   */
-  static native long getNativeValidPointerSize(int size);
-
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
   // should typically only be called from the OffHeap inner class.
@@ -3975,7 +3981,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       DeviceMemoryBuffer mainValidDevBuff = null;
       DeviceMemoryBuffer mainOffsetsDevBuff = null;
       if (mainColValid != null) {
-        long validLen = getNativeValidPointerSize(mainColRows);
+        long validLen = getValidityBufferSize(mainColRows);
         mainValidDevBuff = DeviceMemoryBuffer.allocate(validLen);
         mainValidDevBuff.copyFromHostBuffer(mainColValid, 0, validLen);
       }
@@ -4084,7 +4090,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
       }
       if (validityBuffer != null) {
-        long validLen = getNativeValidPointerSize((int)rows);
+        long validLen = getValidityBufferSize((int)rows);
         valid = DeviceMemoryBuffer.allocate(validLen);
         valid.copyFromHostBuffer(validityBuffer, 0, validLen);
       }
