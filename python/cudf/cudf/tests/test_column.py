@@ -29,8 +29,35 @@ dtypes = sorted(
 
 @pytest.fixture(params=dtypes, ids=dtypes)
 def pandas_input(request):
-    data = np.random.randint(0, 1000, 100)
-    return pd.Series(data, dtype=request.param)
+    rng = np.random.default_rng()
+    dtype = request.param
+    size = 100
+
+    def random_ints(dtype, size):
+        dtype_min = np.iinfo(dtype).min
+        dtype_max = np.iinfo(dtype).max
+        return rng.integers(dtype_min, dtype_max, size=size, dtype=dtype)
+
+    try:
+        dtype = np.dtype(request.param)
+    except TypeError:
+        if dtype == "category":
+            data = random_ints(np.int64, size)
+    else:
+        if dtype.kind == "b":
+            data = np.random.choice([False, True], size=size)
+        elif dtype.kind in ("m", "M"):
+            # datetime or timedelta
+            data = random_ints(np.int64, size).astype(dtype.str)
+        elif dtype.kind == "U":
+            # Unicode strings of integers like "12345"
+            data = random_ints(np.int64, size).astype(dtype.str)
+        elif dtype.kind == "f":
+            # floats in [0.0, 1.0)
+            data = rng.random(size=size, dtype=dtype)
+        else:
+            data = random_ints(dtype, size)
+    return pd.Series(data, dtype=dtype)
 
 
 def str_host_view(list_of_str, to_dtype):
