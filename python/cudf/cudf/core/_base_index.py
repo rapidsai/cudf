@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 import warnings
-from typing import Any, Set
+from typing import Any, Set, Tuple
 
 import pandas as pd
 
@@ -73,6 +73,13 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     def __getitem__(self, key):
+        raise NotImplementedError()
+
+    def _data_columns(self) -> Tuple[ColumnBase, ...]:
+        """Return a tuple of columns that holds actual data. ``RangeIndex``
+        returns an empty tuple. Unlike ``_values``, this method does not
+        materialize columns.
+        """
         raise NotImplementedError()
 
     def __contains__(self, item):

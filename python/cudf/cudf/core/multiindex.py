@@ -1090,6 +1090,9 @@ class MultiIndex(Frame, BaseIndex):
         """
         return self.to_frame(index=False).values
 
+    def _data_columns(self) -> Tuple[column.ColumnBase, ...]:
+        return self._columns
+
     @classmethod
     def from_frame(cls, df, names=None):
         """

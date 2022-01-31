@@ -231,6 +231,9 @@ class RangeIndex(BaseIndex):
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
+    def _data_columns(self) -> Tuple[ColumnBase, ...]:
+        return ()
+
     def is_numeric(self):
         return True
 
@@ -824,6 +827,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @property
     def _values(self):
         return self._column
+
+    def _data_columns(self) -> Tuple[ColumnBase, ...]:
+        return self._columns
 
     @classmethod
     def _concat(cls, objs):

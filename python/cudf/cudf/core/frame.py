@@ -104,7 +104,7 @@ class Frame:
         )
 
     @property
-    def _columns(self) -> List[Any]:  # TODO: List[Column]?
+    def _columns(self) -> Tuple[ColumnBase, ...]:
         return self._data.columns
 
     def serialize(self):

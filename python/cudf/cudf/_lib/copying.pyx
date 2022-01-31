@@ -38,6 +38,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport (
+    columns_from_table_view,
     columns_from_unique_ptr,
     data_from_table_view,
     data_from_unique_ptr,
@@ -330,20 +331,17 @@ def column_slice(Column input_column, object indices):
     return result
 
 
-def table_slice(input_table, object indices, bool keep_index=True):
+def columns_slice(input_columns: list, indices: list):
+    """
+    Given a list of input columns, return columns sliced by ``indices``.
 
-    cdef table_view input_table_view = table_view_from_table(
-        input_table, not keep_index
-    )
-
-    cdef vector[size_type] c_indices
-    c_indices.reserve(len(indices))
-
+    Returns a list of list of columns. The length of return is
+    `len(indices) / 2`. The `i`th item in return is a list of columns sliced
+    from ``input_columns`` with `slice(indices[i*2], indices[i*2 + 1])`.
+    """
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef vector[size_type] c_indices = indices
     cdef vector[table_view] c_result
-
-    cdef int index
-    for index in indices:
-        c_indices.push_back(index)
 
     with nogil:
         c_result = move(
@@ -352,18 +350,11 @@ def table_slice(input_table, object indices, bool keep_index=True):
                 c_indices)
         )
 
-    num_of_result_cols = c_result.size()
     return [
-        data_from_table_view(
-            c_result[i],
-            input_table,
-            column_names=input_table._column_names,
-            index_names=(
-                input_table._index._column_names if (
-                    keep_index is True)
-                else None
-            )
-        ) for i in range(num_of_result_cols)]
+        columns_from_table_view(
+            c_result[i], input_columns
+        ) for i in range(c_result.size())
+    ]
 
 
 def column_split(Column input_column, object splits):
