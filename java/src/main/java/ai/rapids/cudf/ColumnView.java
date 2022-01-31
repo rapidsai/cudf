@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -2331,13 +2331,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null string entries return corresponding null output columns.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter) {
+  public final Table stringSplit(Scalar delimiter, int maxSplit) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
+  }
+  
+  /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public final Table stringSplit(Scalar delimiter) {
+    return stringSplit(delimiter, -1);
   }
 
   /**
@@ -2349,7 +2363,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Table stringSplit() {
     try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplit(emptyString);
+      return stringSplit(emptyString, -1);
     }
   }
 
@@ -2362,7 +2376,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
   public final ColumnVector stringSplitRecord(int maxSplit) {
     try (Scalar emptyString = Scalar.fromString("")) {
@@ -2384,7 +2398,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * string using the specified delimiter.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
   public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
@@ -3234,7 +3248,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The index is set to null if one of the following is true: 
    * 1. The search key row is null.
    * 2. The list row is null.
-   * @param key ColumnView of search keys.
+   * @param keys ColumnView of search keys.
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
    */
@@ -3268,6 +3282,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Scalar getScalarElement(int index) {
     return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
+  /**
+   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
+   * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
+   */
+  static long getValidityBufferSize(int numRows) {
+    // number of bytes required = Math.ceil(number of bits / 8)
+    long actualBytes = ((long) numRows + 7) >> 3;
+    // padding to the multiplies of the padding boundary(64 bytes)
+    return ((actualBytes + 63) >> 6) << 6;
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3490,8 +3515,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * delimiter.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
-  private static native long[] stringSplit(long columnView, long delimiter);
+  private static native long[] stringSplit(long columnView, long delimiter, int maxSplit);
 
   private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
 
@@ -3686,7 +3712,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method to find the first (or last) index of each search key in the specified column,
    * in each row of a list column.
    * @param nativeView the column view handle of the list
-   * @param scalarColumnHandle handle to the search key column
+   * @param keyColumnHandle handle to the search key column
    * @param isFindFirst Whether to find the first index of the key, or the last.
    * @return column handle of the resultant column of int32 indices
    */
@@ -3866,11 +3892,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
                                                              long boolColumnViewHandle) throws CudfException;
 
-  /**
-   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
-   */
-  static native long getNativeValidPointerSize(int size);
-
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
   // should typically only be called from the OffHeap inner class.
@@ -3960,7 +3981,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       DeviceMemoryBuffer mainValidDevBuff = null;
       DeviceMemoryBuffer mainOffsetsDevBuff = null;
       if (mainColValid != null) {
-        long validLen = getNativeValidPointerSize(mainColRows);
+        long validLen = getValidityBufferSize(mainColRows);
         mainValidDevBuff = DeviceMemoryBuffer.allocate(validLen);
         mainValidDevBuff.copyFromHostBuffer(mainColValid, 0, validLen);
       }
@@ -4069,7 +4090,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
       }
       if (validityBuffer != null) {
-        long validLen = getNativeValidPointerSize((int)rows);
+        long validLen = getValidityBufferSize((int)rows);
         valid = DeviceMemoryBuffer.allocate(validLen);
         valid.copyFromHostBuffer(validityBuffer, 0, validLen);
       }

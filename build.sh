@@ -230,6 +230,7 @@ if buildAll || hasArg libcudf; then
         fi
         echo "$MSG"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${LIB_BUILD_DIR}/ninja_log.html
+        cp ${LIB_BUILD_DIR}/.ninja_log ${LIB_BUILD_DIR}/ninja.log
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -142,16 +141,6 @@ class SingleColumnFrame(Frame):
         )
 
     to_list = tolist
-
-    # TODO: When this method is removed we can also remove
-    # ColumnBase.to_gpu_array.
-    def to_gpu_array(self, fillna=None):  # noqa: D102
-        warnings.warn(
-            "The to_gpu_array method will be removed in a future cuDF "
-            "release. Consider using `to_cupy` instead.",
-            FutureWarning,
-        )
-        return self._column.to_gpu_array(fillna=fillna)
 
     @classmethod
     def from_arrow(cls, array):

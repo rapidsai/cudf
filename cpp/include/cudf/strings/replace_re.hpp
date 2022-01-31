@@ -20,6 +20,8 @@
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <optional>
+
 namespace cudf {
 namespace strings {
 /**

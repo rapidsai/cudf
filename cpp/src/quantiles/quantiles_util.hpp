@@ -45,8 +45,8 @@ CUDF_HOST_DEVICE inline Result linear(T lhs, T rhs, double frac)
   // Underflow may occur when converting int64 to double
   // detail: https://github.com/rapidsai/cudf/issues/1417
 
-  double dlhs           = static_cast<double>(lhs);
-  double drhs           = static_cast<double>(rhs);
+  auto dlhs             = static_cast<double>(lhs);
+  auto drhs             = static_cast<double>(rhs);
   double one_minus_frac = 1.0 - frac;
   return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
 }
@@ -55,8 +55,8 @@ template <typename Result, typename T>
 CUDF_HOST_DEVICE inline Result midpoint(T lhs, T rhs)
 {
   // TODO: try std::midpoint (C++20) if available
-  double dlhs = static_cast<double>(lhs);
-  double drhs = static_cast<double>(rhs);
+  auto dlhs = static_cast<double>(lhs);
+  auto drhs = static_cast<double>(rhs);
   return static_cast<Result>(dlhs / 2 + drhs / 2);
 }
 

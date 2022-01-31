@@ -24,11 +24,12 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
-from cudf.core.column import arange
+from cudf.core.column import arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
+from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
@@ -556,7 +557,7 @@ class IndexedFrame(Frame):
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.copying.gather(
                 list(self._index._columns + self._columns)
                 if keep_index
@@ -567,9 +568,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if keep_index else None,
         )
-
-        result._copy_type_metadata(self, include_index=keep_index)
-        return result
 
     def _positions_from_column_names(
         self, column_names, offset_by_index_columns=False
@@ -628,7 +626,7 @@ class IndexedFrame(Frame):
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
@@ -640,8 +638,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if not ignore_index else None,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def add_prefix(self, prefix):
         """
@@ -760,6 +756,51 @@ class IndexedFrame(Frame):
             "`IndexedFrame.add_suffix` not currently implemented. \
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func, kernel_getter, *args, **kwargs):
+        """Apply `func` across the rows of the frame."""
+        if kwargs:
+            raise ValueError("UDFs using **kwargs are not yet supported.")
+
+        try:
+            kernel, retty = _compile_or_get(
+                self, func, args, kernel_getter=kernel_getter
+            )
+        except Exception as e:
+            raise ValueError(
+                "user defined function compilation failed."
+            ) from e
+
+        # Mask and data column preallocated
+        ans_col = cp.empty(len(self), dtype=retty)
+        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        launch_args = [(ans_col, ans_mask), len(self)]
+        offsets = []
+
+        # if _compile_or_get succeeds, it is safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for col in _supported_cols_from_frame(self).values():
+            data = col.data
+            mask = col.mask
+            if mask is None:
+                launch_args.append(data)
+            else:
+                launch_args.append((data, mask))
+            offsets.append(col.offset)
+        launch_args += offsets
+        launch_args += list(args)
+
+        try:
+            kernel.forall(len(self))(*launch_args)
+        except Exception as e:
+            raise RuntimeError("UDF kernel execution failed.") from e
+
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
+
+        return result
 
     def sort_values(
         self,
@@ -1303,9 +1344,7 @@ class IndexedFrame(Frame):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(
-                how=how, subset=subset, thresh=thresh, drop_nan=True
-            )
+            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1313,9 +1352,7 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(
-        self, how="any", subset=None, thresh=None, drop_nan=False
-    ):
+    def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
         Drop null rows from `self`.
 
@@ -1326,7 +1363,7 @@ class IndexedFrame(Frame):
             *all* null values.
         subset : list, optional
             List of columns to consider when dropping rows.
-        thresh: int, optional
+        thresh : int, optional
             If specified, then drops every row containing
             less than `thresh` non-null values.
         """
@@ -1346,17 +1383,16 @@ class IndexedFrame(Frame):
         if len(subset) == 0:
             return self.copy(deep=True)
 
-        if drop_nan:
-            data_columns = [
-                col.nans_to_nulls()
-                if isinstance(col, cudf.core.column.NumericalColumn)
-                else col
-                for col in self._columns
-            ]
+        data_columns = [
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col
+            for col in self._columns
+        ]
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.drop_nulls(
-                list(self._index._data.columns) + data_columns,
+                [*self._index._data.columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(
                     subset, offset_by_index_columns=True
@@ -1366,8 +1402,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def _apply_boolean_mask(self, boolean_mask):
         """Apply boolean mask to each row of `self`.
@@ -1378,15 +1412,13 @@ class IndexedFrame(Frame):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             libcudf.stream_compaction.apply_boolean_mask(
                 list(self._index._columns + self._columns), boolean_mask
             ),
             column_names=self._column_names,
             index_names=self._index.names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def take(self, indices, axis=0):
         """Return a new frame containing the rows specified by *indices*.
@@ -1427,18 +1459,9 @@ class IndexedFrame(Frame):
         0  1.0  a
         2  3.0  c
         """
-        axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
+        if self._get_axis_from_axis_arg(axis) != 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):

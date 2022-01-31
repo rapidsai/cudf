@@ -36,8 +36,7 @@ namespace cudf {
 namespace test {
 
 using namespace cudf;
-
-typedef thrust::tuple<size_type, double, double> expected_value;
+using expected_value = thrust::tuple<size_type, double, double>;
 
 template <typename T>
 struct TDigestAllTypes : public cudf::test::BaseFixture {
