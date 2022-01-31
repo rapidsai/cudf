@@ -48,15 +48,19 @@ void BM_contiguous_split_common(benchmark::State& state,
                    });
   }
 
-  std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());
-  std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) {
-    auto ret = in.release();
-    // computing the null count is not a part of the benchmark's target code path, and we want the
-    // property to be pre-computed so that we measure the performance of only the intended code path
-    [[maybe_unused]] auto const nulls = ret->null_count();
-    return ret;
-  });
-  auto const src_table = cudf::table(std::move(columns));
+  // std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());
+  for (auto&& col : src_cols)
+    [[maybe_unused]] auto const nulls = col->null_count();
+  // std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](T& in) {
+  //   auto ret = in.release();
+  //   // computing the null count is not a part of the benchmark's target code path, and we want
+  //   the
+  //   // property to be pre-computed so that we measure the performance of only the intended code
+  //   path
+  //   [[maybe_unused]] auto const nulls = ret->null_count();
+  //   return ret;
+  // });
+  auto const src_table = cudf::table(std::move(src_cols));
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
@@ -83,16 +87,18 @@ void BM_contiguous_split(benchmark::State& state)
   // generate input table
   srand(31337);
   auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  std::vector<cudf::test::fixed_width_column_wrapper<int>> src_cols(num_cols);
+  std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);
   for (int idx = 0; idx < num_cols; idx++) {
     auto rand_elements =
       cudf::detail::make_counting_transform_iterator(0, [](int i) { return rand(); });
     if (include_validity) {
-      src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(
-        rand_elements, rand_elements + num_rows, valids);
+      src_cols[idx] =
+        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows, valids)
+          .release();
     } else {
       src_cols[idx] =
-        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
+        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows)
+          .release();
     }
   }
 
@@ -129,21 +135,20 @@ void BM_contiguous_split_strings(benchmark::State& state)
 
   // generate input table
   srand(31337);
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
-  std::vector<cudf::test::strings_column_wrapper> src_cols;
-  std::vector<const char*> one_col(num_rows);
+  cudf::test::strings_column_wrapper one_col(h_strings.begin(), h_strings.end());
+  std::vector<std::unique_ptr<cudf::column>> src_cols;
   for (int64_t idx = 0; idx < num_cols; idx++) {
-    // fill in a random set of strings
-    for (int64_t s_idx = 0; s_idx < num_rows; s_idx++) {
-      one_col[s_idx] = h_strings[rand_range(h_strings.size())];
-    }
-    if (include_validity) {
-      src_cols.push_back(
-        cudf::test::strings_column_wrapper(one_col.begin(), one_col.end(), valids));
-    } else {
-      src_cols.push_back(cudf::test::strings_column_wrapper(one_col.begin(), one_col.end()));
-    }
+    auto rand_elements = cudf::detail::make_counting_transform_iterator(
+      0, [include_validity, len = h_strings.size()](int i) {
+        return (include_validity and (i % 2 == 1)) ? len + 1 : rand_range(len);
+      });
+    auto random_indices =
+      cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
+    auto col_table = cudf::gather(cudf::table_view{{one_col}},
+                                  random_indices,
+                                  (include_validity ? cudf::out_of_bounds_policy::NULLIFY
+                                                    : cudf::out_of_bounds_policy::DONT_CHECK));
+    src_cols.push_back(std::move(col_table->release()[0]));
   }
 
   int64_t const total_bytes =
