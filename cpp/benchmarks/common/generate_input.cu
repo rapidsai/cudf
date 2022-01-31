@@ -27,6 +27,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/scan.h>
@@ -646,6 +647,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   auto const cardinality = std::min(profile.get_cardinality(), num_rows);
   auto const avg_run_len = profile.get_avg_run_length();
 
+  // TODO check if null is working fine.
   auto sample_strings =
     create_random_utf8_string_column2(profile, engine, cardinality == 0 ? num_rows : cardinality);
   if (cardinality == 0) {
@@ -748,6 +750,12 @@ struct create_rand_col_fn {
   }
 };
 
+template <typename T>
+struct clamp_down : public thrust::unary_function<T, T> {
+  T max_size;
+  clamp_down(T max_size) : max_size(max_size) {}
+  __host__ __device__ T operator()(T x) const { return min(x, max_size); }
+};
 /**
  * @brief Creates a list column with random content.
  *
@@ -765,8 +773,6 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
                                                                     thrust::minstd_rand& engine,
                                                                     cudf::size_type num_rows)
 {
-  CUDF_FAIL("not implemented yet");
-  /*
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
   auto const num_elements      = num_rows * pow(single_level_mean, dist_params.max_depth);
@@ -775,7 +781,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
   auto len_dist =
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
-  auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
+  auto valid_dist =
+    random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
+  std::cout << "line " << __LINE__ << "\n";
 
   // Generate the list column bottom-up
   auto list_column = std::move(leaf_column);
@@ -783,33 +791,40 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     // Generating the next level - offsets point into the current list column
     auto current_child_column      = std::move(list_column);
     cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
+    std::cout << "num_rows: " << num_rows << "\n";
 
-    std::vector<int32_t> offsets{0};
-    offsets.reserve(num_rows + 1);
-    std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-    for (cudf::size_type row = 1; row < num_rows + 1; ++row) {
-      offsets.push_back(
-        std::min<int32_t>(current_child_column->size(), offsets.back() + len_dist(engine)));
-      if (!valid_dist(engine)) cudf::clear_bit_unsafe(null_mask.data(), row);
-    }
-    offsets.back() = current_child_column->size();  // Always include all elements
+    std::cout << "line " << __LINE__ << "\n";
+    auto offsets = len_dist(engine, num_rows + 1);
+    auto valids  = valid_dist(engine, num_rows);
+    std::cout << "line " << __LINE__ << "\n";
+    std::cout << "offsets.size(): " << offsets.size() << "\n";
+    // to ensure these values <= current_child_column->size()
+    auto output_offsets = thrust::make_transform_output_iterator(
+      offsets.begin(), clamp_down{current_child_column->size()});
 
+    thrust::exclusive_scan(thrust::device, offsets.begin(), offsets.end(), output_offsets);
+    thrust::device_pointer_cast(offsets.end())[-1] =
+      current_child_column->size();  // Always include all elements
+
+    std::cout << "line " << __LINE__ << "\n";
     auto offsets_column = std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_id::INT32},
-      offsets.size(),
-      rmm::device_buffer(
-        offsets.data(), offsets.size() * sizeof(int32_t), rmm::cuda_stream_default));
+      cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
+    std::cout << "line " << __LINE__ << "\n";
+    std::cout << "offsets_column: " << offsets_column->size() << "\n";
+    // cudf::test::print(*offsets_column);
+    std::cout << "line " << __LINE__ << "\n";
 
-    list_column = cudf::make_lists_column(
-      num_rows,
-      std::move(offsets_column),
-      std::move(current_child_column),
-      cudf::UNKNOWN_NULL_COUNT,
-      rmm::device_buffer(
-        null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
+    auto [null_mask, null_count] =
+      cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
+    list_column = cudf::make_lists_column(num_rows,
+                                          std::move(offsets_column),
+                                          std::move(current_child_column),
+                                          null_count,  // cudf::UNKNOWN_NULL_COUNT,
+                                          std::move(null_mask));
+    std::cout << "line " << __LINE__ << "\n";
   }
+  std::cout << "line " << __LINE__ << "\n";
   return list_column;  // return the top-level column
-  */
 }
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
