@@ -27,19 +27,19 @@ namespace text {
 
 struct byte_range_info {
  public:
-  size_t offset;
-  size_t size;
+  int64_t offset;
+  int64_t size;
 
   byte_range_info() : offset(0), size(0) {}
-  byte_range_info(size_t offset, size_t size) : offset(offset), size(size) {}
+  byte_range_info(int64_t offset, int64_t size) : offset(offset), size(size) {}
 
-  static std::vector<byte_range_info> create_consecutive(size_t total_bytes, size_t range_count)
+  static std::vector<byte_range_info> create_consecutive(int64_t total_bytes, int64_t range_count)
   {
     auto range_size = util::div_rounding_up_safe(total_bytes, range_count);
 
     std::vector<byte_range_info> ranges;
 
-    for (size_t i = 0; i < range_count; i++) {
+    for (int64_t i = 0; i < range_count; i++) {
       auto offset = i * range_size;
       auto size   = std::min(range_size, total_bytes - offset);
       ranges.push_back(byte_range_info{offset, size});
@@ -48,7 +48,7 @@ struct byte_range_info {
     return ranges;
   }
 
-  static byte_range_info whole_source() { return {0, std::numeric_limits<size_t>::max()}; }
+  static byte_range_info whole_source() { return {0, std::numeric_limits<int64_t>::max()}; }
 };
 
 }  // namespace text
