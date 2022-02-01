@@ -33,14 +33,14 @@
 namespace cudf::test::binop {
 
 template <typename T>
-struct FixedPointCompiledTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointCompiledTestAllReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_SUITE(FixedPointCompiledTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointCompiledTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpAdd)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -73,7 +73,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpMultiply)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpMultiply)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -109,7 +109,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpMultiply)
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpMultiply2)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpMultiply2)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -128,7 +128,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpMultiply2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpDiv)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -147,7 +147,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv2)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpDiv2)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -166,7 +166,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv3)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpDiv3)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -183,7 +183,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv3)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv4)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpDiv4)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -203,7 +203,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpDiv4)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd2)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpAdd2)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -222,7 +222,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd3)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpAdd3)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -241,7 +241,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd3)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd4)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpAdd4)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -258,7 +258,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd4)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd5)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpAdd5)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -275,7 +275,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd5)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd6)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpAdd6)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -294,7 +294,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd6)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointCast)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointCast)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -308,7 +308,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointCast)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpMultiplyScalar)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpMultiplyScalar)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -325,7 +325,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpMultiplyScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpSimplePlus)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpSimplePlus)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -344,7 +344,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpSimplePlus)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimple)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpEqualSimple)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -361,7 +361,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimple)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimpleScale0)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpEqualSimpleScale0)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -377,7 +377,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimpleScale0)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimpleScale0Null)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpEqualSimpleScale0Null)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -393,7 +393,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimpleScale0Nu
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimpleScale2Null)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpEqualSimpleScale2Null)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -409,7 +409,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualSimpleScale2Nu
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualLessGreater)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpEqualLessGreater)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -453,7 +453,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpEqualLessGreater)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpNullMaxSimple)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpNullMaxSimple)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -473,7 +473,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpNullMaxSimple)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpNullMinSimple)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpNullMinSimple)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -493,7 +493,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpNullMinSimple)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpNullEqualsSimple)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpNullEqualsSimple)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -510,7 +510,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpNullEqualsSimple)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -526,7 +526,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div2)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div2)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -542,7 +542,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div3)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div3)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -558,7 +558,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div3)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div4)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div4)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -574,7 +574,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div4)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div6)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div6)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -591,7 +591,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div6)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div7)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div7)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -608,7 +608,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div7)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div8)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div8)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -624,7 +624,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div8)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div9)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div9)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -640,7 +640,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div9)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div10)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div10)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -656,7 +656,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div10)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div11)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOp_Div11)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -672,7 +672,7 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOp_Div11)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpThrows)
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpThrows)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -682,6 +682,25 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpThrows)
   auto const non_bool_type = data_type{type_to_id<decimalXX>(), -2};
   EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
                cudf::logic_error);
+}
+
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpModSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{10, 10, 10, 10, 10}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{1, 2, 3, 4, 5}, scale_type{-1}};
+
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MOD,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 template <typename T>
