@@ -955,13 +955,167 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def memory_usage(self, index=True, deep=False):
         return sum(super().memory_usage(index, deep).values())
 
+    # For more detail on this function and how it should work, see
+    # https://numpy.org/doc/stable/reference/ufuncs.html
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__":
-            return get_appropriate_dispatched_func(
-                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
-            )
-        else:
+        # We don't currently support reduction, accumulation, etc. We also
+        # don't support any special kwargs.
+        if method != "__call__" or kwargs:
             return NotImplemented
+
+        # Binary operations
+        binary_operations = {
+            # Arithmetic binary operations.
+            "add": "__{}add__",
+            "subtract": "__{}sub__",
+            "multiply": "__{}mul__",
+            "matmul": "__{}matmul__",
+            "divide": "__{}truediv__",
+            "true_divide": "__{}truediv__",
+            "floor_divide": "__{}floordiv__",
+            "power": "__{}pow__",
+            # Bitwise binary operations.
+            "bitwise_and": "__{}and__",
+            "bitwise_or": "__{}or__",
+            "bitwise_xor": "__{}xor__",
+            # Comparison binary operators
+            "greater": "__gt__",
+            "greater_equal": "__ge__",
+            "less": "__lt__",
+            "less_equal": "__le__",
+            "not_equal": "__ne__",
+            "equal": "__eq__",
+        }
+
+        # First look for methods of the class.
+        if ufunc.__name__ in binary_operations:
+            reflect = self is not inputs[0]
+            other = inputs[0] if reflect else inputs[1]
+            op = binary_operations[ufunc.__name__].format(
+                "r" if reflect else ""
+            )
+            return getattr(self, op)(other)
+
+        # Special handling for unary operations.
+        if ufunc.__name__ == "negative":
+            return self * -1
+        if ufunc.__name__ == "positive":
+            return self.copy(deep=True)
+
+        # For anything that wasn't specially handled above, attempt to dispatch
+        # to a cupy function.
+        cupy_func = getattr(cupy, ufunc.__name__)
+        if cupy_func:
+            # TODO: Attempt to align indices if possible
+            # TODO: Try to use something like _from_data instead of constructor
+            cupy_inputs = []
+            mask = None
+            for inp in inputs:
+                # TODO: Generalize for other types of Frames
+                if isinstance(inp, Series):
+                    # Handle nulls.
+                    if inp.has_nulls:
+                        if mask is None:
+                            # TODO: This is a hackish way to perform a bitwise
+                            # and of bitmasks. I need to expose
+                            # cudf::detail::bitwise_and, then I can use that
+                            # instead.
+                            mask = as_column(inp.nullmask)
+                        else:
+                            mask = mask & as_column(inp.nullmask)
+                    # Arbitrarily fill with zeros. For ufuncs, we assume that
+                    # the end result propagates nulls via a bitwise and, so
+                    # these elements are irrelevant.
+                    inp = inp.fillna(0).to_cupy()
+                cupy_inputs.append(inp)
+
+            output_col = as_column(cupy_func(*cupy_inputs, **kwargs)).set_mask(
+                mask
+            )
+            # TODO: Handle indexes properly once index alignment is done.
+            return self.__class__._from_data({self.name: output_col})
+        return NotImplemented
+
+        #
+        #
+        #  {
+        #      # Math
+        #      logaddexp
+        #      logaddexp2
+        #      float_power
+        #      remainder
+        #      mod
+        #      fmod
+        #      divmod
+        #      absolute
+        #      fabs
+        #      rint
+        #      sign
+        #      heaviside
+        #      conj
+        #      conjugate
+        #      exp
+        #      exp2
+        #      log
+        #      log2
+        #      log10
+        #      expm1
+        #      log1p
+        #      sqrt
+        #      square
+        #      cbrt
+        #      reciprocal
+        #      gcd
+        #      lcm
+        #      # Trig
+        #      sin
+        #      cos
+        #      tan
+        #      arcsin
+        #      arccos
+        #      arctan
+        #      arctan2
+        #      hypot
+        #      sinh
+        #      cosh
+        #      tanh
+        #      arcsinh
+        #      arccosh
+        #      arctanh
+        #      degrees
+        #      radians
+        #      deg2rad
+        #      rad2deg
+        #      logical_and
+        #      logical_or
+        #      logical_xor
+        #      logical_not
+        #      maximum
+        #      minimum
+        #      fmax
+        #      fmin
+        #      "invert": "__{}and__",
+        #      "left_shift": "__{}and__",
+        #      "right_shift": "__{}and__",
+        #      # Floating
+        #      isfinite
+        #      isinf
+        #      isnan
+        #      isnat
+        #      fabs
+        #      signbit
+        #      copysign
+        #      nextafter
+        #      spacing
+        #      modf
+        #      ldexp
+        #      frexp
+        #      fmod
+        #      floor
+        #      ceil
+        #      trunc
+        #  }
+        #
 
     def __array_function__(self, func, types, args, kwargs):
         handled_types = [cudf.Series]
