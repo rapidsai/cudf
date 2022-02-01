@@ -15,18 +15,39 @@ _UFUNCS = [
 
 @pytest.mark.parametrize("ufunc", _UFUNCS)
 @pytest.mark.parametrize("has_nulls", [True, False])
-def test_ufunc_series(ufunc, has_nulls):
+@pytest.mark.parametrize("indexed", [True, False])
+def test_ufunc_series(ufunc, has_nulls, indexed):
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
+    if indexed and has_nulls:
+        # TODO: Temporarily ignoring the case of having indices and nulls,
+        # which requires more care in constructing the null mask.
+        return
+
+    fname = ufunc.__name__
+    if indexed and fname in (
+        "greater",
+        "greater_equal",
+        "less",
+        "less_equal",
+        "not_equal",
+        "equal",
+    ):
+        pytest.skip("Comparison operators do not support misaligned indexes.")
+
     N = 100
     pandas_args = args = [
-        cudf.Series(cp.random.randint(size=N, low=1, high=10))
+        cudf.Series(cp.random.randint(low=1, high=10, size=N))
         for _ in range(ufunc.nin)
     ]
 
+    if indexed:
+        for arg in args:
+            arg.index = cp.random.choice(range(N), size=N, replace=False)
+
     if has_nulls:
-        if ufunc.__name__ == "matmul":
+        if fname == "matmul":
             pytest.xfail("Frame.dot currently does not support nulls")
 
         mask = cudf.Series([False] * N)
@@ -66,7 +87,7 @@ def test_ufunc_series(ufunc, has_nulls):
         else:
             assert_eq(got, expect)
     except AssertionError:
-        if ufunc.__name__ in ("power", "float_power"):
+        if fname in ("power", "float_power"):
             not_equal = cudf.from_pandas(expect) != got
             not_equal[got.isna()] = False
             diffs = got[not_equal] - expect[not_equal.to_pandas()]
