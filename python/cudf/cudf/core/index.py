@@ -682,6 +682,7 @@ class RangeIndex(BaseIndex):
         return new_index
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
+        gather_map = cudf.core.column.as_column(gather_map)
         return Int64Index._from_columns(
             [self._values.take(gather_map, nullify, check_bounds)], [self.name]
         )
@@ -770,23 +771,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        if "index_column" in header:
-            warnings.warn(
-                "Index objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("index_column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
-            )
-
-        return super().deserialize(header, frames)
 
     def _binaryop(
         self,
@@ -2508,7 +2492,7 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}({self._values.to_array()},"
+            f"{self.__class__.__name__}({self._values.values_host},"
             f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"

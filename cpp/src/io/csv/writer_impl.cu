@@ -126,7 +126,7 @@ struct column_to_strings_fn {
   // fails to compile var-templs);
   //
   template <typename column_type>
-  constexpr static bool is_not_handled(void)
+  constexpr static bool is_not_handled()
   {
     // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)

@@ -168,7 +168,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   data_type const dtype = DLDataType_to_data_type(tensor.dtype);
 
   size_t const byte_width = size_of(dtype);
-  size_t const num_rows   = static_cast<size_t>(tensor.shape[0]);
+  auto const num_rows     = static_cast<size_t>(tensor.shape[0]);
   size_t const bytes      = num_rows * byte_width;
 
   // For 2D tensors, if the strides pointer is not null, then strides[1] is the

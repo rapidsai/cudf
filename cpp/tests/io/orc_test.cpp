@@ -85,8 +85,8 @@ std::unique_ptr<cudf::table> create_random_fixed_table(cudf::size_type num_colum
   }
   std::vector<std::unique_ptr<cudf::column>> columns(num_columns);
   std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](column_wrapper<T>& in) {
-    auto ret = in.release();
-    ret->has_nulls();
+    auto ret                    = in.release();
+    [[maybe_unused]] auto nulls = ret->has_nulls();  // pre-cache the null count
     return ret;
   });
   return std::make_unique<cudf::table>(std::move(columns));
@@ -162,8 +162,8 @@ inline auto random_values(size_t size)
 }
 
 struct SkipRowTest {
-  int test_calls;
-  SkipRowTest(void) : test_calls(0) {}
+  int test_calls{0};
+  SkipRowTest() {}
 
   std::unique_ptr<table> get_expected_result(const std::string& filepath,
                                              int skip_rows,
@@ -773,12 +773,12 @@ TEST_F(OrcChunkedWriterTest, Metadata)
 
 TEST_F(OrcChunkedWriterTest, Strings)
 {
-  bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
+  bool mask1[] = {true, true, false, true, true, true, true};
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   str_col strings1(h_strings1.begin(), h_strings1.end(), mask1);
   table_view tbl1({strings1});
 
-  bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
+  bool mask2[] = {false, true, true, true, true, true, true};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   str_col strings2(h_strings2.begin(), h_strings2.end(), mask2);
   table_view tbl2({strings2});
@@ -885,8 +885,9 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
 
   int num_els = 31;
 
-  bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
@@ -927,8 +928,9 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
 
   int num_els = 33;
 
-  bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));

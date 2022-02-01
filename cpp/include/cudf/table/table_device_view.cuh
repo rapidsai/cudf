@@ -61,9 +61,9 @@ class table_device_view_base {
     return _columns[column_index];
   }
 
-  __host__ __device__ size_type num_columns() const noexcept { return _num_columns; }
+  [[nodiscard]] __host__ __device__ size_type num_columns() const noexcept { return _num_columns; }
 
-  __host__ __device__ size_type num_rows() const noexcept { return _num_rows; }
+  [[nodiscard]] __host__ __device__ size_type num_rows() const noexcept { return _num_rows; }
 
   void destroy();
 

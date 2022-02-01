@@ -45,7 +45,6 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
-from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -162,6 +161,22 @@ class Frame:
         }
 
         return cls._from_data(data, index)
+
+    def _from_columns_like_self(
+        self,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` from a list of columns with metadata from self.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        frame = self.__class__._from_columns(
+            columns, column_names, index_names
+        )
+        return frame._copy_type_metadata(self, include_index=bool(index_names))
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -1349,39 +1364,6 @@ class Frame:
         )
 
         result._copy_type_metadata(self)
-        return result
-
-    @annotate("APPLY", color="purple", domain="cudf_python")
-    def _apply(self, func, *args):
-        """
-        Apply `func` across the rows of the frame.
-        """
-        kernel, retty = compile_or_get(self, func, args)
-
-        # Mask and data column preallocated
-        ans_col = cupy.empty(len(self), dtype=retty)
-        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask), len(self)]
-        offsets = []
-
-        # if compile_or_get succeeds, it is safe to create a kernel that only
-        # consumes the columns that are of supported dtype
-        for col in supported_cols_from_frame(self).values():
-            data = col.data
-            mask = col.mask
-            if mask is None:
-                launch_args.append(data)
-            else:
-                launch_args.append((data, mask))
-            offsets.append(col.offset)
-        launch_args += offsets
-        launch_args += list(args)
-        kernel.forall(len(self))(*launch_args)
-
-        col = as_column(ans_col)
-        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
-        result = cudf.Series._from_data({None: col}, self._index)
-
         return result
 
     def rank(

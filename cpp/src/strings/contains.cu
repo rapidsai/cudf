@@ -53,7 +53,7 @@ struct contains_fn {
 
   __device__ bool operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) return 0;
+    if (d_strings.is_null(idx)) return false;
     string_view d_str = d_strings.element<string_view>(idx);
     int32_t begin     = 0;
     int32_t end       = bmatch ? 1    // match only the beginning of the string;
