@@ -17,14 +17,6 @@ _UFUNCS = [
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_series(ufunc, has_nulls, indexed):
-    # Avoid zeros in either array to skip division by 0 errors. Also limit the
-    # scale to avoid issues with overflow, etc. We use ints because some
-    # operations (like bitwise ops) are not defined for floats.
-    if indexed and has_nulls:
-        # TODO: Temporarily ignoring the case of having indices and nulls,
-        # which requires more care in constructing the null mask.
-        return
-
     fname = ufunc.__name__
     if indexed and fname in (
         "greater",
@@ -37,7 +29,10 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
         pytest.skip("Comparison operators do not support misaligned indexes.")
 
     N = 100
-    pandas_args = args = [
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    aligned_args = pandas_args = args = [
         cudf.Series(cp.random.randint(low=1, high=10, size=N))
         for _ in range(ufunc.nin)
     ]
@@ -53,14 +48,28 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
         if fname == "matmul":
             pytest.xfail("Frame.dot currently does not support nulls")
 
-        mask = cudf.Series([False] * N)
         pandas_args = []
         for arg in args:
             set_random_null_mask_inplace(arg)
+            pandas_args.append(arg.fillna(0))
+
+        # Note: If the objects have different indexes we have to align them
+        # before computing the mask. I know of no way to accomplish this
+        # without using an internal function, and I don't foresee us exposing
+        # an API for this at any point, so I think this is the best we can do.
+        if indexed and ufunc.nin == 2:
+            aligned_args = cudf.core.series._align_indices(
+                args, allow_non_unique=True
+            )
+
+        mask = cudf.Series(
+            [False] * len(aligned_args[0]), index=aligned_args[0].index
+        )
+        for arg in aligned_args:
             mask |= arg.isna()
             # Fill nas with an arbitrary value to be masked out later.
-            pandas_args.append(arg.fillna(0))
         mask = mask.to_pandas()
+
     pandas_args = [arg.to_pandas() for arg in pandas_args]
 
     try:
