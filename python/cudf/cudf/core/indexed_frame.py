@@ -638,6 +638,20 @@ class IndexedFrame(Frame):
             self._index.names if not ignore_index else None,
         )
 
+    def _empty_like(self, keep_index=True):
+        # TODO: RangeIndex._data.columns materializes data,
+        # which is unecessary here.
+        return self._from_columns_like_self(
+            libcudf.copying.columns_empty_like(
+                [
+                    *(self._index._data.columns if keep_index else ()),
+                    *self._columns,
+                ]
+            ),
+            self._column_names,
+            self._index.names if keep_index else None,
+        )
+
     def add_prefix(self, prefix):
         """
         Prefix labels with string `prefix`.

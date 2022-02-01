@@ -282,24 +282,14 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
-def table_empty_like(input_table, bool keep_index=True):
-
-    cdef table_view input_table_view = table_view_from_table(
-        input_table, not keep_index
-    )
-
+def columns_empty_like(input_columns):
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_copying.empty_like(input_table_view))
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=input_table._column_names,
-        index_names=(
-            input_table._index._column_names if keep_index is True else None
-        )
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def column_slice(Column input_column, object indices):

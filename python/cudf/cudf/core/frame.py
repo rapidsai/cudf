@@ -104,7 +104,7 @@ class Frame:
         )
 
     @property
-    def _columns(self) -> Tuple[ColumnBase, ...]:
+    def _columns(self) -> Tuple[ColumnBase, ...]:  # TODO: List[Column]?
         return self._data.columns
 
     def serialize(self):
@@ -559,14 +559,6 @@ class Frame:
             no index and None as the name to use this method"""
 
         return self._data[None].copy(deep=False)
-
-    def _empty_like(self, keep_index=True):
-        result = self.__class__._from_data(
-            *libcudf.copying.table_empty_like(self, keep_index)
-        )
-
-        result._copy_type_metadata(self, include_index=keep_index)
-        return result
 
     @property
     def values(self):
