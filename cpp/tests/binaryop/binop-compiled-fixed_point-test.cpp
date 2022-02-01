@@ -690,15 +690,34 @@ TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpModSimple)
   using decimalXX = TypeParam;
   using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
-  auto const rhs      = fp_wrapper<RepType>{{10, 10, 10, 10, 10}, scale_type{-1}};
-  auto const expected = fp_wrapper<RepType>{{1, 2, 3, 4, 5}, scale_type{-1}};
+  auto const lhs      = fp_wrapper<RepType>{{-33, -22, -11, 11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{10, 10, 10, 10, 10, 10, 10, 10}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{-3, -2, -1, 1, 2, 3, 4, 5}, scale_type{-1}};
 
   auto const type =
     cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::MOD,
                                                    static_cast<cudf::column_view>(lhs).type(),
                                                    static_cast<cudf::column_view>(rhs).type());
   auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::MOD, type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointCompiledTestAllReps, FixedPointBinaryOpPModSimple)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{-33, -22, -11, 11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{10, 10, 10, 10, 10, 10, 10, 10}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{7, 8, 9, 1, 2, 3, 4, 5}, scale_type{-1}};
+
+  auto const type =
+    cudf::binary_operation_fixed_point_output_type(cudf::binary_operator::PMOD,
+                                                   static_cast<cudf::column_view>(lhs).type(),
+                                                   static_cast<cudf::column_view>(rhs).type());
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::PMOD, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

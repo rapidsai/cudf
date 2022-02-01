@@ -110,7 +110,9 @@ bool is_comparison_binop(binary_operator op)
  */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
-  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or op == binary_operator::MOD;
+  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or  //
+         op == binary_operator::MOD or                                //
+         op == binary_operator::PMOD;
 }
 
 /**
