@@ -974,6 +974,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             "true_divide": "__{}truediv__",
             "floor_divide": "__{}floordiv__",
             "power": "__{}pow__",
+            "float_power": "__{}pow__",
+            "mod": "__{}mod__",
+            "fmod": "__{}mod__",
             # Bitwise binary operations.
             "bitwise_and": "__{}and__",
             "bitwise_or": "__{}or__",
@@ -1003,6 +1006,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return self.copy(deep=True)
         if ufunc.__name__ == "invert":
             return ~self
+        if ufunc.__name__ in ("absolute", "fabs"):
+            return self.abs()
 
         # For anything that wasn't specially handled above, attempt to dispatch
         # to a cupy function.
@@ -1055,11 +1060,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         #      logaddexp2
         #      float_power
         #      remainder
-        #      mod
-        #      fmod
         #      divmod
-        #      absolute
-        #      fabs
+        #      modf
+        #      fmod
         #      rint
         #      sign
         #      heaviside
@@ -1105,22 +1108,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         #      minimum
         #      fmax
         #      fmin
-        #      "left_shift": "__{}and__",
-        #      "right_shift": "__{}and__",
+        #      left_shift
+        #      right_shift
         #      # Floating
         #      isfinite
         #      isinf
         #      isnan
         #      isnat
-        #      fabs
         #      signbit
         #      copysign
         #      nextafter
         #      spacing
-        #      modf
         #      ldexp
         #      frexp
-        #      fmod
         #      floor
         #      ceil
         #      trunc

@@ -6,6 +6,45 @@ import pytest
 import cudf
 from cudf.testing._utils import assert_eq
 
+_UFUNCS = [
+    obj
+    for obj in (getattr(np, name) for name in dir(np))
+    if isinstance(obj, np.ufunc)
+]
+
+
+@pytest.mark.parametrize("ufunc", _UFUNCS)
+def test_ufunc_series(ufunc):
+    is_binary = ufunc.nin == 2
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc
+    args = [cudf.Series(cp.random.randint(size=100, low=1, high=10))]
+    if is_binary:
+        args.append(cudf.Series(cp.random.randint(size=100, low=1, high=10)))
+
+    try:
+        got = ufunc(*args)
+    except AttributeError as e:
+        # We xfail if we don't have an explicit dispatch and cupy doesn't have
+        # the method. xfail is preferable to a silent pass so that we can
+        # identify these if we decide to implement them in the future. As of
+        # this writing, the only missing methods are isnat and heaviside.
+        if "module 'cupy' has no attribute" in str(e):
+            pytest.xfail(reason="Operation not supported by cupy")
+        raise
+
+    expect = ufunc(*(arg.to_pandas() for arg in args))
+
+    try:
+        assert_eq(got, expect)
+    except AssertionError:
+        if ufunc.__name__ in ("power", "float_power"):
+            equivalence = cudf.from_pandas(expect) != got
+            diffs = got[equivalence] - expect[equivalence.to_pandas()]
+            if np.max(np.abs(diffs)) == 1:
+                pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        raise
+
 
 @pytest.fixture
 def np_ar_tup():
