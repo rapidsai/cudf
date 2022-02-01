@@ -443,9 +443,9 @@ class fixed_point {
   /**
    * @brief operator % (for computing the modulo operation of two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are modulo-ed <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are modulo-ed
+   * If `_scale`s are equal, the modulus is computed directly.
+   * If `_scale`s are not equal, the number with larger `_scale` is shifted to the
+   * smaller `_scale`, and then the modulus is computed.
    *
    * @tparam Rep1 Representation type of number being modulo-ed to `this`
    * @tparam Rad1 Radix (base) type of number being modulo-ed to `this`
