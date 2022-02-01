@@ -959,8 +959,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     # https://numpy.org/doc/stable/reference/ufuncs.html
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         # We don't currently support reduction, accumulation, etc. We also
-        # don't support any special kwargs.
-        if method != "__call__" or kwargs:
+        # don't support any special kwargs or higher arity ufuncs than binary.
+        if method != "__call__" or kwargs or ufunc.nin > 2:
             return NotImplemented
 
         # Binary operations
@@ -1001,13 +1001,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return self * -1
         if ufunc.__name__ == "positive":
             return self.copy(deep=True)
+        if ufunc.__name__ == "invert":
+            return ~self
 
         # For anything that wasn't specially handled above, attempt to dispatch
         # to a cupy function.
         cupy_func = getattr(cupy, ufunc.__name__)
         if cupy_func:
-            # TODO: Attempt to align indices if possible
-            # TODO: Try to use something like _from_data instead of constructor
+            # Indices must be aligned before converting to arrays.
+            # TODO: Should this really support index alignment for mixtures of
+            # cudf and pandas Series objects?
+            index = self.index
+            if ufunc.nin == 2 and all(
+                isinstance(inp, (Series, pd.Series)) for inp in inputs
+            ):
+                inputs = _align_indices(inputs, allow_non_unique=True)
+                index = inputs[0].index
+
             cupy_inputs = []
             mask = None
             for inp in inputs:
@@ -1017,8 +1027,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     if inp.has_nulls:
                         if mask is None:
                             # TODO: This is a hackish way to perform a bitwise
-                            # and of bitmasks. I need to expose
-                            # cudf::detail::bitwise_and, then I can use that
+                            # and of bitmasks. Once we expose
+                            # cudf::detail::bitwise_and, then we can use that
                             # instead.
                             mask = as_column(inp.nullmask)
                         else:
@@ -1032,8 +1042,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             output_col = as_column(cupy_func(*cupy_inputs, **kwargs)).set_mask(
                 mask
             )
-            # TODO: Handle indexes properly once index alignment is done.
-            return self.__class__._from_data({self.name: output_col})
+            return self.__class__._from_data(
+                {self.name: output_col}, index=index
+            )
         return NotImplemented
 
         #
@@ -1094,7 +1105,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         #      minimum
         #      fmax
         #      fmin
-        #      "invert": "__{}and__",
         #      "left_shift": "__{}and__",
         #      "right_shift": "__{}and__",
         #      # Floating
