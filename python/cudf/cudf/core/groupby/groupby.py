@@ -959,10 +959,16 @@ class GroupBy(Serializable):
 
         return res
 
-    @annotate("GROUPBY_COV", color="red")
     def cov(self, min_periods=0, ddof=1):
         """
-        Compute pairwise covariance of columns, excluding NA/null values.
+        Compute the pairwise covariance among the columns of a DataFrame,
+        excluding NA/null values.
+
+        The returned data frame is the covariance matrix of the columns of
+        the DataFrame.
+
+        This method is generally used for the analysis of time series data to
+        understand the relationship between different measures across time.
 
         Parameters
         ----------
@@ -1018,22 +1024,18 @@ class GroupBy(Serializable):
         len_cols = len(column_names)
 
         column_pair_structs = {}
-        column_size = len(self.obj)
-
-        with annotate("construct_pair_struct"):
-            for x, y in itertools.combinations_with_replacement(
-                column_names, 2
-            ):
-                # column_pair_structs[(x, y)] = cudf.DataFrame._from_data(
-                #     {"x": self.obj._data[x], "y": self.obj._data[y]}
-                # ).to_struct()
-                column_pair_structs[
-                    (x, y)
-                ] = cudf.core.column.build_struct_column(
-                    names=(x, y),
-                    children=(self.obj._data[x], self.obj._data[y]),
-                    size=column_size,
-                )
+        for x, y in itertools.combinations_with_replacement(column_names, 2):
+            # The number of output columns is the number of input columns
+            # squared. We directly call the struct column factory here to
+            # reduce overhead and avoid copying data. Since libcudf groupby
+            # maintains a cache of aggregation requests, reusing the same
+            # column also makes use of previously cached column means and
+            # reduces kernel costs.
+            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
+                names=(x, y),
+                children=(self.obj._data[x], self.obj._data[y]),
+                size=len(self.obj),
+            )
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
         ).groupby(by=self.grouping.keys)
@@ -1048,6 +1050,7 @@ class GroupBy(Serializable):
                     "Covariance accepts only numerical column-pairs"
                 )
             raise
+
         # ensure that column-pair labels are arranged in ascending order
         cols_list = [
             (y, x) if i > j else (x, y)
@@ -1060,19 +1063,18 @@ class GroupBy(Serializable):
         ]
 
         def combine_columns(gb_cov, ys):
-            list_of_columns = list(map(gb_cov._data.__getitem__, ys))
+            list_of_columns = [gb_cov._data[y] for y in ys]
             frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
             return interleave_columns(frame)
 
         # interleave: combine the correlation results for each column-pair
         # into a single column
-        with annotate("combine_columns"):
-            res = cudf.DataFrame._from_data(
-                {
-                    x: combine_columns(gb_cov, ys)
-                    for ys, x in zip(cols_split, column_names)
-                }
-            )
+        res = cudf.DataFrame._from_data(
+            {
+                x: combine_columns(gb_cov, ys)
+                for ys, x in zip(cols_split, column_names)
+            }
+        )
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
@@ -1082,7 +1084,7 @@ class GroupBy(Serializable):
         if len(gb_cov):
             # TO-DO: Should the operation below be done on the CPU instead?
             sorted_idx._data[None] = as_column(
-                cudf.Series(column_names).tile(len(gb_cov.index))
+                np.tile(column_names, len(gb_cov.index))
             )
         res.index = MultiIndex._from_data(sorted_idx._data)
 
