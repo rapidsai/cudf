@@ -48,6 +48,10 @@ enum class split_direction {
 
 /**
  * @brief Identify the tokens from the `idx'th` string element of `d_strings`.
+ *
+ * Each string's tokens are stored in the `d_tokens` vector.
+ * The `d_token_offsets` specifies the output position within `d_tokens`
+ * for each string.
  */
 template <int stack_size>
 struct token_reader_fn {
@@ -118,12 +122,12 @@ struct token_reader_fn {
  *                The offsets for each token in each string on output.
  * @param stream CUDA stream used for kernel launches.
  */
-rmm::device_uvector<string_index_pair> split_utility(column_device_view const& d_strings,
-                                                     reprog_device& d_prog,
-                                                     split_direction direction,
-                                                     size_type max_tokens,
-                                                     mutable_column_view& offsets,
-                                                     rmm::cuda_stream_view stream)
+rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const& d_strings,
+                                                       reprog_device& d_prog,
+                                                       split_direction direction,
+                                                       size_type max_tokens,
+                                                       mutable_column_view& offsets,
+                                                       rmm::cuda_stream_view stream)
 {
   auto const strings_count = d_strings.size();
 
@@ -165,7 +169,7 @@ rmm::device_uvector<string_index_pair> split_utility(column_device_view const& d
  * @brief Returns string pair for the specified column for each string in `d_strings`
  *
  * This is used to build the table result of a split.
- * Null is returned if the row is null of if the `column_index` is larger
+ * Null is returned if the row is null or if the `column_index` is larger
  * than the token count for that string.
  */
 struct tokens_transform_fn {
@@ -211,10 +215,10 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto offsets_view = offsets->mutable_view();
   auto d_offsets    = offsets_view.data<offset_type>();
 
-  // get the split tokens from the input column
-  auto tokens = split_utility(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
+  // get the split tokens from the input column; this also converts the counts into offsets
+  auto tokens = generate_tokens(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
 
-  // the columns_count is the maximum number of tokens for any string in the input column
+  // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -273,8 +277,8 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto offsets      = count_matches(*d_strings, *d_prog, stream, mr);
   auto offsets_view = offsets->mutable_view();
 
-  // get the split tokens from the input column
-  auto tokens = split_utility(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
+  // get the split tokens from the input column; this also converts the counts into offsets
+  auto tokens = generate_tokens(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
 
   // convert the tokens into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
