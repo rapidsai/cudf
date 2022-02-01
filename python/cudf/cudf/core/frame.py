@@ -669,6 +669,9 @@ class Frame:
             matrix[:, i] = get_column_values_na(col)
         return matrix
 
+    # TODO: As of now, calling cupy.asarray is _much_ faster than calling
+    # to_cupy. We should investigate the reasons why and whether we can provide
+    # a more efficient method here by exploiting __cuda_array_interface__.
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,

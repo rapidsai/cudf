@@ -7,6 +7,7 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
+from itertools import repeat
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -966,173 +967,90 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         # Binary operations
         binary_operations = {
             # Arithmetic binary operations.
-            "add": "__{}add__",
-            "subtract": "__{}sub__",
-            "multiply": "__{}mul__",
-            "matmul": "__{}matmul__",
-            "divide": "__{}truediv__",
-            "true_divide": "__{}truediv__",
-            "floor_divide": "__{}floordiv__",
-            "power": "__{}pow__",
-            "float_power": "__{}pow__",
-            "mod": "__{}mod__",
-            "fmod": "__{}mod__",
+            "add": "add",
+            "subtract": "sub",
+            "multiply": "mul",
+            "matmul": "matmul",
+            "divide": "truediv",
+            "truedivide": "truediv",
+            "floordivide": "floordiv",
+            "power": "pow",
+            "floatpower": "pow",
+            "mod": "mod",
+            "fmod": "mod",
             # Bitwise binary operations.
-            "bitwise_and": "__{}and__",
-            "bitwise_or": "__{}or__",
-            "bitwise_xor": "__{}xor__",
+            "bitwiseand": "and",
+            "bitwiseor": "or",
+            "bitwisexor": "xor",
             # Comparison binary operators
-            "greater": "__gt__",
-            "greater_equal": "__ge__",
-            "less": "__lt__",
-            "less_equal": "__le__",
-            "not_equal": "__ne__",
-            "equal": "__eq__",
+            "greater": "gt",
+            "greaterequal": "ge",
+            "less": "lt",
+            "lessequal": "le",
+            "notequal": "ne",
+            "equal": "eq",
         }
 
         # First look for methods of the class.
-        if ufunc.__name__ in binary_operations:
-            reflect = self is not inputs[0]
-            other = inputs[0] if reflect else inputs[1]
-            op = binary_operations[ufunc.__name__].format(
-                "r" if reflect else ""
-            )
+        fname = ufunc.__name__
+        if fname in binary_operations:
+            not_reflect = self is inputs[0]
+            other = inputs[not_reflect]
+            op = f"__{'' if not_reflect else 'r'}{binary_operations[fname]}__"
             return getattr(self, op)(other)
 
         # Special handling for unary operations.
-        if ufunc.__name__ == "negative":
+        if fname == "negative":
             return self * -1
-        if ufunc.__name__ == "positive":
+        if fname == "positive":
             return self.copy(deep=True)
-        if ufunc.__name__ == "invert":
+        if fname == "invert":
             return ~self
-        if ufunc.__name__ == "absolute":
+        if fname == "absolute":
             return self.abs()
-        if ufunc.__name__ == "fabs":
+        if fname == "fabs":
             return self.abs().astype(np.float64)
 
-        # For anything that wasn't specially handled above, attempt to dispatch
-        # to a cupy function.
-        cupy_func = getattr(cupy, ufunc.__name__)
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cupy, fname)
         if cupy_func:
             # Indices must be aligned before converting to arrays.
-            # TODO: Should this really support index alignment for mixtures of
-            # cudf and pandas Series objects?
-            index = self.index
-            if ufunc.nin == 2 and all(
-                isinstance(inp, (Series, pd.Series)) for inp in inputs
-            ):
+            if ufunc.nin == 2 and all(map(isinstance, inputs, repeat(Series))):
                 inputs = _align_indices(inputs, allow_non_unique=True)
                 index = inputs[0].index
+            else:
+                index = self.index
 
             cupy_inputs = []
             mask = None
             for inp in inputs:
                 # TODO: Generalize for other types of Frames
-                if isinstance(inp, Series):
-                    # Handle nulls.
-                    if inp.has_nulls:
-                        if mask is None:
-                            # TODO: This is a hackish way to perform a bitwise
-                            # and of bitmasks. Once we expose
-                            # cudf::detail::bitwise_and, then we can use that
-                            # instead.
-                            mask = as_column(inp.nullmask)
-                        else:
-                            mask = mask & as_column(inp.nullmask)
+                if isinstance(inp, Series) and inp.has_nulls:
+                    new_mask = as_column(inp.nullmask)
+
+                    # TODO: This is a hackish way to perform a bitwise and of
+                    # bitmasks. Once we expose cudf::detail::bitwise_and, then
+                    # we can use that instead.
+                    mask = new_mask if mask is None else (mask & new_mask)
+
                     # Arbitrarily fill with zeros. For ufuncs, we assume that
                     # the end result propagates nulls via a bitwise and, so
                     # these elements are irrelevant.
-                    inp = inp.fillna(0).to_cupy()
+                    inp = inp.fillna(0)
                 cupy_inputs.append(inp)
 
             cp_output = cupy_func(*cupy_inputs, **kwargs)
-            if ufunc.nout > 1:
-                return [
-                    self.__class__._from_data(
-                        {self.name: as_column(out).set_mask(mask)}, index=index
-                    )
-                    for out in cp_output
-                ]
-            return self.__class__._from_data(
-                {self.name: as_column(cp_output).set_mask(mask)}, index=index
-            )
-        return NotImplemented
 
-        #
-        #
-        #  {
-        #      # Math
-        #      logaddexp
-        #      logaddexp2
-        #      float_power
-        #      remainder
-        #      divmod
-        #      modf
-        #      fmod
-        #      rint
-        #      sign
-        #      heaviside
-        #      conj
-        #      conjugate
-        #      exp
-        #      exp2
-        #      log
-        #      log2
-        #      log10
-        #      expm1
-        #      log1p
-        #      sqrt
-        #      square
-        #      cbrt
-        #      reciprocal
-        #      gcd
-        #      lcm
-        #      # Trig
-        #      sin
-        #      cos
-        #      tan
-        #      arcsin
-        #      arccos
-        #      arctan
-        #      arctan2
-        #      hypot
-        #      sinh
-        #      cosh
-        #      tanh
-        #      arcsinh
-        #      arccosh
-        #      arctanh
-        #      degrees
-        #      radians
-        #      deg2rad
-        #      rad2deg
-        #      logical_and
-        #      logical_or
-        #      logical_xor
-        #      logical_not
-        #      maximum
-        #      minimum
-        #      fmax
-        #      fmin
-        #      left_shift
-        #      right_shift
-        #      # Floating
-        #      isfinite
-        #      isinf
-        #      isnan
-        #      isnat
-        #      signbit
-        #      copysign
-        #      nextafter
-        #      spacing
-        #      ldexp
-        #      frexp
-        #      floor
-        #      ceil
-        #      trunc
-        #  }
-        #
+            def make_frame(arr):
+                return self.__class__._from_data(
+                    {self.name: as_column(arr).set_mask(mask)}, index=index
+                )
+
+            if ufunc.nout > 1:
+                return tuple(make_frame(out) for out in cp_output)
+            return make_frame(cp_output)
+
+        return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
         handled_types = [cudf.Series]
