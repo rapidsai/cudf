@@ -108,10 +108,11 @@ bool is_comparison_binop(binary_operator op)
 /**
  * @brief Returns `true` if `binary_operator` `op` is a modulus operation
  */
-bool is_modulus_binop(binary_operator op)
+bool is_modulo_binop(binary_operator op)
 {
-  return op == binary_operator::MOD or  ///< operator %
-         op == binary_operator::PMOD;   ///< positive modulo operator
+  return op == binary_operator::MOD or   ///< operator %
+         op == binary_operator::PMOD or  ///< positive modulo operator
+         op == binary_operator::PYMOD;   ///< operator % but following python's negative sign rules
 }
 
 /**
@@ -119,7 +120,7 @@ bool is_modulus_binop(binary_operator op)
  */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
-  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or is_modulus_binop(op);
+  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or is_modulo_binop(op);
 }
 
 /**

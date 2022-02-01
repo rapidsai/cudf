@@ -177,7 +177,9 @@ struct PMod {
 struct PyMod {
   template <typename TypeLhs,
             typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
+                              (cudf::is_fixed_point<TypeLhs>() and
+                               std::is_same_v<TypeLhs, TypeRhs>))>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
   {
     return ((x % y) + y) % y;
