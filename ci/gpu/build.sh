@@ -31,7 +31,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='main'
+export INSTALL_DASK_MAIN=1
 
 # ucx-py version
 export UCX_PY_VERSION='0.25.*'
@@ -107,8 +107,13 @@ function install_dask {
     # Install the main version of dask, distributed, and streamz
     gpuci_logger "Install the main version of dask, distributed, and streamz"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
+    if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
+        gpuci_logger "conda install -c dask/label/dev dask"
+        conda install -c dask/label/dev dask
+    else
+        gpuci_logger "conda install -c conda-forge dask"
+        conda install -c conda-forge dask
+    fi
     # Need to uninstall streamz that is already in the env.
     pip uninstall -y streamz
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps

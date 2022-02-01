@@ -5,6 +5,7 @@ channels:
   - rapidsai
   - nvidia
   - rapidsai-nightly
+  - dask/label/dev
   - conda-forge
 dependencies:
   - clang=11.1.0
@@ -63,8 +64,6 @@ dependencies:
   - librdkafka=1.7.0
   - python-confluent-kafka=1.7.0
   - pip:
-      - git+https://github.com/dask/dask.git@main
-      - git+https://github.com/dask/distributed.git@main
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc
   - ptxcompiler  # [linux64]
