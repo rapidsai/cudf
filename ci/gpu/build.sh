@@ -108,8 +108,8 @@ function install_dask {
     gpuci_logger "Install the conda-forge or nightly version of dask and distributed"
     set -x
     if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
-        gpuci_logger "conda install -c dask/label/dev dask"
-        conda install -c dask/label/dev dask
+        gpuci_logger "conda install dask/label/dev::dask --force-reinstall"
+        conda install dask/label/dev::dask --force-reinstall
     else
         gpuci_logger "conda install -c conda-forge dask"
         conda install -c conda-forge dask
