@@ -1006,8 +1006,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return self.copy(deep=True)
         if ufunc.__name__ == "invert":
             return ~self
-        if ufunc.__name__ in ("absolute", "fabs"):
+        if ufunc.__name__ == "absolute":
             return self.abs()
+        if ufunc.__name__ == "fabs":
+            return self.abs().astype(np.float64)
 
         # For anything that wasn't specially handled above, attempt to dispatch
         # to a cupy function.
@@ -1044,11 +1046,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     inp = inp.fillna(0).to_cupy()
                 cupy_inputs.append(inp)
 
-            output_col = as_column(cupy_func(*cupy_inputs, **kwargs)).set_mask(
-                mask
-            )
+            cp_output = cupy_func(*cupy_inputs, **kwargs)
+            if ufunc.nout > 1:
+                return [
+                    self.__class__._from_data(
+                        {self.name: as_column(out).set_mask(mask)}, index=index
+                    )
+                    for out in cp_output
+                ]
             return self.__class__._from_data(
-                {self.name: output_col}, index=index
+                {self.name: as_column(cp_output).set_mask(mask)}, index=index
             )
         return NotImplemented
 

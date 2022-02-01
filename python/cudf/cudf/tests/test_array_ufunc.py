@@ -36,7 +36,11 @@ def test_ufunc_series(ufunc):
     expect = ufunc(*(arg.to_pandas() for arg in args))
 
     try:
-        assert_eq(got, expect)
+        if ufunc.nout > 1:
+            for g, e in zip(got, expect):
+                assert_eq(g, e)
+        else:
+            assert_eq(got, expect)
     except AssertionError:
         if ufunc.__name__ in ("power", "float_power"):
             equivalence = cudf.from_pandas(expect) != got
