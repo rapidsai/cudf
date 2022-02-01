@@ -3625,6 +3625,7 @@ class Frame:
         >>> [1, 2, 3, 4] @ s
         10
         """
+        # TODO: This function does not currently support nulls.
         lhs = self.values
         if isinstance(other, Frame):
             rhs = other.values
@@ -3635,6 +3636,16 @@ class Frame:
         ):
             rhs = cupy.asarray(other)
         else:
+            # TODO: This should raise an exception, not return NotImplemented,
+            # but __matmul__ relies on the current behavior. We should either
+            # move this implementation to __matmul__ and call it from here
+            # (checking for NotImplemented and raising NotImplementedError if
+            # that's what's returned), or __matmul__ should catch a
+            # NotImplementedError from here and return NotImplemented. The
+            # latter feels cleaner (putting the implementation in this method
+            # rather than in the operator) but will be slower in the (highly
+            # unlikely) case that we're multiplying a cudf object with another
+            # type of object that somehow supports this behavior.
             return NotImplemented
         if reflect:
             lhs, rhs = rhs, lhs

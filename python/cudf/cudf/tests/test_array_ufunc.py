@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import assert_eq, set_random_null_mask_inplace
 
 _UFUNCS = [
     obj
@@ -14,13 +14,29 @@ _UFUNCS = [
 
 
 @pytest.mark.parametrize("ufunc", _UFUNCS)
-def test_ufunc_series(ufunc):
-    is_binary = ufunc.nin == 2
+@pytest.mark.parametrize("has_nulls", [True, False])
+def test_ufunc_series(ufunc, has_nulls):
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
-    # scale to avoid issues with overflow, etc
-    args = [cudf.Series(cp.random.randint(size=100, low=1, high=10))]
-    if is_binary:
-        args.append(cudf.Series(cp.random.randint(size=100, low=1, high=10)))
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    N = 100
+    pandas_args = args = [
+        cudf.Series(cp.random.randint(size=N, low=1, high=10))
+        for _ in range(ufunc.nin)
+    ]
+
+    if has_nulls:
+        if ufunc.__name__ == "matmul":
+            pytest.xfail("Frame.dot currently does not support nulls")
+
+        mask = cudf.Series([False] * N)
+        pandas_args = []
+        for arg in args:
+            set_random_null_mask_inplace(arg)
+            mask |= arg.isna()
+            # Fill nas with an arbitrary value to be masked out later.
+            pandas_args.append(arg.fillna(0).to_pandas())
+        mask = mask.to_pandas()
 
     try:
         got = ufunc(*args)
@@ -33,7 +49,15 @@ def test_ufunc_series(ufunc):
             pytest.xfail(reason="Operation not supported by cupy")
         raise
 
-    expect = ufunc(*(arg.to_pandas() for arg in args))
+    expect = ufunc(*pandas_args)
+    if has_nulls:
+        # Converting nullable integer cudf.Series to pandas will produce a
+        # float pd.Series. We need to mask that manually.
+        if ufunc.nout > 1:
+            for e in expect:
+                e[mask] = np.nan
+        else:
+            expect[mask] = np.nan
 
     try:
         if ufunc.nout > 1:
@@ -43,8 +67,9 @@ def test_ufunc_series(ufunc):
             assert_eq(got, expect)
     except AssertionError:
         if ufunc.__name__ in ("power", "float_power"):
-            equivalence = cudf.from_pandas(expect) != got
-            diffs = got[equivalence] - expect[equivalence.to_pandas()]
+            not_equal = cudf.from_pandas(expect) != got
+            not_equal[got.isna()] = False
+            diffs = got[not_equal] - expect[not_equal.to_pandas()]
             if np.max(np.abs(diffs)) == 1:
                 pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
         raise
