@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,7 +45,6 @@ public final class ColumnVector extends ColumnView {
     NativeDepsLoader.loadNativeDeps();
   }
 
-  private final OffHeapState offHeap;
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
 
@@ -56,12 +55,21 @@ public final class ColumnVector extends ColumnView {
    *                      owned by this instance.
    */
   public ColumnVector(long nativePointer) {
-    super(getColumnViewFromColumn(nativePointer));
+    super(new OffHeapState(nativePointer));
     assert nativePointer != 0;
-    offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
     this.refCount = 0;
     incRefCountInternal(true);
+  }
+
+  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+      DeviceMemoryBuffer offsetBuffer) {
+    long viewHandle = initViewHandle(
+        type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    return new OffHeapState(type, (int) rows, dataBuffer, validityBuffer,
+        offsetBuffer, null, viewHandle);
   }
 
   /**
@@ -81,22 +89,27 @@ public final class ColumnVector extends ColumnView {
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer) {
-    super(ColumnVector.initViewHandle(
-        type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
-        dataBuffer, validityBuffer, offsetBuffer, null));
+    super(makeOffHeap(type, rows, nullCount, dataBuffer, validityBuffer, offsetBuffer));
     assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
     if (!type.equals(DType.STRING)) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
         || !nullCount.isPresent();
-    offHeap = new OffHeapState(type, (int) rows, dataBuffer, validityBuffer,
-        offsetBuffer, null, viewHandle);
     MemoryCleaner.register(this, offHeap);
     this.nullCount = nullCount;
-
     this.refCount = 0;
     incRefCountInternal(true);
+  }
+
+  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+      DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
+    long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer,
+        offsetBuffer, childHandles);
+    return new OffHeapState(type, (int) rows, dataBuffer, validityBuffer, offsetBuffer,
+        toClose, viewHandle);
   }
 
   /**
@@ -118,16 +131,12 @@ public final class ColumnVector extends ColumnView {
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
                       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
-    super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
-        dataBuffer, validityBuffer,
-        offsetBuffer, childHandles));
+    super(makeOffHeap(type, rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, toClose, childHandles));
     if (!type.equals(DType.STRING) && !type.equals(DType.LIST)) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
         || !nullCount.isPresent();
-    offHeap = new OffHeapState(type, (int) rows, dataBuffer, validityBuffer, offsetBuffer,
-            toClose, viewHandle);
     MemoryCleaner.register(this, offHeap);
 
     this.refCount = 0;
@@ -143,8 +152,7 @@ public final class ColumnVector extends ColumnView {
    * @param contiguousBuffer the buffer that this is based off of.
    */
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
-    super(viewAddress);
-    offHeap = new OffHeapState(viewAddress, contiguousBuffer);
+    super(new OffHeapState(viewAddress, contiguousBuffer));
     MemoryCleaner.register(this, offHeap);
     // TODO we may want to ask for the null count anyways...
     this.nullCount = Optional.empty();
@@ -498,6 +506,42 @@ public final class ColumnVector extends ColumnView {
     }
     return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
   }
+
+  /**
+   * Create a list column in which each row is a sequence of values starting from a `start` value,
+   * incrementing by one, and its cardinality is specified by a `size` value. The `start` and `size`
+   * values used to generate each list is taken from the corresponding row of the input start and
+   * size columns.
+   * @param start first values in the result sequences
+   * @param size numbers of values in the result sequences
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(ColumnView start, ColumnView size) {
+    assert start.getNullCount() == 0 || size.getNullCount() == 0 : "starts and sizes input " +
+        "columns must not have nulls.";
+    return new ColumnVector(sequences(start.getNativeView(), size.getNativeView(), 0));
+  }
+
+  /**
+   * Create a list column in which each row is a sequence of values starting from a `start` value,
+   * incrementing by a `step` value, and its cardinality is specified by a `size` value.
+   * The values `start`, `step`, and `size` used to generate each list is taken from the
+   * corresponding row of the input starts, steps, and sizes columns.
+   * @param start first values in the result sequences
+   * @param size numbers of values in the result sequences
+   * @param step increment values for the result sequences.
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(ColumnView start, ColumnView size, ColumnView step) {
+    assert start.getNullCount() == 0 || size.getNullCount() == 0 || step.getNullCount() == 0:
+        "start, size and step must not have nulls.";
+    assert step.getType() == start.getType() : "start and step input columns must" +
+        " have the same type.";
+
+    return new ColumnVector(sequences(start.getNativeView(), size.getNativeView(),
+        step.getNativeView()));
+  }
+
   /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
@@ -680,7 +724,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), new int[0], 0));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), 0));
   }
 
   /**
@@ -704,7 +748,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), seed));
   }
 
   /**
@@ -739,7 +783,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), seed));
   }
 
   /**
@@ -788,6 +832,9 @@ public final class ColumnVector extends ColumnView {
   /////////////////////////////////////////////////////////////////////////////
 
   private static native long sequence(long initialValue, long step, int rows);
+
+  private static native long sequences(long startHandle, long sizeHandle, long stepHandle)
+      throws CudfException;
 
   private static native long fromArrow(int type, long col_length,
       long null_count, ByteBuffer data, ByteBuffer validity,
@@ -859,36 +906,14 @@ public final class ColumnVector extends ColumnView {
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
    * @param hashId integer native ID of the hashing function identifier HashType.
-   * @param initialValues array of integer values, one per column, only used by non-serial murmur3
-   *                      hash. Each element's hash value is merged with its column's initial value
-   *                      before the row is merged into a single value.
    * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId, int[] initialValues,
-                                  int seed) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId, int seed) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
-
-  /**
-   * Close all non-null buffers. Exceptions that occur during the process will
-   * be aggregated into a single exception thrown at the end.
-   */
-  static void closeBuffers(AutoCloseable buffer) {
-    Throwable toThrow = null;
-    if (buffer != null) {
-      try {
-        buffer.close();
-      } catch (Throwable t) {
-        toThrow = t;
-      }
-    }
-    if (toThrow != null) {
-      throw new RuntimeException(toThrow);
-    }
-  }
 
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
@@ -1079,13 +1104,17 @@ public final class ColumnVector extends ColumnView {
       if (!toClose.isEmpty()) {
         try {
           for (MemoryBuffer toCloseBuff : toClose) {
-            closeBuffers(toCloseBuff);
-          }
-        } catch (Throwable t) {
-          if (toThrow != null) {
-            toThrow.addSuppressed(t);
-          } else {
-            toThrow = t;
+            if (toCloseBuff != null) {
+              try {
+                toCloseBuff.close();
+              } catch (Throwable t) {
+                if (toThrow != null) {
+                  toThrow.addSuppressed(t);
+                } else {
+                  toThrow = t;
+                }
+              }
+            }
           }
         } finally {
           toClose.clear();

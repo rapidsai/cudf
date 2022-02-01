@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,9 +122,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                                   !std::is_same_v<RhsViewT, column_device_view>,
-                                                 OutT>
+  __device__ inline typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+                                                !std::is_same_v<RhsViewT, column_device_view>,
+                                              OutT>
   operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
@@ -136,9 +136,9 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE typename std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
-                                                   std::is_same_v<RhsViewT, column_device_view>,
-                                                 OutT>
+  __device__ inline typename std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
+                                                std::is_same_v<RhsViewT, column_device_view>,
+                                              OutT>
   operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(),
@@ -150,9 +150,9 @@ struct compare_functor {
 
   // This is used to compare 2 column values
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
-                                                   std::is_same_v<RhsViewT, column_device_view>,
-                                                 OutT>
+  __device__ inline typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+                                                std::is_same_v<RhsViewT, column_device_view>,
+                                              OutT>
   operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
@@ -167,13 +167,13 @@ struct compare_functor {
 // This functor performs null aware binop between two columns or a column and a scalar by
 // iterating over them on the device
 struct null_considering_binop {
-  auto get_device_view(cudf::scalar const& scalar_item) const
+  [[nodiscard]] auto get_device_view(cudf::scalar const& scalar_item) const
   {
     return get_scalar_device_view(
       static_cast<cudf::scalar_type_t<cudf::string_view>&>(const_cast<scalar&>(scalar_item)));
   }
 
-  auto get_device_view(column_device_view const& col_item) const { return col_item; }
+  [[nodiscard]] auto get_device_view(column_device_view const& col_item) const { return col_item; }
 
   template <typename LhsViewT, typename RhsViewT, typename OutT, typename CompareFunc>
   void populate_out_col(LhsViewT const& lhsv,
@@ -344,6 +344,8 @@ case binary_operator::PMOD:                 apply_binary_op<ops::PMod>(out, lhs,
 case binary_operator::NULL_EQUALS:          apply_binary_op<ops::NullEquals>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::NULL_MAX:             apply_binary_op<ops::NullMax>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::NULL_MIN:             apply_binary_op<ops::NullMin>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::NULL_LOGICAL_AND:     apply_binary_op<ops::NullLogicalAnd>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::NULL_LOGICAL_OR:      apply_binary_op<ops::NullLogicalOr>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 default:;
 }
   // clang-format on

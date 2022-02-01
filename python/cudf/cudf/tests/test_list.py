@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import functools
 import operator
 
@@ -304,8 +305,8 @@ def test_get_nulls():
         ([[1, 2, 3], [], [3, 4, 5]], 6, [False, False, False],),
         ([[1.0, 2.0, 3.0], None, []], 2.0, [True, None, False],),
         ([[None, "b", "c"], [], ["b", "e", "f"]], "b", [True, False, True],),
-        ([[None, 2, 3], None, []], 1, [None, None, False]),
-        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [None, False, False],),
+        ([[None, 2, 3], None, []], 1, [False, None, False]),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [False, False, False],),
     ],
 )
 def test_contains_scalar(data, scalar, expect):
@@ -586,3 +587,18 @@ def test_listcol_setitem_error_cases(data, item, error):
     sr = cudf.Series(data)
     with pytest.raises(BaseException, match=error):
         sr[1] = item
+
+
+def test_listcol_setitem_retain_dtype():
+    df = cudf.DataFrame(
+        {"a": cudf.Series([["a", "b"], []]), "b": [1, 2], "c": [123, 321]}
+    )
+    df1 = df.head(0)
+    # Performing a setitem on `b` triggers a `column.column_empty_like` call
+    # which tries to create an empty ListColumn.
+    df1["b"] = df1["c"]
+    # Performing a copy to trigger a copy dtype which is obtained by accessing
+    # `ListColumn.children` that would have been corrupted in previous call
+    # prior to this fix: https://github.com/rapidsai/cudf/pull/10151/
+    df2 = df1.copy()
+    assert df2["a"].dtype == df["a"].dtype

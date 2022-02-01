@@ -106,17 +106,17 @@ class flattened_table {
   /**
    * @brief Getter for the flattened columns, as a `table_view`.
    */
-  table_view flattened_columns() const { return _flattened_columns; }
+  [[nodiscard]] table_view flattened_columns() const { return _flattened_columns; }
 
   /**
    * @brief Getter for the cudf::order of the table_view's columns.
    */
-  std::vector<order> orders() const { return _orders; }
+  [[nodiscard]] std::vector<order> orders() const { return _orders; }
 
   /**
    * @brief Getter for the cudf::null_order of the table_view's columns.
    */
-  std::vector<null_order> null_orders() const { return _null_orders; }
+  [[nodiscard]] std::vector<null_order> null_orders() const { return _null_orders; }
 
   /**
    * @brief Conversion to `table_view`, to fetch flattened columns.

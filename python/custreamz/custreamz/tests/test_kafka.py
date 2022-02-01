@@ -5,11 +5,10 @@ import pytest
 from cudf.testing._utils import assert_eq
 
 
-@pytest.mark.parametrize("commit_offset", [-1, 0, 1, 1000])
+@pytest.mark.parametrize("commit_offset", [1, 45, 100, 22, 1000, 10])
 @pytest.mark.parametrize("topic", ["cudf-kafka-test-topic"])
 def test_kafka_offset(kafka_client, topic, commit_offset):
-    ck_top = ck.TopicPartition(topic, 0, commit_offset)
-    offsets = [ck_top]
+    offsets = [ck.TopicPartition(topic, 0, commit_offset)]
     kafka_client.commit(offsets=offsets)
 
     # Get the offsets that were just committed to Kafka
