@@ -694,6 +694,11 @@ class RangeIndex(BaseIndex):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def _split(self, splits):
+        return Int64Index._from_columns(
+            [self._values.columns_split(splits)], [self.name]
+        )
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.

@@ -1577,6 +1577,9 @@ class BaseIndex(Serializable):
             [],
         )
 
+    def _split(self, splits):
+        raise NotImplementedError()
+
 
 def _get_result_name(left_name, right_name):
     if left_name == right_name:

@@ -3378,11 +3378,19 @@ class Frame:
             self, ascending=ascending, null_position=null_position
         )
 
-    def _split(self, splits, keep_index=True):
-        results = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-        return [self.__class__._from_data(*result) for result in results]
+    def _split(self, splits):
+        """Split a frame with split points in ``splits``. Returns a list of
+        Frames of length `len(splits) + 1`.
+        """
+        return [
+            self._from_columns_like_self(
+                libcudf.copying.columns_split([*self._data.columns], splits)[
+                    split_idx
+                ],
+                self._column_names,
+            )
+            for split_idx in range(len(splits) + 1)
+        ]
 
     def _encode(self):
         data, index, indices = libcudf.transform.table_encode(self)

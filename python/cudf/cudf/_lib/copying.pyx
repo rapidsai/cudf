@@ -282,7 +282,7 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
-def columns_empty_like(input_columns):
+def columns_empty_like(input_columns: list):
     cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef unique_ptr[table] c_result
 
@@ -378,20 +378,11 @@ def column_split(Column input_column, object splits):
     return result
 
 
-def table_split(input_table, object splits, bool keep_index=True):
+def columns_split(input_columns: list, object splits):
 
-    cdef table_view input_table_view = table_view_from_table(
-        input_table, not keep_index
-    )
-
-    cdef vector[size_type] c_splits
-    c_splits.reserve(len(splits))
-
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef vector[size_type] c_splits = splits
     cdef vector[table_view] c_result
-
-    cdef int split
-    for split in splits:
-        c_splits.push_back(split)
 
     with nogil:
         c_result = move(
@@ -400,16 +391,11 @@ def table_split(input_table, object splits, bool keep_index=True):
                 c_splits)
         )
 
-    num_of_result_cols = c_result.size()
     return [
-        data_from_table_view(
-            c_result[i],
-            input_table,
-            column_names=input_table._column_names,
-            index_names=input_table._index_names if (
-                keep_index is True)
-            else None
-        ) for i in range(num_of_result_cols)]
+        columns_from_table_view(
+            c_result[i], input_columns
+        ) for i in range(c_result.size())
+    ]
 
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):

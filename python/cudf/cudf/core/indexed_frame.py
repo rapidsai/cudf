@@ -652,6 +652,22 @@ class IndexedFrame(Frame):
             self._index.names if keep_index else None,
         )
 
+    def _split(self, splits, keep_index=True):
+        return [
+            self._from_columns_like_self(
+                libcudf.copying.columns_split(
+                    [
+                        *(self._index._data.columns if keep_index else []),
+                        *self._columns,
+                    ],
+                    splits,
+                )[split_idx],
+                self._column_names,
+                self._index.names if keep_index else None,
+            )
+            for split_idx in range(len(splits) + 1)
+        ]
+
     def add_prefix(self, prefix):
         """
         Prefix labels with string `prefix`.
