@@ -30,7 +30,7 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
-# Dask & Distributed git tag
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=1
 
 # ucx-py version
@@ -104,8 +104,8 @@ conda config --show-sources
 conda list --show-channel-urls
 
 function install_dask {
-    # Install the main version of dask, distributed, and streamz
-    gpuci_logger "Install the main version of dask, distributed, and streamz"
+    # Install the conda-forge or nightly version of dask and distributed
+    gpuci_logger "Install the conda-forge or nightly version of dask and distributed"
     set -x
     if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
         gpuci_logger "conda install -c dask/label/dev dask"
@@ -114,6 +114,8 @@ function install_dask {
         gpuci_logger "conda install -c conda-forge dask"
         conda install -c conda-forge dask
     fi
+    # Install the main version of streamz
+    gpuci_logger "Install the main version of streamz"
     # Need to uninstall streamz that is already in the env.
     pip uninstall -y streamz
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps

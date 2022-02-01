@@ -36,7 +36,7 @@ export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 # like `/tmp` is.
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
-# Dask & Distributed option to install main
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=1
 
 function remove_libcudf_kernel_cache_dir {
@@ -77,16 +77,16 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 # conda remove -f rapids-build-env rapids-notebook-env
 # conda install "your-pkg=1.0.0"
 
-# Install the master version of dask, distributed, and streamz
-# Install the main version of dask and distributed
+# Install the conda-forge or nightly version of dask and distributed
 if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     gpuci_logger "conda install -c dask/label/dev dask"
     conda install -c dask/label/dev dask
 else
-    gpuci_logger "conda install -c conda-forge dask"
+    gpuci_logger "conda install -c conda-forge dask>=2021.11.1"
     conda install -c conda-forge dask
 fi
 
+# Install the master version of streamz
 logger "pip install git+https://github.com/python-streamz/streamz.git@master --upgrade --no-deps"
 pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
 
