@@ -2284,7 +2284,11 @@ class StringMethods(ColumnMethods):
             return res
 
     def split(
-        self, pat: str = None, n: int = -1, expand: bool = None
+        self,
+        pat: str = None,
+        n: int = -1,
+        expand: bool = None,
+        regex: bool = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
@@ -2295,8 +2299,9 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str, default ' ' (space)
-            String to split on, does not yet support regular expressions.
+        pat : str, default None
+            String or regular expression to split on. If not specified, split
+            on whitespace.
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
@@ -2307,6 +2312,13 @@ class StringMethods(ColumnMethods):
               dimensionality.
             * If ``False``, return Series/Index, containing lists
               of strings.
+        regex : bool, default None
+            Determines if the passed-in pattern is a regular expression:
+
+            * If ``True``, assumes the passed-in pattern is a regular
+              expression
+            * If ``False``, treats the pattern as a literal string.
+            * If pat length is 1, treats pat as a literal string.
 
         Returns
         -------
@@ -2406,27 +2418,39 @@ class StringMethods(ColumnMethods):
             )
 
         # Pandas treats 0 as all
-        if n == 0:
+        if n is None or n == 0:
             n = -1
 
         if pat is None:
             pat = ""
 
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
+        if len(str(pat)) <= 1:
+            regex = False
+
         if expand:
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                data, index = libstrings.split(
-                    self._column, cudf.Scalar(pat, "str"), n
-                )
+                if regex is True:
+                    data, index = libstrings.split_re(self._column, pat, n)
+                else:
+                    data, index = libstrings.split(
+                        self._column, cudf.Scalar(pat, "str"), n
+                    )
                 if len(data) == 1 and data[0].null_count == len(self._column):
                     result_table = cudf.core.frame.Frame({})
                 else:
                     result_table = cudf.core.frame.Frame(data, index)
         else:
-            result_table = libstrings.split_record(
-                self._column, cudf.Scalar(pat, "str"), n
-            )
+            if regex is True:
+                result_table = libstrings.split_record_re(self._column, pat, n)
+            else:
+                result_table = libstrings.split_record(
+                    self._column, cudf.Scalar(pat, "str"), n
+                )
 
         return self._return_or_inplace(result_table, expand=expand)
 

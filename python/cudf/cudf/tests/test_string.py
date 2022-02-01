@@ -962,6 +962,29 @@ def test_string_split(data, pat, n, expand):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        ["a b", " c ", "   d", "e   ", "f"],
+        ["a-b", "-c-", "---d", "e---", "f"],
+        ["ab", "c", "d", "e", "f"],
+        [None, None, None, None, None],
+    ],
+)
+@pytest.mark.parametrize("pat", [None, " ", "\\-+", "\\s+"])
+@pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("expand", [True, False, None])
+def test_string_split_re(data, pat, n, expand):
+    ps = pd.Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
+
+    # Pandas does not support the regex parameter until 1.4.0
+    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
 @pytest.mark.parametrize("num_keys", [1, 2, 3])
