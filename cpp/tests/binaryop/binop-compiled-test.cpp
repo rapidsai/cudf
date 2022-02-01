@@ -339,6 +339,24 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
 }
 
+TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector_SpecialCase)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using POW = cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = fixed_width_column_wrapper<TypeLhs>({3, -3, 8, -8});
+  auto rhs = fixed_width_column_wrapper<TypeRhs>({1, 1, 7, 7});
+
+  auto out =
+    cudf::binary_operation(lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
+}
+
+
 // LOG_BASE
 //     n      t     d
 // n log(n, n)
