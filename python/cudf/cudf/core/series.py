@@ -991,12 +991,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             "equal": "eq",
         }
 
+        cast_to_bool = {"bitwise_and", "bitwise_or", "bitwise_xor"}
+
         # First look for methods of the class.
         fname = ufunc.__name__
         if fname in binary_operations:
             not_reflect = self is inputs[0]
             other = inputs[not_reflect]
             op = f"__{'' if not_reflect else 'r'}{binary_operations[fname]}__"
+            if fname in cast_to_bool and not self.index.equals(other.index):
+                return getattr(self, op)(other).astype(bool)
             return getattr(self, op)(other)
 
         # Special handling for unary operations.

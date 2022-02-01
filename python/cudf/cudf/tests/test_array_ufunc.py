@@ -43,6 +43,9 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
     ]
 
     if indexed:
+        if fname == "matmul":
+            pytest.xfail("Frame.dot currently does not support indexes")
+
         for arg in args:
             arg.index = cp.random.choice(range(N), size=N, replace=False)
 
@@ -56,8 +59,9 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
             set_random_null_mask_inplace(arg)
             mask |= arg.isna()
             # Fill nas with an arbitrary value to be masked out later.
-            pandas_args.append(arg.fillna(0).to_pandas())
+            pandas_args.append(arg.fillna(0))
         mask = mask.to_pandas()
+    pandas_args = [arg.to_pandas() for arg in pandas_args]
 
     try:
         got = ufunc(*args)

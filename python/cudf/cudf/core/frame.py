@@ -671,7 +671,10 @@ class Frame:
 
     # TODO: As of now, calling cupy.asarray is _much_ faster than calling
     # to_cupy. We should investigate the reasons why and whether we can provide
-    # a more efficient method here by exploiting __cuda_array_interface__.
+    # a more efficient method here by exploiting __cuda_array_interface__. In
+    # particular, we need to benchmark how much of the overhead is coming from
+    # (potentially unavoidable) local copies in to_cupy and how much comes from
+    # inefficiencies in the implementation.
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -3626,6 +3629,7 @@ class Frame:
         10
         """
         # TODO: This function does not currently support nulls.
+        # TODO: This function does not properly support misaligned indexes.
         lhs = self.values
         if isinstance(other, Frame):
             rhs = other.values
