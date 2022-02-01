@@ -765,7 +765,7 @@ CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1> const& lhs,
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
-// MODULUS OPERATION
+// MODULO OPERATION
 template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
