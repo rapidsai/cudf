@@ -1,3 +1,6 @@
+import operator
+from functools import reduce
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -17,6 +20,7 @@ _UFUNCS = [
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_series(ufunc, has_nulls, indexed):
+    # Note: This test assumes that all ufuncs are unary or binary.
     fname = ufunc.__name__
     if indexed and fname in (
         "greater",
@@ -28,83 +32,67 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
     ):
         pytest.skip("Comparison operators do not support misaligned indexes.")
 
+    if (indexed or has_nulls) and fname == "matmul":
+        pytest.xfail("Frame.dot currently does not support indexes or nulls")
+
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
-    aligned_args = pandas_args = args = [
-        cudf.Series(cp.random.randint(low=1, high=10, size=N))
+    pandas_args = args = [
+        cudf.Series(
+            cp.random.randint(low=1, high=10, size=N),
+            index=cp.random.choice(range(N), N, False) if indexed else None,
+        )
         for _ in range(ufunc.nin)
     ]
 
-    if indexed:
-        if fname == "matmul":
-            pytest.xfail("Frame.dot currently does not support indexes")
-
-        for arg in args:
-            arg.index = cp.random.choice(range(N), size=N, replace=False)
-
     if has_nulls:
-        if fname == "matmul":
-            pytest.xfail("Frame.dot currently does not support nulls")
-
-        pandas_args = []
+        # Converting nullable integer cudf.Series to pandas will produce a
+        # float pd.Series, so instead we replace nulls with an arbitrary
+        # integer value, precompute the mask, and then reapply it afterwards.
         for arg in args:
             set_random_null_mask_inplace(arg)
-            pandas_args.append(arg.fillna(0))
+        pandas_args = [arg.fillna(0) for arg in args]
 
-        # Note: If the objects have different indexes we have to align them
-        # before computing the mask. I know of no way to accomplish this
-        # without using an internal function, and I don't foresee us exposing
-        # an API for this at any point, so I think this is the best we can do.
-        if indexed and ufunc.nin == 2:
-            aligned_args = cudf.core.series._align_indices(
-                args, allow_non_unique=True
-            )
-
-        mask = cudf.Series(
-            [False] * len(aligned_args[0]), index=aligned_args[0].index
+        # Note: Different indexes must be aligned before the mask is computed.
+        # This requires using an internal function (_align_indices), and that
+        # is unlikely to change for the foreseeable future.
+        aligned = (
+            cudf.core.series._align_indices(args, allow_non_unique=True)
+            if indexed and ufunc.nin == 2
+            else args
         )
-        for arg in aligned_args:
-            mask |= arg.isna()
-            # Fill nas with an arbitrary value to be masked out later.
-        mask = mask.to_pandas()
-
-    pandas_args = [arg.to_pandas() for arg in pandas_args]
+        mask = reduce(operator.or_, (a.isna() for a in aligned)).to_pandas()
 
     try:
         got = ufunc(*args)
     except AttributeError as e:
         # We xfail if we don't have an explicit dispatch and cupy doesn't have
-        # the method. xfail is preferable to a silent pass so that we can
-        # identify these if we decide to implement them in the future. As of
-        # this writing, the only missing methods are isnat and heaviside.
+        # the method so that we can easily identify these methods. As of this
+        # writing, the only missing methods are isnat and heaviside.
         if "module 'cupy' has no attribute" in str(e):
             pytest.xfail(reason="Operation not supported by cupy")
         raise
 
-    expect = ufunc(*pandas_args)
-    if has_nulls:
-        # Converting nullable integer cudf.Series to pandas will produce a
-        # float pd.Series. We need to mask that manually.
-        if ufunc.nout > 1:
-            for e in expect:
-                e[mask] = np.nan
-        else:
-            expect[mask] = np.nan
+    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     try:
         if ufunc.nout > 1:
             for g, e in zip(got, expect):
+                if has_nulls:
+                    e[mask] = np.nan
                 assert_eq(g, e)
         else:
+            if has_nulls:
+                expect[mask] = np.nan
             assert_eq(got, expect)
     except AssertionError:
         if fname in ("power", "float_power"):
             not_equal = cudf.from_pandas(expect) != got
             not_equal[got.isna()] = False
             diffs = got[not_equal] - expect[not_equal.to_pandas()]
-            if np.max(np.abs(diffs)) == 1:
+            if diffs.abs().max() == 1:
                 pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
         raise
 
