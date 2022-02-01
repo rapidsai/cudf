@@ -1024,18 +1024,23 @@ class GroupBy(Serializable):
         len_cols = len(column_names)
 
         column_pair_structs = {}
-        for x, y in itertools.combinations_with_replacement(column_names, 2):
-            # The number of output columns is the number of input columns
-            # squared. We directly call the struct column factory here to
-            # reduce overhead and avoid copying data. Since libcudf groupby
-            # maintains a cache of aggregation requests, reusing the same
-            # column also makes use of previously cached column means and
-            # reduces kernel costs.
-            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
-                names=(x, y),
-                children=(self.obj._data[x], self.obj._data[y]),
-                size=len(self.obj),
-            )
+        with annotate("construct_pair_struct"):
+            for x, y in itertools.combinations_with_replacement(
+                column_names, 2
+            ):
+                # The number of output columns is the number of input columns
+                # squared. We directly call the struct column factory here to
+                # reduce overhead and avoid copying data. Since libcudf groupby
+                # maintains a cache of aggregation requests, reusing the same
+                # column also makes use of previously cached column means and
+                # reduces kernel costs.
+                column_pair_structs[
+                    (x, y)
+                ] = cudf.core.column.build_struct_column(
+                    names=(x, y),
+                    children=(self.obj._data[x], self.obj._data[y]),
+                    size=len(self.obj),
+                )
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
         ).groupby(by=self.grouping.keys)
@@ -1069,12 +1074,13 @@ class GroupBy(Serializable):
 
         # interleave: combine the correlation results for each column-pair
         # into a single column
-        res = cudf.DataFrame._from_data(
-            {
-                x: combine_columns(gb_cov, ys)
-                for ys, x in zip(cols_split, column_names)
-            }
-        )
+        with annotate("combine_columns"):
+            res = cudf.DataFrame._from_data(
+                {
+                    x: combine_columns(gb_cov, ys)
+                    for ys, x in zip(cols_split, column_names)
+                }
+            )
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
