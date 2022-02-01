@@ -340,7 +340,7 @@ enum class hash_id {
 /**
  * @brief The default seed value for hash functions
  */
-static constexpr uint32_t DEFAULT_HASH_SEED = 0;
+constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf
