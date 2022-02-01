@@ -40,6 +40,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final DType type;
   protected final long rows;
   protected final long nullCount;
+  protected final ColumnVector.OffHeapState offHeap;
 
   /**
    * Constructs a Column View given a native view address
@@ -50,6 +51,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+    this.offHeap = null;
+  }
+
+
+  /**
+   * Intended to be called from ColumnVector when it is being constructed. Because state creates a
+   * cudf::column_view instance and will close it in all cases, we don't want to have to double
+   * close it.
+   * @param state the state this view is based off of.
+   */
+  protected ColumnView(ColumnVector.OffHeapState state) {
+    offHeap = state;
+    viewHandle = state.getViewHandle();
+    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+    rows = ColumnView.getNativeRowCount(viewHandle);
+    nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
   /**
@@ -265,7 +282,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   @Override
   public void close() {
-    ColumnView.deleteColumnView(viewHandle);
+    // close the view handle so long as offHeap is not going to do it for us.
+    if (offHeap == null) {
+      ColumnView.deleteColumnView(viewHandle);
+    }
     viewHandle = 0;
   }
 
