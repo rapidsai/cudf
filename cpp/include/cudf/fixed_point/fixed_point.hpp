@@ -441,7 +441,7 @@ class fixed_point {
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-   * @brief operator % (for modulo-ing two `fixed_point` numbers)
+   * @brief operator % (for computing the modulo operation of two `fixed_point` numbers)
    *
    * If `_scale`s are equal, `_value`s are modulo-ed <br>
    * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
