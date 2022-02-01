@@ -392,11 +392,14 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
-    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
+    col_schema.type                         = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type               = ConvertedType::UNKNOWN;
+    col_schema.stats_dtype                  = statistics_dtype::dtype_timestamp64;
+    col_schema.logical_type.isset.TIMESTAMP = true;
+    col_schema.logical_type.TIMESTAMP.unit.isset.NANOS = true;
+    if (timestamp_is_int96) {
+      col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
+    }
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -437,10 +440,12 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
   {
-    col_schema.type           = Type::INT64;
-    col_schema.converted_type = ConvertedType::TIME_MICROS;
-    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
-    col_schema.ts_scale       = -1000;  // negative value indicates division by absolute value
+    col_schema.type                               = Type::INT64;
+    col_schema.converted_type                     = ConvertedType::UNKNOWN;
+    col_schema.logical_type.isset.TIME            = true;
+    col_schema.logical_type.TIME.unit.isset.NANOS = true;
+    col_schema.stats_dtype                        = statistics_dtype::dtype_int64;
+    // col_schema.ts_scale       = -1000;  // negative value indicates division by absolute value
   }
 
   template <typename T>
