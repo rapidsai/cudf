@@ -88,7 +88,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const use_np_dtypes = (flags & 2) != 0;
   auto const ts_type       = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
 
-  // No nested types here - cannot use skip_rows with such types
+  // skip_rows is not supported on nested types
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                                    int32_t(type_group_id::FLOATING_POINT),
