@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,14 +116,19 @@ class reprog {
 
   void optimize1();
   void optimize2();
+  void check_for_errors();
+#ifndef NDEBUG
   void print(regex_flags const flags);
+#endif
 
  private:
   std::vector<reinst> _insts;
   std::vector<reclass> _classes;
   int32_t _startinst_id;
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
-  int32_t _num_capturing_groups;
+  int32_t _num_capturing_groups{};
+
+  void check_for_errors(int32_t id, int32_t next_id);
 };
 
 }  // namespace detail

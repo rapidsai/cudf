@@ -173,7 +173,9 @@ class ApplyKernelCompilerBase:
                 outputs[k], index=outdf.index, nan_as_null=False
             )
             if out_mask is not None:
-                outdf[k] = outdf[k].set_mask(out_mask.data_array_view)
+                outdf._data[k] = outdf[k]._column.set_mask(
+                    out_mask.data_array_view
+                )
 
         return outdf
 
