@@ -79,11 +79,11 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 
 # Install the conda-forge or nightly version of dask and distributed
 if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
-    gpuci_logger "conda install dask/label/dev::dask --force-reinstall"
-    conda install dask/label/dev::dask --force-reinstall
+    gpuci_logger "gpuci_mamba_retry install dask/label/dev::dask --force-reinstall"
+    gpuci_mamba_retry install dask/label/dev::dask --force-reinstall
 else
-    gpuci_logger "conda install -c conda-forge dask>=2021.11.1"
-    conda install -c conda-forge dask
+    gpuci_logger "gpuci_mamba_retry install -c conda-forge dask>=2021.11.1"
+    gpuci_mamba_retry install -c conda-forge dask
 fi
 
 # Install the master version of streamz
