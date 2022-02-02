@@ -74,7 +74,7 @@ TEST_F(NewRowOpTest, BasicStructTwoChild)
 
   auto result1 = cudf::sorted_order(input);
   cudf::test::print(result1->view());
-  auto result2 = cudf::detail::sorted_order2(input);
+  auto result2 = cudf::detail::experimental::sorted_order2(input);
   cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
@@ -128,7 +128,7 @@ TEST_F(NewRowOpTest, DeepStruct)
 
   auto result1 = cudf::sorted_order(input);
   cudf::test::print(result1->view());
-  auto result2 = cudf::detail::sorted_order2(input);
+  auto result2 = cudf::detail::experimental::sorted_order2(input);
   cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
@@ -202,14 +202,14 @@ TEST_F(NewRowOpTest, SampleStructTest)
 
   auto result1 = cudf::sorted_order(input);
   cudf::test::print(result1->view());
-  auto result2 = cudf::detail::sorted_order2(input);
+  auto result2 = cudf::detail::experimental::sorted_order2(input);
   cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 
   std::vector<cudf::order> col_order       = {cudf::order::DESCENDING, cudf::order::ASCENDING};
   std::vector<cudf::null_order> null_order = {cudf::null_order::BEFORE, cudf::null_order::AFTER};
   result1                                  = cudf::sorted_order(input, col_order, null_order);
-  result2 = cudf::detail::sorted_order2(input, col_order, null_order);
+  result2 = cudf::detail::experimental::sorted_order2(input, col_order, null_order);
   cudf::test::print(result1->view());
   cudf::test::print(result2->view());
   cudf::test::expect_columns_equal(result1->view(), result2->view());

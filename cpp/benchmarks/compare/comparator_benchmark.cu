@@ -81,7 +81,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
     // auto result = cudf::sorted_order(input);
-    auto result = cudf::detail::sorted_order2(input);
+    auto result = cudf::detail::experimental::sorted_order2(input);
   }
 }
 

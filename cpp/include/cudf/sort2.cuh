@@ -37,6 +37,7 @@
 
 namespace cudf {
 namespace detail {
+namespace experimental {
 
 /**
  * @copydoc
@@ -44,51 +45,13 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-template <bool stable = false>
 std::unique_ptr<column> sorted_order2(
   table_view input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource())
-{
-  CUDF_FUNC_RANGE();
-  if (input.num_rows() == 0 or input.num_columns() == 0) {
-    return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0);
-  }
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
-  std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
-    data_type(type_to_id<size_type>()), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
-  mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
-                   mutable_indices_view.begin<size_type>(),
-                   mutable_indices_view.end<size_type>(),
-                   0);
-
-  auto [verticalized, depths] = cudf::structs::detail::experimental::verticalize_nested_columns(
-    input, column_order, null_precedence);
-  auto device_table         = table_device_view::create(verticalized.flattened_columns(), stream);
-  auto const d_column_order = make_device_uvector_async(verticalized.orders(), stream);
-  auto const d_null_precedence = make_device_uvector_async(verticalized.null_orders(), stream);
-  auto const d_depths          = make_device_uvector_async(depths, stream);
-
-  // auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
-  auto const comparator = experimental::row_lexicographic_comparator(nullate::DYNAMIC{true},
-                                                                     *device_table,
-                                                                     *device_table,
-                                                                     d_depths.data(),
-                                                                     d_column_order.data(),
-                                                                     d_null_precedence.data());
-
-  thrust::sort(rmm::exec_policy(stream),
-               mutable_indices_view.begin<size_type>(),
-               mutable_indices_view.end<size_type>(),
-               comparator);
-  // protection for temporary d_column_order and d_null_precedence
-  stream.synchronize();
-
-  return sorted_indices;
-}
-
+}  // namespace experimental
 }  // namespace detail
 }  // namespace cudf
