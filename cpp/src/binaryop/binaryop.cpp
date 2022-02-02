@@ -88,7 +88,10 @@ bool is_basic_arithmetic_binop(binary_operator op)
          op == binary_operator::MUL or       // operator *
          op == binary_operator::DIV or       // operator / using common type of lhs and rhs
          op == binary_operator::NULL_MIN or  // 2 null = null, 1 null = value, else min
-         op == binary_operator::NULL_MAX;    // 2 null = null, 1 null = value, else max
+         op == binary_operator::NULL_MAX or  // 2 null = null, 1 null = value, else max
+         op == binary_operator::MOD or       // operator %
+         op == binary_operator::PMOD or      // positive modulo operator
+         op == binary_operator::PYMOD;  // operator % but following Python's negative sign rules
 }
 
 /**
@@ -106,21 +109,11 @@ bool is_comparison_binop(binary_operator op)
 }
 
 /**
- * @brief Returns `true` if `binary_operator` `op` is a modulus operation
- */
-bool is_modulo_binop(binary_operator op)
-{
-  return op == binary_operator::MOD or   ///< operator %
-         op == binary_operator::PMOD or  ///< positive modulo operator
-         op == binary_operator::PYMOD;   ///< operator % but following python's negative sign rules
-}
-
-/**
  * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
  */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
-  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or is_modulo_binop(op);
+  return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
 
 /**
