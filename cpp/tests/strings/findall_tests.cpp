@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ TEST_F(StringsFindallTests, FindallTest)
                                        nullptr};
 
   std::string pattern = "(\\w+)";
-  auto results        = cudf::strings::findall_re(strings_view, pattern);
+  auto results        = cudf::strings::findall(strings_view, pattern);
   EXPECT_TRUE(results->num_columns() == 2);
 
   cudf::test::strings_column_wrapper expected1(
@@ -75,6 +75,28 @@ TEST_F(StringsFindallTests, FindallTest)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 
+TEST_F(StringsFindallTests, FindallRecord)
+{
+  cudf::test::strings_column_wrapper input(
+    {"3-A", "4-May 5-Day 6-Hay", "12-Dec-2021-Jan", "Feb-March", "4 ABC", "", "", "25-9000-Hal"},
+    {1, 1, 1, 1, 1, 0, 1, 1});
+
+  auto results = cudf::strings::findall_record(cudf::strings_column_view(input), "(\\d+)-(\\w+)");
+
+  bool valids[] = {1, 1, 1, 0, 0, 0, 0, 1};
+  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{"3-A"},
+                LCW{"4-May", "5-Day", "6-Hay"},
+                LCW{"12-Dec", "2021-Jan"},
+                LCW{},
+                LCW{},
+                LCW{},
+                LCW{},
+                LCW{"25-9000"}},
+               valids);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
 TEST_F(StringsFindallTests, MediumRegex)
 {
   // This results in 15 regex instructions and falls in the 'medium' range.
@@ -87,7 +109,7 @@ TEST_F(StringsFindallTests, MediumRegex)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::findall_re(strings_view, medium_regex);
+  auto results      = cudf::strings::findall(strings_view, medium_regex);
   EXPECT_TRUE(results->num_columns() == 2);
 
   std::vector<const char*> h_expected1{"first words 1234", nullptr};
@@ -115,9 +137,11 @@ TEST_F(StringsFindallTests, LargeRegex)
   std::vector<const char*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com I'm here @home zzzz",
-    "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
+    "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
+    "34"
     "5678901234567890",
-    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
+    "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmn"
+    "op"
     "qrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -125,7 +149,7 @@ TEST_F(StringsFindallTests, LargeRegex)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::findall_re(strings_view, large_regex);
+  auto results      = cudf::strings::findall(strings_view, large_regex);
   EXPECT_TRUE(results->num_columns() == 1);
 
   std::vector<const char*> h_expected{large_regex.c_str(), nullptr, nullptr};

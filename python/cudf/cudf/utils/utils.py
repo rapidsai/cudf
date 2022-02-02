@@ -242,7 +242,6 @@ def _fillna_natwise(col):
     return column.build_column(
         data=result.base_data,
         dtype=result.dtype,
-        mask=col.base_mask,
         size=result.size,
         offset=result.offset,
         children=result.base_children,
