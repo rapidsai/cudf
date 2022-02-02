@@ -967,6 +967,12 @@ class GroupBy(Serializable):
         The returned data frame is the covariance matrix of the columns of
         the DataFrame.
 
+        Both NA and null values are automatically excluded from the
+        calculation.(See the note below about bias from missing values)
+        A threshold can be set for the minimum number of observations
+        for each value created.Comparisons with observations below this
+        threshold will be returned as NaN.
+
         This method is generally used for the analysis of time series data to
         understand the relationship between different measures across time.
 
@@ -980,9 +986,26 @@ class GroupBy(Serializable):
             Delta degrees of freedom, default is 1.
 
         Returns
-        ----------
+        -------
         DataFrame
             Covariance matrix.
+
+        Notes
+        -----
+        Returns the covariance matrix of the DataFrame’s time series.
+        The covariance is normalized by N-ddof.
+
+        For DataFrames that have Series that are missing data
+        (assuming that data is missing at random) the returned covariance
+        matrix will be an unbiased estimate of the variance and covariance
+        between the member Series.
+
+        However, for many applications this estimate may not be acceptable
+        because the estimate covariance matrix is not guaranteed to be
+        positive semi-definite. This could lead to estimate correlations
+        having absolute values which are greater than one, and/or a
+        non-invertible covariance matrix. See Estimation of covariance
+        matrices for more details.
 
         Examples
         --------
@@ -1024,23 +1047,18 @@ class GroupBy(Serializable):
         len_cols = len(column_names)
 
         column_pair_structs = {}
-        with annotate("construct_pair_struct"):
-            for x, y in itertools.combinations_with_replacement(
-                column_names, 2
-            ):
-                # The number of output columns is the number of input columns
-                # squared. We directly call the struct column factory here to
-                # reduce overhead and avoid copying data. Since libcudf groupby
-                # maintains a cache of aggregation requests, reusing the same
-                # column also makes use of previously cached column means and
-                # reduces kernel costs.
-                column_pair_structs[
-                    (x, y)
-                ] = cudf.core.column.build_struct_column(
-                    names=(x, y),
-                    children=(self.obj._data[x], self.obj._data[y]),
-                    size=len(self.obj),
-                )
+        for x, y in itertools.combinations_with_replacement(column_names, 2):
+            # The number of output columns is the number of input columns
+            # squared. We directly call the struct column factory here to
+            # reduce overhead and avoid copying data. Since libcudf groupby
+            # maintains a cache of aggregation requests, reusing the same
+            # column also makes use of previously cached column means and
+            # reduces kernel costs.
+            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
+                names=(x, y),
+                children=(self.obj._data[x], self.obj._data[y]),
+                size=len(self.obj),
+            )
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
         ).groupby(by=self.grouping.keys)
@@ -1074,13 +1092,12 @@ class GroupBy(Serializable):
 
         # interleave: combine the correlation results for each column-pair
         # into a single column
-        with annotate("combine_columns"):
-            res = cudf.DataFrame._from_data(
-                {
-                    x: combine_columns(gb_cov, ys)
-                    for ys, x in zip(cols_split, column_names)
-                }
-            )
+        res = cudf.DataFrame._from_data(
+            {
+                x: combine_columns(gb_cov, ys)
+                for ys, x in zip(cols_split, column_names)
+            }
+        )
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
