@@ -808,3 +808,13 @@ def test_read_text_byte_range(datadir):
     actual = cudf.concat([actual_0, actual_1, actual_2], ignore_index=True)
 
     assert_eq(expected, actual)
+
+def test_read_text_byte_range_large(datadir):
+    content = str([('\n' if x % 5 == 0 else 'x') for x in range(0, 300000000)])
+    delimiter = "1."
+    temp_file = str(datadir) + "/temp.txt"
+
+    with open(temp_file, "w") as f:
+        f.write(content)
+
+    cudf.read_text(temp_file, delimiter=delimiter)

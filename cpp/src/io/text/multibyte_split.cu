@@ -104,7 +104,7 @@ __global__ void multibyte_split_init_kernel(
   cudf::size_type base_tile_idx,
   cudf::size_type num_tiles,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
-  cudf::io::text::detail::scan_tile_state_view<uint64_t> tile_output_offsets,
+  cudf::io::text::detail::scan_tile_state_view<int64_t> tile_output_offsets,
   cudf::io::text::detail::scan_tile_status status =
     cudf::io::text::detail::scan_tile_status::invalid)
 {
@@ -118,7 +118,7 @@ __global__ void multibyte_split_init_kernel(
 
 __global__ void multibyte_split_seed_kernel(
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
-  cudf::io::text::detail::scan_tile_state_view<uint64_t> tile_output_offsets,
+  cudf::io::text::detail::scan_tile_state_view<int64_t> tile_output_offsets,
   multistate tile_multistate_seed,
   uint32_t tile_output_offset)
 {
@@ -132,7 +132,7 @@ __global__ void multibyte_split_seed_kernel(
 __global__ void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
-  cudf::io::text::detail::scan_tile_state_view<uint64_t> tile_output_offsets,
+  cudf::io::text::detail::scan_tile_state_view<int64_t> tile_output_offsets,
   cudf::io::text::detail::trie_device_view trie,
   int32_t chunk_input_offset,
   cudf::device_span<char const> chunk_input_chars,
@@ -140,8 +140,8 @@ __global__ void multibyte_split_kernel(
 {
   using InputLoad =
     cub::BlockLoad<char, THREADS_PER_TILE, ITEMS_PER_THREAD, cub::BLOCK_LOAD_VECTORIZE>;
-  using OffsetScan         = cub::BlockScan<uint64_t, THREADS_PER_TILE>;
-  using OffsetScanCallback = cudf::io::text::detail::scan_tile_state_callback<uint64_t>;
+  using OffsetScan         = cub::BlockScan<int64_t, THREADS_PER_TILE>;
+  using OffsetScanCallback = cudf::io::text::detail::scan_tile_state_callback<int64_t>;
 
   __shared__ union {
     typename InputLoad::TempStorage input_load;
@@ -173,7 +173,7 @@ __global__ void multibyte_split_kernel(
 
   // STEP 3: Flag matches
 
-  uint64_t thread_offsets[ITEMS_PER_THREAD];
+  int64_t thread_offsets[ITEMS_PER_THREAD];
 
   for (int32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     thread_offsets[i] = i < thread_input_size and trie.is_match(thread_states[i]);
@@ -192,7 +192,7 @@ __global__ void multibyte_split_kernel(
   if (abs_output_delimiter_offsets.size() > 0) {
     for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
       if (trie.is_match(thread_states[i])) {
-        auto const match_end = base_tile_idx * ITEMS_PER_TILE + thread_input_offset + i + 1;
+        auto const match_end = static_cast<int64_t>(base_tile_idx) * ITEMS_PER_TILE + thread_input_offset + i + 1;
         abs_output_delimiter_offsets[thread_offsets[i]] = match_end;
       }
     }
@@ -240,7 +240,7 @@ std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_p
 int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const& source,
                                          cudf::io::text::detail::trie const& trie,
                                          scan_tile_state<multistate>& tile_multistates,
-                                         scan_tile_state<uint64_t>& tile_offsets,
+                                         scan_tile_state<int64_t>& tile_offsets,
                                          device_span<int64_t> output_buffer,
                                          rmm::cuda_stream_view stream,
                                          std::vector<rmm::cuda_stream_view> const& streams)
@@ -336,7 +336,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // best when at least 32 more than max possible concurrent tiles, due to rolling `invalid`s
   auto num_tile_states  = std::max(32, TILES_PER_CHUNK * concurrency + 32);
   auto tile_multistates = scan_tile_state<multistate>(num_tile_states, stream);
-  auto tile_offsets     = scan_tile_state<uint64_t>(num_tile_states, stream);
+  auto tile_offsets     = scan_tile_state<int64_t>(num_tile_states, stream);
 
   auto streams = get_streams(concurrency, stream_pool);
 
@@ -404,6 +404,12 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto string_chars_size = relevant_offset_last - relevant_offset_first;
   auto string_chars      = rmm::device_uvector<char>(string_chars_size, stream, mr);
 
+  std::cout << " Relevant Byte Range:   (" << byte_range.offset << ", " << byte_range.offset + byte_range.size << ")" << std::endl
+            << " Relevant Offset First: " << relevant_offset_first << std::endl  //
+            << " Relevant Offset Last:  " << relevant_offset_last << std::endl   //
+            << " Relevant Chars:        " << string_chars_size << std::endl      //
+            << std::endl;
+
   // copy relevant offsets and adjust them to be zero-based.
   thrust::transform(rmm::exec_policy(stream),
                     relevant_offsets_begin,
@@ -425,6 +431,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                relevant_bytes->data(),  //
                relevant_bytes->data() + relevant_bytes->size(),
                string_chars.begin());
+
+  std::cout << " Total Offsets: " << string_offsets_out.size() - 1 << std::endl  //
+            << " Total Chars:   " << string_chars.size() << std::endl            //
+            << std::endl;
 
   return cudf::make_strings_column(
     string_offsets_out.size() - 1, std::move(string_offsets_out), std::move(string_chars));
