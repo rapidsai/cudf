@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
@@ -54,6 +55,7 @@ namespace strings {
 std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -69,7 +71,7 @@ std::unique_ptr<table> extract(
  * @code{.pseudo}
  * Example:
  * s = ["a1 b4", "b2", "c3 a5", "b", null]
- * r = extract_all(s,"([ab])(\\d)")
+ * r = extract_all_record(s,"([ab])(\\d)")
  * r is now [ ["a", "1", "b", "4"],
  *            ["b", "2"],
  *            ["a", "5"],
@@ -84,9 +86,10 @@ std::unique_ptr<table> extract(
  * @param mr Device memory resource used to allocate any returned device memory.
  * @return Lists column containing strings extracted from the input column.
  */
-std::unique_ptr<column> extract_all(
+std::unique_ptr<column> extract_all_record(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
