@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -15,7 +15,6 @@ import pyorc as po
 import pytest
 
 import cudf
-from cudf.core.dtypes import Decimal64Dtype
 from cudf.io.orc import ORCWriter
 from cudf.testing._utils import (
     assert_eq,
@@ -392,6 +391,64 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
+def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
+    reference_file = "TestOrcFile.demo-12-zlib.orc"
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, statistics=stats_freq)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
+def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
+    reference_file = "TestOrcFile.test1.orc"
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("chunked_gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    columns = [
+        "boolean1",
+        "byte1",
+        "short1",
+        "int1",
+        "long1",
+        "float1",
+        "double1",
+    ]
+    pdf = orcfile.read(columns=columns).to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    expect = pd.concat([pdf, pdf]).reset_index(drop=True)
+
+    writer = ORCWriter(gdf_fname, statistics=stats_freq)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("compression", [None, "snappy"])
 @pytest.mark.parametrize(
     "reference_file, columns",
@@ -502,7 +559,7 @@ def test_orc_writer_sliced(tmpdir):
         "TestOrcFile.decimal.orc",
         "TestOrcFile.decimal.same.values.orc",
         "TestOrcFile.decimal.multiple.values.orc",
-        # For addional information take look at PR 7034
+        # For additional information take look at PR 7034
         "TestOrcFile.decimal.runpos.issue.orc",
     ],
 )
@@ -528,12 +585,6 @@ def test_orc_decimal_precision_fail(datadir):
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
-    # Max precision supported is 18 (Decimal64Dtype limit)
-    # and the data has the precision 19. This test should be removed
-    # once Decimal128Dtype is introduced.
-    with pytest.raises(RuntimeError):
-        cudf.read_orc(file_path)
-
     # Shouldn't cause failure if decimal column is not chosen to be read.
     pdf = orcfile.read(columns=["int"]).to_pandas()
     gdf = cudf.read_orc(file_path, columns=["int"])
@@ -541,7 +592,7 @@ def test_orc_decimal_precision_fail(datadir):
     assert_eq(pdf, gdf)
 
 
-# For addional information take look at PR 6636 and 6702
+# For additional information take look at PR 6636 and 6702
 @pytest.mark.parametrize(
     "orc_file",
     [
@@ -599,8 +650,9 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
+@pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
-def test_orc_write_statistics(tmpdir, datadir, nrows):
+def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -616,7 +668,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath)
+    gdf.to_orc(fname.strpath, statistics=stats_freq)
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
@@ -790,12 +842,16 @@ def test_empty_string_columns(data):
 
 
 @pytest.mark.parametrize("scale", [-3, 0, 3])
-def test_orc_writer_decimal(tmpdir, scale):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
+)
+def test_orc_writer_decimal(tmpdir, scale, decimal_type):
     np.random.seed(0)
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
-    expected["dec_val"] = expected["dec_val"].astype(Decimal64Dtype(7, scale))
+    expected["dec_val"] = expected["dec_val"].astype(decimal_type(7, scale))
 
     expected.to_orc(fname)
 

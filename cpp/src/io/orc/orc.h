@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,15 @@
 
 #include "orc_common.h"
 
-#include <io/comp/io_uncomp.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/comp/io_uncomp.h>
 
-#include <stddef.h>
-#include <stdint.h>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -87,7 +87,7 @@ struct Stream {
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
-  std::optional<uint32_t> column_index() const noexcept
+  [[nodiscard]] std::optional<uint32_t> column_index() const noexcept
   {
     return column_id.value_or(0) > 0 ? std::optional<uint32_t>{*column_id - 1}
                                      : std::optional<uint32_t>{};
@@ -130,6 +130,67 @@ struct StripeStatistics {
 struct Metadata {
   std::vector<StripeStatistics> stripeStats;
 };
+
+int inline constexpr encode_field_number(int field_number, ProtofType field_type) noexcept
+{
+  return (field_number * 8) + static_cast<int>(field_type);
+}
+
+namespace {
+template <typename base_t,
+          typename std::enable_if_t<!std::is_arithmetic<base_t>::value and
+                                    !std::is_enum<base_t>::value>* = nullptr>
+int static constexpr encode_field_number_base(int field_number) noexcept
+{
+  return encode_field_number(field_number, ProtofType::FIXEDLEN);
+}
+
+template <typename base_t,
+          typename std::enable_if_t<std::is_integral<base_t>::value or
+                                    std::is_enum<base_t>::value>* = nullptr>
+int static constexpr encode_field_number_base(int field_number) noexcept
+{
+  return encode_field_number(field_number, ProtofType::VARINT);
+}
+
+template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, float>>* = nullptr>
+int static constexpr encode_field_number_base(int field_number) noexcept
+{
+  return encode_field_number(field_number, ProtofType::FIXED32);
+}
+
+template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, double>>* = nullptr>
+int static constexpr encode_field_number_base(int field_number) noexcept
+{
+  return encode_field_number(field_number, ProtofType::FIXED64);
+}
+};  // namespace
+
+template <
+  typename T,
+  typename std::enable_if_t<!std::is_class<T>::value or std::is_same_v<T, std::string>>* = nullptr>
+int constexpr encode_field_number(int field_number) noexcept
+{
+  return encode_field_number_base<T>(field_number);
+}
+
+// containters change the field number encoding
+template <
+  typename T,
+  typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value>* = nullptr>
+int constexpr encode_field_number(int field_number) noexcept
+{
+  return encode_field_number_base<T>(field_number);
+}
+
+// optional fields don't change the field number encoding
+template <typename T,
+          typename std::enable_if_t<
+            std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
+int constexpr encode_field_number(int field_number) noexcept
+{
+  return encode_field_number_base<typename T::value_type>(field_number);
+}
 
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
@@ -180,60 +241,6 @@ class ProtobufReader {
 
   template <typename T, typename... Operator>
   void function_builder(T& s, size_t maxlen, std::tuple<Operator...>& op);
-
-  template <typename base_t,
-            typename std::enable_if_t<!std::is_arithmetic<base_t>::value and
-                                      !std::is_enum<base_t>::value>* = nullptr>
-  int static constexpr encode_field_number_base(int field_number) noexcept
-  {
-    return (field_number * 8) + PB_TYPE_FIXEDLEN;
-  }
-
-  template <typename base_t,
-            typename std::enable_if_t<std::is_integral<base_t>::value or
-                                      std::is_enum<base_t>::value>* = nullptr>
-  int static constexpr encode_field_number_base(int field_number) noexcept
-  {
-    return (field_number * 8) + PB_TYPE_VARINT;
-  }
-
-  template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, float>>* = nullptr>
-  int static constexpr encode_field_number_base(int field_number) noexcept
-  {
-    return (field_number * 8) + PB_TYPE_FIXED32;
-  }
-
-  template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, double>>* = nullptr>
-  int static constexpr encode_field_number_base(int field_number) noexcept
-  {
-    return (field_number * 8) + PB_TYPE_FIXED64;
-  }
-
-  template <typename T,
-            typename std::enable_if_t<!std::is_class<T>::value or std::is_same_v<T, std::string>>* =
-              nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
-  {
-    return encode_field_number_base<T>(field_number);
-  }
-
-  // containters change the field number encoding
-  template <typename T,
-            typename std::enable_if_t<
-              std::is_same<T, std::vector<typename T::value_type>>::value>* = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
-  {
-    return encode_field_number_base<T>(field_number);
-  }
-
-  // optional fields don't change the field number encoding
-  template <typename T,
-            typename std::enable_if_t<
-              std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
-  int static constexpr encode_field_number(int field_number) noexcept
-  {
-    return encode_field_number_base<typename T::value_type>(field_number);
-  }
 
   uint32_t read_field_size(const uint8_t* end);
 
@@ -470,16 +477,28 @@ class ProtobufWriter {
  public:
   ProtobufWriter() { m_buf = nullptr; }
   ProtobufWriter(std::vector<uint8_t>* output) { m_buf = output; }
-  void putb(uint8_t v) { m_buf->push_back(v); }
+  uint32_t put_byte(uint8_t v)
+  {
+    m_buf->push_back(v);
+    return 1;
+  }
+  template <typename T>
+  uint32_t put_bytes(host_span<T const> values)
+  {
+    static_assert(sizeof(T) == 1);
+    m_buf->reserve(m_buf->size() + values.size());
+    m_buf->insert(m_buf->end(), values.begin(), values.end());
+    return values.size();
+  }
   uint32_t put_uint(uint64_t v)
   {
     int l = 1;
     while (v > 0x7f) {
-      putb(static_cast<uint8_t>(v | 0x80));
+      put_byte(static_cast<uint8_t>(v | 0x80));
       v >>= 7;
       l++;
     }
-    putb(static_cast<uint8_t>(v));
+    put_byte(static_cast<uint8_t>(v));
     return l;
   }
   uint32_t put_int(int64_t v)
@@ -493,7 +512,8 @@ class ProtobufWriter {
                            int32_t data_ofs,
                            int32_t data2_blk,
                            int32_t data2_ofs,
-                           TypeKind kind);
+                           TypeKind kind,
+                           ColStatsBlob const* stats);
 
  public:
   size_t write(const PostScript&);
@@ -520,14 +540,14 @@ class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
   const uint8_t* Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen);
-  uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
-  uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
+  [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
+  [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
     return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio
                                                          : m_blockSize;
   }
-  CompressionKind GetKind() const { return m_kind; }
-  uint32_t GetBlockSize() const { return m_blockSize; }
+  [[nodiscard]] CompressionKind GetKind() const { return m_kind; }
+  [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
 
  protected:
   CompressionKind const m_kind;
@@ -583,16 +603,16 @@ class metadata {
  public:
   explicit metadata(datasource* const src);
 
-  size_t get_total_rows() const { return ff.numberOfRows; }
-  int get_num_stripes() const { return ff.stripes.size(); }
-  int get_num_columns() const { return ff.types.size(); }
+  [[nodiscard]] size_t get_total_rows() const { return ff.numberOfRows; }
+  [[nodiscard]] int get_num_stripes() const { return ff.stripes.size(); }
+  [[nodiscard]] int get_num_columns() const { return ff.types.size(); }
   /**
    * @brief Returns the name of the column with the given ID.
    *
    * Name might not be unique in the ORC file, since columns with different parents are allowed to
    * have the same names.
    */
-  std::string const& column_name(size_type column_id) const
+  [[nodiscard]] std::string const& column_name(size_type column_id) const
   {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_names[column_id];
@@ -603,22 +623,25 @@ class metadata {
    *
    * Each column in the ORC file has a unique path.
    */
-  std::string const& column_path(size_type column_id) const
+  [[nodiscard]] std::string const& column_path(size_type column_id) const
   {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_paths[column_id];
   }
-  int get_row_index_stride() const { return ff.rowIndexStride; }
+  [[nodiscard]] int get_row_index_stride() const { return ff.rowIndexStride; }
 
   /**
    * @brief Returns the ID of the parent column of the given column.
    */
-  size_type parent_id(size_type column_id) const { return parents.at(column_id).value().id; }
+  [[nodiscard]] size_type parent_id(size_type column_id) const
+  {
+    return parents.at(column_id).value().id;
+  }
 
   /**
    * @brief Returns the index the given column has in its parent's children list.
    */
-  size_type field_index(size_type column_id) const
+  [[nodiscard]] size_type field_index(size_type column_id) const
   {
     return parents.at(column_id).value().field_idx;
   }
@@ -626,7 +649,7 @@ class metadata {
   /**
    * @brief Returns whether the given column has a parent.
    */
-  size_type column_has_parent(size_type column_id) const
+  [[nodiscard]] size_type column_has_parent(size_type column_id) const
   {
     return parents.at(column_id).has_value();
   }
@@ -673,7 +696,7 @@ struct orc_column_device_view : public column_device_view {
 struct rowgroup_rows {
   size_type begin;
   size_type end;
-  constexpr auto size() const noexcept { return end - begin; }
+  [[nodiscard]] constexpr auto size() const noexcept { return end - begin; }
 };
 
 }  // namespace orc

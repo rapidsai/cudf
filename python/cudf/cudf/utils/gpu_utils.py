@@ -15,10 +15,10 @@ def validate_setup():
 
     import warnings
 
+    from cuda.cudart import cudaDeviceAttr, cudaError_t
+
     from rmm._cuda.gpu import (
         CUDARuntimeError,
-        cudaDeviceAttr,
-        cudaError,
         deviceGetName,
         driverGetVersion,
         getDeviceAttribute,
@@ -30,30 +30,30 @@ def validate_setup():
         try:
             # CUDA 10.2+ symbols
             return [
-                cudaError.cudaErrorDeviceUninitialized,
-                cudaError.cudaErrorTimeout,
+                cudaError_t.cudaErrorDeviceUninitialized,
+                cudaError_t.cudaErrorTimeout,
             ]
         except AttributeError:
             # CUDA 10.1 symbols
-            return [cudaError.cudaErrorDeviceUninitilialized]
+            return [cudaError_t.cudaErrorDeviceUninitilialized]
 
     notify_caller_errors = {
-        cudaError.cudaErrorInitializationError,
-        cudaError.cudaErrorInsufficientDriver,
-        cudaError.cudaErrorInvalidDeviceFunction,
-        cudaError.cudaErrorInvalidDevice,
-        cudaError.cudaErrorStartupFailure,
-        cudaError.cudaErrorInvalidKernelImage,
-        cudaError.cudaErrorAlreadyAcquired,
-        cudaError.cudaErrorOperatingSystem,
-        cudaError.cudaErrorNotPermitted,
-        cudaError.cudaErrorNotSupported,
-        cudaError.cudaErrorSystemNotReady,
-        cudaError.cudaErrorSystemDriverMismatch,
-        cudaError.cudaErrorCompatNotSupportedOnDevice,
+        cudaError_t.cudaErrorInitializationError,
+        cudaError_t.cudaErrorInsufficientDriver,
+        cudaError_t.cudaErrorInvalidDeviceFunction,
+        cudaError_t.cudaErrorInvalidDevice,
+        cudaError_t.cudaErrorStartupFailure,
+        cudaError_t.cudaErrorInvalidKernelImage,
+        cudaError_t.cudaErrorAlreadyAcquired,
+        cudaError_t.cudaErrorOperatingSystem,
+        cudaError_t.cudaErrorNotPermitted,
+        cudaError_t.cudaErrorNotSupported,
+        cudaError_t.cudaErrorSystemNotReady,
+        cudaError_t.cudaErrorSystemDriverMismatch,
+        cudaError_t.cudaErrorCompatNotSupportedOnDevice,
         *_try_get_old_or_new_symbols(),
-        cudaError.cudaErrorUnknown,
-        cudaError.cudaErrorApiFailureBase,
+        cudaError_t.cudaErrorUnknown,
+        cudaError_t.cudaErrorApiFailureBase,
     }
 
     try:
@@ -68,8 +68,6 @@ def validate_setup():
         # Cupy throws RunTimeException to get GPU count,
         # hence obtaining GPU count by in-house cpp api above
 
-        # 75 - Indicates to get "cudaDevAttrComputeCapabilityMajor" attribute
-        # 0 - Get GPU 0
         major_version = getDeviceAttribute(
             cudaDeviceAttr.cudaDevAttrComputeCapabilityMajor, 0
         )
@@ -143,7 +141,7 @@ def validate_setup():
             cuda_driver_supported_rt_version >= 11000
             and cuda_runtime_version >= 11000
         ):
-            # With cuda enhanced compatibitlity any code compiled
+            # With cuda enhanced compatibility any code compiled
             # with 11.x version of cuda can now run on any
             # driver >= 450.80.02. 11000 is the minimum cuda
             # version 450.80.02 supports.

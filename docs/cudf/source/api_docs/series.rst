@@ -118,6 +118,7 @@ Computations / descriptive stats
    Series.abs
    Series.all
    Series.any
+   Series.autocorr
    Series.ceil
    Series.clip
    Series.corr
@@ -161,6 +162,8 @@ Reindexing / selection / label manipulation
 .. autosummary::
    :toctree: api/
 
+   Series.add_prefix
+   Series.add_suffix
    Series.drop
    Series.drop_duplicates
    Series.equals
@@ -206,6 +209,7 @@ Reshaping, sorting
    Series.scatter_by_map
    Series.searchsorted
    Series.repeat
+   Series.transpose
 
 Combining / comparing / joining / merging / encoding
 ----------------------------------------------------
@@ -300,6 +304,9 @@ Datetime methods
 
    strftime
    isocalendar
+   ceil
+   floor
+   round
 
 
 Timedelta properties
@@ -415,6 +422,4 @@ Serialization / IO / conversion
    Series.from_categorical
    Series.from_masked_array
    Series.from_pandas
-   Series.hash_encode
    Series.hash_values
-   

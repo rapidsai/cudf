@@ -53,8 +53,8 @@ namespace detail {
  * @endcode
  */
 struct list_gatherer {
-  typedef size_type argument_type;
-  typedef size_type result_type;
+  using argument_type = size_type;
+  using result_type   = size_type;
 
   size_t offset_count;
   size_type const* base_offsets;
@@ -176,7 +176,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                              std::move(child_gd.offsets),
                              std::move(child),
                              null_count,
-                             std::move(null_mask));
+                             std::move(null_mask),
+                             stream,
+                             mr);
   }
 
   // it's a leaf.  do a regular gather
@@ -187,7 +189,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            std::move(child_gd.offsets),
                            std::move(child),
                            null_count,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

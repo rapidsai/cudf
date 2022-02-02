@@ -28,20 +28,19 @@ def transpose(source):
         return source
 
     cats = None
-    dtype = source._columns[0].dtype
+    columns = source._columns
+    dtype = columns[0].dtype
 
     if is_categorical_dtype(dtype):
-        if any(not is_categorical_dtype(c.dtype) for c in source._columns):
+        if any(not is_categorical_dtype(c.dtype) for c in columns):
             raise ValueError('Columns must all have the same dtype')
-        cats = list(c.categories for c in source._columns)
+        cats = list(c.categories for c in columns)
         cats = cudf.core.column.concat_columns(cats).unique()
         source = cudf.core.frame.Frame(index=source._index, data=[
             (name, col._set_categories(cats, is_unique=True).codes)
             for name, col in source._data.items()
         ])
-    elif dtype.kind in 'OU':
-        raise NotImplementedError('Cannot transpose string columns')
-    elif any(c.dtype != dtype for c in source._columns):
+    elif any(c.dtype != dtype for c in columns):
         raise ValueError('Columns must all have the same dtype')
 
     cdef pair[unique_ptr[column], table_view] c_result

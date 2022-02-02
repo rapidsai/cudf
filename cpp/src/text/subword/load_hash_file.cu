@@ -28,8 +28,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <stdint.h>
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <vector>

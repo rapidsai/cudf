@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -316,7 +316,7 @@ def read_orc(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source
+                passed_filesystem=None, path=source, **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
@@ -395,7 +395,7 @@ def to_orc(
     df,
     fname,
     compression=None,
-    enable_statistics=True,
+    statistics="ROWGROUP",
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,
@@ -431,7 +431,7 @@ def to_orc(
                 df,
                 file_obj,
                 compression,
-                enable_statistics,
+                statistics,
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
@@ -441,7 +441,7 @@ def to_orc(
             df,
             path_or_buf,
             compression,
-            enable_statistics,
+            statistics,
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,

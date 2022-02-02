@@ -161,13 +161,13 @@ struct trie {
   /**
    * @brief Gets the number of nodes contained in this trie.
    */
-  cudf::size_type size() const { return _nodes.size(); }
+  [[nodiscard]] cudf::size_type size() const { return _nodes.size(); }
 
   /**
    * @brief A pessimistic count of duplicate tokens in the trie. Used to determine the maximum
    * possible stack size required to compute matches of this trie in parallel.
    */
-  cudf::size_type max_duplicate_tokens() const { return _max_duplicate_tokens; }
+  [[nodiscard]] cudf::size_type max_duplicate_tokens() const { return _max_duplicate_tokens; }
 
   /**
    * @brief Create a trie which represents the given pattern.
@@ -255,7 +255,7 @@ struct trie {
                 cudf::detail::make_device_uvector_sync(trie_nodes, stream, mr)};
   }
 
-  trie_device_view view() const { return trie_device_view{_nodes}; }
+  [[nodiscard]] trie_device_view view() const { return trie_device_view{_nodes}; }
 };
 
 }  // namespace detail

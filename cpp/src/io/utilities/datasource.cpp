@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include "file_io_utilities.hpp"
+
 #include <cudf/io/datasource.hpp>
+#include <cudf/utilities/error.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-#include <cudf/utilities/error.hpp>
-#include "file_io_utilities.hpp"
 
 namespace cudf {
 namespace io {
@@ -39,9 +40,9 @@ class file_source : public datasource {
 
   virtual ~file_source() = default;
 
-  bool supports_device_read() const override { return _cufile_in != nullptr; }
+  [[nodiscard]] bool supports_device_read() const override { return _cufile_in != nullptr; }
 
-  bool is_device_read_preferred(size_t size) const override
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
     return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
   }
@@ -78,7 +79,7 @@ class file_source : public datasource {
     return _cufile_in->read_async(offset, read_size, dst, stream);
   }
 
-  size_t size() const override { return _file.size(); }
+  [[nodiscard]] size_t size() const override { return _file.size(); }
 
  protected:
   detail::file_wrapper _file;
@@ -101,7 +102,7 @@ class memory_mapped_source : public file_source {
     if (_file.size() != 0) map(_file.desc(), offset, size);
   }
 
-  virtual ~memory_mapped_source()
+  ~memory_mapped_source() override
   {
     if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
   }
@@ -209,7 +210,10 @@ class user_datasource_wrapper : public datasource {
     return source->host_read(offset, size);
   }
 
-  bool supports_device_read() const override { return source->supports_device_read(); }
+  [[nodiscard]] bool supports_device_read() const override
+  {
+    return source->supports_device_read();
+  }
 
   size_t device_read(size_t offset,
                      size_t size,
@@ -226,7 +230,7 @@ class user_datasource_wrapper : public datasource {
     return source->device_read(offset, size, stream);
   }
 
-  size_t size() const override { return source->size(); }
+  [[nodiscard]] size_t size() const override { return source->size(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
@@ -239,7 +243,7 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
                                                size_t size)
 {
 #ifdef CUFILE_FOUND
-  if (detail::cufile_config::instance()->is_required()) {
+  if (detail::cufile_integration::is_always_enabled()) {
     // avoid mmap as GDS is expected to be used for most reads
     return std::make_unique<direct_read_source>(filepath.c_str());
   }

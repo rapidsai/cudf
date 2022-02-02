@@ -48,8 +48,8 @@ constexpr uint32_t rowofs_block_bytes = rowofs_block_dim * 32;  // 16KB/threadbl
  * Format: row_count * 4 + id, where `row_count` is the number of rows
  * in a character block, and `id` is the row parser state at the end of the block.
  */
-typedef uint32_t rowctx32_t;
-typedef uint64_t rowctx64_t;
+using rowctx32_t = uint32_t;
+using rowctx64_t = uint64_t;
 
 /**
  * Packed row context format
@@ -61,7 +61,7 @@ typedef uint64_t rowctx64_t;
  * always zero (EOF input state implies a zero row count) and therefore
  * stored as 64-bit.
  */
-typedef uint64_t packed_rowctx_t;
+using packed_rowctx_t = uint64_t;
 
 /**
  * @brief return a row context from a {count, id} pair
@@ -116,7 +116,7 @@ inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx
 inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
                                                          packed_rowctx_t packed_ctx)
 {
-  uint32_t ctxid = static_cast<uint32_t>(sel_ctx & 3);
+  auto ctxid     = static_cast<uint32_t>(sel_ctx & 3);
   rowctx32_t ctx = get_row_context(packed_ctx, ctxid);
   return (sel_ctx & ~3) + ctx;
 }

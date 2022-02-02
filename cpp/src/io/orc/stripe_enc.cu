@@ -414,7 +414,7 @@ static __device__ uint32_t IntegerRLE(
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
         block_vmin = static_cast<uint64_t>(vmin);
-        if (sizeof(T) > 4) {
+        if constexpr (sizeof(T) > 4) {
           vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
           vrange_mode2 = vmax - vmin;
           mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
@@ -660,7 +660,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
     auto const mask_byte = get_mask_byte(column.null_mask(), column.offset());
     auto dst_offset      = offset + s->nnz;
     auto vbuf_bit_idx    = [](int row) {
-      // valid_buf is a circular buffer with validitiy of 8 rows in each element
+      // valid_buf is a circular buffer with validity of 8 rows in each element
       return row % (encode_block_size * 8);
     };
     if (dst_offset % 8 == 0 and pd_set_cnt == 8) {
@@ -696,7 +696,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
         ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, s->present_out / 8, nbytes_out, flush, t) * 8;
 
       if (!t) {
-        // Number of rows enocoded so far
+        // Number of rows encoded so far
         s->present_out += nrows_encoded;
         s->numvals -= min(s->numvals, nrows_encoded);
       }
@@ -705,10 +705,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
   }
 
   // reset shared state
-  if (t == 0) {
-    s->nnz     = 0;
-    s->numvals = 0;
-  }
+  if (t == 0) { s->nnz = 0; }
 }
 
 /**
@@ -1043,7 +1040,7 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char* ptr = 0;
+      const char* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
         auto string_val = string_column->element<string_view>(string_idx);

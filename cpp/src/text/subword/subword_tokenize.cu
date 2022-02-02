@@ -250,28 +250,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 }  // namespace detail
 
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
-                                  std::string const& filename_hashed_vocabulary,
-                                  uint32_t max_sequence_length,
-                                  uint32_t stride,
-                                  bool do_lower_case,
-                                  bool do_truncate,
-                                  uint32_t max_rows_tensor,
-                                  rmm::mr::device_memory_resource* mr)
-{
-  auto vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
-  CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(strings,
-                                  *vocab_table,
-                                  max_sequence_length,
-                                  stride,
-                                  do_lower_case,
-                                  do_truncate,
-                                  max_rows_tensor,
-                                  rmm::cuda_stream_default,
-                                  mr);
-}
-
-tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   hashed_vocabulary const& vocabulary_table,
                                   uint32_t max_sequence_length,
                                   uint32_t stride,

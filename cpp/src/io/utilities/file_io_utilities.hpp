@@ -19,8 +19,8 @@
 #ifdef CUFILE_FOUND
 #include "thread_pool.hpp"
 
-#include <cufile.h>
 #include <cudf_test/file_utilities.hpp>
+#include <cufile.h>
 #endif
 
 #include <rmm/cuda_stream_view.hpp>
@@ -45,8 +45,8 @@ class file_wrapper {
   explicit file_wrapper(std::string const& filepath, int flags);
   explicit file_wrapper(std::string const& filepath, int flags, mode_t mode);
   ~file_wrapper();
-  auto size() const { return _size; }
-  auto desc() const { return fd; }
+  [[nodiscard]] auto size() const { return _size; }
+  [[nodiscard]] auto desc() const { return fd; }
 };
 
 /**
@@ -163,32 +163,6 @@ class cufile_output : public cufile_io_base {
 class cufile_shim;
 
 /**
- * @brief Class that manages cuFile configuration.
- */
-class cufile_config {
-  std::string const default_policy    = "OFF";
-  std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-
-  std::string const policy = default_policy;
-  temp_directory tmp_config_dir{"cudf_cufile_config"};
-
-  cufile_config();
-
- public:
-  /**
-   * @brief Returns true when cuFile use is enabled.
-   */
-  bool is_enabled() const { return policy == "ALWAYS" or policy == "GDS"; }
-
-  /**
-   * @brief Returns true when cuDF should not fall back to host IO.
-   */
-  bool is_required() const { return policy == "ALWAYS"; }
-
-  static cufile_config const* instance();
-};
-
-/**
  * @brief Class that provides RAII for cuFile file registration.
  */
 struct cufile_registered_file {
@@ -210,7 +184,7 @@ struct cufile_registered_file {
     register_handle();
   }
 
-  auto const& handle() const noexcept { return cf_handle; }
+  [[nodiscard]] auto const& handle() const noexcept { return cf_handle; }
 
   ~cufile_registered_file();
 

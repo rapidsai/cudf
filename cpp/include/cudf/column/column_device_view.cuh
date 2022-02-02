@@ -44,23 +44,30 @@
 namespace cudf {
 
 /**
- * @brief Policy for what assumptions the optional iterator has about null values
+ * @brief Indicates the presence of nulls at compile-time or runtime.
  *
- * - `YES` means that the column supports nulls and has null values, therefore
- *    the optional might not contain a value
+ * If used at compile-time, this indicator can tell the optimizer
+ * to include or exclude any null-checking clauses.
  *
- * - `NO` means that the column has no null values, therefore the optional will
- *    always have a value
- *
- * - `DYNAMIC` defers the assumption of nullability to runtime with the users stating
- *    on construction of the iterator if column has nulls.
  */
-struct contains_nulls {
-  struct YES {
+struct nullate {
+  struct YES : std::bool_constant<true> {
   };
-  struct NO {
+  struct NO : std::bool_constant<false> {
   };
   struct DYNAMIC {
+    DYNAMIC() = delete;
+    /**
+     * @brief Create a runtime nullate object.
+     *
+     * @see cudf::column_device_view::optional_begin for example usage
+     *
+     * @param b True if nulls are expected in the operation in which this
+     *          object is applied.
+     */
+    constexpr explicit DYNAMIC(bool b) noexcept : value{b} {}
+    constexpr operator bool() const noexcept { return value; }
+    bool value;  ///< True if nulls are expected
   };
 };
 
@@ -132,12 +139,12 @@ class alignas(16) column_device_view_base {
   /**
    * @brief Returns the number of elements in the column.
    */
-  __host__ __device__ size_type size() const noexcept { return _size; }
+  [[nodiscard]] __host__ __device__ size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the element type
    */
-  __host__ __device__ data_type type() const noexcept { return _type; }
+  [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates whether the column can contain null elements, i.e., if it
@@ -148,7 +155,7 @@ class alignas(16) column_device_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
+  [[nodiscard]] __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -157,13 +164,16 @@ class alignas(16) column_device_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  __host__ __device__ bitmask_type const* null_mask() const noexcept { return _null_mask; }
+  [[nodiscard]] __host__ __device__ bitmask_type const* null_mask() const noexcept
+  {
+    return _null_mask;
+  }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
    */
-  __host__ __device__ size_type offset() const noexcept { return _offset; }
+  [[nodiscard]] __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**
    * @brief Returns whether the specified element holds a valid value (i.e., not
@@ -179,7 +189,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid(size_type element_index) const noexcept
   {
     return not nullable() or is_valid_nocheck(element_index);
   }
@@ -196,7 +206,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid_nocheck(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_type element_index) const noexcept
   {
     return bit_is_set(_null_mask, offset() + element_index);
   }
@@ -214,7 +224,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  __device__ bool is_null(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null(size_type element_index) const noexcept
   {
     return not is_valid(element_index);
   }
@@ -230,7 +240,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  __device__ bool is_null_nocheck(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null_nocheck(size_type element_index) const noexcept
   {
     return not is_valid_nocheck(element_index);
   }
@@ -244,7 +254,7 @@ class alignas(16) column_device_view_base {
    * @param word_index The index of the word to get
    * @return bitmask word for the given word_index
    */
-  __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
+  [[nodiscard]] __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
   {
     return null_mask()[word_index];
   }
@@ -282,7 +292,7 @@ class alignas(16) column_device_view_base {
 // Forward declaration
 template <typename T>
 struct value_accessor;
-template <typename T, typename contains_nulls_mode>
+template <typename T, typename Nullate>
 struct optional_accessor;
 template <typename T, bool has_nulls>
 struct pair_accessor;
@@ -469,7 +479,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_iterator<T> begin() const
+  [[nodiscard]] const_iterator<T> begin() const
   {
     return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
   }
@@ -487,17 +497,17 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_iterator<T> end() const
+  [[nodiscard]] const_iterator<T> end() const
   {
     return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
 
   /**
-   * @brief optional iterator for navigating this column
+   * @brief Optional iterator for navigating this column
    */
-  template <typename T, typename contains_nulls_mode>
+  template <typename T, typename Nullate>
   using const_optional_iterator =
-    thrust::transform_iterator<detail::optional_accessor<T, contains_nulls_mode>, count_it>;
+    thrust::transform_iterator<detail::optional_accessor<T, Nullate>, count_it>;
 
   /**
    * @brief Pair iterator for navigating this column
@@ -520,117 +530,57 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * Dereferencing the returned iterator returns a `thrust::optional<T>`.
    *
-   * When the element of an iterator contextually converted to bool, the conversion returns true
+   * The element of this iterator contextually converts to bool. The conversion returns true
    * if the object contains a value and false if it does not contain a value.
    *
-   * optional_begin with mode `DYNAMIC` defers the assumption of nullability to
-   * runtime, with the user stating on construction of the iterator if column has nulls.
-   * `DYNAMIC` mode is nice when an algorithm is going to execute on multiple
-   * iterators and you don't want to compile all the combinations of iterator types
+   * Calling this method with `nullate::DYNAMIC` defers the assumption of nullability to
+   * runtime with the caller indicating if the column has nulls. The `nullate::DYNAMIC` is
+   * useful when an algorithm is going to execute on multiple iterators and all the combinations of
+   * iterator types are not required at compile time.
    *
-   * Example:
-   *
-   * \code{.cpp}
+   * @code{.cpp}
    * template<typename T>
    * void some_function(cudf::column_view<T> const& col_view){
    *    auto d_col = cudf::column_device_view::create(col_view);
    *    // Create a `DYNAMIC` optional iterator
-   *    auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{},
-   *                                                      col_view.has_nulls());
+   *    auto optional_iterator =
+   *       d_col->optional_begin<T>(cudf::nullate::DYNAMIC{col_view.has_nulls()});
    * }
-   * \endcode
+   * @endcode
    *
-   * This function does not participate in overload resolution if
-   * `column_device_view::has_element_accessor<T>()` is false.
+   * Calling this method with `nullate::YES` means that the column supports nulls and
+   * the optional returned might not contain a value.
    *
-   * @throws cudf::logic_error if the column is not nullable, and `DYNAMIC` mode used and
-   *         the user has stated nulls exist
-   * @throws cudf::logic_error if column datatype and Element type mismatch.
-   */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_begin(contains_nulls::DYNAMIC, bool has_nulls) const
-  {
-    return const_optional_iterator<T, contains_nulls::DYNAMIC>{
-      count_it{0}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this, has_nulls}};
-  }
-
-  /**
-   * @brief Return an optional iterator to the first element of the column.
+   * Calling this method with `nullate::NO` means that the column has no null values
+   * and the optional returned will always contain a value.
    *
-   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
-   *
-   * When the element of an iterator contextually converted to bool, the conversion returns true
-   * if the object contains a value and false if it does not contain a value.
-   *
-   * optional_begin with mode `YES` means that the column supports nulls and
-   * potentially has null values, therefore the optional might not contain a value
-   *
-   * Example:
-   *
-   * \code{.cpp}
+   * @code{.cpp}
    * template<typename T, bool has_nulls>
    * void some_function(cudf::column_view<T> const& col_view){
    *    auto d_col = cudf::column_device_view::create(col_view);
    *    if constexpr(has_nulls) {
-   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::nullate::YES{});
    *      //use optional_iterator
    *    } else {
-   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::NO{});
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::nullate::NO{});
    *      //use optional_iterator
    *    }
    * }
-   * \endcode
+   * @endcode
    *
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
    *
-   * @throws cudf::logic_error if the column is not nullable, and `YES` mode used
+   * @throws cudf::logic_error if the column is not nullable and `has_nulls` evaluates to true.
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_begin(contains_nulls::YES) const
+  template <typename T,
+            typename Nullate,
+            CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  auto optional_begin(Nullate has_nulls) const
   {
-    return const_optional_iterator<T, contains_nulls::YES>{
-      count_it{0}, detail::optional_accessor<T, contains_nulls::YES>{*this}};
-  }
-
-  /**
-   * @brief Return an optional iterator to the first element of the column.
-   *
-   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
-   *
-   * When the element of an iterator contextually converted to bool, the conversion returns true
-   * if the object contains a value and false if it does not contain a value.
-   *
-   * optional_begin with mode `NO` means that the column has no null values,
-   * therefore the optional will always contain a value.
-   *
-   * Example:
-   *
-   * \code{.cpp}
-   * template<typename T, bool has_nulls>
-   * void some_function(cudf::column_view<T> const& col_view){
-   *    auto d_col = cudf::column_device_view::create(col_view);
-   *    if constexpr(has_nulls) {
-   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
-   *      //use optional_iterator
-   *    } else {
-   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::NO{});
-   *      //use optional_iterator
-   *    }
-   * }
-   * \endcode
-   *
-   * This function does not participate in overload resolution if
-   * `column_device_view::has_element_accessor<T>()` is false.
-   *
-   * @throws cudf::logic_error if column datatype and Element type mismatch.
-   */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_begin(contains_nulls::NO) const
-  {
-    return const_optional_iterator<T, contains_nulls::NO>{
-      count_it{0}, detail::optional_accessor<T, contains_nulls::NO>{*this}};
+    return const_optional_iterator<T, Nullate>{
+      count_it{0}, detail::optional_accessor<T, Nullate>{*this, has_nulls}};
   }
 
   /**
@@ -655,7 +605,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_iterator<T, has_nulls> pair_begin() const
+  [[nodiscard]] const_pair_iterator<T, has_nulls> pair_begin() const
   {
     return const_pair_iterator<T, has_nulls>{count_it{0},
                                              detail::pair_accessor<T, has_nulls>{*this}};
@@ -685,7 +635,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
+  [[nodiscard]] const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
   {
     return const_pair_rep_iterator<T, has_nulls>{count_it{0},
                                                  detail::pair_rep_accessor<T, has_nulls>{*this}};
@@ -695,57 +645,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @brief Return an optional iterator to the element following the last element of
    * the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
+   * The returned iterator represents a `thrust::optional<T>` element.
    *
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
    *
-   * @throws cudf::logic_error if the column is not nullable, and `DYNAMIC` mode used and
-   *         the user has stated nulls exist
+   * @throws cudf::logic_error if the column is not nullable and `has_nulls` is true
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_end(contains_nulls::DYNAMIC, bool has_nulls) const
+  template <typename T,
+            typename Nullate,
+            CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  auto optional_end(Nullate has_nulls) const
   {
-    return const_optional_iterator<T, contains_nulls::DYNAMIC>{
-      count_it{size()}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this, has_nulls}};
-  }
-
-  /**
-   * @brief Return an optional iterator to the element following the last element of
-   * the column.
-   *
-   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
-   *
-   * This function does not participate in overload resolution if
-   * `column_device_view::has_element_accessor<T>()` is false.
-   *
-   * @throws cudf::logic_error if the column is not nullable, and `YES` mode used
-   * @throws cudf::logic_error if column datatype and Element type mismatch.
-   */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_end(contains_nulls::YES) const
-  {
-    return const_optional_iterator<T, contains_nulls::YES>{
-      count_it{size()}, detail::optional_accessor<T, contains_nulls::YES>{*this}};
-  }
-
-  /**
-   * @brief Return an optional iterator to the element following the last element of
-   * the column.
-   *
-   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
-   *
-   * This function does not participate in overload resolution if
-   * `column_device_view::has_element_accessor<T>()` is false.
-   *
-   * @throws cudf::logic_error if column datatype and Element type mismatch.
-   */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_end(contains_nulls::NO) const
-  {
-    return const_optional_iterator<T, contains_nulls::NO>{
-      count_it{size()}, detail::optional_accessor<T, contains_nulls::NO>{*this}};
+    return const_optional_iterator<T, Nullate>{
+      count_it{size()}, detail::optional_accessor<T, Nullate>{*this, has_nulls}};
   }
 
   /**
@@ -762,7 +676,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_iterator<T, has_nulls> pair_end() const
+  [[nodiscard]] const_pair_iterator<T, has_nulls> pair_end() const
   {
     return const_pair_iterator<T, has_nulls>{count_it{size()},
                                              detail::pair_accessor<T, has_nulls>{*this}};
@@ -782,7 +696,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
+  [[nodiscard]] const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
   {
     return const_pair_rep_iterator<T, has_nulls>{count_it{size()},
                                                  detail::pair_rep_accessor<T, has_nulls>{*this}};
@@ -832,7 +746,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  __device__ column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }
@@ -840,7 +754,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Returns a span containing the children of this column
    */
-  __device__ device_span<column_device_view const> children() const noexcept
+  [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
   {
     return device_span<column_device_view const>(d_children, _num_children);
   }
@@ -850,7 +764,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @return The number of child columns
    */
-  __host__ __device__ size_type num_child_columns() const noexcept { return _num_children; }
+  [[nodiscard]] __host__ __device__ size_type num_child_columns() const noexcept
+  {
+    return _num_children;
+  }
 
  protected:
   column_device_view* d_children{};  ///< Array of `column_device_view`
@@ -996,7 +913,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  __host__ __device__ bitmask_type* null_mask() const noexcept
+  [[nodiscard]] __host__ __device__ bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
@@ -1046,7 +963,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  __device__ mutable_column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }
@@ -1201,77 +1118,55 @@ struct value_accessor {
  * @brief optional accessor of a column
  *
  *
- * The optional_accessor always returns a thrust::optional of column[i]. The validity
- * of the optional is determined by the contains_nulls_mode template parameter
- * which has the following modes:
+ * The optional_accessor always returns a `thrust::optional` of `column[i]`. The validity
+ * of the optional is determined by the `Nullate` parameter which may be one of the following:
  *
- * - `YES` means that the column supports nulls and has null values, therefore
- *    the optional might be valid or invalid
+ * - `nullate::YES` means that the column supports nulls and the optional returned
+ *    might be valid or invalid.
  *
- * - `NO` the user has attested that the column has no null values,
+ * - `nullate::NO` means the caller attests that the column has no null values,
  *    no checks will occur and `thrust::optional{column[i]}` will be
  *    return for each `i`.
  *
- * - `DYNAMIC` defers the assumption of nullability to runtime with the users stating
- *    on construction of the iterator if column has nulls.
- *    When `with_nulls=true` the return value validity will be determined if column[i]
- *    is not null.
- *    When `with_nulls=false` the return value will always be valid
+ * - `nullate::DYNAMIC` defers the assumption of nullability to runtime and the caller
+ *    specifies if the column has nulls at runtime.
+ *    For `DYNAMIC{true}` the return value will be `thrust::optional{column[i]}` if
+ *      element `i` is not null and `thrust::optional{}` if element `i` is null.
+ *    For `DYNAMIC{false}` the return value will always be `thrust::optional{column[i]}`.
  *
  * @throws cudf::logic_error if column datatype and template T type mismatch.
- * @throws cudf::logic_error if the column is not nullable, and `with_nulls=true`
- *
+ * @throws cudf::logic_error if the column is not nullable and `with_nulls` evaluates to true
  *
  * @tparam T The type of elements in the column
- * @tparam contains_nulls_mode Specifies if nulls are checked at runtime or compile time.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <typename T, typename contains_nulls_mode>
+template <typename T, typename Nullate>
 struct optional_accessor {
   column_device_view const col;  ///< column view of column in device
 
   /**
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
+   * @brief Constructor
+   *
+   * @param col Column on which to iterator over its elements.
+   * @param with_nulls Indicates if the `col` should be checked for nulls.
    */
-  optional_accessor(column_device_view const& _col) : col{_col}
-  {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
-  }
-
-  CUDA_DEVICE_CALLABLE
-  thrust::optional<T> operator()(cudf::size_type i) const
-  {
-    if constexpr (std::is_same_v<contains_nulls_mode, contains_nulls::YES>) {
-      return (col.is_valid_nocheck(i)) ? thrust::optional<T>{col.element<T>(i)}
-                                       : thrust::optional<T>{thrust::nullopt};
-    }
-    return thrust::optional<T>{col.element<T>(i)};
-  }
-};
-
-template <typename T>
-struct optional_accessor<T, contains_nulls::DYNAMIC> {
-  column_device_view const col;  ///< column view of column in device
-  bool has_nulls;
-
-  /**
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
-   * @param[in] with_nulls Indicates if @p _col has nulls
-   */
-  optional_accessor(column_device_view const& _col, bool with_nulls)
+  optional_accessor(column_device_view const& _col, Nullate with_nulls)
     : col{_col}, has_nulls{with_nulls}
   {
     CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
     if (with_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::optional<T> operator()(cudf::size_type i) const
+  __device__ inline thrust::optional<T> operator()(cudf::size_type i) const
   {
-    return (has_nulls and col.is_null_nocheck(i)) ? thrust::optional<T>{thrust::nullopt}
-                                                  : thrust::optional<T>{col.element<T>(i)};
+    if (has_nulls) {
+      return (col.is_valid_nocheck(i)) ? thrust::optional<T>{col.element<T>(i)}
+                                       : thrust::optional<T>{thrust::nullopt};
+    }
+    return thrust::optional<T>{col.element<T>(i)};
   }
+
+  Nullate has_nulls{};
 };
 
 /**
@@ -1306,8 +1201,7 @@ struct pair_accessor {
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<T, bool> operator()(cudf::size_type i) const
+  __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
@@ -1347,21 +1241,20 @@ struct pair_rep_accessor {
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
   {
     return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
 
  private:
   template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
   template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
   }

@@ -84,7 +84,7 @@ TYPED_TEST_SUITE(ColumnViewShallowTests, AllTypes);
 // Test for fixed_width, dict, string, list, struct
 // column_view, column_view = same hash.
 // column_view, make a copy = same hash.
-// new column_view from colmn = same hash
+// new column_view from column = same hash
 // column_view, copy column = diff hash
 // column_view, diff column = diff hash.
 //
@@ -163,7 +163,7 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_update_data)
     col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
     auto col_view_new = cudf::column_view{*col};
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_new));
-    col_view_new.null_count();
+    [[maybe_unused]] auto const nulls = col_view_new.null_count();
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_view_new));
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_EQ(shallow_hash(col_view_new), shallow_hash(col_view_new2));
@@ -332,7 +332,7 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_update_data)
     col->set_null_mask(cudf::create_null_mask(col->size(), cudf::mask_state::ALL_VALID));
     auto col_view_new = cudf::column_view{*col};
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
-    col_view_new.null_count();
+    [[maybe_unused]] auto const nulls = col_view_new.null_count();
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_view_new));
     auto col_view_new2 = cudf::column_view{*col};
     EXPECT_TRUE(is_shallow_equivalent(col_view_new, col_view_new2));

@@ -738,9 +738,9 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 )
 @pytest.mark.parametrize("deep", [True, False])
 def test_multiindex_copy_deep(data, deep):
-    """Test memory idendity for deep copy
+    """Test memory identity for deep copy
     Case1: Constructed from GroupBy, StringColumns
-    Case2: Constrcuted from MultiIndex, NumericColumns
+    Case2: Constructed from MultiIndex, NumericColumns
     """
     same_ref = not deep
 
@@ -768,19 +768,19 @@ def test_multiindex_copy_deep(data, deep):
         mi1 = data
         mi2 = mi1.copy(deep=deep)
 
-        # Assert ._levels idendity
+        # Assert ._levels identity
         lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
         rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
 
         assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
-        # Assert ._codes idendity
+        # Assert ._codes identity
         lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
         rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
 
         assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
-        # Assert ._data idendity
+        # Assert ._data identity
         lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
         rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
 

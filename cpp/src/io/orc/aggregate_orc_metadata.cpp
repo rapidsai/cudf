@@ -79,7 +79,7 @@ void add_nested_columns(std::map<size_type, std::vector<size_type>>& selected_co
  * @brief Adds the column with the given id to the mapping
  *
  * All nested columns and direct ancestors of column `id` are included.
- * Columns that are not on the direct path are excluded, which may result in prunning.
+ * Columns that are not on the direct path are excluded, which may result in pruning.
  */
 void add_column_to_mapping(std::map<size_type, std::vector<size_type>>& selected_columns,
                            metadata const& metadata,
@@ -171,9 +171,11 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
-      for (const size_t& stripe_idx : user_specified_stripes[src_file_idx]) {
-        CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
-                     "Invalid stripe index");
+      for (const auto& stripe_idx : user_specified_stripes[src_file_idx]) {
+        CUDF_EXPECTS(
+          stripe_idx >= 0 and stripe_idx < static_cast<decltype(stripe_idx)>(
+                                             per_file_metadata[src_file_idx].ff.stripes.size()),
+          "Invalid stripe index");
         stripe_infos.push_back(
           std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;

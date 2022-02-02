@@ -79,7 +79,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     device_views.cend(),
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
-    thrust::plus<size_t>{});
+    thrust::plus{});
   auto d_offsets         = make_device_uvector_async(offsets, stream);
   auto const output_size = offsets.back();
 
@@ -113,7 +113,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
       thrust::upper_bound(
         thrust::seq, output_offsets, output_offsets + number_of_views, mask_index) -
       output_offsets - 1;
-    bool bit_is_set = 1;
+    bool bit_is_set = true;
     if (source_view_index < number_of_views) {
       size_type const column_element_index = mask_index - output_offsets[source_view_index];
       bit_is_set = views[source_view_index].is_valid(column_element_index);

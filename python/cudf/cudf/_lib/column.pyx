@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -8,12 +8,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudfxx
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -146,8 +141,7 @@ cdef class Column:
     def nullable(self):
         return self.base_mask is not None
 
-    @property
-    def has_nulls(self):
+    def has_nulls(self, include_nan=False):
         return self.null_count != 0
 
     @property

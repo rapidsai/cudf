@@ -50,7 +50,7 @@ generate_list_offsets_and_validities(table_view const& input,
   auto const num_cols         = input.num_columns();
   auto const num_rows         = input.num_rows();
   auto const num_output_lists = num_rows * num_cols;
-  auto const table_dv_ptr     = table_device_view::create(input);
+  auto const table_dv_ptr     = table_device_view::create(input, stream);
 
   // The output offsets column.
   static_assert(sizeof(offset_type) == sizeof(int32_t));
@@ -217,7 +217,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const noexcept
   {
-    auto const table_dv_ptr = table_device_view::create(input);
+    auto const table_dv_ptr = table_device_view::create(input, stream);
     auto comp_fn            = compute_string_sizes_and_interleave_lists_fn{
       *table_dv_ptr, output_list_offsets.template begin<offset_type>(), data_has_null_mask};
 
@@ -228,8 +228,8 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
     auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
 
-    auto [null_mask, null_count] = cudf::detail::valid_if(
-      validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    auto [null_mask, null_count] =
+      cudf::detail::valid_if(validities.begin(), validities.end(), thrust::identity{}, stream, mr);
 
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
@@ -250,7 +250,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
                                      rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const num_cols     = input.num_columns();
-    auto const table_dv_ptr = table_device_view::create(input);
+    auto const table_dv_ptr = table_device_view::create(input, stream);
 
     // The output child column.
     auto output        = allocate_like(lists_column_view(*input.begin()).child(),
@@ -258,7 +258,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
                                 mask_allocation_policy::NEVER,
                                 stream,
                                 mr);
-    auto output_dv_ptr = mutable_column_device_view::create(*output);
+    auto output_dv_ptr = mutable_column_device_view::create(*output, stream);
 
     // The array of int8_t to store entry validities.
     auto validities =
@@ -306,7 +306,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+        validities.begin(), validities.end(), thrust::identity{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
     }
 
@@ -405,7 +405,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
   return make_lists_column(num_output_lists,
                            std::move(list_offsets),
                            std::move(list_entries),

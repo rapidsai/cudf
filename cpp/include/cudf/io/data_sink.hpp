@@ -70,6 +70,22 @@ class data_sink {
   static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
 
   /**
+   * @brief Creates a vector of data sinks, one per element in the input vector.
+   *
+   * @param[in] args vector of parameters
+   */
+  template <typename T>
+  static std::vector<std::unique_ptr<data_sink>> create(std::vector<T> const& args)
+  {
+    std::vector<std::unique_ptr<data_sink>> sinks;
+    sinks.reserve(args.size());
+    std::transform(args.cbegin(), args.cend(), std::back_inserter(sinks), [](auto const& arg) {
+      return data_sink::create(arg);
+    });
+    return sinks;
+  }
+
+  /**
    * @brief Base class destructor
    */
   virtual ~data_sink(){};
@@ -104,7 +120,7 @@ class data_sink {
    *
    * @return bool If this writer supports device_write() calls.
    */
-  virtual bool supports_device_write() const { return false; }
+  [[nodiscard]] virtual bool supports_device_write() const { return false; }
 
   /**
    * @brief Estimates whether a direct device write would be more optimal for the given size.
@@ -112,7 +128,10 @@ class data_sink {
    * @param size Number of bytes to write
    * @return whether the device write is expected to be more performant for the given size
    */
-  virtual bool is_device_write_preferred(size_t size) const { return supports_device_write(); }
+  [[nodiscard]] virtual bool is_device_write_preferred(size_t size) const
+  {
+    return supports_device_write();
+  }
 
   /**
    * @brief Append the buffer content to the sink from a gpu address

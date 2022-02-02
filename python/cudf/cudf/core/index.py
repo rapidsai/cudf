@@ -86,6 +86,7 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = None):
     """Construct an index of the appropriate type from some data."""
+
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:
@@ -111,6 +112,13 @@ def _index_from_data(data: MutableMapping, name: Any = None):
     else:
         index_class_type = cudf.MultiIndex
     return index_class_type._from_data(data, None, name)
+
+
+def _index_from_columns(
+    columns: List[cudf.core.column.ColumnBase], name: Any = None
+):
+    """Construct an index from ``columns``, with levels named 0, 1, 2..."""
+    return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
 
 
 class RangeIndex(BaseIndex):
@@ -623,7 +631,7 @@ class RangeIndex(BaseIndex):
                 else:
                     return result
 
-        # If all the above optimizations don't cater to the inpputs,
+        # If all the above optimizations don't cater to the inputs,
         # we materialize RangeIndex's into `Int64Index` and
         # then perform `union`.
         return Int64Index(self._values)._union(other, sort=sort)
@@ -672,6 +680,16 @@ class RangeIndex(BaseIndex):
             new_index = new_index.sort_values()
 
         return new_index
+
+    def _gather(self, gather_map, nullify=False, check_bounds=True):
+        return Int64Index._from_columns(
+            [self._values.take(gather_map, nullify, check_bounds)], [self.name]
+        )
+
+    def _apply_boolean_mask(self, boolean_mask):
+        return Int64Index._from_columns(
+            [self._values.apply_boolean_mask(boolean_mask)], [self.name]
+        )
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -769,34 +787,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         return super().deserialize(header, frames)
-
-    def drop_duplicates(self, keep="first"):
-        """
-        Return Index with duplicate values removed
-
-        Parameters
-        ----------
-        keep : {‘first’, ‘last’, False}, default ‘first’
-            * ‘first’ : Drop duplicates except for the
-                first occurrence.
-            * ‘last’ : Drop duplicates except for the
-                last occurrence.
-            *  False : Drop all duplicates.
-
-        Returns
-        -------
-        Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
-        >>> idx
-        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
-        >>> idx.drop_duplicates()
-        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
-        """  # noqa: E501
-        return super().drop_duplicates(keep=keep)
 
     def _binaryop(
         self,
@@ -1555,9 +1545,11 @@ class DatetimeIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.DatetimeIndex([1, 2, 3, 4], name="a")
-    DatetimeIndex(['1970-01-01 00:00:00.001000', '1970-01-01 00:00:00.002000',
-                   '1970-01-01 00:00:00.003000', '1970-01-01 00:00:00.004000'],
-                  dtype='datetime64[ms]', name='a')
+    DatetimeIndex(['1970-01-01 00:00:00.000000001',
+                   '1970-01-01 00:00:00.000000002',
+                   '1970-01-01 00:00:00.000000003',
+                   '1970-01-01 00:00:00.000000004'],
+                  dtype='datetime64[ns]', name='a')
     """
 
     def __init__(
@@ -1898,6 +1890,109 @@ class DatetimeIndex(GenericIndex):
     def is_boolean(self):
         return False
 
+    def ceil(self, freq):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:05:42",
+        ...     "1999-12-31 18:40:30",
+        ... ])
+        >>> gIndex.ceil("T")
+        DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.ceil(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def floor(self, freq):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:59:59",
+        ...     "1999-12-31 18:44:59",
+        ... ])
+        >>> gIndex.floor("T")
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.floor(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index containing rounded datetimes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_idx = cudf.Index([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_idx
+        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:04:58',
+                       '2001-01-01 00:05:04'],
+                      dtype='datetime64[ns]')
+        >>> dt_idx.round('H')
+        DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
+        >>> dt_idx.round('T')
+        DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.round(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -1930,14 +2025,15 @@ class TimedeltaIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.TimedeltaIndex([1132223, 2023232, 342234324, 4234324],
-    ...     dtype='timedelta64[ns]')
-    TimedeltaIndex(['00:00:00.001132', '00:00:00.002023', '00:00:00.342234',
-                    '00:00:00.004234'],
-                dtype='timedelta64[ns]')
-    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype='timedelta64[s]',
+    ...     dtype="timedelta64[ns]")
+    TimedeltaIndex(['0 days 00:00:00.001132223', '0 days 00:00:00.002023232',
+                    '0 days 00:00:00.342234324', '0 days 00:00:00.004234324'],
+                  dtype='timedelta64[ns]')
+    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype="timedelta64[s]",
     ...     name="delta-index")
-    TimedeltaIndex(['00:00:01', '00:00:02', '00:00:03', '00:00:04'],
-                dtype='timedelta64[s]', name='delta-index')
+    TimedeltaIndex(['0 days 00:00:01', '0 days 00:00:02', '0 days 00:00:03',
+                    '0 days 00:00:04'],
+                  dtype='timedelta64[s]', name='delta-index')
     """
 
     def __init__(
@@ -2066,11 +2162,11 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """  # noqa: E501
 
     def __init__(
@@ -2361,9 +2457,7 @@ class IntervalIndex(GenericIndex):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]],
-                    closed='right',
-                    dtype='interval[int64]')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
@@ -2434,7 +2528,7 @@ class StringIndex(GenericIndex):
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return self.fillna(cudf._NA_REP)
         else:
             return self
@@ -2446,7 +2540,7 @@ class StringIndex(GenericIndex):
         return True
 
 
-def as_index(arbitrary, **kwargs) -> BaseIndex:
+def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2479,7 +2573,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, ColumnBase):
         return _index_from_data({kwargs.get("name", None): arbitrary})
     elif isinstance(arbitrary, cudf.Series):
-        return as_index(arbitrary._column, **kwargs)
+        return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
     elif isinstance(arbitrary, (pd.RangeIndex, range)):
         return RangeIndex(
             start=arbitrary.start,
@@ -2488,11 +2582,14 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
             **kwargs,
         )
     elif isinstance(arbitrary, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(arbitrary)
+        return cudf.MultiIndex.from_pandas(arbitrary, nan_as_null=nan_as_null)
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
-        column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
+        column.as_column(
+            arbitrary, dtype=kwargs.get("dtype", None), nan_as_null=nan_as_null
+        ),
+        **kwargs,
     )
 
 
@@ -2542,6 +2639,10 @@ class Index(BaseIndex, metaclass=IndexMeta):
     tupleize_cols : bool (default: True)
         When True, attempt to create a MultiIndex if possible.
         tupleize_cols == False is not yet supported.
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
 
     Returns
     -------
@@ -2574,6 +2675,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
         copy=False,
         name=None,
         tupleize_cols=True,
+        nan_as_null=True,
         **kwargs,
     ):
         assert (
@@ -2584,7 +2686,14 @@ class Index(BaseIndex, metaclass=IndexMeta):
                 "tupleize_cols != True is not yet supported"
             )
 
-        return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+        return as_index(
+            data,
+            copy=copy,
+            dtype=dtype,
+            name=name,
+            nan_as_null=nan_as_null,
+            **kwargs,
+        )
 
     @classmethod
     def from_arrow(cls, obj):

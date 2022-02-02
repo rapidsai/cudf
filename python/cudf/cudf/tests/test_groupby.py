@@ -2362,4 +2362,66 @@ def test_groupby_get_group(pdf, group, name, obj):
     assert_groupby_results_equal(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        ["a", "b"],
+        pd.Series([2, 1, 1, 2, 2]),
+        pd.Series(["b", "a", "a", "b", "b"]),
+    ],
+)
+@pytest.mark.parametrize("agg", ["sum", "mean", lambda df: df.mean()])
+def test_groupby_transform_aggregation(by, agg):
+    gdf = cudf.DataFrame(
+        {"a": [2, 2, 1, 2, 1], "b": [1, 1, 1, 2, 2], "c": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+
+    expected = pdf.groupby(by).transform(agg)
+    actual = gdf.groupby(by).transform(agg)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_select_then_ffill():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2],
+            "b": [1, None, None, 2, None],
+            "c": [3, None, None, 4, None],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].ffill()
+    actual = gdf.groupby("a")["c"].ffill()
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_select_then_shift():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].shift(1)
+    actual = gdf.groupby("a")["c"].shift(1)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_select_then_diff():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].diff(1)
+    actual = gdf.groupby("a")["c"].diff(1)
+
+    assert_groupby_results_equal(expected, actual)
+
+
 # TODO: Add a test including datetime64[ms] column in input data
