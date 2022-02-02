@@ -441,11 +441,11 @@ class fixed_point {
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-   * @brief operator % (for modulo-ing two `fixed_point` numbers)
+   * @brief operator % (for computing the modulo operation of two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are modulo-ed <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are modulo-ed
+   * If `_scale`s are equal, the modulus is computed directly.
+   * If `_scale`s are not equal, the number with larger `_scale` is shifted to the
+   * smaller `_scale`, and then the modulus is computed.
    *
    * @tparam Rep1 Representation type of number being modulo-ed to `this`
    * @tparam Rad1 Radix (base) type of number being modulo-ed to `this`
@@ -765,7 +765,7 @@ CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1> const& lhs,
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
-// MODULUS OPERATION
+// MODULO OPERATION
 template <typename Rep1, Radix Rad1>
 CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1> const& lhs,
                                                           fixed_point<Rep1, Rad1> const& rhs)
