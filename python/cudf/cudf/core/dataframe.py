@@ -6031,11 +6031,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Count number of distinct elements in specified axis.
         Return Series with number of distinct elements. Can ignore NaN values.
-        
+
         Parameters
         ----------
         axis : {0 or 'index', 1 or 'columns'}, default 0
-            The axis to use. 0 or 'index' for row-wise, 1 or 'columns' for column-wise.
+            The axis to use. 0 or 'index' for row-wise, 1 or 'columns' for
+            column-wise.
         dropna : bool, default True
             Don't include NaN in the counts.
 
@@ -6053,11 +6054,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
         """
         if axis != 0:
-            raise NotImplementedError(
-                "axis parameter is not supported yet."
-            )
+            raise NotImplementedError("axis parameter is not supported yet.")
 
         return cudf.Series(super().nunique(method="sort", dropna=dropna))
+
 
 def from_dataframe(df, allow_copy=False):
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import builtins
 from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -328,7 +329,7 @@ class SingleColumnFrame(Frame):
 
     def nunique(self, method: builtins.str = "sort", dropna: bool = True):
         """
-        Returns count of unique values for the column.
+        Return count of unique values for the column.
 
         Parameters
         ----------

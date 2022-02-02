@@ -9095,7 +9095,7 @@ def test_dataframe_nunique(data):
 
 
 @pytest.mark.parametrize(
-    "data", [{ "key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
+    "data", [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
 )
 def test_dataframe_nunique_index(data):
     gdf = cudf.DataFrame(data)
@@ -9113,4 +9113,3 @@ def test_dataframe_rename_duplicate_column():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gdf.rename(columns={"a": "b"}, inplace=True)
-

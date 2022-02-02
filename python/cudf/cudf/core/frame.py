@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import copy
 import pickle
 import warnings
@@ -6420,9 +6421,10 @@ class Frame:
             Name and unique value counts of each column in frame.
         """
         return {
-            name: col.distinct_count(method=method, dropna=dropna) 
-                for name, col in self._data.items()
+            name: col.distinct_count(method=method, dropna=dropna)
+            for name, col in self._data.items()
         }
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
