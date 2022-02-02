@@ -134,9 +134,6 @@ __global__ void multibyte_split_kernel(
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
   cudf::io::text::detail::scan_tile_state_view<int64_t> tile_output_offsets,
   cudf::io::text::detail::trie_device_view trie,
-  int64_t byte_range_begin,
-  int64_t byte_range_end,
-  int32_t chunk_input_offset,
   cudf::device_span<char const> chunk_input_chars,
   cudf::device_span<int64_t> abs_output_delimiter_offsets)
 {
@@ -241,7 +238,6 @@ std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_p
 
 int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const& source,
                                          cudf::io::text::detail::trie const& trie,
-                                         byte_range_info byte_range,
                                          scan_tile_state<multistate>& tile_multistates,
                                          scan_tile_state<int64_t>& tile_offsets,
                                          device_span<int64_t> output_buffer,
@@ -301,9 +297,6 @@ int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const
       tile_multistates,
       tile_offsets,
       trie.view(),
-      byte_range.offset,
-      byte_range.offset + byte_range.size,
-      chunk_offset,
       *chunk,
       output_buffer);
 
@@ -350,7 +343,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto bytes_total =
     multibyte_split_scan_full_source(source,
                                      trie,
-                                     byte_range,
                                      tile_multistates,
                                      tile_offsets,
                                      cudf::device_span<int64_t>(static_cast<int64_t*>(nullptr), 0),
@@ -375,7 +367,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   multibyte_split_scan_full_source(
     source,
     trie,
-    byte_range,
     tile_multistates,
     tile_offsets,
     cudf::device_span<int64_t>(string_offsets).subspan(1, num_results),
