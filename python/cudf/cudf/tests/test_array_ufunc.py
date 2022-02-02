@@ -3,7 +3,6 @@ from functools import reduce
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pytest
 
 import cudf
@@ -88,6 +87,8 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
                 expect[mask] = np.nan
             assert_eq(got, expect)
     except AssertionError:
+        # TODO: This branch can be removed when
+        # https://github.com/rapidsai/cudf/issues/10178 is resolved
         if fname in ("power", "float_power"):
             not_equal = cudf.from_pandas(expect) != got
             not_equal[got.isna()] = False
@@ -103,98 +104,6 @@ def np_ar_tup():
     return (np.random.random(100), np.random.random(100))
 
 
-comparison_ops_ls = [
-    np.greater,
-    np.greater_equal,
-    np.less,
-    np.less_equal,
-    np.equal,
-    np.not_equal,
-]
-
-
-@pytest.mark.parametrize(
-    "func", comparison_ops_ls + [np.subtract, np.fmod, np.power]
-)
-def test_ufunc_cudf_non_nullseries(np_ar_tup, func):
-    x, y = np_ar_tup[0], np_ar_tup[1]
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.to_numpy())
-
-
-@pytest.mark.parametrize(
-    "func", [np.bitwise_and, np.bitwise_or, np.bitwise_xor],
-)
-def test_ufunc_cudf_series_bitwise(func):
-    np.random.seed(0)
-    x = np.random.randint(size=100, low=0, high=100)
-    y = np.random.randint(size=100, low=0, high=100)
-
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.to_numpy())
-
-
-@pytest.mark.parametrize(
-    "func",
-    [
-        np.subtract,
-        np.multiply,
-        np.floor_divide,
-        np.true_divide,
-        np.power,
-        np.remainder,
-        np.divide,
-    ],
-)
-def test_ufunc_cudf_null_series(np_ar_tup, func):
-    x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
-    x[0] = np.nan
-    y[1] = np.nan
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.fillna(np.nan).to_numpy())
-
-    scalar = 0.5
-    expect = func(x, scalar)
-    got = func(s_1, scalar)
-    assert_eq(expect, got.fillna(np.nan).to_numpy())
-
-    expect = func(scalar, x)
-    got = func(scalar, s_1)
-    assert_eq(expect, got.fillna(np.nan).to_numpy())
-
-
-@pytest.mark.xfail(
-    reason="""cuDF comparison operations with <NA> incorrectly
-    returns False rather than <NA>"""
-)
-@pytest.mark.parametrize(
-    "func", comparison_ops_ls,
-)
-def test_ufunc_cudf_null_series_comparison_ops(np_ar_tup, func):
-    x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
-    x[0] = np.nan
-    y[1] = np.nan
-    s_1, s_2 = cudf.Series(x), cudf.Series(y)
-    expect = func(x, y)
-    got = func(s_1, s_2)
-    assert_eq(expect, got.fillna(np.nan).to_numpy())
-
-    scalar = 0.5
-    expect = func(x, scalar)
-    got = func(s_1, scalar)
-    assert_eq(expect, got.fillna(np.nan).to_numpy())
-
-    expect = func(scalar, x)
-    got = func(scalar, s_1)
-    assert_eq(expect, got.fillna(np.nan).to_numpy())
-
-
 @pytest.mark.parametrize(
     "func", [np.logaddexp, np.fmax, np.fmod],
 )
@@ -206,36 +115,6 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
     cupy_ar = cp.array(y)
     got = func(cudf_s, cupy_ar)
     assert_eq(expect, got.to_numpy())
-
-
-@pytest.mark.parametrize(
-    "func", [np.absolute, np.sign, np.exp2, np.tanh],
-)
-def test_ufunc_cudf_series_with_index(func):
-    data = [-1, 2, 3, 0]
-    index = [2, 3, 1, 0]
-    cudf_s = cudf.Series(data=data, index=index)
-    pd_s = pd.Series(data=data, index=index)
-
-    expect = func(pd_s)
-    got = func(cudf_s)
-
-    assert_eq(got, expect)
-
-
-@pytest.mark.parametrize(
-    "func", [np.logaddexp2],
-)
-def test_ufunc_cudf_series_with_nonaligned_index(func):
-    cudf_s1 = cudf.Series(data=[-1, 2, 3, 0], index=[2, 3, 1, 0])
-    cudf_s2 = cudf.Series(data=[-1, 2, 3, 0], index=[3, 1, 0, 2])
-    ps1 = cudf_s1.to_pandas()
-    ps2 = cudf_s2.to_pandas()
-
-    expect = func(ps1, ps2)
-    got = func(cudf_s1, cudf_s2)
-
-    assert_eq(got, expect)
 
 
 @pytest.mark.parametrize(
