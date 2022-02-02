@@ -387,9 +387,9 @@ class fixed_point {
   /**
    * @brief operator + (for adding two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are added
+   * If `_scale`s are equal, `_value`s are added.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are added
+   * smaller `_scale`, and then the `_value`s are added.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -402,9 +402,9 @@ class fixed_point {
   /**
    * @brief operator - (for subtracting two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are subtracted
+   * If `_scale`s are equal, `_value`s are subtracted.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are subtracted
+   * smaller `_scale`, and then the `_value`s are subtracted.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -417,7 +417,7 @@ class fixed_point {
   /**
    * @brief operator * (for multiplying two `fixed_point` numbers)
    *
-   * `_scale`s are added and `_value`s are multiplied
+   * `_scale`s are added and `_value`s are multiplied.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -430,7 +430,7 @@ class fixed_point {
   /**
    * @brief operator / (for dividing two `fixed_point` numbers)
    *
-   * `_scale`s are subtracted and `_value`s are divided
+   * `_scale`s are subtracted and `_value`s are divided.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -443,9 +443,9 @@ class fixed_point {
   /**
    * @brief operator == (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are compared
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -458,9 +458,9 @@ class fixed_point {
   /**
    * @brief operator != (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are compared
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -473,9 +473,9 @@ class fixed_point {
   /**
    * @brief operator <= (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are compared
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -488,9 +488,9 @@ class fixed_point {
   /**
    * @brief operator >= (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are compared
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -503,9 +503,9 @@ class fixed_point {
   /**
    * @brief operator < (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are compared
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -518,9 +518,9 @@ class fixed_point {
   /**
    * @brief operator > (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
    * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
-   * smaller `_scale`, and then the `_value`s are compared
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -534,7 +534,7 @@ class fixed_point {
    * @brief Method for creating a `fixed_point` number with a new `scale`
    *
    * The `fixed_point` number returned will have the same value, underlying representation and
-   * radix as `this`, the only thing changed is the scale
+   * radix as `this`, the only thing changed is the scale.
    *
    * @param scale The `scale` of the returned `fixed_point` number
    * @return `fixed_point` number with a new `scale`
