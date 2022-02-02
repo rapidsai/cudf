@@ -213,17 +213,15 @@ cudf::size_type distinct_count(column_view const& input,
     thrust::counting_iterator<cudf::size_type>(num_rows),
     [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {
       auto const is_null = device_view.is_null(i);
-      auto const is_nan  = nan_is_null and should_check_nan
-                             ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i)
-                             : false;
+      auto const is_nan  = nan_is_null and should_check_nan and
+                          cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i);
       if (not count_nulls and (is_null or (nan_is_null and is_nan))) { return false; }
       if (i == 0) { return true; }
       if (count_nulls and nan_is_null and (is_nan or is_null)) {
         auto const prev_is_nan =
-          should_check_nan
-            ? cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1)
-            : false;
-        return not(device_view.is_null(i - 1) or prev_is_nan);
+          should_check_nan and
+          cudf::type_dispatcher(device_view.type(), check_nan{}, device_view, i - 1);
+        return not(prev_is_nan or device_view.is_null(i - 1));
       }
       return not comp(i, i - 1);
     });
@@ -236,11 +234,11 @@ cudf::size_type unordered_distinct_count(column_view const& input,
 {
   if (0 == input.size() or input.null_count() == input.size()) { return 0; }
 
-  // Check for Nans
+  // Check for NaNs
   // Checking for nulls in input and flag nan_handling, as the count will
   // only get affected if these two conditions are true. NaN will only be
-  // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
-  // will increase the count by 1.
+  // double-counted as a null if nan_handling was NAN_IS_NULL and input also
+  // had null values. If so, we decrement the count.
   auto const has_nan_as_null = (nan_handling == nan_policy::NAN_IS_NULL) and
                                cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   auto const has_null = input.has_nulls();
@@ -248,8 +246,8 @@ cudf::size_type unordered_distinct_count(column_view const& input,
   auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
   // if nan is considered null and there are already null values
-  if (has_nan_as_null and (has_null or null_handling == null_policy::EXCLUDE)) { --count; }
   if (null_handling == null_policy::EXCLUDE and has_null) { --count; }
+  if (has_nan_as_null and (has_null or null_handling == null_policy::EXCLUDE)) { --count; }
   return count;
 }
 }  // namespace detail

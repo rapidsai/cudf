@@ -58,15 +58,15 @@ std::unique_ptr<column> add_keys(
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys =
     cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
-  // sort and remove any duplicates from the combined keys
-  // unordered_drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
+
+  // Drop duplicates from the combined keys, then sort the result.
+  // sort(unordered_drop_duplicates([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
   auto table_keys =
     cudf::detail::unordered_drop_duplicates(table_view{{combined_keys->view()}},
                                             std::vector<size_type>{0},  // only one key column
                                             null_equality::EQUAL,
                                             stream,
                                             mr);
-
   std::vector<order> column_order{order::ASCENDING};
   std::vector<null_order> null_precedence{null_order::AFTER};  // should be no nulls here
   auto sorted_keys =

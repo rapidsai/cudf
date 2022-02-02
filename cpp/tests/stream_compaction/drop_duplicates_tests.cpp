@@ -115,7 +115,7 @@ TEST_F(DropDuplicates, NonNullTable)
   cudf::table_view input{{col1, col2, col1_key, col2_key}};
   std::vector<cudf::size_type> keys{2, 3};
 
-  // Keep the first of duplicate
+  // Keep the first duplicate row
   // The expected table would be sorted in ascending order with respect to keys
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_first{{5, 5, 5, 3, 8}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_first{{4, 4, 4, 3, 9}};
@@ -128,7 +128,7 @@ TEST_F(DropDuplicates, NonNullTable)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first, got_first->view());
 
-  // Keep the last of duplicate
+  // Keep the last duplicate row
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_last{{5, 5, 4, 3, 8}};
   cudf::test::fixed_width_column_wrapper<float> exp_col2_last{{4, 4, 5, 3, 9}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col1_key_last{{9, 19, 20, 20, 21}};
