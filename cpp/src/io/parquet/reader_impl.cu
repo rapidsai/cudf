@@ -105,13 +105,14 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  parquet::Type physical                = schema.type;
-  parquet::ConvertedType converted_type = schema.converted_type;
-  int32_t decimal_scale                 = schema.decimal_scale;
+  parquet::Type const physical            = schema.type;
+  parquet::LogicalType const logical_type = schema.logical_type;
+  parquet::ConvertedType converted_type   = schema.converted_type;
+  int32_t decimal_scale                   = schema.decimal_scale;
 
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
-  auto inferred_converted_type = logical_type_to_converted_type(schema.logical_type);
+  auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
   if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
     decimal_scale = schema.logical_type.DECIMAL.scale;
@@ -130,12 +131,12 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::TIME_MICROS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::DURATION_MICROSECONDS;
-    case parquet::TIMESTAMP_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MICROSECONDS;
     case parquet::TIMESTAMP_MILLIS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
+    case parquet::TIMESTAMP_MICROS:
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::TIMESTAMP_MICROSECONDS;
     case parquet::DECIMAL:
       if (physical == parquet::INT32) { return type_id::DECIMAL32; }
       if (physical == parquet::INT64) { return type_id::DECIMAL64; }
@@ -159,6 +160,18 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::NA: return type_id::STRING;
     // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
     default: break;
+  }
+
+  if (logical_type.isset.TIME) {
+    if (logical_type.TIME.unit.isset.NANOS) {
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::DURATION_NANOSECONDS;
+    }
+  } else if (logical_type.isset.TIMESTAMP) {
+    if (logical_type.TIMESTAMP.unit.isset.NANOS) {
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::TIMESTAMP_NANOSECONDS;
+    }
   }
 
   // is it simply a struct?
