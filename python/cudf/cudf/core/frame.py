@@ -5982,12 +5982,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.eq(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.eq(right, fill_value=7)
-        a     b      c      d
+              a     b      c      d
         0  True  True   True  False
         1  True  True  False  False
         2  True  True  False  False
@@ -6057,12 +6057,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.ne(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.ne(right, fill_value=7)
-        a      b      c     d
+               a      b      c     d
         0  False  False  False  True
         1  False  False   True  True
         2  False  False   True  True
@@ -6132,12 +6132,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.lt(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.lt(right, fill_value=7)
-        a      b      c     d
+               a      b      c     d
         0  False  False  False  True
         1  False  False  False  True
         2  False  False  False  True
@@ -6207,12 +6207,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.le(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.le(right, fill_value=7)
-        a     b      c     d
+              a     b      c     d
         0  True  True   True  True
         1  True  True  False  True
         2  True  True  False  True
@@ -6282,12 +6282,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.gt(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.gt(right, fill_value=7)
-        a      b      c      d
+               a      b      c      d
         0  False  False  False  False
         1  False  False   True  False
         2  False  False   True  False
@@ -6357,12 +6357,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.ge(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.ge(right, fill_value=7)
-        a     b     c      d
+              a     b     c      d
         0  True  True  True  False
         1  True  True  True  False
         2  True  True  True  False
