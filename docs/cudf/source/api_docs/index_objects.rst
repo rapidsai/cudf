@@ -93,9 +93,9 @@ Conversion
    :toctree: api/
 
    Index.astype
-   Index.to_array
    Index.to_arrow
    Index.to_list
+   Index.to_numpy
    Index.to_series
    Index.to_frame
    Index.to_pandas

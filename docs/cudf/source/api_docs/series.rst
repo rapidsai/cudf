@@ -408,13 +408,13 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
-   Series.to_array
    Series.to_arrow
    Series.to_dlpack
    Series.to_frame
    Series.to_gpu_array
    Series.to_hdf
    Series.to_json
+   Series.to_numpy
    Series.to_pandas
    Series.to_string
    Series.from_arrow
