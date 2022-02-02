@@ -91,51 +91,6 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
   void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
 
-  std::size_t read_to(device_span<char> destination, rmm::cuda_stream_view stream) override
-  {
-    CUDF_FUNC_RANGE();
-
-    std::size_t total_read_size = 0;
-
-    while (destination.size() > 0) {
-      auto& h_ticket = _tickets[_next_ticket_idx];
-
-      _next_ticket_idx = (_next_ticket_idx + 1) % _tickets.size();
-
-      // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
-      CUDA_TRY(cudaEventSynchronize(h_ticket.event));
-
-      auto read_size = h_ticket.buffer.size();
-
-      // read data from the host istream in to the pinned host memory buffer
-      _datastream->read(h_ticket.buffer.data(), read_size);
-
-      // adjust the read size to reflect how many bytes were actually read from the data stream
-      read_size = _datastream->gcount();
-
-      if (read_size == 0) { break; }
-
-      total_read_size += read_size;
-
-      auto chunk = destination.subspan(0, read_size);
-
-      // copy the host-pinned data on to device
-      CUDA_TRY(cudaMemcpyAsync(  //
-        chunk.data(),
-        h_ticket.buffer.data(),
-        read_size,
-        cudaMemcpyHostToDevice,
-        stream.value()));
-
-      // record the host-to-device copy.
-      CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
-
-      destination = destination.last(destination.size() - read_size);
-    }
-
-    return total_read_size;
-  }
-
   device_span<char> find_or_create_data(std::size_t size, rmm::cuda_stream_view stream)
   {
     auto search = _buffers.find(stream.value());
@@ -208,11 +163,6 @@ class device_span_data_chunk_reader : public data_chunk_reader {
     if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
     _position += read_size;
   };
-
-  std::size_t read_to(device_span<char> destination, rmm::cuda_stream_view stream) override
-  {
-    CUDF_FAIL();
-  }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override

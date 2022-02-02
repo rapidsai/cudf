@@ -196,27 +196,8 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRangeNoCheck)
   rmm::mr::logging_resource_adaptor logger{mr(), std::cout};
   rmm::mr::set_current_device_resource(&logger);
 
-  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 4);
+  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 6);
   for (auto byte_range : byte_ranges) {
     auto out0 = cudf::io::text::multibyte_split(*source, delimiter, byte_range);
   }
-  // auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
-  // auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
-  // auto out3        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[3]);
-  // auto out4        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[4]);
-  // auto out5        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[5]);
-  // auto out6        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[6]);
-  // auto out7        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[7]);
-
-  // auto out_views = std::vector<cudf::column_view>({//
-  //                                                  out0->view(),
-  //                                                  out1->view(),
-  //                                                  out2->view(),
-  //                                                  out3->view(),
-  //                                                  out4->view(),
-  //                                                  out5->view(),
-  //                                                  out6->view(),
-  //                                                  out7->view()});
-
-  EXPECT_TRUE(true);
 }
