@@ -409,9 +409,9 @@ Serialization / IO / conversion
    :toctree: api/
 
    Series.to_arrow
+   Series.to_cupy
    Series.to_dlpack
    Series.to_frame
-   Series.to_gpu_array
    Series.to_hdf
    Series.to_json
    Series.to_numpy
