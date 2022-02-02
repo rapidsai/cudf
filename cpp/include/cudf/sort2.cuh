@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/row_operator2.cuh>
 #include <cudf/table/row_operator3.cuh>
@@ -51,6 +52,7 @@ std::unique_ptr<column> sorted_order2(
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return cudf::make_numeric_column(data_type(type_to_id<size_type>()), 0);
   }
@@ -63,16 +65,18 @@ std::unique_ptr<column> sorted_order2(
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto verticalized = cudf::structs::detail::experimental::verticalize_nested_columns(
+  auto [verticalized, depths] = cudf::structs::detail::experimental::verticalize_nested_columns(
     input, column_order, null_precedence);
   auto device_table         = table_device_view::create(verticalized.flattened_columns(), stream);
   auto const d_column_order = make_device_uvector_async(verticalized.orders(), stream);
   auto const d_null_precedence = make_device_uvector_async(verticalized.null_orders(), stream);
+  auto const d_depths          = make_device_uvector_async(depths, stream);
 
   // auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
   auto const comparator = experimental::row_lexicographic_comparator(nullate::DYNAMIC{true},
                                                                      *device_table,
                                                                      *device_table,
+                                                                     d_depths.data(),
                                                                      d_column_order.data(),
                                                                      d_null_precedence.data());
 

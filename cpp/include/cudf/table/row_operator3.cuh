@@ -73,11 +73,13 @@ class row_lexicographic_comparator {
   row_lexicographic_comparator(Nullate has_nulls,
                                table_device_view lhs,
                                table_device_view rhs,
+                               int const* depth                  = nullptr,
                                order const* column_order         = nullptr,
                                null_order const* null_precedence = nullptr)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
+      _depth{depth},
       _column_order{column_order},
       _null_precedence{null_precedence}
   {
@@ -97,7 +99,15 @@ class row_lexicographic_comparator {
    */
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
+    int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      if (_depth[i] > last_null_depth) {
+        continue;
+      } else {
+        last_null_depth = std::numeric_limits<int>::max();
+      }
+
+      bool continue_to_next_col = false;
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
       weak_ordering state{weak_ordering::EQUIVALENT};
@@ -106,18 +116,24 @@ class row_lexicographic_comparator {
 
       column_device_view lcol = _lhs.column(i);
       column_device_view rcol = _rhs.column(i);
+      int depth               = _depth[i];
       while (lcol.type().id() == type_id::STRUCT) {
         bool const lhs_is_null{lcol.is_null(lhs_index)};
         bool const rhs_is_null{rcol.is_null(rhs_index)};
 
         if (lhs_is_null or rhs_is_null) {  // atleast one is null
           state = null_compare(lhs_is_null, rhs_is_null, null_precedence);
-          if (state != weak_ordering::EQUIVALENT) break;
+          if (state == weak_ordering::EQUIVALENT) { continue_to_next_col = true; }
+          last_null_depth = depth;
+          break;
         }
 
         lcol = lcol.children()[0];
         rcol = rcol.children()[0];
+        ++depth;
       }
+
+      if (continue_to_next_col) { continue; }
 
       if (state == weak_ordering::EQUIVALENT) {
         auto comparator = element_relational_comparator{_nulls, lcol, rcol, null_precedence};
@@ -137,6 +153,7 @@ class row_lexicographic_comparator {
   Nullate _nulls{};
   null_order const* _null_precedence{};
   order const* _column_order{};
+  int const* _depth;
 };  // class row_lexicographic_comparator
 
 }  // namespace experimental
