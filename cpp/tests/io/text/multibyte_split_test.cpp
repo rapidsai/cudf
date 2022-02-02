@@ -196,7 +196,7 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRangeNoCheck)
   rmm::mr::logging_resource_adaptor logger{mr(), std::cout};
   rmm::mr::set_current_device_resource(&logger);
 
-  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 6);
+  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 4);
   for (auto byte_range : byte_ranges) {
     auto out0 = cudf::io::text::multibyte_split(*source, delimiter, byte_range);
   }
