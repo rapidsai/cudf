@@ -3238,7 +3238,7 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
+            "Series.floor and DataFrame.floor are deprecated and will be \
                 removed in the future",
             DeprecationWarning,
         )
