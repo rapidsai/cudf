@@ -134,6 +134,8 @@ __global__ void multibyte_split_kernel(
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
   cudf::io::text::detail::scan_tile_state_view<int64_t> tile_output_offsets,
   cudf::io::text::detail::trie_device_view trie,
+  int64_t byte_range_begin,
+  int64_t byte_range_end,
   int32_t chunk_input_offset,
   cudf::device_span<char const> chunk_input_chars,
   cudf::device_span<int64_t> abs_output_delimiter_offsets)
@@ -239,6 +241,7 @@ std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_p
 
 int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const& source,
                                          cudf::io::text::detail::trie const& trie,
+                                         byte_range_info byte_range,
                                          scan_tile_state<multistate>& tile_multistates,
                                          scan_tile_state<int64_t>& tile_offsets,
                                          device_span<int64_t> output_buffer,
@@ -298,6 +301,8 @@ int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const
       tile_multistates,
       tile_offsets,
       trie.view(),
+      byte_range.offset,
+      byte_range.offset + byte_range.size,
       chunk_offset,
       *chunk,
       output_buffer);
@@ -305,6 +310,8 @@ int64_t multibyte_split_scan_full_source(cudf::io::text::data_chunk_source const
     cudaEventRecord(last_launch_event, chunk_stream);
 
     chunk_offset += chunk->size();
+
+    chunk.reset();
   }
 
   cudaEventDestroy(last_launch_event);
@@ -343,6 +350,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto bytes_total =
     multibyte_split_scan_full_source(source,
                                      trie,
+                                     byte_range,
                                      tile_multistates,
                                      tile_offsets,
                                      cudf::device_span<int64_t>(static_cast<int64_t*>(nullptr), 0),
@@ -353,16 +361,21 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto num_tiles =
     cudf::util::div_rounding_up_safe(bytes_total, static_cast<int64_t>(ITEMS_PER_TILE));
   auto num_results    = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
-  auto string_offsets = rmm::device_uvector<int64_t>(num_results + 2, stream, mr);
+
+  std::cout << " Num Results: " << num_results << std::endl;
+  auto string_offsets = rmm::device_uvector<int64_t>(num_results + 2, stream);
 
   // first and last element are set manually to zero and size of input, respectively.
   // kernel is only responsible for determining delimiter offsets
   string_offsets.set_element_to_zero_async(0, stream);
   string_offsets.set_element_async(string_offsets.size() - 1, bytes_total, stream);
 
+  // kernel needs to find first and last relevant offset., as well as count of relevant offsets.
+
   multibyte_split_scan_full_source(
     source,
     trie,
+    byte_range,
     tile_multistates,
     tile_offsets,
     cudf::device_span<int64_t>(string_offsets).subspan(1, num_results),
@@ -404,7 +417,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto string_chars_size = relevant_offset_last - relevant_offset_first;
   auto string_chars      = rmm::device_uvector<char>(string_chars_size, stream, mr);
 
-  std::cout << " Relevant Byte Range:   (" << byte_range.offset << ", " << byte_range.offset + byte_range.size << ")" << std::endl
+  std::cout << " Relevant Byte Range:   (" << byte_range.offset << ", "
+            << byte_range.offset + byte_range.size << ")" << std::endl
             << " Relevant Offset First: " << relevant_offset_first << std::endl  //
             << " Relevant Offset Last:  " << relevant_offset_last << std::endl   //
             << " Relevant Chars:        " << string_chars_size << std::endl      //
@@ -422,15 +436,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   stream.synchronize();
 
   auto reader = source.create_reader();
-
-  // replace this with a "reader->read_to(string_chars, stream)" call, instead of creating a buffer
   reader->skip_bytes(relevant_offset_first);
-  auto relevant_bytes = reader->get_next_chunk(string_chars_size, stream);
-
-  thrust::copy(rmm::exec_policy(stream),
-               relevant_bytes->data(),  //
-               relevant_bytes->data() + relevant_bytes->size(),
-               string_chars.begin());
+  reader->read_to(string_chars, stream);
 
   std::cout << " Total Offsets: " << string_offsets_out.size() - 1 << std::endl  //
             << " Total Chars:   " << string_chars.size() << std::endl            //

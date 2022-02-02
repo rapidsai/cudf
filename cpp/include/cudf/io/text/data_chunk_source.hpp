@@ -54,6 +54,9 @@ class data_chunk_reader {
  public:
   virtual void skip_bytes(std::size_t size) = 0;
 
+  virtual std::size_t read_to(device_span<char> destination,
+                              rmm::cuda_stream_view stream) = 0;
+
   /**
    * @brief Get the next chunk of bytes from the data source
    *

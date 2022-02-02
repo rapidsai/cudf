@@ -172,15 +172,19 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
 }
 
+#include <rmm/mr/device/logging_resource_adaptor.hpp>
+
 TEST_F(MultibyteSplitTest, LargeInputMultipleRangeNoCheck)
 {
   auto host_input    = std::string();
   auto host_expected = std::vector<std::string>();
 
-//1245074572
-//622537286
-  for (auto i = 0; i < 1245074572; i++) {
-    host_input += "...:|";
+  // 1245074572
+  // 622537286
+  // for (auto i = 0; i < 622537286; i++) {
+  for (auto i = 0; i < 1245074572 / 4; i++) {
+    // for (auto i = 0; i < 1045074572; i++) {
+    host_input += "..................:|";
   }
 
   // make the last value non-empty, otherwise string concat (used in this test) will omit it.
@@ -189,10 +193,30 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRangeNoCheck)
   auto delimiter = std::string("...:|");
   auto source    = cudf::io::text::make_source(host_input);
 
-  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 3);
-  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
-  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
-  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+  rmm::mr::logging_resource_adaptor logger{mr(), std::cout};
+  rmm::mr::set_current_device_resource(&logger);
 
-  auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
+  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 4);
+  for (auto byte_range : byte_ranges) {
+    auto out0 = cudf::io::text::multibyte_split(*source, delimiter, byte_range);
+  }
+  // auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
+  // auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+  // auto out3        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[3]);
+  // auto out4        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[4]);
+  // auto out5        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[5]);
+  // auto out6        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[6]);
+  // auto out7        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[7]);
+
+  // auto out_views = std::vector<cudf::column_view>({//
+  //                                                  out0->view(),
+  //                                                  out1->view(),
+  //                                                  out2->view(),
+  //                                                  out3->view(),
+  //                                                  out4->view(),
+  //                                                  out5->view(),
+  //                                                  out6->view(),
+  //                                                  out7->view()});
+
+  EXPECT_TRUE(true);
 }
