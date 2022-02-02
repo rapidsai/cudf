@@ -25,7 +25,11 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-  install(TARGETS ${CMAKE_TEST_NAME} COMPONENT testing EXCLUDE_FROM_ALL)
+  install(
+    TARGETS ${CMAKE_TEST_NAME}
+    COMPONENT testing
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################

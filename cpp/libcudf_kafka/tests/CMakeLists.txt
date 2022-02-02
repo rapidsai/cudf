@@ -27,7 +27,11 @@ function(ConfigureTest test_name)
     ${test_name} PRIVATE GTest::gmock GTest::gmock_main GTest::gtest_main cudf_kafka
   )
   add_test(NAME ${test_name} COMMAND ${test_name})
-  install(TARGETS ${test_name} COMPONENT testing EXCLUDE_FROM_ALL)
+  install(
+    TARGETS ${test_name}
+    COMPONENT testing
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################
