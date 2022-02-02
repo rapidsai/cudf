@@ -109,8 +109,8 @@ struct MurmurHash3_32 {
   {
     // Read a 4-byte value from the data pointer as individual bytes for safe
     // unaligned access (very likely for string types).
-    auto const q = reinterpret_cast<uint8_t const*>(data + offset);
-    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+    auto const block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
   /* Copyright 2005-2014 Daniel James.
@@ -324,8 +324,8 @@ struct SparkMurmurHash3_32 {
                                                       cudf::size_type offset) const
   {
     // Individual byte reads for unaligned accesses (very likely for strings)
-    auto q = reinterpret_cast<uint8_t const*>(data + offset);
-    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+    auto block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
   result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
