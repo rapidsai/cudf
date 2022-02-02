@@ -234,19 +234,22 @@ cudf::size_type unordered_distinct_count(column_view const& input,
 {
   if (0 == input.size() or input.null_count() == input.size()) { return 0; }
 
-  // Check for NaNs
-  // Checking for nulls in input and flag nan_handling, as the count will
-  // only get affected if these two conditions are true. NaN will only be
-  // double-counted as a null if nan_handling was NAN_IS_NULL and input also
-  // had null values. If so, we decrement the count.
-  auto const has_nan_as_null = (nan_handling == nan_policy::NAN_IS_NULL) and
-                               cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
-  auto const has_null = input.has_nulls();
-
   auto count = detail::unordered_distinct_count(table_view{{input}}, null_equality::EQUAL, stream);
 
-  // if nan is considered null and there are already null values
+  // Check for nulls. If the null policy is EXCLUDE and null values were found,
+  // we decrement the count.
+  auto const has_null = input.has_nulls();
   if (null_handling == null_policy::EXCLUDE and has_null) { --count; }
+
+  // Check for NaNs. There are two cases that can lead to decrementing the
+  // count. The first case is when the input has no nulls, but has NaN values
+  // handled as a null via NAN_IS_NULL and has a policy to EXCLUDE null values
+  // from the count. The second case is when the input has null values and NaN
+  // values handled as nulls via NAN_IS_NULL. Regardless of whether the null
+  // policy is set to EXCLUDE, we decrement the count to avoid double-counting
+  // null and NaN as distinct entities.
+  auto const has_nan_as_null = (nan_handling == nan_policy::NAN_IS_NULL) and
+                               cudf::type_dispatcher(input.type(), has_nans{}, input, stream);
   if (has_nan_as_null and (has_null or null_handling == null_policy::EXCLUDE)) { --count; }
   return count;
 }
