@@ -74,7 +74,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
  public:
   istream_data_chunk_reader(std::unique_ptr<std::istream> datastream)
-    : _datastream(std::move(datastream)),  _buffers(),_tickets(2)
+    : _datastream(std::move(datastream)),_tickets(2)
   {
     // create an event to track the completion of the last device-to-host copy.
     for (std::size_t i = 0; i < _tickets.size(); i++) {
@@ -90,17 +90,6 @@ class istream_data_chunk_reader : public data_chunk_reader {
   }
 
   void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
-
-  device_span<char> find_or_create_data(std::size_t size, rmm::cuda_stream_view stream)
-  {
-    auto search = _buffers.find(stream.value());
-
-    if (search == _buffers.end() || search->second.size() < size) {
-      _buffers[stream.value()] = rmm::device_buffer(size, stream);
-    }
-
-    return device_span<char>(static_cast<char*>(_buffers[stream.value()].data()), size);
-  }
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
@@ -124,8 +113,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     read_size = _datastream->gcount();
 
     // get a view over some device memory we can use to buffer the read data on to device.
-    // auto chunk = rmm::device_uvector<char>(read_size, stream);
-    auto chunk = find_or_create_data(read_size, stream);
+    auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host-pinned data on to device
     CUDA_TRY(cudaMemcpyAsync(  //
@@ -139,13 +127,12 @@ class istream_data_chunk_reader : public data_chunk_reader {
     CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
-    return std::make_unique<device_span_data_chunk>(device_span_data_chunk(chunk));
+    return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
   }
 
  private:
   std::size_t _next_ticket_idx = 0;
   std::unique_ptr<std::istream> _datastream;
-  std::unordered_map<cudaStream_t, rmm::device_buffer> _buffers;
   std::vector<host_ticket> _tickets;
 };
 
