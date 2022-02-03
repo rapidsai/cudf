@@ -34,32 +34,21 @@ class Quantiles : public cudf::benchmark {
 
 static void BM_quantiles(benchmark::State& state, bool nulls)
 {
-  using Type           = int;
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 100);
+  using Type = int;
 
   const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
   const cudf::size_type n_cols{(cudf::size_type)state.range(1)};
   const cudf::size_type n_quantiles{(cudf::size_type)state.range(2)};
 
   // Create columns with values in the range [0,100)
-  std::vector<column_wrapper> columns;
-  columns.reserve(n_cols);
-  std::generate_n(std::back_inserter(columns), n_cols, [&, n_rows]() {
-    auto elements = cudf::detail::make_counting_transform_iterator(
-      0, [&](auto row) { return distribution(generator); });
-    if (!nulls) return column_wrapper(elements, elements + n_rows);
-    auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 100 == 0 ? false : true; });
-    return column_wrapper(elements, elements + n_rows, valids);
-  });
+  data_profile profile;
+  profile.set_null_frequency(nulls ? 0.01 : -0.1);  // 1% nulls or no null mask (<0)
+  profile.set_cardinality(0);
+  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
-  // Create column views
-  auto column_views = std::vector<cudf::column_view>(columns.begin(), columns.end());
-
-  // Create table view
-  auto input = cudf::table_view(column_views);
+  auto input_table =
+    create_random_table({cudf::type_to_id<Type>()}, n_cols, row_count{n_rows}, profile);
+  auto input = cudf::table_view(*input_table);
 
   std::vector<double> q(n_quantiles);
   thrust::tabulate(
