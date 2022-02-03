@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
@@ -74,13 +73,13 @@ std::unique_ptr<scalar> reduce(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Compute reduction to each list in the lists column.
+ * @brief  Compute reduction of each segment in the input column
  *
  * This function does not detect overflows in reductions.
  * Using a higher precision `data_type` may prevent overflow.
  * The null values are skipped for the operation.
- * If the list is empty, the row corresponding to the result of the
- * list is null.
+ * If the segment is empty, the row corresponding to the result of the
+ * segment is null.
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
@@ -95,17 +94,19 @@ std::unique_ptr<scalar> reduce(
  * type. If the input column has non-arithmetic type, e.g. timestamp or string,
  * the same output type must be specified.
  *
- * @param col Input lists column.
- * @param agg Aggregation operator applied by the reduction.
+ * @param col Input column view
+ * @param offsets Indices to segment boundaries
+ * @param agg Aggregation operator applied by the reduction
  * @param output_dtype  The computation and output precision.
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output column with results of segmented reduction.
  */
 std::unique_ptr<column> segmented_reduce(
-  lists_column_view const& col,
+  column_view const& col,
+  device_span<size_type const> offsets,
   std::unique_ptr<aggregation> const& agg,
   data_type output_dtype,
   null_policy null_handling,
