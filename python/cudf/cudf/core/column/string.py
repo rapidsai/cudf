@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -5196,7 +5196,7 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal64Column":
+    ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
@@ -5217,26 +5217,6 @@ class StringColumn(column.ColumnBase):
         Return a CuPy representation of the StringColumn.
         """
         raise TypeError("String Arrays is not yet implemented in cudf")
-
-    # TODO: This method is deprecated and should be removed when the associated
-    # Frame methods are removed.
-    def to_array(self, fillna: bool = None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Raises
-        ------
-        ``NotImplementedError`` if there are nulls
-        """
-        if fillna is not None:
-            warnings.warn("fillna parameter not supported for string arrays")
-
-        return self.to_arrow().to_pandas().values
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
@@ -5401,9 +5381,6 @@ class StringColumn(column.ColumnBase):
             return col
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
-
-    def _default_na_value(self) -> ScalarLike:
-        return None
 
     def binary_operator(
         self, op: builtins.str, rhs, reflect: bool = False

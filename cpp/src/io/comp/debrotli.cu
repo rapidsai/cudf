@@ -201,8 +201,8 @@ inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value);
 /// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s* s, const uint8_t* base, size_t len, size_t pos = 0)
 {
-  const uint8_t* p      = base + pos;
-  uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
+  const uint8_t* p  = base + pos;
+  auto prefix_bytes = (uint32_t)(((size_t)p) & 3);
   p -= prefix_bytes;
   s->base     = base;
   s->end      = base + len;
@@ -248,7 +248,7 @@ inline __device__ uint32_t getbits(debrotli_state_s* s, uint32_t n)
 
 inline __device__ uint32_t getbits_bytealign(debrotli_state_s* s)
 {
-  uint32_t n    = (uint32_t)((-(int32_t)s->bitpos) & 7);
+  auto n        = (uint32_t)((-(int32_t)s->bitpos) & 7);
   uint32_t bits = showbits(s, n);
   skipbits(s, n);
   return bits;
@@ -315,7 +315,7 @@ static __device__ uint8_t* local_alloc(debrotli_state_s* s, uint32_t bytes)
   int heap_used  = s->heap_used;
   auto const len = allocation_size(bytes);
   if (heap_used + len <= s->heap_limit) {
-    uint8_t* ptr = reinterpret_cast<uint8_t*>(&s->heap[heap_used]);
+    auto* ptr    = reinterpret_cast<uint8_t*>(&s->heap[heap_used]);
     s->heap_used = (uint16_t)(heap_used + len);
     return ptr;
   } else {
@@ -351,9 +351,9 @@ static __device__ uint8_t* ext_heap_alloc(uint32_t bytes,
                                           uint8_t* ext_heap_base,
                                           uint32_t ext_heap_size)
 {
-  uint32_t len                = (bytes + 0xf) & ~0xf;
-  volatile uint32_t* heap_ptr = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
-  uint32_t first_free_block   = ~0;
+  uint32_t len              = (bytes + 0xf) & ~0xf;
+  volatile auto* heap_ptr   = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
+  uint32_t first_free_block = ~0;
   for (;;) {
     uint32_t blk_next, blk_prev;
     first_free_block = atomicExch((unsigned int*)heap_ptr, first_free_block);
@@ -421,10 +421,10 @@ static __device__ void ext_heap_free(void* ptr,
                                      uint8_t* ext_heap_base,
                                      uint32_t ext_heap_size)
 {
-  uint32_t len                = (bytes + 0xf) & ~0xf;
-  volatile uint32_t* heap_ptr = (volatile uint32_t*)ext_heap_base;
-  uint32_t first_free_block   = ~0;
-  uint32_t cur_blk            = static_cast<uint32_t>(static_cast<uint8_t*>(ptr) - ext_heap_base);
+  uint32_t len              = (bytes + 0xf) & ~0xf;
+  volatile auto* heap_ptr   = (volatile uint32_t*)ext_heap_base;
+  uint32_t first_free_block = ~0;
+  auto cur_blk              = static_cast<uint32_t>(static_cast<uint8_t*>(ptr) - ext_heap_base);
   for (;;) {
     first_free_block = atomicExch((unsigned int*)heap_ptr, first_free_block);
     if (first_free_block != ~0) { break; }
@@ -1299,7 +1299,7 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s* s, uint8_t*
   uint32_t i           = 1;
   uint32_t upper_bound = s->mtf_upper_bound;
   uint32_t* mtf        = &s->mtf[1];  // Make mtf[-1] addressable.
-  uint8_t* mtf_u8      = reinterpret_cast<uint8_t*>(mtf);
+  auto* mtf_u8         = reinterpret_cast<uint8_t*>(mtf);
   uint32_t pattern     = 0x03020100;  // Little-endian
 
   // Initialize list using 4 consequent values pattern.
@@ -1419,12 +1419,12 @@ static __device__ debrotli_huff_tree_group_s* HuffmanTreeGroupInit(debrotli_stat
                                                                    uint32_t max_symbol,
                                                                    uint32_t ntrees)
 {
-  debrotli_huff_tree_group_s* group = reinterpret_cast<debrotli_huff_tree_group_s*>(local_alloc(
+  auto* group          = reinterpret_cast<debrotli_huff_tree_group_s*>(local_alloc(
     s, sizeof(debrotli_huff_tree_group_s) + ntrees * sizeof(uint16_t*) - sizeof(uint16_t*)));
-  group->alphabet_size              = (uint16_t)alphabet_size;
-  group->max_symbol                 = (uint16_t)max_symbol;
-  group->num_htrees                 = (uint16_t)ntrees;
-  group->htrees[0]                  = nullptr;
+  group->alphabet_size = (uint16_t)alphabet_size;
+  group->max_symbol    = (uint16_t)max_symbol;
+  group->num_htrees    = (uint16_t)ntrees;
+  group->htrees[0]     = nullptr;
   return group;
 }
 
@@ -1640,7 +1640,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
   const uint8_t *context_map_slice, *dist_context_map_slice;
   int dist_rb_idx;
   uint32_t blen_L, blen_I, blen_D;
-  uint8_t* const dict_scratch = reinterpret_cast<uint8_t*>(
+  auto* const dict_scratch = reinterpret_cast<uint8_t*>(
     &s->hs);  // 24+13 bytes (max length of a dictionary word including prefix & suffix)
   int context_mode;
 
@@ -1808,7 +1808,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
               pos         = meta_block_len;
               copy_length = 0;
             } else {
-              int32_t offset         = (int32_t)words->offsets_by_length[copy_length];
+              auto offset            = (int32_t)words->offsets_by_length[copy_length];
               uint32_t shift         = words->size_bits_by_length[copy_length];
               uint32_t address       = distance_code - max_distance - 1;
               int32_t word_idx       = address & ((1 << shift) - 1);
@@ -1927,8 +1927,8 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
   if (z >= count) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    uint8_t const* src = static_cast<uint8_t const*>(inputs[z].srcDevice);
-    size_t src_size    = inputs[z].srcSize;
+    auto const* src = static_cast<uint8_t const*>(inputs[z].srcDevice);
+    size_t src_size = inputs[z].srcSize;
     if (src && src_size >= 8) {
       s->error = 0;
       s->out = s->outbase = static_cast<uint8_t*>(inputs[z].dstDevice);
@@ -2084,7 +2084,7 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
 {
   uint32_t count32 = (count > 0) ? count : 0;
   uint32_t fb_heap_size;
-  uint8_t* scratch_u8 = static_cast<uint8_t*>(scratch);
+  auto* scratch_u8 = static_cast<uint8_t*>(scratch);
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 

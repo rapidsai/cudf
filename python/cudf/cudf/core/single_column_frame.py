@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import warnings
+import builtins
 from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -142,16 +142,6 @@ class SingleColumnFrame(Frame):
         )
 
     to_list = tolist
-
-    # TODO: When this method is removed we can also remove
-    # ColumnBase.to_gpu_array.
-    def to_gpu_array(self, fillna=None):  # noqa: D102
-        warnings.warn(
-            "The to_gpu_array method will be removed in a future cuDF "
-            "release. Consider using `to_cupy` instead.",
-            FutureWarning,
-        )
-        return self._column.to_gpu_array(fillna=fillna)
 
     @classmethod
     def from_arrow(cls, array):
@@ -336,3 +326,21 @@ class SingleColumnFrame(Frame):
                 return NotImplemented
 
         return {result_name: (self._column, other, reflect, fill_value)}
+
+    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+        """
+        Return count of unique values for the column.
+
+        Parameters
+        ----------
+        method : builtins.str, default "sort"
+            Method used by cpp_distinct_count
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        int
+            Number of unique values in the column.
+        """
+        return self._column.distinct_count(method=method, dropna=dropna)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,6 +237,19 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
   }
 }
 
+TEST_F(StringsContainsTests, OctalTest)
+{
+  cudf::test::strings_column_wrapper strings({"AZ", "B", "CDAZEY", ""});
+  auto strings_view = cudf::strings_column_view(strings);
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 0});
+  auto results = cudf::strings::contains_re(strings_view, "\\101");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::contains_re(strings_view, "\\101Z");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::contains_re(strings_view, "D*\\101\\132");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsContainsTests, EmbeddedNullCharacter)
 {
   std::vector<std::string> data(10);
@@ -259,6 +272,15 @@ TEST_F(StringsContainsTests, EmbeddedNullCharacter)
   results  = cudf::strings::contains_re(strings_view, "J\\0B");
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
+TEST_F(StringsContainsTests, Errors)
+{
+  cudf::test::strings_column_wrapper input({"3", "33"});
+  auto strings_view = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "(3?)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "3?+"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)

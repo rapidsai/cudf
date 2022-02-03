@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.02.00
+  VERSION 22.04.00
   LANGUAGES C CXX CUDA
 )
 
@@ -186,6 +186,8 @@ add_library(
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
   src/binaryop/compiled/NullEquals.cu
+  src/binaryop/compiled/NullLogicalOr.cu
+  src/binaryop/compiled/NullLogicalAnd.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -326,6 +328,12 @@ add_library(
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
+  src/join/mixed_join.cu
+  src/join/mixed_join_kernels.cu
+  src/join/mixed_join_kernels_semi.cu
+  src/join/mixed_join_semi.cu
+  src/join/mixed_join_size_kernels.cu
+  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
@@ -417,13 +425,11 @@ add_library(
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/shift.cu
+  src/strings/count_matches.cu
   src/strings/extract/extract.cu
   src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
-  src/strings/findall.cu
-  src/strings/find.cu
-  src/strings/find_multiple.cu
   src/strings/padding.cu
   src/strings/json/json_path.cu
   src/strings/regex/regcomp.cpp
@@ -433,6 +439,10 @@ add_library(
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
   src/strings/replace/replace_re.cu
+  src/strings/search/findall.cu
+  src/strings/search/findall_record.cu
+  src/strings/search/find.cu
+  src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
   src/strings/split/split_record.cu

@@ -74,22 +74,22 @@ class avro_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to be read.
    */
-  std::vector<std::string> get_columns() const { return _columns; }
+  [[nodiscard]] std::vector<std::string> get_columns() const { return _columns; }
 
   /**
    * @brief Returns number of rows to skip from the start.
    */
-  size_type get_skip_rows() const { return _skip_rows; }
+  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
    */
-  size_type get_num_rows() const { return _num_rows; }
+  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Set names of the column to be read.
