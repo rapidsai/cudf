@@ -355,18 +355,6 @@ cdef class Aggregation:
             ))
         return agg
 
-    @classmethod
-    def cov(
-        cls,
-        libcudf_types.size_type min_periods,
-        libcudf_types.size_type ddof=1
-    ):
-        cdef Aggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_covariance_aggregation[aggregation](
-                min_periods, ddof
-            ))
-        return agg
 
 cdef class RollingAggregation:
     """A Cython wrapper for rolling window aggregations.
