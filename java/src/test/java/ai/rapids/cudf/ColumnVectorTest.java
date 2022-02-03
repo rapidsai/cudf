@@ -4441,7 +4441,7 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 2, 5, 10, 15, 15);
         ColumnVector tmpInputListsKeysVals = inputStructsKeysVals.makeListFromOffsets(6,inputOffsets);
         ColumnVector templateBitmask = ColumnVector.fromBoxedInts(1, null, 1, 1, 1, null);
-        ColumnVector inputListsKeysVals = tmpInputListsKeysVals.replaceBitmask(templateBitmask);
+        ColumnVector inputListsKeysVals = tmpInputListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, templateBitmask);
 
         ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
             1, 2, // list1
@@ -4464,7 +4464,7 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 2, 5, 8, 11, 11);
         ColumnVector tmpExpectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(6,
             expectedOffsets);
-        ColumnVector expectedListsKeysVals = tmpExpectedListsKeysVals.replaceBitmask(templateBitmask);
+        ColumnVector expectedListsKeysVals = tmpExpectedListsKeysVals.mergeAndSetValidity(BinaryOp.BITWISE_AND, templateBitmask);
 
         ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
         ColumnVector sortedOutput = output.listSortRows(false, false);

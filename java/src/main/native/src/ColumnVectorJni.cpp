@@ -264,24 +264,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeListFromOffsets(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_replaceBitmask(
-    JNIEnv *env, jobject j_object, jlong native_handle, jlong template_bitmask_handle) {
-  JNI_NULL_CHECK(env, native_handle, "native_handle is null", 0)
-  JNI_NULL_CHECK(env, template_bitmask_handle, "template_bitmask_handle is null", 0)
-  try {
-    cudf::jni::auto_set_device(env);
-    auto const input_cv = reinterpret_cast<cudf::column_view const *>(native_handle);
-    auto const template_bitmask_cv =
-        reinterpret_cast<cudf::column_view const *>(template_bitmask_handle);
-
-    auto result = std::make_unique<cudf::column>(*input_cv);
-    result->set_null_mask(cudf::copy_bitmask(*template_bitmask_cv),
-                          template_bitmask_cv->null_count());
-    return release_as_jlong(result);
-  }
-  CATCH_STD(env, 0);
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env, jclass,
                                                                     jlong j_scalar,
                                                                     jint row_count) {

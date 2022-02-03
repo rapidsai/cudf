@@ -827,19 +827,6 @@ public final class ColumnVector extends ColumnView {
     return super.castTo(type);
   }
 
-  /**
-   * Create a new column that has data copied from the current column and a new bitmask copied from
-   * the given templateBitmask column.
-   *
-   * The caller is responsible for any data corruption that is make by calling to this function.
-   *
-   * @param templateBitmask a column from which the bitmask will be copied to the output column.
-   */
-  public ColumnVector replaceBitmask(ColumnView templateBitmask) {
-    assert templateBitmask.getRowCount() == getRowCount();
-    return new ColumnVector(replaceBitmask(getNativeView(), templateBitmask.getNativeView()));
-  }
-
   /////////////////////////////////////////////////////////////////////////////
   // NATIVE METHODS
   /////////////////////////////////////////////////////////////////////////////
@@ -860,8 +847,6 @@ public final class ColumnVector extends ColumnView {
 
   private static native long makeListFromOffsets(long childHandle, long offsetsHandle, long rows)
       throws CudfException;
-
-  private static native long replaceBitmask(long nativeHandle, long templateBitmaskHandle);
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 
