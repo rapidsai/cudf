@@ -84,10 +84,6 @@ def make_frame(
     return df
 
 
-def get_nelem():
-    yield from [2, 3, 1000]
-
-
 @pytest.fixture
 def gdf():
     return DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
@@ -1095,7 +1091,7 @@ def test_groupby_cumcount():
     )
 
 
-@pytest.mark.parametrize("nelem", get_nelem())
+@pytest.mark.parametrize("nelem", [2, 3, 1000])
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmin", "idxmax", "mean", "count"]
