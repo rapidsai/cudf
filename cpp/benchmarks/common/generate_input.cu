@@ -852,6 +852,7 @@ columns_vector create_random_columns(data_profile const& profile,
   columns_vector output_columns;
   std::transform(
     dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) {
+      engine.discard(num_rows);
       return cudf::type_dispatcher(
         cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows);
     });
@@ -904,7 +905,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   // std::vector<std::future<columns_vector>> col_futures;
   // random_value_fn<unsigned> seed_dist(
   //   {distribution_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
-  thrust::uniform_int_distribution<int> seed_dist;
+  thrust::uniform_int_distribution<unsigned> seed_dist;
   // for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
   //   auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
   //   auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
@@ -927,10 +928,15 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   //     std::begin(partial_table), std::end(partial_table), std::back_inserter(output_columns));
   //   partial_table.clear();
   // }
-
-  auto thread_engine = deterministic_engine(seed_dist(seed_engine));
-  columns_vector output_columns =
-    create_random_columns(profile, out_dtype_ids, thread_engine, num_rows.count);
+  columns_vector output_columns;
+  std::transform(out_dtype_ids.begin(),
+                 out_dtype_ids.end(),
+                 std::back_inserter(output_columns),
+                 [&](auto tid) mutable {
+                   auto engine = deterministic_engine(seed_dist(seed_engine));
+                   return cudf::type_dispatcher(
+                     cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows.count);
+                 });
   return std::make_unique<cudf::table>(std::move(output_columns));
 }
 
