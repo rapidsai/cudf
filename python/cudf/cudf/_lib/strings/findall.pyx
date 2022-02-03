@@ -8,8 +8,8 @@ from libcpp.utility cimport move
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.strings.contains cimport regex_flags
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.strings.contains cimport regex_flags
 from cudf._lib.cpp.strings.findall cimport (
     findall as cpp_findall,
     findall_record as cpp_findall_record,
