@@ -478,7 +478,7 @@ public final class ColumnVector extends ColumnView {
     return new ColumnVector(makeListFromOffsets(getNativeView(), offsets.getNativeView(), rows));
   }
 
-    /**
+   /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
