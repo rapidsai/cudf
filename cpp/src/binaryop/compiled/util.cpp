@@ -46,9 +46,9 @@ struct common_type_functor {
         return data_type{type_to_id<TypeCommon>()};
       }
 
-      // A compiler bug may cause a compilation error when using empty initializer list to construct
-      // an std::optional object containing no `data_type` value. Therefore, we should explicitly
-      // return `std::nullopt` instead.
+      // A GCC-10 compiler bug may cause a compilation error when using empty initializer list to
+      // construct an std::optional object containing no `data_type` value. Therefore, we should
+      // explicitly return `std::nullopt` instead.
       return std::nullopt;
     }
   };
