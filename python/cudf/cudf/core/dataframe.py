@@ -3625,7 +3625,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         )
 
-    @annotate("DATAFRAME_QUERY", color="green", domain="cudf_python")
     def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
@@ -3692,7 +3691,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
-        with annotate("QUERY", color="purple", domain="cudf_python"):
+        with annotate("DATAFRAME_QUERY", color="purple", domain="cudf_python"):
             if local_dict is None:
                 local_dict = {}
 
