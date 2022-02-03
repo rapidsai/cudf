@@ -4380,12 +4380,14 @@ public class ColumnVectorTest extends CudfTestBase {
             3, 4, 5, // list2
             null, 0, 6, 6, 0, // list3
             null, 6, 7, null, 7 // list 4
+            // list5 (empty)
         );
         ColumnVector inputChildVals = ColumnVector.fromBoxedInts(
             10, 20, // list1
             30, 40, 50, // list2
             60, 70, 80, 90, 100, // list3
             110, 120, 130, 140, 150 // list4
+            // list5 (empty)
         );
         ColumnVector inputStructsKeysVals = ColumnVector.makeStruct(inputChildKeys, inputChildVals);
         ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 5, 10, 15, 15);
@@ -4408,6 +4410,59 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 5, 8, 11, 11);
         ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(5,
             expectedOffsets);
+
+        ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
+        ColumnVector sortedOutput = output.listSortRows(false, false);
+    ) {
+      assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
+    }
+  }
+
+  @Test
+  void testDropListDuplicatesWithKeysValuesNullable() {
+    try(ColumnVector inputChildKeys = ColumnVector.fromBoxedInts(
+        1, 2, // list1
+        // list2 (null)
+        3, 4, 5, // list3
+        null, 0, 6, 6, 0, // list4
+        null, 6, 7, null, 7 // list 5
+        // list6 (null)
+    );
+        ColumnVector inputChildVals = ColumnVector.fromBoxedInts(
+            10, 20, // list1
+            // list2 (null)
+            30, 40, 50, // list3
+            60, 70, 80, 90, 100, // list4
+            110, 120, 130, 140, 150 // list5
+            // list6 (null)
+        );
+        ColumnVector inputStructsKeysVals = ColumnVector.makeStruct(inputChildKeys, inputChildVals);
+        ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 2, 5, 10, 15, 15);
+        ColumnVector templateBitmask = ColumnVector.fromBoxedInts(1, null, 1, 1, 1, null);
+        ColumnVector inputListsKeysVals = inputStructsKeysVals.makeListFromOffsetsAndTemplateBitmask(6,
+            inputOffsets, templateBitmask);
+
+        ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+            1, 2, // list1
+            // list2 (null)
+            3, 4, 5, // list3
+            0, 6, null, // list4
+            6, 7, null // list5
+            // list6 (null)
+        );
+        ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+            10, 20, // list1
+            // list2 (null)
+            30, 40, 50, // list3
+            100, 90, 60, // list4
+            120, 150, 140 // list5
+            // list6 (null)
+            );
+        ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
+            expectedChildVals);
+        ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 2, 5, 8, 11, 11);
+        ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsetsAndTemplateBitmask(6,
+            expectedOffsets, templateBitmask);
 
         ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
         ColumnVector sortedOutput = output.listSortRows(false, false);
@@ -4716,7 +4771,7 @@ public class ColumnVectorTest extends CudfTestBase {
          Table resultSplitOnce = v.stringSplit(pattern, 1);
          Table resultSplitAll = v.stringSplit(pattern)) {
           assertTablesAreEqual(expectedSplitOnce, resultSplitOnce);
-          assertTablesAreEqual(expectedSplitAll, resultSplitAll);      
+          assertTablesAreEqual(expectedSplitAll, resultSplitAll);
     }
   }
 
@@ -6068,7 +6123,7 @@ public class ColumnVectorTest extends CudfTestBase {
     }
 
     // Negative case: Mismatch in row count.
-    Exception x = assertThrows(CudfException.class, () ->  { 
+    Exception x = assertThrows(CudfException.class, () ->  {
       try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
          ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T);
          ColumnVector result = exemplar.copyWithBooleanColumnAsValidity(validity)) {
