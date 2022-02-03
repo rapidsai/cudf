@@ -49,6 +49,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return Columns of strings extracted from the input column.
  */
@@ -83,6 +84,7 @@ std::unique_ptr<table> extract(
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate any returned device memory.
  * @return Lists column containing strings extracted from the input column.
  */
