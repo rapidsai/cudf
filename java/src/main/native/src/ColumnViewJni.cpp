@@ -408,7 +408,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
   JNI_NULL_CHECK(env, keys_vals_handle, "keys_vals_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const *input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
     CUDF_EXPECTS(input_cv->offset() == 0, "Input column has non-zero offset.");
     CUDF_EXPECTS(input_cv->type().id() == cudf::type_id::LIST,
                  "Input column is not a lists column.");
