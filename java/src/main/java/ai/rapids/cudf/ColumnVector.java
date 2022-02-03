@@ -479,6 +479,33 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a LIST column from the current column and a given offsets column and a template bitmask
+   * column. The output column will contain lists having elements that are copied from the current
+   * column. The lists sizes are determined by the given offsets and their bitmask is copied from
+   * the given template bitmask column.
+   *
+   * Note that the caller is responsible to make sure the given offsets column is of type INT32 and
+   * it contains valid indices to create a LIST column. Similarly, the caller is also responsible
+   * to make sure the given template bitmask column has size equal to the given rows parameter.
+   *
+   * There will not be any validity check for these offsets and template bitmask during calling to
+   * this function. If any of the given offsets or template bitmask is invalid, we may have bad
+   * memory accesses and/or data corruption.
+   *
+   * @param rows the number of rows to create.
+   * @param offsets the offsets pointing to row indices of the current column to create an output
+   *                LIST column.
+   * @param templateBitmask a column from which the bitmask will be copied to the output column.
+   */
+  public ColumnVector makeListFromOffsetsAndTemplateBitmask(long rows, ColumnView offsets,
+                                                       ColumnView templateBitmask) {
+    return new ColumnVector(makeListFromOffsetsAndTemplateBitmask(getNativeView(),
+                                                             offsets.getNativeView(),
+                                                             templateBitmask.getNativeView(),
+                                                             rows));
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -846,6 +873,12 @@ public final class ColumnVector extends ColumnView {
       throws CudfException;
 
   private static native long makeListFromOffsets(long childHandle, long offsetsHandle, long rows)
+      throws CudfException;
+
+  private static native long makeListFromOffsetsAndTemplateBitmask(long childHandle, 
+                                                                   long offsetsHandle,
+                                                                   long templateBitmask,
+                                                                   long rows)
       throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
