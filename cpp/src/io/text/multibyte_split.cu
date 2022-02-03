@@ -354,7 +354,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     cudf::util::div_rounding_up_safe(bytes_total, static_cast<int64_t>(ITEMS_PER_TILE));
   auto num_results    = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
 
-  std::cout << " Num Results: " << num_results << std::endl;
   auto string_offsets = rmm::device_uvector<int64_t>(num_results + 2, stream);
 
   // first and last element are set manually to zero and size of input, respectively.
@@ -372,20 +371,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     cudf::device_span<int64_t>(string_offsets).subspan(1, num_results),
     stream,
     streams);
-
-  stream.synchronize();
-
-  // count_if really needs to find min offset, max offset, and count.
-
-  // binary search to find first relevant offset.
-  // binary search to find last relevant offset.
-  // diff iterators to find number of relevant offsets.
-  // diff values to find number of relevant characters.
-
-  // copy relevant offsets, subtracting the value of the first offset from all offsets, such that
-  // the first offset begins at zero.
-
-  // copy relevant characters.
 
   auto relevant_offsets_begin = thrust::lower_bound(
     rmm::exec_policy(stream), string_offsets.begin(), string_offsets.end() - 1, byte_range.offset);
@@ -408,13 +393,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto string_chars_size = relevant_offset_last - relevant_offset_first;
   auto string_chars      = rmm::device_uvector<char>(string_chars_size, stream, mr);
 
-  std::cout << " Relevant Byte Range:   (" << byte_range.offset << ", "
-            << byte_range.offset + byte_range.size << ")" << std::endl
-            << " Relevant Offset First: " << relevant_offset_first << std::endl  //
-            << " Relevant Offset Last:  " << relevant_offset_last << std::endl   //
-            << " Relevant Chars:        " << string_chars_size << std::endl      //
-            << std::endl;
-
   // copy relevant offsets and adjust them to be zero-based.
   thrust::transform(rmm::exec_policy(stream),
                     relevant_offsets_begin,
@@ -428,7 +406,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   auto reader = source.create_reader();
   reader->skip_bytes(relevant_offset_first);
-  // reader->read_to(string_chars, stream);
 
   auto relevant_bytes = reader->get_next_chunk(string_chars_size, stream);
 
@@ -436,10 +413,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                relevant_bytes->data(),  //
                relevant_bytes->data() + relevant_bytes->size(),
                string_chars.begin());
-
-  std::cout << " Total Offsets: " << string_offsets_out.size() - 1 << std::endl  //
-            << " Total Chars:   " << string_chars.size() << std::endl            //
-            << std::endl;
 
   return cudf::make_strings_column(
     string_offsets_out.size() - 1, std::move(string_offsets_out), std::move(string_chars));
