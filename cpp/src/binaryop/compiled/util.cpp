@@ -45,7 +45,7 @@ struct common_type_functor {
         // Eg. d=t-t
         return data_type{type_to_id<TypeCommon>()};
       }
-      return {};
+      return std::nullopt;
     }
   };
   template <typename TypeLhs, typename TypeRhs>
