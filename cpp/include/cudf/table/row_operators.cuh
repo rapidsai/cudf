@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,7 @@ class row_equality_comparator {
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
-                          null_equality nulls_are_equal = true)
+                          null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
