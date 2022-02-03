@@ -829,11 +829,12 @@ def test_string_join(ps_gs, sep):
 
 @pytest.mark.parametrize("pat", [r"(a)", r"(f)", r"([a-z])", r"([A-Z])"])
 @pytest.mark.parametrize("expand", [True, False])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)]
+)
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
-    expectation = raise_builder([flags_raise], NotImplementedError)
-
+    expectation = raise_builder([flags_raise], ValueError)
     with expectation:
         expect = ps.str.extract(pat, flags=flags, expand=expand)
         got = gs.str.extract(pat, flags=flags, expand=expand)

@@ -574,6 +574,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Regular expression pattern with capturing groups.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
         expand : bool, default True
             If True, return DataFrame with one column per capture group.
             If False, return a Series/Index if there is one capture group or
@@ -588,8 +590,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        The `flags` parameter is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is passed.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -618,10 +620,10 @@ class StringMethods(ColumnMethods):
         2    <NA>
         dtype: object
         """  # noqa W605
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
-        data, index = libstrings.extract(self._column, pat)
+        data, index = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
             data = next(iter(data.values()))
         else:
