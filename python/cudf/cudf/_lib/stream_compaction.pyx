@@ -32,7 +32,7 @@ from cudf._lib.utils cimport (
 )
 
 
-def drop_nulls(columns: list, how="any", keys=None, thresh=None):
+def drop_nulls(list columns, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
 
@@ -75,7 +75,7 @@ def drop_nulls(columns: list, how="any", keys=None, thresh=None):
     return columns_from_unique_ptr(move(c_result))
 
 
-def apply_boolean_mask(columns: list, Column boolean_mask):
+def apply_boolean_mask(list columns, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
 
@@ -104,7 +104,7 @@ def apply_boolean_mask(columns: list, Column boolean_mask):
     return columns_from_unique_ptr(move(c_result))
 
 
-def drop_duplicates(columns: list,
+def drop_duplicates(list columns,
                     object keys=None,
                     object keep='first',
                     bool nulls_are_equal=True):

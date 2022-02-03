@@ -167,7 +167,7 @@ def copy_range(Column input_column,
 
 
 def gather(
-    columns: list,
+    list columns,
     Column gather_map,
     bool nullify=False
 ):
@@ -282,7 +282,7 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
-def columns_empty_like(input_columns: list):
+def columns_empty_like(list input_columns):
     cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef unique_ptr[table] c_result
 
@@ -321,7 +321,7 @@ def column_slice(Column input_column, object indices):
     return result
 
 
-def columns_slice(input_columns: list, indices: list):
+def columns_slice(list input_columns, list indices):
     """
     Given a list of input columns, return columns sliced by ``indices``.
 
@@ -378,7 +378,7 @@ def column_split(Column input_column, object splits):
     return result
 
 
-def columns_split(input_columns: list, object splits):
+def columns_split(list input_columns, object splits):
 
     cdef table_view input_table_view = table_view_from_columns(input_columns)
     cdef vector[size_type] c_splits = splits
