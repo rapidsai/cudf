@@ -150,25 +150,6 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_):
         assert_eq(got, expect)
 
 
-@pytest.fixture
-def np_ar_tup():
-    np.random.seed(0)
-    return (np.random.random(100), np.random.random(100))
-
-
-@pytest.mark.parametrize(
-    "func", [np.logaddexp, np.fmax, np.fmod],
-)
-def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
-    x, y = np_ar_tup[0], np_ar_tup[1]
-    expect = func(x, y)
-
-    cudf_s = cudf.Series(x)
-    cupy_ar = cp.array(y)
-    got = func(cudf_s, cupy_ar)
-    assert_eq(expect, got.to_numpy())
-
-
 @pytest.mark.parametrize(
     "func", [np.add],
 )
