@@ -68,7 +68,7 @@ class make_pair_function {
   {
     // Compute the hash value of row `i`
     auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
-    return cuco::make_pair<hash_value_type, size_type>(std::move(row_hash_value), std::move(i));
+    return cuco::make_pair(row_hash_value, i);
   }
 
  private:

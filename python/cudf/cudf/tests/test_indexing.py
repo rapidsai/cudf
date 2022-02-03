@@ -783,8 +783,8 @@ def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
     gdf = cudf.DataFrame()
     gdf["a"] = list(range(nelem))
     gdf["b"] = list(range(nelem, 2 * nelem))
-    gdf["a"] = gdf["a"].set_mask(utils.random_bitmask(nelem))
-    gdf["b"] = gdf["b"].set_mask(utils.random_bitmask(nelem))
+    gdf["a"] = gdf["a"]._column.set_mask(utils.random_bitmask(nelem))
+    gdf["b"] = gdf["b"]._column.set_mask(utils.random_bitmask(nelem))
 
     def do_slice(x):
         return x[slice_start:slice_end]

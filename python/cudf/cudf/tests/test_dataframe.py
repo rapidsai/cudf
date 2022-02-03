@@ -968,7 +968,7 @@ def test_dataframe_dir_and_getattr():
         df.not_a_column
 
 
-def test_empty_dataframe_to_array():
+def test_empty_dataframe_to_cupy():
     df = cudf.DataFrame()
 
     # Check fully empty dataframe.
@@ -1023,7 +1023,7 @@ def test_dataframe_to_cupy_null_values():
     for k in "abcd":
         df[k] = data = np.random.random(nelem)
         bitmask = utils.random_bitmask(nelem)
-        df[k] = df[k].set_mask(bitmask)
+        df[k] = df[k]._column.set_mask(bitmask)
         boolmask = np.asarray(
             utils.expand_bits_to_bytes(bitmask)[:nelem], dtype=np.bool_
         )
@@ -1194,7 +1194,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
     gdf["val"] = np.arange(nrows) + 100
     bitmask = utils.random_bitmask(nrows)
     bytemask = utils.expand_bits_to_bytes(bitmask)
-    gdf["val"] = gdf["val"].set_mask(bitmask)
+    gdf["val"] = gdf["val"]._column.set_mask(bitmask)
     parted = gdf.partition_by_hash(["key"], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
@@ -1215,7 +1215,7 @@ def test_dataframe_hash_partition_masked_keys(nrows):
     gdf["val"] = np.arange(nrows) + 100
     bitmask = utils.random_bitmask(nrows)
     bytemask = utils.expand_bits_to_bytes(bitmask)
-    gdf["key"] = gdf["key"].set_mask(bitmask)
+    gdf["key"] = gdf["key"]._column.set_mask(bitmask)
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
     # Verify that the valid mask is correct
     for p in parted:
@@ -9150,3 +9150,37 @@ def test_dataframe_assign_cp_np_array():
     gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+)
+def test_dataframe_nunique(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.nunique()
+    expected = pdf.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
+)
+def test_dataframe_nunique_index(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.index.nunique()
+    expected = pdf.index.nunique()
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_rename_duplicate_column():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gdf.rename(columns={"a": "b"}, inplace=True)

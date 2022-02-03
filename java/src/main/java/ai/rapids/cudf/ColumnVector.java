@@ -45,7 +45,6 @@ public final class ColumnVector extends ColumnView {
     NativeDepsLoader.loadNativeDeps();
   }
 
-  private final OffHeapState offHeap;
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
 
@@ -56,12 +55,21 @@ public final class ColumnVector extends ColumnView {
    *                      owned by this instance.
    */
   public ColumnVector(long nativePointer) {
-    super(getColumnViewFromColumn(nativePointer));
+    super(new OffHeapState(nativePointer));
     assert nativePointer != 0;
-    offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
     this.refCount = 0;
     incRefCountInternal(true);
+  }
+
+  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+      DeviceMemoryBuffer offsetBuffer) {
+    long viewHandle = initViewHandle(
+        type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    return new OffHeapState(type, (int) rows, dataBuffer, validityBuffer,
+        offsetBuffer, null, viewHandle);
   }
 
   /**
@@ -81,22 +89,27 @@ public final class ColumnVector extends ColumnView {
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer) {
-    super(ColumnVector.initViewHandle(
-        type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
-        dataBuffer, validityBuffer, offsetBuffer, null));
+    super(makeOffHeap(type, rows, nullCount, dataBuffer, validityBuffer, offsetBuffer));
     assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
     if (!type.equals(DType.STRING)) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
         || !nullCount.isPresent();
-    offHeap = new OffHeapState(type, (int) rows, dataBuffer, validityBuffer,
-        offsetBuffer, null, viewHandle);
     MemoryCleaner.register(this, offHeap);
     this.nullCount = nullCount;
-
     this.refCount = 0;
     incRefCountInternal(true);
+  }
+
+  private static OffHeapState makeOffHeap(DType type, long rows, Optional<Long> nullCount,
+      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+      DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
+    long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer,
+        offsetBuffer, childHandles);
+    return new OffHeapState(type, (int) rows, dataBuffer, validityBuffer, offsetBuffer,
+        toClose, viewHandle);
   }
 
   /**
@@ -118,16 +131,12 @@ public final class ColumnVector extends ColumnView {
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
                       DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
-    super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
-        dataBuffer, validityBuffer,
-        offsetBuffer, childHandles));
+    super(makeOffHeap(type, rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, toClose, childHandles));
     if (!type.equals(DType.STRING) && !type.equals(DType.LIST)) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
         || !nullCount.isPresent();
-    offHeap = new OffHeapState(type, (int) rows, dataBuffer, validityBuffer, offsetBuffer,
-            toClose, viewHandle);
     MemoryCleaner.register(this, offHeap);
 
     this.refCount = 0;
@@ -143,8 +152,7 @@ public final class ColumnVector extends ColumnView {
    * @param contiguousBuffer the buffer that this is based off of.
    */
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
-    super(viewAddress);
-    offHeap = new OffHeapState(viewAddress, contiguousBuffer);
+    super(new OffHeapState(viewAddress, contiguousBuffer));
     MemoryCleaner.register(this, offHeap);
     // TODO we may want to ask for the null count anyways...
     this.nullCount = Optional.empty();

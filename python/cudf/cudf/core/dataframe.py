@@ -17,7 +17,6 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
@@ -64,6 +63,7 @@ from cudf.core.indexed_frame import (
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
+from cudf.core.udf.row_function import _get_row_kernel
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -269,7 +269,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
-                    df.index = self._frame.index.take(row_selection)
+                    df.index = self._frame.index._apply_boolean_mask(
+                        row_selection
+                    )
                 else:
                     df.index = as_index(row_selection)
         # Step 4: Downcast
@@ -3096,124 +3098,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
         return out
 
-    def as_gpu_matrix(self, columns=None, order="F"):
-        warnings.warn(
-            "The as_gpu_matrix method will be removed in a future cuDF "
-            "release. Consider using `to_cupy` instead.",
-            FutureWarning,
-        )
-        if columns is None:
-            columns = self._data.names
-
-        cols = [self._data[k] for k in columns]
-        ncol = len(cols)
-        nrow = len(self)
-        if ncol < 1:
-            # This is the case for empty dataframe - construct empty cupy array
-            matrix = cupy.empty(
-                shape=(0, 0), dtype=cudf.dtype("float64"), order=order
-            )
-            return cuda.as_cuda_array(matrix)
-
-        if any(
-            (is_categorical_dtype(c) or np.issubdtype(c, cudf.dtype("object")))
-            for c in cols
-        ):
-            raise TypeError("non-numeric data not yet supported")
-
-        dtype = find_common_type([col.dtype for col in cols])
-        for k, c in self._data.items():
-            if c.has_nulls():
-                raise ValueError(
-                    f"column '{k}' has null values. "
-                    f"hint: use .fillna() to replace null values"
-                )
-        cupy_dtype = dtype
-        if np.issubdtype(cupy_dtype, np.datetime64):
-            cupy_dtype = cudf.dtype("int64")
-
-        if order not in ("F", "C"):
-            raise ValueError(
-                "order parameter should be 'C' for row major or 'F' for"
-                "column major GPU matrix"
-            )
-
-        matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
-        for colidx, inpcol in enumerate(cols):
-            dense = inpcol.astype(cupy_dtype)
-            matrix[:, colidx] = cupy.asarray(dense)
-        return cuda.as_cuda_array(matrix).view(dtype)
-
-    def as_matrix(self, columns=None):
-        warnings.warn(
-            "The as_matrix method will be removed in a future cuDF "
-            "release. Consider using `to_numpy` instead.",
-            FutureWarning,
-        )
-        return self.as_gpu_matrix(columns=columns).copy_to_host()
-
-    def label_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
-    ):
-        """Encode labels in a column with label encoding.
-
-        Parameters
-        ----------
-        column : str
-            the source column with binary encoding for the data.
-        prefix : str
-            the new column name prefix.
-        cats : sequence of ints
-            the sequence of categories as integers.
-        prefix_sep : str
-            the separator between the prefix and the category.
-        dtype :
-            the dtype for the outputs; see Series.label_encoding
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        -------
-        A new DataFrame with a new column appended for the coded values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 10, 20]})
-        >>> df
-           a   b
-        0  1  10
-        1  2  10
-        2  3  20
-        >>> df.label_encoding(column="b", prefix="b_col", cats=[10, 20])
-           a   b  b_col_labels
-        0  1  10             0
-        1  2  10             0
-        2  3  20             1
-        """
-
-        warnings.warn(
-            "DataFrame.label_encoding is deprecated and will be removed in "
-            "the future. Consider using cuML's LabelEncoder instead.",
-            FutureWarning,
-        )
-
-        return self._label_encoding(
-            column, prefix, cats, prefix_sep, dtype, na_sentinel
-        )
-
-    def _label_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
-    ):
-        # Private implementation of deprecated public label_encoding method
-        newname = prefix_sep.join([prefix, "labels"])
-        newcol = self[column]._label_encoding(
-            cats=cats, dtype=dtype, na_sentinel=na_sentinel
-        )
-        outdf = self.copy()
-        outdf.insert(len(outdf._data), newname, newcol)
-        return outdf
-
     def agg(self, aggs, axis=None):
         """
         Aggregate using one or more operations over the specified axis.
@@ -4001,10 +3885,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("The `raw` kwarg is not yet supported.")
         if result_type is not None:
             raise ValueError("The `result_type` kwarg is not yet supported.")
-        if kwargs:
-            raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        return self._apply(func, *args)
+        return self._apply(func, _get_row_kernel, *args, **kwargs)
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -5611,7 +5493,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                     .fillna(np.nan)
                 )
-        arr = cupy.asarray(prepared.as_gpu_matrix())
+        arr = prepared.to_cupy()
 
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
@@ -6219,6 +6101,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df_protocol.__dataframe__(
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
+
+    def nunique(self, axis=0, dropna=True):
+        """
+        Count number of distinct elements in specified axis.
+        Return Series with number of distinct elements. Can ignore NaN values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            The axis to use. 0 or 'index' for row-wise, 1 or 'columns' for
+            column-wise.
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A': [4, 5, 6], 'B': [4, 1, 1]})
+        >>> df.nunique()
+        A    3
+        B    2
+        dtype: int64
+        """
+        if axis != 0:
+            raise NotImplementedError("axis parameter is not supported yet.")
+
+        return cudf.Series(super().nunique(method="sort", dropna=dropna))
 
 
 def from_dataframe(df, allow_copy=False):

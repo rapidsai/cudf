@@ -355,20 +355,6 @@ class NumericalColumn(NumericalBaseColumn):
             skipna=skipna, min_count=min_count
         )
 
-    def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column"""
-        dkind = self.dtype.kind
-        if dkind == "f":
-            return self.dtype.type(np.nan)
-        elif dkind == "i":
-            return np.iinfo(self.dtype).min
-        elif dkind == "u":
-            return np.iinfo(self.dtype).max
-        elif dkind == "b":
-            return self.dtype.type(False)
-        else:
-            raise TypeError(f"numeric column of {self.dtype} has no NaN value")
-
     def find_and_replace(
         self,
         to_replace: ColumnLike,

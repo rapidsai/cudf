@@ -46,14 +46,13 @@ void BM_csv_write_varying_inout(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::csv_writer_options options =
-      cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-        .include_header(true)
-        .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
+      cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view).include_header(true);
     cudf_io::write_csv(options);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 void BM_csv_write_varying_options(benchmark::State& state)
@@ -71,12 +70,12 @@ void BM_csv_write_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   std::string const na_per(na_per_len, '#');
-  std::vector<char> csv_data;
+  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::csv_writer_options options =
-      cudf_io::csv_writer_options::builder(cudf_io::sink_info{&csv_data}, view)
+      cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
         .include_header(true)
         .na_rep(na_per)
         .rows_per_chunk(rows_per_chunk);
@@ -85,6 +84,7 @@ void BM_csv_write_varying_options(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 #define CSV_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)       \
