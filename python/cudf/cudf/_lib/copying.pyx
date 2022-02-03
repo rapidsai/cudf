@@ -584,8 +584,6 @@ def _boolean_mask_scatter_scalar(list input_scalars, list target_columns,
     return columns_from_unique_ptr(move(c_result))
 
 
-# TODO: This function is currently unused but should be used in
-# ColumnBase.__setitem__, see https://github.com/rapidsai/cudf/issues/8667.
 def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
     """Assign the `ith` row in input column to the row correspond to the `ith`
