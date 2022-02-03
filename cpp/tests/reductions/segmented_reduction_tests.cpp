@@ -51,7 +51,7 @@ TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_sum_aggregation(),
+                              *make_sum_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -66,7 +66,7 @@ TYPED_TEST(SegmentedReductionTest, EmptySum)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_sum_aggregation(),
+                              *make_sum_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -89,7 +89,7 @@ TYPED_TEST(SegmentedReductionTest, ProductExcludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_product_aggregation(),
+                              *make_product_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -111,7 +111,7 @@ TYPED_TEST(SegmentedReductionTest, MaxExcludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_max_aggregation(),
+                              *make_max_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -133,7 +133,7 @@ TYPED_TEST(SegmentedReductionTest, MinExcludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_min_aggregation(),
+                              *make_min_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -157,7 +157,7 @@ TYPED_TEST(SegmentedReductionTest, AnyExcludeNulls)
     {true, true, true, true, false, true, true, false, false}};
 
   auto res = segmented_reduce(
-    input, d_offsets, make_any_aggregation(), data_type{type_id::BOOL8}, null_policy::EXCLUDE);
+    input, d_offsets, *make_any_aggregation(), data_type{type_id::BOOL8}, null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
@@ -179,7 +179,7 @@ TYPED_TEST(SegmentedReductionTest, AllExcludeNulls)
     {true, true, false, true, false, false, true, true, true}};
 
   auto res = segmented_reduce(
-    input, d_offsets, make_all_aggregation(), data_type{type_id::BOOL8}, null_policy::EXCLUDE);
+    input, d_offsets, *make_all_aggregation(), data_type{type_id::BOOL8}, null_policy::EXCLUDE);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
@@ -203,7 +203,7 @@ TYPED_TEST(SegmentedReductionTest, SumIncludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_sum_aggregation(),
+                              *make_sum_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -226,7 +226,7 @@ TYPED_TEST(SegmentedReductionTest, ProductIncludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_product_aggregation(),
+                              *make_product_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -249,7 +249,7 @@ TYPED_TEST(SegmentedReductionTest, MaxIncludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_max_aggregation(),
+                              *make_max_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -272,7 +272,7 @@ TYPED_TEST(SegmentedReductionTest, MinIncludeNulls)
 
   auto res = segmented_reduce(input,
                               d_offsets,
-                              make_min_aggregation(),
+                              *make_min_aggregation(),
                               data_type{type_to_id<TypeParam>()},
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
@@ -296,7 +296,7 @@ TYPED_TEST(SegmentedReductionTest, AnyIncludeNulls)
     {true, false, true, false, false, true, true, false, false}};
 
   auto res = segmented_reduce(
-    input, d_offsets, make_any_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
+    input, d_offsets, *make_any_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
@@ -318,7 +318,7 @@ TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
     {true, false, false, true, false, false, true, false, true}};
 
   auto res = segmented_reduce(
-    input, d_offsets, make_all_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
+    input, d_offsets, *make_all_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }

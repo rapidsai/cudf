@@ -55,7 +55,7 @@ struct segmented_reduce_dispatch_functor {
   }
 
   template <aggregation::Kind k>
-  std::unique_ptr<column> operator()(std::unique_ptr<aggregation> const& agg)
+  std::unique_ptr<column> operator()()
   {
     switch (k) {
       case aggregation::SUM:
@@ -84,7 +84,7 @@ struct segmented_reduce_dispatch_functor {
 std::unique_ptr<column> segmented_reduce(
   column_view const& col,
   device_span<size_type const> offsets,
-  std::unique_ptr<aggregation> const& agg,
+  aggregation const& agg,
   data_type output_dtype,
   null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -93,15 +93,14 @@ std::unique_ptr<column> segmented_reduce(
   // TODO: handle invalid inputs.
 
   return aggregation_dispatcher(
-    agg->kind,
-    segmented_reduce_dispatch_functor{col, offsets, output_dtype, null_handling, stream, mr},
-    agg);
+    agg.kind,
+    segmented_reduce_dispatch_functor{col, offsets, output_dtype, null_handling, stream, mr});
 }
 }  // namespace detail
 
 std::unique_ptr<column> segmented_reduce(column_view const& col,
                                          device_span<size_type const> offsets,
-                                         std::unique_ptr<aggregation> const& agg,
+                                         aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
                                          rmm::mr::device_memory_resource* mr)
