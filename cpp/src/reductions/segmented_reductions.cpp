@@ -26,6 +26,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -90,7 +91,7 @@ std::unique_ptr<column> segmented_reduce(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  // TODO: handle invalid inputs.
+  CUDF_EXPECTS(offsets.size() > 1, "Input should have at least 1 segment.");
 
   return aggregation_dispatcher(
     agg.kind,
