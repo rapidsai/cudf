@@ -835,6 +835,7 @@ def test_string_join(ps_gs, sep):
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
     expectation = raise_builder([flags_raise], ValueError)
+
     with expectation:
         expect = ps.str.extract(pat, flags=flags, expand=expand)
         got = gs.str.extract(pat, flags=flags, expand=expand)
