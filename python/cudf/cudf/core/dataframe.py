@@ -5869,7 +5869,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not all(isinstance(name, str) for name in self._data.names):
             warnings.warn(
                 "DataFrame contains non-string column name(s). Struct column "
-                "require string as field name. Non-string column names will "
+                "requires field name to be string. Non-string column names will "
                 "be casted to string as the field name."
             )
             field_names = [str(name) for name in self._data.names]
