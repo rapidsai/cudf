@@ -4498,8 +4498,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         out_df.columns = out_columns
         return out_df
 
-    @annotate("DATAFRAME_FROM_PANDAS", color="green", domain="cudf_python")
     @classmethod
+    @annotate("DATAFRAME_FROM_PANDAS", color="green", domain="cudf_python")
     def from_pandas(cls, dataframe, nan_as_null=None):
         """
         Convert from a Pandas DataFrame.
@@ -4568,8 +4568,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return result
 
-    @annotate("DATAFRAME_FROM_ARROW", color="green", domain="cudf_python")
     @classmethod
+    @annotate("DATAFRAME_FROM_ARROW", color="green", domain="cudf_python")
     def from_arrow(cls, table):
         """
         Convert from PyArrow Table to DataFrame.
@@ -4723,8 +4723,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ret[col] = self[col].to_numpy()
         return ret
 
-    @annotate("DATAFRAME_FROM_RECORDS", color="green", domain="cudf_python")
     @classmethod
+    @annotate("DATAFRAME_FROM_RECORDS", color="green", domain="cudf_python")
     def from_records(cls, data, index=None, columns=None, nan_as_null=False):
         """
         Convert structured or record ndarray to DataFrame.
