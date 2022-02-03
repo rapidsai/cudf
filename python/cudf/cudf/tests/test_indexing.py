@@ -1294,8 +1294,8 @@ def test_loc_datetime_index(sli, is_dataframe):
 @pytest.mark.parametrize(
     "gdf",
     [
-        cudf.DataFrame({"a": range(1000000)}),
-        cudf.DataFrame({"a": range(1000000), "b": range(1000000)}),
+        cudf.DataFrame({"a": range(100000)}),
+        cudf.DataFrame({"a": range(100000), "b": range(100000)}),
         cudf.DataFrame({"a": range(20), "b": range(20)}),
         cudf.DataFrame(
             {
@@ -1305,25 +1305,23 @@ def test_loc_datetime_index(sli, is_dataframe):
             }
         ),
         cudf.DataFrame(index=[1, 2, 3]),
-        cudf.DataFrame(index=range(1000000)),
+        cudf.DataFrame(index=range(100000)),
         cudf.DataFrame(columns=["a", "b", "c", "d"]),
-        cudf.DataFrame(columns=["a"], index=range(1000000)),
-        cudf.DataFrame(
-            columns=["a", "col2", "...col n"], index=range(1000000)
-        ),
-        cudf.DataFrame(index=cudf.Series(range(1000000)).astype("str")),
+        cudf.DataFrame(columns=["a"], index=range(100000)),
+        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(100000)),
+        cudf.DataFrame(index=cudf.Series(range(100000)).astype("str")),
         cudf.DataFrame(
             columns=["a", "b", "c", "d"],
-            index=cudf.Series(range(1000000)).astype("str"),
+            index=cudf.Series(range(100000)).astype("str"),
         ),
     ],
 )
 @pytest.mark.parametrize(
     "slice",
     [
-        slice(250000, 500000),
-        slice(250000, 250001),
-        slice(500000),
+        slice(25000, 50000),
+        slice(25000, 25001),
+        slice(50000),
         slice(1, 10),
         slice(10, 20),
         slice(15, 24000),

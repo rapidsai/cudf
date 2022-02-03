@@ -8,6 +8,7 @@ from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -1009,17 +1010,17 @@ def test_small_zip(tmpdir):
 def test_csv_reader_carriage_return(tmpdir):
     rows = 1000
     names = ["int_row", "int_double_row"]
-
     buffer = ",".join(names) + "\r\n"
     for row in range(rows):
         buffer += str(row) + ", " + str(2 * row) + "\r\n"
 
     df = read_csv(StringIO(buffer))
+    expect = cudf.DataFrame(
+        {"int_row": cp.arange(rows), "int_double_row": cp.arange(rows) * 2}
+    )
 
     assert len(df) == rows
-    for row in range(0, rows):
-        assert df[names[0]][row] == row
-        assert df[names[1]][row] == 2 * row
+    assert_eq(expect, df)
 
 
 def test_csv_reader_tabs():
