@@ -4404,7 +4404,8 @@ public class ColumnVectorTest extends CudfTestBase {
             10, 20,
             30, 40, 50,
             100, 90, 60,
-            120, 150, 140);
+            120, 150, 140
+        );
         ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
             expectedChildVals);
         ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 5, 8, 11, 11);
@@ -4421,13 +4422,13 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testDropListDuplicatesWithKeysValuesNullable() {
     try(ColumnVector inputChildKeys = ColumnVector.fromBoxedInts(
-        1, 2, // list1
-        // list2 (null)
-        3, 4, 5, // list3
-        null, 0, 6, 6, 0, // list4
-        null, 6, 7, null, 7 // list 5
-        // list6 (null)
-    );
+            1, 2, // list1
+            // list2 (null)
+            3, 4, 5, // list3
+            null, 0, 6, 6, 0, // list4
+            null, 6, 7, null, 7 // list 5
+            // list6 (null)
+        );
         ColumnVector inputChildVals = ColumnVector.fromBoxedInts(
             10, 20, // list1
             // list2 (null)
@@ -4457,7 +4458,7 @@ public class ColumnVectorTest extends CudfTestBase {
             100, 90, 60, // list4
             120, 150, 140 // list5
             // list6 (null)
-            );
+        );
         ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
             expectedChildVals);
         ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 2, 5, 8, 11, 11);
