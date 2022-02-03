@@ -121,8 +121,8 @@ class Frame:
         columns = deserialize_columns(header["columns"], frames)
         return cls_deserialize._from_data(dict(zip(column_names, columns)))
 
-    @annotate("FRAME_FROM_DATA", color="green", domain="cudf_python")
     @classmethod
+    @annotate("FRAME_FROM_DATA", color="green", domain="cudf_python")
     def _from_data(
         cls,
         data: MutableMapping,
@@ -132,8 +132,8 @@ class Frame:
         Frame.__init__(obj, data, index)
         return obj
 
-    @annotate("FRAME_FROM_COLUMNS", color="green", domain="cudf_python")
     @classmethod
+    @annotate("FRAME_FROM_COLUMNS", color="green", domain="cudf_python")
     def _from_columns(
         cls,
         columns: List[ColumnBase],
