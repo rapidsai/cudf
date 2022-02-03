@@ -5,21 +5,23 @@ import numpy as np
 from numba import cuda, typeof
 from numba.core.errors import TypingError
 from numba.np import numpy_support
-from numba.types import Poison, Tuple, boolean, int64, void
+from numba.types import Poison, Tuple, boolean, int64, void, CPointer
 from nvtx import annotate
 
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.typing import MaskedType, string_view, str_view_arg_handler
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
+    STRING_TYPES,
 )
+from cudf.api.types import is_string_dtype
 
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
+    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
 )
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
@@ -114,11 +116,20 @@ def _masked_array_type_from_col(col):
     corresponding to `dtype`, and the second an
     array of bools representing a mask.
     """
-    nb_scalar_ty = numpy_support.from_dtype(col.dtype)
-    if col.mask is None:
-        return nb_scalar_ty[::1]
+    if is_string_dtype(col.dtype):
+        # strings_udf library provides a pointer directly to the data
+        col_type = CPointer(string_view)
     else:
-        return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
+        nb_scalar_ty = numpy_support.from_dtype(col.dtype)
+        col_type = nb_scalar_ty[::1]
+
+    if col.mask is None:
+        return col_type
+    else:
+        return Tuple(
+            col_type,
+            libcudf_bitmask_type[::1]
+        )
 
 
 def _construct_signature(frame, return_type, args):
@@ -211,6 +222,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig)(_kernel)
+    breakpoint()
+    kernel = cuda.jit(sig, link=['/home/nfs/brmiller/ipynb/strings_udf/len.ptx'], extensions=[str_view_arg_handler])(_kernel)
 
     return kernel

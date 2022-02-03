@@ -23,6 +23,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
+from cudf.core.udf import strings
 
 def _get_frame_row_type(dtype):
     """
@@ -126,7 +127,6 @@ def _get_row_kernel(frame, func, args):
         np.dtype(list(_all_dtypes_from_frame(frame).items()))
     )
     scalar_return_type = _get_udf_return_type(row_type, func, args)
-
     # this is the signature for the final full kernel compilation
     sig = _construct_signature(frame, scalar_return_type, args)
 

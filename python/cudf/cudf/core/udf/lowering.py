@@ -16,7 +16,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.typing import MaskedType, NAType
+from cudf.core.udf.typing import MaskedType, NAType, string_view
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -348,6 +348,7 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 @lower_builtin(api.Masked, types.Number, types.boolean)
 @lower_builtin(api.Masked, types.NPDatetime, types.boolean)
 @lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
+@lower_builtin(api.Masked, string_view, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args

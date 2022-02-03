@@ -1,5 +1,5 @@
 import operator
-
+from numba import cuda
 from numba import types
 from numba.core.extending import (
     make_attribute_wrapper,
@@ -25,13 +25,52 @@ from cudf.core.udf._ops import (
     unary_ops,
 )
 
+from cudf.core.buffer import Buffer
+
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
     types.Boolean,
     types.NPDatetime,
     types.NPTimedelta,
+    types.PyObject
 )
 
+
+
+class StringView(types.Type):
+    def __init__(self):
+         super().__init__(name="string_view")
+
+string_view = StringView()
+
+@typeof_impl.register(StringView)
+def typeof_stringview(val, c):
+    return string_view
+
+@register_model(StringView)
+class stringview_model(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        # from string_view.hpp:
+        # private:
+        #  const char* _data{};          ///< Pointer to device memory contain char array for this string
+        #  size_type _bytes{};           ///< Number of bytes in _data for this string
+        #  mutable size_type _length{};  ///< Number of characters in this string (computed)
+        members = (
+            ('data', types.CPointer(types.char)),
+            ('bytes', types.int32),
+            ('length', types.int32),
+        )
+        super().__init__(dmm, fe_type, members)
+        
+class StrViewArgHandler:
+    def prepare_args(self, ty, val, **kwargs):
+        if isinstance(val, Buffer):
+            return types.uint64, val.ptr
+        else:
+            return ty, val
+
+
+str_view_arg_handler = StrViewArgHandler()
 
 class MaskedType(types.Type):
     """
@@ -42,7 +81,11 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if isinstance(value, SUPPORTED_NUMBA_TYPES):
+
+        # TODO - replace object with stringview immediately
+        if isinstance(value, (types.PyObject, StringView)):
+            self.value_type = string_view
+        elif isinstance(value, SUPPORTED_NUMBA_TYPES):
             self.value_type = value
         else:
             # Unsupported Dtype. Numba tends to print out the type info
@@ -54,7 +97,7 @@ class MaskedType(types.Type):
                 "attempting to use a column of unsupported dtype in a UDF. "
                 f"Supported dtypes are {SUPPORTED_NUMBA_TYPES}"
             )
-        super().__init__(name=f"Masked{self.value_type}")
+        super().__init__(name=f"Masked({self.value_type})")
 
     def __hash__(self):
         """
@@ -143,6 +186,7 @@ class MaskedConstructor(ConcreteTemplate):
             | datetime_cases
             | timedelta_cases
             | {types.boolean}
+            | {types.pyobject, string_view}
         )
     ]
 
