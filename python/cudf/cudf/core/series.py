@@ -999,7 +999,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             op = f"__{'' if not_reflect else 'r'}{binary_operations[fname]}__"
 
             # pandas bitwise operations return bools if indexes are misaligned.
-            if "bitwise" in fname and not self.index.equals(other.index):
+            # TODO: Generalize for other types of Frames
+            if (
+                "bitwise" in fname
+                and isinstance(other, Series)
+                and not self.index.equals(other.index)
+            ):
                 return getattr(self, op)(other).astype(bool)
             # Float_power returns float irrespective of the input type.
             if fname == "float_power":

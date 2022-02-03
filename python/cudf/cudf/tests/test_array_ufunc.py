@@ -98,6 +98,48 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
         raise
 
 
+@pytest.mark.parametrize("ufunc", [np.add, np.greater, np.logical_and])
+@pytest.mark.parametrize("has_nulls", [True, False])
+@pytest.mark.parametrize("indexed", [True, False])
+def test_binary_ufunc_series_array(ufunc, has_nulls, indexed):
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    args = [
+        cudf.Series(
+            cp.random.rand(N),
+            index=cp.random.choice(range(N), N, False) if indexed else None,
+        )
+        for _ in range(ufunc.nin)
+    ]
+
+    if has_nulls:
+        # Converting nullable integer cudf.Series to pandas will produce a
+        # float pd.Series, so instead we replace nulls with an arbitrary
+        # integer value, precompute the mask, and then reapply it afterwards.
+        for arg in args:
+            set_random_null_mask_inplace(arg)
+
+        # Cupy doesn't support nulls, so we fill with nans before converting.
+        args[1] = args[1].fillna(cp.nan)
+        mask = args[0].isna().to_pandas()
+
+    got = ufunc(args[0], args[1].to_cupy())
+
+    expect = ufunc(args[0].to_pandas(), args[1].to_pandas().to_numpy())
+
+    if ufunc.nout > 1:
+        for g, e in zip(got, expect):
+            if has_nulls:
+                e[mask] = np.nan
+            assert_eq(g, e)
+    else:
+        if has_nulls:
+            expect[mask] = np.nan
+        assert_eq(got, expect)
+
+
 @pytest.fixture
 def np_ar_tup():
     np.random.seed(0)
