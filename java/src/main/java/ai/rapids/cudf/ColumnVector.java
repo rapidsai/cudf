@@ -485,12 +485,10 @@ public final class ColumnVector extends ColumnView {
    * the given template bitmask column.
    *
    * Note that the caller is responsible to make sure the given offsets column is of type INT32 and
-   * it contains valid indices to create a LIST column. Similarly, the caller is also responsible
-   * to make sure the given template bitmask column has size equal to the given rows parameter.
+   * it contains valid indices to create a LIST column.
    *
-   * There will not be any validity check for these offsets and template bitmask during calling to
-   * this function. If any of the given offsets or template bitmask is invalid, we may have bad
-   * memory accesses and/or data corruption.
+   * There will not be any validity check for the offsets during calling to this function. If any
+   * of the given offsets is invalid, we may have bad memory accesses and/or data corruption.
    *
    * @param rows the number of rows to create.
    * @param offsets the offsets pointing to row indices of the current column to create an output
@@ -499,6 +497,7 @@ public final class ColumnVector extends ColumnView {
    */
   public ColumnVector makeListFromOffsetsAndTemplateBitmask(long rows, ColumnView offsets,
                                                        ColumnView templateBitmask) {
+    assert templateBitmask.getRowCount() == rows;
     return new ColumnVector(makeListFromOffsetsAndTemplateBitmask(getNativeView(),
                                                              offsets.getNativeView(),
                                                              templateBitmask.getNativeView(),
@@ -875,7 +874,7 @@ public final class ColumnVector extends ColumnView {
   private static native long makeListFromOffsets(long childHandle, long offsetsHandle, long rows)
       throws CudfException;
 
-  private static native long makeListFromOffsetsAndTemplateBitmask(long childHandle, 
+  private static native long makeListFromOffsetsAndTemplateBitmask(long childHandle,
                                                                    long offsetsHandle,
                                                                    long templateBitmask,
                                                                    long rows)
