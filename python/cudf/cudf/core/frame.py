@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import copy
 import pickle
 import warnings
@@ -6080,12 +6081,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.eq(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.eq(right, fill_value=7)
-        a     b      c      d
+              a     b      c      d
         0  True  True   True  False
         1  True  True  False  False
         2  True  True  False  False
@@ -6156,12 +6157,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.ne(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.ne(right, fill_value=7)
-        a      b      c     d
+               a      b      c     d
         0  False  False  False  True
         1  False  False   True  True
         2  False  False   True  True
@@ -6232,12 +6233,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.lt(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.lt(right, fill_value=7)
-        a      b      c     d
+               a      b      c     d
         0  False  False  False  True
         1  False  False  False  True
         2  False  False  False  True
@@ -6308,12 +6309,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.le(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.le(right, fill_value=7)
-        a     b      c     d
+              a     b      c     d
         0  True  True   True  True
         1  True  True  False  True
         2  True  True  False  True
@@ -6384,12 +6385,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.gt(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.gt(right, fill_value=7)
-        a      b      c      d
+               a      b      c      d
         0  False  False  False  False
         1  False  False   True  False
         2  False  False   True  False
@@ -6460,12 +6461,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.ge(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.ge(right, fill_value=7)
-        a     b     c      d
+              a     b     c      d
         0  True  True  True  False
         1  True  True  True  False
         2  True  True  True  False
@@ -6504,6 +6505,28 @@ class Frame:
         return self._binaryop(
             other=other, fn="ge", fill_value=fill_value, can_reindex=True
         )
+
+    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+        """
+        Returns a per column mapping with counts of unique values for
+        each column.
+
+        Parameters
+        ----------
+        method : builtins.str, default "sort"
+            Method used by cpp_distinct_count
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        dict
+            Name and unique value counts of each column in frame.
+        """
+        return {
+            name: col.distinct_count(method=method, dropna=dropna)
+            for name, col in self._data.items()
+        }
 
 
 @annotate(
