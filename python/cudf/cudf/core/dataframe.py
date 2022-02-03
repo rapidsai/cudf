@@ -1876,6 +1876,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # implementation assumes that binary operations between a column and
         # NULL are always commutative, even for binops (like subtraction) that
         # are normally anticommutative.
+        # TODO: We probably should support pandas DataFrame/Series objects.
         if isinstance(rhs, Sequence):
             # TODO: Consider validating sequence length (pandas does).
             operands = {
