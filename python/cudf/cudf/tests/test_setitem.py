@@ -187,6 +187,33 @@ def test_column_set_equal_length_object_by_mask():
     assert_eq(cudf.Series(data), cudf.Series([100, 0, 300, 1, 500]))
 
 
+def test_column_set_unequal_length_object_by_mask():
+    data = [1, 2, 3, 4, 5]
+    replace_data_1 = [8, 9]
+    replace_data_2 = [8, 9, 10, 11]
+    mask = [True, True, False, True, False]
+
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_exceptions_equal(
+        psr.__setitem__,
+        gsr.__setitem__,
+        ([mask, replace_data_1], {}),
+        ([mask, replace_data_1], {}),
+        compare_error_message=False,
+    )
+
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_exceptions_equal(
+        psr.__setitem__,
+        gsr.__setitem__,
+        ([mask, replace_data_2], {}),
+        ([mask, replace_data_2], {}),
+        compare_error_message=False,
+    )
+
+
 def test_categorical_setitem_invalid():
     ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")

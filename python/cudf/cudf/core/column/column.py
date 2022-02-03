@@ -56,6 +56,7 @@ from cudf.api.types import (
     is_integer_dtype,
     is_interval_dtype,
     is_list_dtype,
+    is_numeric_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
@@ -80,6 +81,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
+Slice = TypeVar("Slice", bound=slice)  # WAR for "slice" is taken in ColumnBase
 
 
 class ColumnBase(Column, Serializable):
@@ -324,22 +326,22 @@ class ColumnBase(Column, Serializable):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        fill_scalar = as_device_scalar(fill_value, self.dtype)
+        slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
         if not inplace:
-            return libcudf.filling.fill(self, begin, end, fill_scalar)
+            return libcudf.filling.fill(self, begin, end, slr.device_value)
 
         if is_string_dtype(self.dtype):
             return self._mimic_inplace(
-                libcudf.filling.fill(self, begin, end, fill_scalar),
+                libcudf.filling.fill(self, begin, end, slr.device_value),
                 inplace=True,
             )
 
-        if fill_value is None and not self.nullable:
+        if not slr.is_valid() and not self.nullable:
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
-        libcudf.filling.fill_in_place(self, begin, end, fill_scalar)
+        libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
 
         return self
 
@@ -492,45 +494,123 @@ class ColumnBase(Column, Serializable):
         """
         Set the value of self[key] to value.
 
-        If value and self are of different types,
-        value is coerced to self.dtype
+        If value and self are of different types, value is coerced to
+        self.dtype. Assumes ``self`` and ``value`` are index-aligned.
         """
 
+        # Normalize value to scalar/column
+        value_normalized: Union[cudf.core.scalar.Scalar, ColumnBase]
+        if is_scalar(value):
+            value_normalized = cudf.Scalar(value, dtype=self.dtype)
+        else:
+            value_normalized = as_column(value).astype(self.dtype)
+
+        out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
         if isinstance(key, slice):
-            key_start, key_stop, key_stride = key.indices(len(self))
-            if key_start < 0:
-                key_start = key_start + len(self)
-            if key_stop < 0:
-                key_stop = key_stop + len(self)
-            if key_start >= key_stop:
-                return self.copy()
-            if (key_stride is None or key_stride == 1) and is_scalar(value):
-                return self._fill(value, key_start, key_stop, inplace=True)
-            if key_stride != 1 or key_stride is not None or is_scalar(value):
-                key = arange(
-                    start=key_start,
-                    stop=key_stop,
-                    step=key_stride,
-                    dtype=cudf.dtype(np.int32),
-                )
-                nelem = len(key)
-            else:
-                nelem = abs(key_stop - key_start)
+            out = self._scatter_by_slice(key, value_normalized)
         else:
             key = as_column(key)
-            if is_bool_dtype(key.dtype):
-                if not len(key) == len(self):
-                    raise ValueError(
-                        "Boolean mask must be of same length as column"
-                    )
-                key = arange(len(self))[key]
-                if hasattr(value, "__len__") and len(value) == len(self):
-                    value = as_column(value)[key]
+            if not is_numeric_dtype(key.dtype):
+                raise ValueError("Unknown scatter map type.")
+            out = self._scatter_by_column(
+                cast("cudf.core.column.NumericalColumn", key), value_normalized
+            )
+
+        if out:
+            self._mimic_inplace(out, inplace=True)
+
+    def _scatter_by_slice(
+        self, key: Slice, value: Union[cudf.core.scalar.Scalar, ColumnBase]
+    ) -> Optional[ColumnBase]:
+        """If this function returns None, it's either a no-op (slice is empty),
+        or the inplace replacement is already performed (fill-in-place).
+        """
+        nelem: int  # the number of elements to scatter
+
+        key_start, key_stop, key_stride = key.indices(len(self))
+        if key_start < 0:
+            key_start = key_start + len(self)
+        if key_stop < 0:
+            key_stop = key_stop + len(self)
+        if key_start >= key_stop:
+            return None
+        key_stride = 1 if key_stride is None else key_stride
+        nelem = int(np.ceil(key_stop - key_start) / key_stride)
+
+        self._check_scatter_key_length(nelem, value)
+
+        if key_stride == 1:
+            if isinstance(value, cudf.core.scalar.Scalar):
+                return self._fill(value, key_start, key_stop, inplace=True)
+            else:
+                return libcudf.copying.copy_range(
+                    value, self, 0, nelem, key_start, key_stop, False
+                )
+
+        # stride != 1, create a scatter map with arange
+        scatter_map: ColumnBase = arange(
+            start=key_start,
+            stop=key_stop,
+            step=key_stride,
+            dtype=cudf.dtype(np.int32),
+        )
+
+        return self._scatter_by_column(
+            cast("cudf.core.column.NumericalColumn", scatter_map), value
+        )
+
+    def _scatter_by_column(
+        self,
+        key: "cudf.core.column.NumericalColumn",
+        value: Union[cudf.core.scalar.Scalar, ColumnBase],
+    ) -> ColumnBase:
+        nelem: int  # the number of elements to scatter
+
+        if is_bool_dtype(key.dtype):
+            if not len(key) == len(self):
+                raise ValueError(
+                    "Boolean mask must be of same length as column"
+                )
+            nelem = -1
+            if isinstance(value, ColumnBase):
+                if len(self) == len(value):
+                    # Both value and key is aligned to self. Thus, the values
+                    # corresponding to the `F` masks in key should be ignored.
+                    value = value.apply_boolean_mask(key)
+                    nelem = len(value)
+            # For boolean masks, the number of element to scatter is the number
+            # of `true` values in the mask.
+            nelem = key.sum() if nelem == -1 else nelem
+        else:
             nelem = len(key)
 
-        if is_scalar(value):
-            value = cudf.Scalar(value, dtype=self.dtype)
-        else:
+        self._check_scatter_key_length(nelem, value)
+
+        try:
+            if is_bool_dtype(key.dtype):
+                # boolean_mask_scatter assigns the ith row of value to the row
+                # where the ith `true` resides in mask.
+                return libcudf.copying.boolean_mask_scatter(
+                    [value], [self], key
+                )[0]._with_type_metadata(self.dtype)
+            else:
+                return libcudf.copying.scatter(
+                    value, key, self
+                )._with_type_metadata(self.dtype)
+        except RuntimeError as e:
+            if "out of bounds" in str(e):
+                raise IndexError(
+                    f"index out of bounds for column of size {len(self)}"
+                ) from e
+            raise
+
+    def _check_scatter_key_length(
+        self, nelem: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
+    ):
+        """:param nelem: the number of keys to scatter. Should equal to the
+        number of value.
+        """
+        if isinstance(value, ColumnBase):
             if len(value) != nelem:
                 msg = (
                     f"Size mismatch: cannot set value "
@@ -538,34 +618,6 @@ class ColumnBase(Column, Serializable):
                     f"{nelem}"
                 )
                 raise ValueError(msg)
-            value = as_column(value).astype(self.dtype)
-
-        if (
-            isinstance(key, slice)
-            and (key_stride == 1 or key_stride is None)
-            and not is_scalar(value)
-        ):
-
-            out = libcudf.copying.copy_range(
-                value, self, 0, nelem, key_start, key_stop, False
-            )
-        else:
-            try:
-                if not isinstance(key, Column):
-                    key = as_column(key)
-                if not is_scalar(value) and not isinstance(value, Column):
-                    value = as_column(value)
-                out = libcudf.copying.scatter(
-                    value, key, self
-                )._with_type_metadata(self.dtype)
-            except RuntimeError as e:
-                if "out of bounds" in str(e):
-                    raise IndexError(
-                        f"index out of bounds for column of size {len(self)}"
-                    ) from e
-                raise
-
-        self._mimic_inplace(out, inplace=True)
 
     def fillna(
         self: T,
