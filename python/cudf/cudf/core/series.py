@@ -1049,7 +1049,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     # the end result propagates nulls via a bitwise and, so
                     # these elements are irrelevant.
                     inp = inp.fillna(0)
-                cupy_inputs.append(inp)
+                cupy_inputs.append(cupy.asarray(inp))
 
             cp_output = cupy_func(*cupy_inputs, **kwargs)
 

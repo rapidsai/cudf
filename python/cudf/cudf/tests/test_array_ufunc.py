@@ -101,7 +101,8 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
 @pytest.mark.parametrize("ufunc", [np.add, np.greater, np.logical_and])
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
-def test_binary_ufunc_series_array(ufunc, has_nulls, indexed):
+@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
+def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_):
     fname = ufunc.__name__
     if fname == "greater" and has_nulls:
         pytest.xfail(
@@ -131,9 +132,12 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed):
         args[1] = args[1].fillna(cp.nan)
         mask = args[0].isna().to_pandas()
 
-    got = ufunc(args[0], args[1].to_cupy())
+    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
+    if type_ == "list":
+        arg1 = arg1.tolist()
 
-    expect = ufunc(args[0].to_pandas(), args[1].to_pandas().to_numpy())
+    got = ufunc(args[0], arg1)
+    expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
 
     if ufunc.nout > 1:
         for g, e in zip(got, expect):
