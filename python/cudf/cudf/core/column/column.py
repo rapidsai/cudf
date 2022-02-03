@@ -986,7 +986,7 @@ class ColumnBase(Column, Serializable):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed. To explicitly construct a host array, consider using "
-            ".to_array()"
+            ".to_numpy()"
         )
 
     @property
