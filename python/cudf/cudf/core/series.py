@@ -1023,6 +1023,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if fname == "fabs":
             return self.abs().astype(np.float64)
 
+        # Note: There are some operations that may be supported by libcudf but
+        # are not supported by pandas APIs. In particular, libcudf binary
+        # operations support logical and/or operations, but those operations
+        # are not defined on pd.Series/DataFrame. For now those operations will
+        # dispatch to cupy, but if ufuncs are ever a bottleneck we could add
+        # special handling to dispatch those (or any other) functions that we
+        # could implement without cupy.
+
         # Attempt to dispatch all other functions to cupy.
         cupy_func = getattr(cupy, fname)
         if cupy_func:
@@ -1355,15 +1363,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     def logical_and(self, other):
+        warnings.warn(
+            "Series.logical_and is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_and").astype(np.bool_)
 
     def remainder(self, other):
+        warnings.warn(
+            "Series.remainder is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "mod")
 
     def logical_or(self, other):
+        warnings.warn(
+            "Series.logical_or is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_or").astype(np.bool_)
 
     def logical_not(self):
+        warnings.warn(
+            "Series.logical_not is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
