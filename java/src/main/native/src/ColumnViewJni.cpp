@@ -408,7 +408,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
   JNI_NULL_CHECK(env, keys_vals_handle, "keys_vals_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const *input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
     CUDF_EXPECTS(input_cv->offset() == 0, "Input column has non-zero offset.");
     CUDF_EXPECTS(input_cv->type().id() == cudf::type_id::LIST,
                  "Input column is not a lists column.");
@@ -460,7 +460,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
     auto out_structs =
         cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0, {});
     return release_as_jlong(cudf::make_lists_column(input_cv->size(), std::move(out_offsets),
-                                                    std::move(out_structs), 0, {}));
+                                                    std::move(out_structs), input_cv->null_count(),
+                                                    cudf::copy_bitmask(*input_cv)));
   }
   CATCH_STD(env, 0);
 }
@@ -561,17 +562,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
                                                                         jlong column_view,
-                                                                        jlong delimiter) {
+                                                                        jlong delimiter_ptr,
+                                                                        jint max_split) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
+  JNI_NULL_CHECK(env, delimiter_ptr, "string scalar delimiter is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
-    cudf::strings_column_view scv(*cv);
-    cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);
+    cudf::strings_column_view const scv{*reinterpret_cast<cudf::column_view *>(column_view)};
+    auto delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_ptr);
 
-    std::unique_ptr<cudf::table> table_result = cudf::strings::split(scv, *ss_scalar);
-    return cudf::jni::convert_table_for_return(env, table_result);
+    return cudf::jni::convert_table_for_return(env,
+                                               cudf::strings::split(scv, *delimiter, max_split));
   }
   CATCH_STD(env, 0);
 }
@@ -1442,13 +1443,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
-    cudf::strings_column_view strings_column(*column_view);
+    cudf::strings_column_view const strings_column{
+        *reinterpret_cast<cudf::column_view *>(j_view_handle)};
     cudf::jni::native_jstring pattern(env, patternObj);
 
-    std::unique_ptr<cudf::table> table_result =
-        cudf::strings::extract(strings_column, pattern.get());
-    return cudf::jni::convert_table_for_return(env, table_result);
+    return cudf::jni::convert_table_for_return(
+        env, cudf::strings::extract(strings_column, pattern.get()));
   }
   CATCH_STD(env, 0);
 }
@@ -1820,16 +1820,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
       result = cudf::bitmask_allocation_size_bytes(column->size());
     }
     return result;
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize(JNIEnv *env,
-                                                                                 jobject j_object,
-                                                                                 jint size) {
-  try {
-    cudf::jni::auto_set_device(env);
-    return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
   }
   CATCH_STD(env, 0);
 }

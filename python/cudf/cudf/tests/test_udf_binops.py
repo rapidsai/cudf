@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-from __future__ import division
 
 import numpy as np
 import pytest
@@ -49,4 +48,4 @@ def test_generic_ptx(dtype):
 
     result = lhs_arr ** 3 + rhs_arr
 
-    np.testing.assert_almost_equal(result, out_col.to_array())
+    np.testing.assert_almost_equal(result, out_col.values_host)

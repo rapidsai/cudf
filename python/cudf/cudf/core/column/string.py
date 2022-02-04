@@ -5083,7 +5083,7 @@ class StringColumn(column.ColumnBase):
         """
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))]
+                pa.null(), len(self), [pa.py_buffer(b"")]
             )
         else:
             return super().to_arrow()
@@ -5217,26 +5217,6 @@ class StringColumn(column.ColumnBase):
         Return a CuPy representation of the StringColumn.
         """
         raise TypeError("String Arrays is not yet implemented in cudf")
-
-    # TODO: This method is deprecated and should be removed when the associated
-    # Frame methods are removed.
-    def to_array(self, fillna: bool = None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Raises
-        ------
-        ``NotImplementedError`` if there are nulls
-        """
-        if fillna is not None:
-            warnings.warn("fillna parameter not supported for string arrays")
-
-        return self.to_arrow().to_pandas().values
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
@@ -5401,9 +5381,6 @@ class StringColumn(column.ColumnBase):
             return col
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
-
-    def _default_na_value(self) -> ScalarLike:
-        return None
 
     def binary_operator(
         self, op: builtins.str, rhs, reflect: bool = False
