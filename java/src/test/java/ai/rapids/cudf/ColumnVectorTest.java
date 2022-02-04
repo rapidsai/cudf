@@ -4789,14 +4789,6 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStringSplitThrowsException() {
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
-           Table result = cv.stringSplit(null)) {}
-    });
-  }
-
-  @Test
   void testsubstringColumn() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
          ColumnVector start = ColumnVector.fromInts(2, 1, 1, 1, 0, 1);
