@@ -134,6 +134,8 @@ ConfigureTest(
   REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
 )
 
+ConfigureTest(RANK_TEST reductions/list_rank_test.cpp)
+
 # ##################################################################################################
 # * replace tests ---------------------------------------------------------------------------------
 ConfigureTest(REPLACE_TEST replace/replace_tests.cpp)

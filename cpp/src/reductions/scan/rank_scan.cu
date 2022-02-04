@@ -18,7 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/row_operator_list.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -54,7 +54,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  row_equality_comparator comparator(
+  cudf::experimental::row_equality_comparator comparator(
     nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
@@ -85,8 +85,6 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
-               "Unsupported list type in dense_rank scan.");
   return rank_generator(
     order_by,
     has_nested_nulls(table_view{{order_by}}),
