@@ -31,3 +31,9 @@ Operations that support the use of GPUDirect Storage:
 - `to_csv`
 - `to_parquet`
 - `to_orc`
+
+Several parameters that can be used to tune the performance of GDS-enabled I/O are exposed through environment variables:
+
+- ``LIBCUDF_CUFILE_THREAD_COUNT``: Integral value, maximum number of parallel reads/writes per file (default 16);
+- ``LIBCUDF_CUFILE_SLICE_SIZE``: Integral value, maximum size of each GDS read/write, in bytes (default 4MB).
+  Larger I/O operations are split into multiple calls.
