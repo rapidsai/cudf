@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-#
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
