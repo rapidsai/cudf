@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division
+from __future__ import annotations
 
 import functools
 import inspect
@@ -1242,66 +1242,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 return result
 
     def memory_usage(self, index=True, deep=False):
-        """
-        Return the memory usage of each column in bytes.
-        The memory usage can optionally include the contribution of
-        the index and elements of `object` dtype.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the DataFrame's
-            index in returned Series. If ``index=True``, the memory usage of
-            the index is the first item in the output.
-        deep : bool, default False
-            If True, introspect the data deeply by interrogating
-            `object` dtypes for system-level memory consumption, and include
-            it in the returned values.
-
-        Returns
-        -------
-        Series
-            A Series whose index is the original column names and whose values
-            is the memory usage of each column in bytes.
-
-        Examples
-        --------
-        >>> dtypes = ['int64', 'float64', 'object', 'bool']
-        >>> data = dict([(t, np.ones(shape=5000).astype(t))
-        ...              for t in dtypes])
-        >>> df = cudf.DataFrame(data)
-        >>> df.head()
-           int64  float64  object  bool
-        0      1      1.0     1.0  True
-        1      1      1.0     1.0  True
-        2      1      1.0     1.0  True
-        3      1      1.0     1.0  True
-        4      1      1.0     1.0  True
-        >>> df.memory_usage(index=False)
-        int64      40000
-        float64    40000
-        object     40000
-        bool        5000
-        dtype: int64
-
-        Use a Categorical for efficient storage of an object-dtype column with
-        many repeated values.
-
-        >>> df['object'].astype('category').memory_usage(deep=True)
-        5008
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        ind = list(self.columns)
-        sizes = [col.memory_usage() for col in self._data.columns]
-        if index:
-            ind.append("Index")
-            ind = cudf.Index(ind, dtype="str")
-            sizes.append(self.index.memory_usage())
-        return Series(sizes, index=ind)
+        return Series(
+            {str(k): v for k, v in super().memory_usage(index, deep).items()}
+        )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
@@ -2546,11 +2489,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ),
             inplace=inplace,
         )
-
-    def take(self, indices, axis=0):
-        out = super().take(indices)
-        out.columns = self.columns
-        return out
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value, nan_as_null=None):
@@ -4229,7 +4167,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 dtype = self.dtypes.iloc[i]
                 col = pprint_thing(col)
 
-                line_no = _put_str(" {num}".format(num=i), space_num)
+                line_no = _put_str(f" {i}", space_num)
                 count = ""
                 if show_counts:
                     count = counts[i]
@@ -5576,9 +5514,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if issubclass(dtype.type, e_dtype):
                         exclude_subtypes.add(dtype.type)
 
-        include_all = set(
-            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
-        )
+        include_all = {cudf_dtype_from_pydata_dtype(d) for d in self.dtypes}
 
         if include:
             inclusion = include_all & include_subtypes
@@ -6027,6 +5963,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
 
+    def nunique(self, axis=0, dropna=True):
+        """
+        Count number of distinct elements in specified axis.
+        Return Series with number of distinct elements. Can ignore NaN values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            The axis to use. 0 or 'index' for row-wise, 1 or 'columns' for
+            column-wise.
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A': [4, 5, 6], 'B': [4, 1, 1]})
+        >>> df.nunique()
+        A    3
+        B    2
+        dtype: int64
+        """
+        if axis != 0:
+            raise NotImplementedError("axis parameter is not supported yet.")
+
+        return cudf.Series(super().nunique(method="sort", dropna=dropna))
+
 
 def from_dataframe(df, allow_copy=False):
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
@@ -6298,8 +6265,8 @@ def _align_indices(lhs, rhs):
         lhs_out = DataFrame(index=df.index)
         rhs_out = DataFrame(index=df.index)
         common = set(lhs.columns) & set(rhs.columns)
-        common_x = set(["{}_x".format(x) for x in common])
-        common_y = set(["{}_y".format(x) for x in common])
+        common_x = {f"{x}_x" for x in common}
+        common_y = {f"{x}_y" for x in common}
         for col in df.columns:
             if col in common_x:
                 lhs_out[col[:-2]] = df[col]
