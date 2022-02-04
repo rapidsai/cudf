@@ -5093,9 +5093,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result[name] = col.isin(values)
         else:
             raise TypeError(
-                f"only list-like or dict-like objects are "
-                f"allowed to be passed to DataFrame.isin(), "
-                f"you passed a "
+                "only list-like or dict-like objects are "
+                "allowed to be passed to DataFrame.isin(), "
+                "you passed a "
                 f"'{type(values).__name__}'"
             )
 
