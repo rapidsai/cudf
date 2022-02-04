@@ -12,10 +12,26 @@ import cudf
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
     is_categorical_dtype,
+    is_decimal_dtype,
+    is_interval_dtype,
+    is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
+    is_struct_dtype,
 )
 from cudf.core._compat import PANDAS_GE_110
+
+
+def dtype_can_compare_equal_to_other(dtype):
+    # return True if values of this dtype can compare
+    # as equal to equal values of a different dtype
+    return not (
+        is_string_dtype(dtype)
+        or is_list_dtype(dtype)
+        or is_struct_dtype(dtype)
+        or is_decimal_dtype(dtype)
+        or is_interval_dtype(dtype)
+    )
 
 
 def _check_isinstance(left, right, obj):
@@ -151,6 +167,9 @@ def assert_column_equal(
                 msg1 = f"{left.dtype}"
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)
+    else:
+        if left.null_count == len(left) and right.null_count == len(right):
+            return True
 
     if check_datetimelike_compat:
         if np.issubdtype(left.dtype, np.datetime64):
@@ -210,38 +229,46 @@ def assert_column_equal(
     if left.size == right.size == 0:
         columns_equal = True
     elif not (
-        (is_string_dtype(left) and is_numeric_dtype(right))
-        or (is_numeric_dtype(left) and is_string_dtype(right))
+        (
+            not dtype_can_compare_equal_to_other(left.dtype)
+            and is_numeric_dtype(right)
+        )
+        or (
+            is_numeric_dtype(left)
+            and not dtype_can_compare_equal_to_other(right)
+        )
     ):
         try:
             # nulls must be in the same places for all dtypes
-            nulls_equal = cp.all(left.isnull().values == right.isnull().values)
+            columns_equal = cp.all(
+                left.isnull().values == right.isnull().values
+            )
 
-            if not check_exact and is_numeric_dtype(left):
+            if is_numeric_dtype(left) and columns_equal and not check_exact:
                 # non-null values must be the same
-                values_equal = cp.allclose(
+                columns_equal = cp.allclose(
                     left[left.isnull().unary_operator("not")].values,
                     right[right.isnull().unary_operator("not")].values,
                 )
-                if not left.dtype.kind == right.dtype.kind == "f":
-                    columns_equal = nulls_equal and values_equal
-                else:
-                    # nans must be the same for float types
-                    nans_equal = cp.all(
+                if columns_equal and (
+                    left.dtype.kind == right.dtype.kind == "f"
+                ):
+                    columns_equal = cp.all(
                         is_nan(left).values == is_nan(right).values
                     )
-                    columns_equal = nulls_equal and values_equal and nans_equal
             else:
                 columns_equal = left.equals(right)
         except TypeError as e:
             if str(e) != "Categoricals can only compare with the same type":
                 raise e
+            else:
+                columns_equal = False
             if is_categorical_dtype(left) and is_categorical_dtype(right):
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
-        ldata = [val for val in left.to_pandas(nullable=True)]
-        rdata = [val for val in right.to_pandas(nullable=True)]
+        ldata = str([val for val in left.to_pandas(nullable=True)])
+        rdata = str([val for val in right.to_pandas(nullable=True)])
         msg1 = f"{ldata}"
         msg2 = f"{rdata}"
         try:
@@ -253,7 +280,10 @@ def assert_column_equal(
         except BaseException:
             diff = 100.0
         raise_assert_detail(
-            obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2,
+            obj,
+            f"values are different ({np.round(diff, 5)} %)",
+            {ldata},
+            {rdata},
         )
 
 
