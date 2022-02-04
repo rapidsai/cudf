@@ -412,7 +412,7 @@ def test_as_column_buffer(data, expected):
         (
             [100, 200, 300],
             {"type": pa.decimal128(3)},
-            {"dtype": cudf.core.dtypes.Decimal128Dtype(3, 0)}),
+            {"dtype": cudf.core.dtypes.Decimal128Dtype(3, 0)},
         ),
         ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], {}, {},),
         ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], {}, {},),
