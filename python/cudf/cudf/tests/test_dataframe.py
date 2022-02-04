@@ -9079,7 +9079,7 @@ def test_dataframe_add_suffix():
         ),
         (
             {
-                "id": [0] * 4 + [1] * 3,
+                "id": [0, 0, 0, 0, 1, 1, 1],
                 "a": [10, 3, 4, 2, -3, 9, 10],
                 "b": [10, 23, -4, 2, -3, 9, 19],
             },
@@ -9163,14 +9163,13 @@ def test_groupby_cov_invalid_column_types(data, gkey):
         cudf.DataFrame(data).groupby(gkey).cov(min_periods=0, ddof=1)
 
 
-def test_groupby_cov_for_positive_semi_definite_ness():
-    # Refer to discussions in PR re "pair-wise deletion" strategy being used
-    # in pandas to compute the covariance of a dataframe with rows containing
-    # missing values.
-    # Note: cuDF currently matches pandas behavivor in that the covariance
-    # matrices are non-PSD (positive semi definite). Link to discussion below:
+def test_groupby_cov_positive_semidefinite_matrix():
+    # Refer to discussions in PR #9889 re "pair-wise deletion" strategy
+    # being used in pandas to compute the covariance of a dataframe with
+    # rows containing
+    # Note: cuDF currently matches pandas behavior in that the covariance
+    # matrices are not guaranteed PSD (positive semi definite).
     # https://github.com/rapidsai/cudf/pull/9889#discussion_r794158358
-
     gdf = cudf.DataFrame(
         [[1, 2], [None, 4], [5, None], [7, 8]], columns=["v0", "v1"]
     )
@@ -9191,13 +9190,12 @@ def test_groupby_cov_for_pandas_bug_case():
     # Handles case: pandas bug when min_periods=2 and ddof=2
     # Currently pandas recognizes the bug with no clear fix
     # Filed an issue in Pandas on GH, link below:
+    # https://github.com/pandas-dev/pandas/issues/45814
     pdf = pd.DataFrame(
         {
             "id": ["a", "a", "b", "b", "c", "c"],
-            "val": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            "val1": pd.Series(
-                [None, None, None, None, None, None], dtype=float
-            ),
+            "val1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "val2": [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
         }
     )
     expected = pdf.groupby("id").cov(min_periods=2, ddof=2)
