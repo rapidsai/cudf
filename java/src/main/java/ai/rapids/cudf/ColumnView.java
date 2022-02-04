@@ -2358,7 +2358,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Table stringSplit(String delimiter, int maxSplit, boolean splitByRegex) {
     assert delimiter != null : "delimiter is null";
-    assert (delimiter.length() == 0) ^ splitByRegex : "cannot split by empty regex";
+    assert delimiter.length() > 0 || !splitByRegex : "cannot split by empty regex";
     assert type.equals(DType.STRING) : "column type must be a String";
     return new Table(stringSplit(this.getNativeView(), delimiter, maxSplit, splitByRegex));
   }
@@ -2441,7 +2441,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector stringSplitRecord(String delimiter, int maxSplit, boolean splitByRegex) {
     assert delimiter != null : "delimiter is null";
-    assert (delimiter.length() == 0) ^ splitByRegex : "cannot split by empty regex";
+    assert delimiter.length() > 0 || !splitByRegex : "cannot split by empty regex";
     assert type.equals(DType.STRING) : "column type must be String";
     return new ColumnVector(
         stringSplitRecord(this.getNativeView(), delimiter, maxSplit, splitByRegex));
