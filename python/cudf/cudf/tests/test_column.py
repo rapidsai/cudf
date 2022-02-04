@@ -43,14 +43,13 @@ def pandas_input(request):
     except TypeError:
         if dtype == "category":
             data = random_ints(np.int64, size)
-        else:
-            raise
+        raise
     else:
         if dtype.kind == "b":
-            data = np.random.choice([False, True], size=size)
+            data = rng.choice([False, True], size=size)
         elif dtype.kind in ("m", "M"):
             # datetime or timedelta
-            data = random_ints(np.int64, size).astype(dtype.str)
+            data = random_ints(np.int64, size)
         elif dtype.kind == "U":
             # Unicode strings of integers like "12345"
             data = random_ints(np.int64, size).astype(dtype.str)
@@ -412,17 +411,17 @@ def test_as_column_buffer(data, expected):
     [
         (
             [100, 200, 300],
-            dict(type=pa.decimal128(3)),
-            dict(dtype=cudf.core.dtypes.Decimal128Dtype(3, 0)),
+            {"type": pa.decimal128(3)},
+            {"dtype": cudf.core.dtypes.Decimal128Dtype(3, 0)}),
         ),
-        ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], dict(), dict(),),
-        ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], dict(), dict(),),
+        ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], {}, {},),
+        ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], {}, {},),
     ],
 )
 def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
     pyarrow_data = pa.array(data, **pyarrow_kwargs)
-    cudf_from_pyarrow = cudf.core.column.as_column(pyarrow_data)
-    expected = cudf.core.column.as_column(data, **cudf_kwargs)
+    cudf_from_pyarrow = as_column(pyarrow_data)
+    expected = as_column(data, **cudf_kwargs)
     assert_eq(cudf.Series(cudf_from_pyarrow), cudf.Series(expected))
 
 
