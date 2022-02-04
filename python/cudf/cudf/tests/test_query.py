@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from __future__ import division, print_function
 
 import datetime
 import inspect
