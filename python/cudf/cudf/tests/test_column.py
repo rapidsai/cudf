@@ -29,8 +29,8 @@ dtypes = sorted(
 
 @pytest.fixture(params=dtypes, ids=dtypes)
 def pandas_input(request):
-    rng = np.random.default_rng()
     dtype = request.param
+    rng = np.random.default_rng()
     size = 100
 
     def random_ints(dtype, size):
@@ -39,11 +39,12 @@ def pandas_input(request):
         return rng.integers(dtype_min, dtype_max, size=size, dtype=dtype)
 
     try:
-        dtype = np.dtype(request.param)
+        dtype = np.dtype(dtype)
     except TypeError:
         if dtype == "category":
             data = random_ints(np.int64, size)
-        raise
+        else:
+            raise
     else:
         if dtype.kind == "b":
             data = rng.choice([False, True], size=size)
