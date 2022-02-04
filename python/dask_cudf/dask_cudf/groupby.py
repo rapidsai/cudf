@@ -82,6 +82,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+
         arg = _redirect_aggs(arg)
 
         if (
@@ -178,10 +179,8 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
-        arg = _redirect_aggs(arg)
 
-        if not isinstance(arg, dict):
-            arg = {self._slice: arg}
+        arg = _redirect_aggs(arg)
 
         if (
             isinstance(self.obj, DaskDataFrame)
@@ -253,7 +252,7 @@ def groupby_agg(
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
-    if isinstance(aggs, list):
+    if not isinstance(aggs, dict):
         aggs = {col: aggs for col in columns}
 
     # Assert if our output will have a MultiIndex; this will be the case if
@@ -413,6 +412,8 @@ def _is_supported(arg, supported: set):
             _global_set = set(arg)
 
         return bool(_global_set.issubset(supported))
+    elif isinstance(arg, str):
+        return arg in supported
     return False
 
 
