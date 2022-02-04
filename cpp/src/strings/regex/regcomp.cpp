@@ -278,15 +278,15 @@ class regex_parser {
             yy         = 0;
             if (a >= '0' && a <= '9')
               yy += (a - '0') << 4;
-            else if (a > 'a' && a <= 'f')
+            else if (a >= 'a' && a <= 'f')
               yy += (a - 'a' + 10) << 4;
-            else if (a > 'A' && a <= 'F')
+            else if (a >= 'A' && a <= 'F')
               yy += (a - 'A' + 10) << 4;
             if (b >= '0' && b <= '9')
               yy += b - '0';
-            else if (b > 'a' && b <= 'f')
+            else if (b >= 'a' && b <= 'f')
               yy += b - 'a' + 10;
-            else if (b > 'A' && b <= 'F')
+            else if (b >= 'A' && b <= 'F')
               yy += b - 'A' + 10;
             break;
           }
