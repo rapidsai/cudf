@@ -171,7 +171,7 @@ cufile_input_impl::cufile_input_impl(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_RDONLY | O_DIRECT),
     // The benefit from multithreaded read plateaus around 16 threads
-    pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))  
+    pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
   pool.sleep_duration = 10;
 }
@@ -196,9 +196,10 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
 {
   std::vector<std::future<ResultT>> slice_tasks;
   constexpr size_t default_max_slice_bytes = 4 * 1024 * 1024;
-  static auto const max_slice_bytes = getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_bytes);
-  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_offset              = 0;
+  static auto const max_slice_bytes =
+    getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_bytes);
+  size_t const n_slices = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_offset   = 0;
   for (size_t t = 0; t < n_slices; ++t) {
     DataT* ptr_slice = ptr + slice_offset;
 
