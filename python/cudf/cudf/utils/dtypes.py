@@ -160,8 +160,8 @@ def numeric_normalize_types(*args):
 def _find_common_type_decimal(dtypes):
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
-    s = max([dtype.scale for dtype in dtypes])
-    lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
+    s = max(dtype.scale for dtype in dtypes)
+    lhs = max(dtype.precision - dtype.scale for dtype in dtypes)
     # Combine to get the necessary precision and clip at the maximum
     # precision
     p = s + lhs
@@ -525,7 +525,7 @@ def find_common_type(dtypes):
             )
             for dtype in dtypes
         ):
-            if len(set(dtype._categories.dtype for dtype in dtypes)) == 1:
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
                 return cudf.CategoricalDtype(
                     cudf.core.column.concat_columns(
                         [dtype._categories for dtype in dtypes]
