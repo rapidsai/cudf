@@ -1059,11 +1059,24 @@ class GroupBy(Serializable):
             # maintains a cache of aggregation requests, reusing the same
             # column also makes use of previously cached column means and
             # reduces kernel costs.
+
+            # checks if input column names are string, raise a warning if
+            # not so and cast them to strings
+            if not (isinstance(x, str) and isinstance(y, str)):
+                warnings.warn(
+                    "DataFrame contains non-string column name(s). "
+                    "Struct column requires field name to be string."
+                    "Non-string column names will be casted to string"
+                    "as the field name."
+                )
+                x, y = str(x), str(y)
+
             column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
                 names=(x, y),
                 children=(self.obj._data[x], self.obj._data[y]),
                 size=len(self.obj),
             )
+
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
         ).groupby(by=self.grouping.keys)
