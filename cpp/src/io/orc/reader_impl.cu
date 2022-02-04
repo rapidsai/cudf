@@ -260,28 +260,28 @@ auto decimal_column_type(std::vector<std::string> const& float64_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s> stats,
+__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> stats,
                                         bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
     if (stats[tid].status != 0) {
-      any_block_failure[0] = true;  // Doesn't need to be atomic
+      *any_block_failure = true;  // Doesn't need to be atomic
     }
   }
 }
 
 void decompress_check(device_span<gpu_inflate_status_s> stats,
-                      rmm::cuda_stream_view stream,
-                      bool* any_block_failure)
+                      bool* any_block_failure,
+                      rmm::cuda_stream_view stream)
 {
   dim3 block(128);
   dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
   decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
 }
 
-__global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
-                                      size_t* actual_uncompressed_sizes,
+__global__ void convert_nvcomp_status(device_span<nvcompStatus_t const> nvcomp_stats,
+                                      device_span<size_t const> actual_uncompressed_sizes,
                                       device_span<gpu_inflate_status_s> stats)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -313,6 +313,10 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_blocks, stream);
   rmm::device_uvector<nvcompStatus_t> statuses(num_blocks, stream);
 
+  device_span<size_t const> actual_uncompressed_sizes_span(actual_uncompressed_data_sizes.data(),
+                                                           actual_uncompressed_data_sizes.size());
+  device_span<nvcompStatus_t const> statuses_span(statuses.data(), statuses.size());
+
   // Prepare the vectors
   auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
                                            compressed_data_sizes.begin(),
@@ -341,7 +345,7 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   dim3 block(128);
   dim3 grid(cudf::util::div_rounding_up_safe(num_blocks, static_cast<size_t>(block.x)));
   convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(
-    statuses.data(), actual_uncompressed_data_sizes.data(), comp_stat);
+    statuses_span, actual_uncompressed_sizes_span, comp_stat);
 }
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
@@ -438,7 +442,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
         break;
       default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
     }
-    decompress_check(inflate_out_view, stream, any_block_failure.device_ptr());
+    decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
   }
   if (num_uncompressed_blocks > 0) {
     CUDA_TRY(gpu_copy_uncompressed_blocks(
@@ -451,7 +455,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   compinfo.device_to_host(stream, true);
 
   // We can check on host after stream synchronize
-  CUDF_EXPECTS(any_block_failure[0] == false, "Error during decompression");
+  CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
   const size_t num_columns = chunks.size().second;
 
