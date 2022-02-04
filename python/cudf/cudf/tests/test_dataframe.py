@@ -1158,7 +1158,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     gdf = cudf.DataFrame()
     keycols = []
     for i in range(nkeys):
-        keyname = "key{}".format(i)
+        keyname = f"key{i}"
         gdf[keyname] = np.random.randint(0, 7 - i, nrows)
         keycols.append(keyname)
     gdf["val1"] = np.random.randint(0, nrows * 2, nrows)

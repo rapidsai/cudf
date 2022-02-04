@@ -5107,7 +5107,7 @@ class StringColumn(column.ColumnBase):
         """
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))]
+                pa.null(), len(self), [pa.py_buffer(b"")]
             )
         else:
             return super().to_arrow()
