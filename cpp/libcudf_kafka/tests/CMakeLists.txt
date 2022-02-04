@@ -22,7 +22,7 @@ function(ConfigureTest test_name)
   set_target_properties(
     ${test_name}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>"
-               INSTALL_RPATH "\$ORIGIN/../lib"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
     ${test_name} PRIVATE GTest::gmock GTest::gmock_main GTest::gtest_main cudf_kafka
