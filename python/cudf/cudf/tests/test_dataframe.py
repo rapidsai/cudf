@@ -9094,7 +9094,7 @@ def test_diff_dataframe_numeric_dtypes(data, periods):
 
 
 @pytest.mark.parametrize(
-    ("precision", "scale"), [(5, 2), (4, 3), (8, 5), (3, 1), (6, 4)],
+    ("precision", "scale"), [(5, 2), (8, 5)],
 )
 @pytest.mark.parametrize(
     "dtype", [cudf.Decimal32Dtype, cudf.Decimal64Dtype],
