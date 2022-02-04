@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
-import warnings
 from collections.abc import Sequence
 from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
@@ -23,10 +22,14 @@ from cudf.core import column
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
-from cudf.utils.utils import _maybe_indices_to_slice, cached_property
+from cudf.utils.utils import (
+    NotIterable,
+    _maybe_indices_to_slice,
+    cached_property,
+)
 
 
-class MultiIndex(Frame, BaseIndex):
+class MultiIndex(Frame, BaseIndex, NotIterable):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -366,9 +369,6 @@ class MultiIndex(Frame, BaseIndex):
             mi.names = self.names.copy()
 
         return mi
-
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __repr__(self):
         max_seq_items = get_option("display.max_seq_items") or len(self)
@@ -1412,22 +1412,14 @@ class MultiIndex(Frame, BaseIndex):
         )
 
     def memory_usage(self, deep=False):
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-
-        n = 0
-        for col in self._data.columns:
-            n += col.memory_usage()
+        usage = sum(super().memory_usage(deep=deep).values())
         if self.levels:
             for level in self.levels:
-                n += level.memory_usage(deep=deep)
+                usage += level.memory_usage(deep=deep)
         if self.codes:
             for col in self.codes._data.columns:
-                n += col.memory_usage()
-        return n
+                usage += col.memory_usage()
+        return usage
 
     def difference(self, other, sort=None):
         if hasattr(other, "to_pandas"):

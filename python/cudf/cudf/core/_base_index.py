@@ -3,7 +3,6 @@
 from __future__ import annotations, division, print_function
 
 import pickle
-import warnings
 from typing import Any, Set
 
 import pandas as pd
@@ -1349,28 +1348,6 @@ class BaseIndex(Serializable):
         """
 
         return self._values.isin(values).values
-
-    def memory_usage(self, deep=False):
-        """
-        Memory usage of the values.
-
-        Parameters
-        ----------
-            deep : bool
-                Introspect the data deeply,
-                interrogate `object` dtypes for system-level
-                memory consumption.
-
-        Returns
-        -------
-            bytes used
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        return self._values.memory_usage()
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
