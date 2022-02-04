@@ -826,18 +826,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
    * device_vector equivalent of the boolean column given as argument.
-   * 
+   *
    * The boolColumn must have the same number of rows as the current column.
-   * The result column will have the same number of rows as the current column. 
+   * The result column will have the same number of rows as the current column.
    * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
    * For all other values (i.e. `false` or `null`), the result column will have nulls.
-   * 
+   *
    * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
    * then the row value is undefined.
-   * 
+   *
    * @param boolColumn bool column whose value is to be used as the validity mask.
    * @return Deep copy of the column with replaced validity mask.
-   */    
+   */
   public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
     return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
   }
@@ -2352,17 +2352,51 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter, int maxSplit) {
+  public final Table stringSplit(Scalar delimiter, int maxSplit, boolean splitByRegex) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
+    return new Table(stringSplit(this.getNativeView(),
+                                 delimiter.getScalarHandle(),
+                                 maxSplit,
+                                 splitByRegex));
   }
-  
+
+  /**
+   * Returns a list of columns by splitting each string using the specified string literal delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @return New table of strings columns.
+   */
+  public final Table stringSplit(Scalar delimiter, int maxSplit) {
+    return stringSplit(delimiter, maxSplit, false);
+  }
+
   /**
    * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return New table of strings columns.
+   */
+  public final Table stringSplit(Scalar delimiter, boolean splitByRegex) {
+    return stringSplit(delimiter, -1, splitByRegex);
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified string literal delimiter.
    * The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
@@ -2371,7 +2405,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final Table stringSplit(Scalar delimiter) {
-    return stringSplit(delimiter, -1);
+    return stringSplit(delimiter, -1, false);
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using whitespace as the delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @return New table of strings columns.
+   */
+  public final Table stringSplit(int maxSplit) {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplit(emptyString, maxSplit, false);
+    }
   }
 
   /**
@@ -2382,35 +2430,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final Table stringSplit() {
-    try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplit(emptyString, -1);
-    }
-  }
-
-  /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   */
-  public final ColumnVector stringSplitRecord() {
-    return stringSplitRecord(-1);
-  }
-
-  /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
-   */
-  public final ColumnVector stringSplitRecord(int maxSplit) {
-    try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplitRecord(emptyString, maxSplit);
-    }
-  }
-
-  /**
-   * Returns a column of lists of strings by splitting each string using the specified delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  An empty string indicates split on whitespace.
-   */
-  public final ColumnVector stringSplitRecord(Scalar delimiter) {
-    return stringSplitRecord(delimiter, -1);
+    return stringSplit(-1);
   }
 
   /**
@@ -2419,14 +2439,70 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
    * @return New table of strings columns.
    */
-  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
-    assert type.equals(DType.STRING) : "column type must be a String";
+  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit, boolean splitByRegex) {
+    assert type.equals(DType.STRING) : "column type must be String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
+        stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit, splitByRegex));
+  }
+
+  /**
+   * Returns a column that is a list of strings. Each string list is made by splitting each input
+   * string using the specified string literal delimiter.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @return New table of strings columns.
+   */
+  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    assert delimiter != null : "delimiter may not be null";
+    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
+    return new ColumnVector(
+        stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit, false));
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using the specified delimiter.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   */
+  public final ColumnVector stringSplitRecord(Scalar delimiter, boolean splitByRegex) {
+    return stringSplitRecord(delimiter, -1, splitByRegex);
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using the specified string
+   * literal delimiter.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   */
+  public final ColumnVector stringSplitRecord(Scalar delimiter) {
+    return stringSplitRecord(delimiter, -1, false);
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   */
+  public final ColumnVector stringSplitRecord(int maxSplit) {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplitRecord(emptyString, maxSplit, false);
+    }
+  }
+
+  /**
+   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
+   */
+  public final ColumnVector stringSplitRecord() {
+    return stringSplitRecord(-1);
   }
 
   /**
@@ -3248,7 +3324,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a column of int32 indices, indicating the position of the scalar search key
    * in each list row.
    * All indices are 0-based. If a search key is not found, the index is set to -1.
-   * The index is set to null if one of the following is true: 
+   * The index is set to null if one of the following is true:
    * 1. The search key is null.
    * 2. The list row is null.
    * @param key The scalar search key
@@ -3265,7 +3341,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a column of int32 indices, indicating the position of each row in the
    * search key column in the corresponding row of the lists column.
    * All indices are 0-based. If a search key is not found, the index is set to -1.
-   * The index is set to null if one of the following is true: 
+   * The index is set to null if one of the following is true:
    * 1. The search key row is null.
    * 2. The list row is null.
    * @param keys ColumnView of search keys.
@@ -3537,9 +3613,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param delimiter  UTF-8 encoded string identifying the split points in each string.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
-  private static native long[] stringSplit(long columnView, long delimiter, int maxSplit);
+  private static native long[] stringSplit(long columnView, long delimiter, int maxSplit,
+                                           boolean splitByRegex);
 
-  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
+  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit,
+                                               boolean splitByRegex);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -3714,7 +3792,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Native method to search list rows for null elements.
    * @param nativeView the column view handle of the list
-   * @return column handle of the resultant boolean column 
+   * @return column handle of the resultant boolean column
    */
   private static native long listContainsNulls(long nativeView);
 
@@ -3896,20 +3974,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Native method to deep copy a column while replacing the null mask. The null mask is the
    * device_vector equivalent of the boolean column given as argument.
-   * 
+   *
    * The boolColumn must have the same number of rows as the exemplar column.
    * The result column will have the same number of rows as the exemplar.
    * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
    * For all other values (i.e. `false` or `null`), the result column will have nulls.
-   * 
+   *
    * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
    * then the resultant row value is undefined.
-   * 
+   *
    * @param exemplarViewHandle column view of the column that is deep copied.
    * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
    * @return Deep copy of the column with replaced null mask.
-   */                                                      
-  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
+   */
+  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle,
                                                              long boolColumnViewHandle) throws CudfException;
 
   ////////
