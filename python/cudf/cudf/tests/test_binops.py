@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import division
 
 import decimal
 import operator

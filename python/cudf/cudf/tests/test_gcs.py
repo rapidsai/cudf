@@ -48,14 +48,14 @@ def test_read_csv(pdf, monkeypatch, tmpdir):
     # use_python_file_object=True, because the pyarrow
     # `open_input_file` command will fail (since it doesn't
     # use the monkey-patched `open` definition)
-    got = cudf.read_csv("gcs://{}".format(fpath), use_python_file_object=False)
+    got = cudf.read_csv(f"gcs://{fpath}", use_python_file_object=False)
     assert_eq(pdf, got)
 
     # AbstractBufferedFile -> PythonFile conversion
     # will work fine with the monkey-patched FS if we
     # pass in an fsspec file object
     fs = gcsfs.core.GCSFileSystem()
-    with fs.open("gcs://{}".format(fpath)) as f:
+    with fs.open(f"gcs://{fpath}") as f:
         got = cudf.read_csv(f)
     assert_eq(pdf, got)
 
@@ -69,7 +69,7 @@ def test_write_orc(pdf, monkeypatch, tmpdir):
         return open(local_filepath, "wb")
 
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
-    gdf.to_orc("gcs://{}".format(gcs_fname))
+    gdf.to_orc(f"gcs://{gcs_fname}")
 
     got = pa.orc.ORCFile(local_filepath).read().to_pandas()
     assert_eq(pdf, got)

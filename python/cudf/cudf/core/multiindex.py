@@ -118,7 +118,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
             )
-        if len(set(c.size for c in codes._data.columns)) != 1:
+        if len({c.size for c in codes._data.columns}) != 1:
             raise ValueError(
                 "MultiIndex length of codes does not match "
                 "and is inconsistent!"
@@ -752,7 +752,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             result = cudf.Series._from_data(
-                {}, name=tuple((col[0] for col in index._data.columns))
+                {}, name=tuple(col[0] for col in index._data.columns)
             )
         elif out_index._num_columns == 1:
             # If there's only one column remaining in the output index, convert
@@ -1202,7 +1202,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if not pd.api.types.is_list_like(level):
             level = (level,)
 
-        ilevels = sorted([self._level_index_from_level(lev) for lev in level])
+        ilevels = sorted(self._level_index_from_level(lev) for lev in level)
 
         if not ilevels:
             return None

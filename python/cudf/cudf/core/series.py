@@ -167,7 +167,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame._index.nlevels
-                and not any((isinstance(x, slice) for x in arg))
+                and not any(isinstance(x, slice) for x in arg)
             ):
                 result = result.iloc[0]
             return result
@@ -2888,7 +2888,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return percentiles
 
         def _format_percentile_names(percentiles):
-            return ["{0}%".format(int(x * 100)) for x in percentiles]
+            return [f"{int(x * 100)}%" for x in percentiles]
 
         def _format_stats_values(stats_data):
             return map(lambda x: round(x, 6), stats_data)
@@ -2990,7 +2990,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                         .to_numpy(na_value=np.nan),
                     )
                 ),
-                "max": str(pd.Timestamp((self.max()))),
+                "max": str(pd.Timestamp(self.max())),
             }
 
             return Series(
@@ -3474,7 +3474,7 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class DatetimeProperties(object):
+class DatetimeProperties:
     """
     Accessor object for datetimelike properties of the Series values.
 
@@ -4416,7 +4416,7 @@ class DatetimeProperties(object):
         )
 
 
-class TimedeltaProperties(object):
+class TimedeltaProperties:
     """
     Accessor object for timedeltalike properties of the Series values.
 
