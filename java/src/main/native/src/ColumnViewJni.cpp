@@ -563,19 +563,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
                                                                         jlong input_handle,
-                                                                        jlong delimiter_handle,
+                                                                        jstring delimiter,
                                                                         jint max_split,
                                                                         jboolean split_by_regex) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
-  JNI_NULL_CHECK(env, delimiter_handle, "string scalar delimiter is null", 0);
   try {
     cudf::jni::auto_set_device(env);
+
     auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
     auto const strs_input = cudf::strings_column_view{*input};
-    auto const delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_handle);
 
-    auto result = split_by_regex ? cudf::strings::split_re(strs_input, *delimiter, max_split) :
-                                   cudf::strings::split(strs_input, *delimiter, max_split);
+    auto const delimiter_content = env->GetStringUTFChars(delimiter, nullptr);
+    auto const str_delimiter = std::string{delimiter_content};
+
+    auto result =
+        split_by_regex ?
+            cudf::strings::split_re(strs_input, str_delimiter, max_split) :
+            cudf::strings::split(strs_input, cudf::string_scalar{str_delimiter}, max_split);
     return cudf::jni::convert_table_for_return(env, std::move(result));
   }
   CATCH_STD(env, 0);
@@ -583,20 +587,23 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
                                                                          jlong input_handle,
-                                                                         jlong delimiter_handle,
+                                                                         jstring delimiter,
                                                                          jint max_split,
                                                                          jboolean split_by_regex) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
-  JNI_NULL_CHECK(env, delimiter_handle, "delimiter_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
+
     auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
     auto const strs_input = cudf::strings_column_view{*input};
-    auto const delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_handle);
 
-    auto result = split_by_regex ?
-                      cudf::strings::split_record_re(strs_input, *delimiter, max_split) :
-                      cudf::strings::split_record(strs_input, *delimiter, max_split);
+    auto const delimiter_content = env->GetStringUTFChars(delimiter, nullptr);
+    auto const str_delimiter = std::string{delimiter_content};
+
+    auto result =
+        split_by_regex ?
+            cudf::strings::split_record_re(strs_input, str_delimiter, max_split) :
+            cudf::strings::split_record(strs_input, cudf::string_scalar{str_delimiter}, max_split);
     return release_as_jlong(result);
   }
   CATCH_STD(env, 0);

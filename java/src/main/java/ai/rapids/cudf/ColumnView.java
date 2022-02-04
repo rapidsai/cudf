@@ -2349,21 +2349,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @param splitByRegex a boolean flag indicating whether the input string will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter, int maxSplit, boolean splitByRegex) {
+  public final Table stringSplit(String delimiter, int maxSplit, boolean splitByRegex) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new Table(stringSplit(this.getNativeView(),
-                                 delimiter.getScalarHandle(),
-                                 maxSplit,
-                                 splitByRegex));
+    return new Table(stringSplit(this.getNativeView(), delimiter, maxSplit, splitByRegex));
   }
 
   /**
@@ -2371,12 +2366,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter, int maxSplit) {
+  public final Table stringSplit(String delimiter, int maxSplit) {
     return stringSplit(delimiter, maxSplit, false);
   }
 
@@ -2385,13 +2380,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @param splitByRegex a boolean flag indicating whether the input string will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter, boolean splitByRegex) {
+  public final Table stringSplit(String delimiter, boolean splitByRegex) {
     return stringSplit(delimiter, -1, splitByRegex);
   }
 
@@ -2400,11 +2395,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter) {
+  public final Table stringSplit(String delimiter) {
     return stringSplit(delimiter, -1, false);
   }
 
@@ -2417,9 +2412,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final Table stringSplit(int maxSplit) {
-    try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplit(emptyString, maxSplit, false);
-    }
+    String emptyString = "";
+    return stringSplit(emptyString, maxSplit, false);
   }
 
   /**
@@ -2436,55 +2430,48 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a column that is a list of strings. Each string list is made by splitting each input
    * string using the specified delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @param splitByRegex a boolean flag indicating whether the input string will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
    * @return New table of strings columns.
    */
-  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit, boolean splitByRegex) {
+  public final ColumnVector stringSplitRecord(String delimiter, int maxSplit, boolean splitByRegex) {
     assert type.equals(DType.STRING) : "column type must be String";
-    assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit, splitByRegex));
+        stringSplitRecord(this.getNativeView(), delimiter, maxSplit, splitByRegex));
   }
 
   /**
    * Returns a column that is a list of strings. Each string list is made by splitting each input
    * string using the specified string literal delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
-  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
-    assert type.equals(DType.STRING) : "column type must be String";
-    assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit, false));
+  public final ColumnVector stringSplitRecord(String delimiter, int maxSplit) {
+    return stringSplitRecord(delimiter, maxSplit, false);
   }
-
   /**
    * Returns a column of lists of strings by splitting each string using the specified delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    * @param splitByRegex a boolean flag indicating whether the input string will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
    */
-  public final ColumnVector stringSplitRecord(Scalar delimiter, boolean splitByRegex) {
+  public final ColumnVector stringSplitRecord(String delimiter, boolean splitByRegex) {
     return stringSplitRecord(delimiter, -1, splitByRegex);
   }
 
   /**
    * Returns a column of lists of strings by splitting each string using the specified string
    * literal delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    *                  An empty string indicates split on whitespace.
    */
-  public final ColumnVector stringSplitRecord(Scalar delimiter) {
+  public final ColumnVector stringSplitRecord(String delimiter) {
     return stringSplitRecord(delimiter, -1, false);
   }
 
@@ -2493,9 +2480,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
   public final ColumnVector stringSplitRecord(int maxSplit) {
-    try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplitRecord(emptyString, maxSplit, false);
-    }
+    String emptyString = "";
+    return stringSplitRecord(emptyString, maxSplit, false);
   }
 
   /**
@@ -3607,16 +3593,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Native method which returns array of columns by splitting each string using the specified
+   * Native method which returns an array of columns by splitting each string using the specified
    * delimiter.
-   * @param columnView native handle of the cudf::column_view being operated on.
-   * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   * @param nativeHandle native handle of the cudf::column_view being operated on.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
    * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long[] stringSplit(long columnView, long delimiter, int maxSplit,
+  private static native long[] stringSplit(long nativeHandle, String delimiter, int maxSplit,
                                            boolean splitByRegex);
 
-  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit,
+  /**
+   * Native method which returns a LIST column by splitting each string into a list of strings
+   * using the specified delimiter.
+   * @param nativeHandle native handle of the cudf::column_view being operated on.
+   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
+   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   */
+  private static native long stringSplitRecord(long nativeHandle, String delimiter, int maxSplit,
                                                boolean splitByRegex);
 
   /**

@@ -4741,24 +4741,25 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testStringSplitRecord() {
-      try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
-           ColumnVector expected = ColumnVector.fromLists(
-                   new HostColumnVector.ListType(true,
-                       new HostColumnVector.BasicType(true, DType.STRING)),
-                   Arrays.asList("Héllo", "there"),
-                   Arrays.asList("thésé"),
-                   Arrays.asList("null"),
-                   Arrays.asList(""),
-                   Arrays.asList("ARé", "some"),
-                   Arrays.asList("test", "strings"));
-           Scalar pattern = Scalar.fromString(" ");
-           ColumnVector result = v.stringSplitRecord(pattern, -1)) {
-          assertColumnsAreEqual(expected, result);
-      }
+    String pattern = " ";
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
+         ColumnVector expected = ColumnVector.fromLists(
+                 new HostColumnVector.ListType(true,
+                     new HostColumnVector.BasicType(true, DType.STRING)),
+                 Arrays.asList("Héllo", "there"),
+                 Arrays.asList("thésé"),
+                 Arrays.asList("null"),
+                 Arrays.asList(""),
+                 Arrays.asList("ARé", "some"),
+                 Arrays.asList("test", "strings"));
+         ColumnVector result = v.stringSplitRecord(pattern, -1)) {
+        assertColumnsAreEqual(expected, result);
+    }
   }
 
   @Test
   void testStringSplit() {
+    String pattern = " ";
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "", "ARé some things", "test strings here");
          Table expectedSplitOnce = new Table.TestBuilder()
          .column("Héllo", "thésé", null, "", "ARé", "test")
@@ -4769,7 +4770,6 @@ public class ColumnVectorTest extends CudfTestBase {
          .column("there", null, null, null, "some", "strings")
          .column("all", null, null, null, "things", "here")
          .build();
-         Scalar pattern = Scalar.fromString(" ");
          Table resultSplitOnce = v.stringSplit(pattern, 1);
          Table resultSplitAll = v.stringSplit(pattern)) {
           assertTablesAreEqual(expectedSplitOnce, resultSplitOnce);
@@ -4790,16 +4790,6 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void teststringSplitThrowsException() {
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
-           Scalar delimiter = Scalar.fromString(null);
-           Table result = cv.stringSplit(delimiter)) {}
-    });
-    assertThrows(AssertionError.class, () -> {
-    try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
-         Scalar delimiter = Scalar.fromInt(1);
-         Table result = cv.stringSplit(delimiter)) {}
-    });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
            Table result = cv.stringSplit(null)) {}
