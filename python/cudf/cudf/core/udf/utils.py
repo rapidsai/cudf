@@ -222,7 +222,6 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    breakpoint()
     kernel = cuda.jit(sig, link=['/home/nfs/brmiller/ipynb/strings_udf/len.ptx'], extensions=[str_view_arg_handler])(_kernel)
 
     return kernel

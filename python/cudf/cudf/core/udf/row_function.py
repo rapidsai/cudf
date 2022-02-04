@@ -45,7 +45,14 @@ def _get_frame_row_type(dtype):
     fields = []
     offset = 0
 
-    sizes = [val[0].itemsize for val in dtype.fields.values()]
+    sizes = []
+    for field in dtype.fields.values():
+        if field[0] == np.dtype('object'):
+            sizes.append(24)
+        else:
+            sizes.append(field[0].itemsize)
+
+    #sizes = [val[0].itemsize for val in dtype.fields.values()]
     for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.
@@ -62,7 +69,11 @@ def _get_frame_row_type(dtype):
         fields.append((name, infos))
 
         # increment offset by itemsize plus one byte for validity
-        offset += elemdtype.itemsize + 1
+        if elemdtype == np.dtype('object'):
+            itemsize = 24
+        else:
+            itemsize = elemdtype.itemsize
+        offset += itemsize + 1
 
         # Align the next member of the struct to be a multiple of the
         # memory access size, per PTX ISA 7.4/5.4.5
