@@ -337,6 +337,26 @@ class Frame:
         """
         return self.size == 0
 
+    def memory_usage(self, deep=False):
+        """Return the memory usage of an object.
+
+        Parameters
+        ----------
+        deep : bool
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        The total bytes used.
+        """
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        return {name: col.memory_usage() for name, col in self._data.items()}
+
     def __len__(self):
         return self._num_rows
 
@@ -3200,9 +3220,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.ceil and DataFrame.ceil are deprecated and will be "
+            "removed in the future",
+            FutureWarning,
         )
 
         return self._unaryop("ceil")
@@ -3239,9 +3259,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.floor and DataFrame.floor are deprecated and will be "
+            "removed in the future.",
+            FutureWarning,
         )
 
         return self._unaryop("floor")
