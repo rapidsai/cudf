@@ -556,11 +556,20 @@ def test_groupby_agg_redirect(aggregations):
 
 
 @pytest.mark.parametrize(
-    "arg",
-    [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
+    "arg,supported",
+    [
+        ("sum", True),
+        (["sum"], True),
+        ({"a": "sum"}, True),
+        ({"a": ["sum"]}, True),
+        ("not_supported", False),
+        (["not_supported"], False),
+        ({"a": "not_supported"}, False),
+        ({"a": ["not_supported"]}, False),
+    ],
 )
-def test_is_supported(arg):
-    assert _is_supported(arg, {"supported"}) is False
+def test_is_supported(arg, supported):
+    assert _is_supported(arg, SUPPORTED_AGGS) is supported
 
 
 def test_groupby_unique_lists():
