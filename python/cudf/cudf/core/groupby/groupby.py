@@ -969,6 +969,7 @@ class GroupBy(Serializable):
 
         Both NA and null values are automatically excluded from the
         calculation.(See the note below about bias from missing values)
+
         A threshold can be set for the minimum number of observations
         for each value created.Comparisons with observations below this
         threshold will be returned as NaN.
@@ -992,7 +993,7 @@ class GroupBy(Serializable):
 
         Notes
         -----
-        Returns the covariance matrix of the DataFrame’s time series.
+        Returns the covariance matrix of the DataFrame's time series.
         The covariance is normalized by N-ddof.
 
         For DataFrames that have Series that are missing data
@@ -1004,8 +1005,12 @@ class GroupBy(Serializable):
         because the estimate covariance matrix is not guaranteed to be
         positive semi-definite. This could lead to estimate correlations
         having absolute values which are greater than one, and/or a
-        non-invertible covariance matrix. See Estimation of covariance
-        matrices for more details.
+        non-invertible covariance matrix. See `Estimation of covariance
+        matrices <https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices>`
+        for more details.
+
+        Support for alternative methods of nan handling could be added
+        in the future.
 
         Examples
         --------
@@ -1038,13 +1043,13 @@ class GroupBy(Serializable):
         c  val1  2.333333   3.833333   3.833333
            val2  3.833333  12.333333  12.333333
            val3  3.833333  12.333333  12.333333
-        """
+        """  # noqa: E501
 
         # create expanded dataframe consisting all combinations of the
-        # struct columns-pairs to be correlated
-        # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        # struct columns-pairs used in the covariance calculation
+        # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
         column_names = self.grouping.values.columns.tolist()
-        len_cols = len(column_names)
+        num_cols = len(column_names)
 
         column_pair_structs = {}
         for x, y in itertools.combinations_with_replacement(column_names, 2):
@@ -1081,8 +1086,8 @@ class GroupBy(Serializable):
             for i, x in enumerate(column_names)
         ]
         cols_split = [
-            cols_list[i : i + len_cols]
-            for i in range(0, len(cols_list), len_cols)
+            cols_list[i : i + num_cols]
+            for i in range(0, len(cols_list), num_cols)
         ]
 
         def combine_columns(gb_cov, ys):
@@ -1101,7 +1106,7 @@ class GroupBy(Serializable):
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
-        unsorted_idx = gb_cov.index.repeat(len_cols)
+        unsorted_idx = gb_cov.index.repeat(num_cols)
         idx_sort_order = unsorted_idx._get_sorted_inds()
         sorted_idx = unsorted_idx._gather(idx_sort_order)
         if len(gb_cov):
