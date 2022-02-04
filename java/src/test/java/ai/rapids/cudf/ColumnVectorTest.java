@@ -4778,7 +4778,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void teststringSplitWhiteSpace() {
+  void testStringSplitWhiteSpace() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo thesé", null, "are\tsome", "tést\nString", " ");
          Table expected = new Table.TestBuilder().column("Héllo", null, "are", "tést", null)
          .column("thesé", null, "some", "String", null)
@@ -4789,7 +4789,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void teststringSplitThrowsException() {
+  void testStringSplitThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
            Table result = cv.stringSplit(null)) {}
