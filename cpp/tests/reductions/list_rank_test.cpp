@@ -45,6 +45,34 @@ TEST_F(ListRankScanTest, BasicList)
   this->test_ungrouped_rank_scan(
     col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
 }
+
+TEST_F(ListRankScanTest, DeepList)
+{
+  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
+  lcw col{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
+    {{7, 8}, {}},
+    lcw{lcw{}, lcw{}, lcw{}},
+    lcw{lcw{}},
+    lcw{lcw{}},
+    lcw{lcw{}},
+    lcw{lcw{}, lcw{}, lcw{}},
+    lcw{lcw{}, lcw{}, lcw{}},
+    {lcw{10}},
+    {lcw{10}},
+    {{13, 14}, {15}},
+    {{13, 14}, {16}},
+    lcw{},
+    lcw{lcw{}},
+  };
+
+  auto const expected_dense_vals = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    1, 1, 2, 3, 4, 5, 5, 5, 6, 6, 7, 7, 8, 9, 10, 11};
+  this->test_ungrouped_rank_scan(
+    col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
+}
 }  // namespace test
 }  // namespace cudf
 
