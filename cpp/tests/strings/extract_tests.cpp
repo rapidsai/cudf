@@ -157,8 +157,9 @@ TEST_F(StringsExtractTests, MultiLine)
   auto view = cudf::strings_column_view(input);
 
   auto results = cudf::strings::extract(view, "(^[a-c]+$)", cudf::strings::regex_flags::MULTILINE);
-  cudf::test::strings_column_wrapper expected_ml({"abc", "abc", "abc", "", "abc"}, {1, 1, 1, 0, 1});
-  auto expected = cudf::table_view{{expected_ml}};
+  cudf::test::strings_column_wrapper expected_multiline({"abc", "abc", "abc", "", "abc"},
+                                                        {1, 1, 1, 0, 1});
+  auto expected = cudf::table_view{{expected_multiline}};
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
   results = cudf::strings::extract(view, "^([a-c]+)$");
   cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", ""}, {0, 0, 1, 0, 0});
@@ -172,9 +173,9 @@ TEST_F(StringsExtractTests, DotAll)
   auto view  = cudf::strings_column_view(input);
 
   auto results = cudf::strings::extract(view, "(a.*f)", cudf::strings::regex_flags::DOTALL);
-  cudf::test::strings_column_wrapper expected_ml({"abc\nfa\nef", "abbc\nfff", "abcdef", ""},
-                                                 {1, 1, 1, 0});
-  auto expected = cudf::table_view{{expected_ml}};
+  cudf::test::strings_column_wrapper expected_dotall({"abc\nfa\nef", "abbc\nfff", "abcdef", ""},
+                                                     {1, 1, 1, 0});
+  auto expected = cudf::table_view{{expected_dotall}};
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
   results = cudf::strings::extract(view, "(a.*f)");
   cudf::test::strings_column_wrapper expected_default({"", "", "abcdef", ""}, {0, 0, 1, 0});
