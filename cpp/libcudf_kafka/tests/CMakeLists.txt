@@ -31,6 +31,7 @@ function(ConfigureTest test_name)
   install(
     TARGETS ${test_name}
     COMPONENT testing
+    DESTINATION bin/gtests/libcudf_kafka
     EXCLUDE_FROM_ALL
   )
 endfunction()
