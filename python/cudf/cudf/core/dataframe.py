@@ -5872,9 +5872,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "requires field name to be string. Non-string column names will "
                 "be casted to string as the field name."
             )
-            field_names = [str(name) for name in self._data.names]
-        else:
-            field_names = self._data.names
+        field_names = [str(name) for name in self._data.names]
 
         col = cudf.core.column.build_struct_column(
             names=field_names, children=self._data.columns, size=len(self)
