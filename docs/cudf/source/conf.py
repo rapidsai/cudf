@@ -116,17 +116,6 @@ include_pandas_compat = True
 
 html_theme = "pydata_sphinx_theme"
 html_logo = "_static/RAPIDS-logo-purple.png"
-# on_rtd is whether we are on readthedocs.org
-on_rtd = os.environ.get("READTHEDOCS", None) == "True"
-
-if not on_rtd:
-    # only import and set the theme if we're building docs locally
-    # otherwise, readthedocs.org uses their theme by default,
-    # so no need to specify it
-    import pydata_sphinx_theme
-
-    html_theme = "pydata_sphinx_theme"
-    html_theme_path = pydata_sphinx_theme.get_html_theme_path()
 
 
 # Theme options are theme-specific and customize the look and feel of a theme
