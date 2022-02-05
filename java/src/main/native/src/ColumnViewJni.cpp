@@ -573,8 +573,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
     auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
     auto const strs_input = cudf::strings_column_view{*input};
 
-    auto const delimiter_content = env->GetStringUTFChars(delimiter, nullptr);
-    auto const str_delimiter = std::string{delimiter_content};
+    auto const delimiter_chars = env->GetStringUTFChars(delimiter, nullptr);
+    auto const delimiter_size = env->GetStringUTFLength(delimiter);
+    auto const str_delimiter = std::string(delimiter_chars, delimiter_size);
+    env->ReleaseStringUTFChars(delimiter, delimiter_chars);
 
     auto result =
         split_by_regex ?
@@ -597,8 +599,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
     auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
     auto const strs_input = cudf::strings_column_view{*input};
 
-    auto const delimiter_content = env->GetStringUTFChars(delimiter, nullptr);
-    auto const str_delimiter = std::string{delimiter_content};
+    auto const delimiter_chars = env->GetStringUTFChars(delimiter, nullptr);
+    auto const delimiter_size = env->GetStringUTFLength(delimiter);
+    auto const str_delimiter = std::string(delimiter_chars, delimiter_size);
+    env->ReleaseStringUTFChars(delimiter, delimiter_chars);
 
     auto result =
         split_by_regex ?
