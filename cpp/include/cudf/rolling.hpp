@@ -451,7 +451,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *      should be the exact same type (`INT32`).
  *
  * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ * Example: Consider a motor-racing statistics dataset, containing the following columns:
  *   1. driver_name:   (STRING) Name of the car driver
  *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
  *   3. lap_number:    (INT32)  The number of the lap
