@@ -9104,7 +9104,7 @@ def test_dataframe_add_suffix():
     "d_dof", [1, 3, 4, 5],
 )
 def test_groupby_covariance(data, gkey, min_per, d_dof):
-    gdf = cudf.DataFrame(data)
+    gdf = cudf.DataFrame(data, nan_as_null=False)
     pdf = gdf.to_pandas()
 
     actual = gdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
