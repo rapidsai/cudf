@@ -127,12 +127,6 @@ inline void test_single_scan(column_view const& keys,
   auto result = gb_obj.scan(requests);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
-  /*
-  std::cout << "Expected: (Type == " << static_cast<int32_t>(expect_vals.type().id()) << ")" <<
-  std::endl; print(expect_vals); std::cout << "Got: (Type == " <<
-  static_cast<int32_t>(result.second[0].results[0]->type().id()) << ")" << std::endl;
-  print(*result.second[0].results[0]);
-  */
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
     expect_vals, *result.second[0].results[0], debug_output_level::ALL_ERRORS);
 }
