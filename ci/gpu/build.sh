@@ -36,6 +36,10 @@ export DASK_DISTRIBUTED_GIT_TAG='2022.01.0'
 # ucx-py version
 export UCX_PY_VERSION='0.25.*'
 
+export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
+export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
+export CMAKE_C_COMPILER_LAUNCHER="sccache"
+
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
 ################################################################################

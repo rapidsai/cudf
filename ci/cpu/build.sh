@@ -31,6 +31,10 @@ if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
   export VERSION_SUFFIX=`date +%y%m%d`
 fi
 
+export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
+export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
+export CMAKE_C_COMPILER_LAUNCHER="sccache"
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -83,6 +87,8 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
+  gpuci_logger "sccache stats"
+  sccache --show-stats
 
   # Copy libcudf build metrics results
   LIBCUDF_BUILD_DIR=$CONDA_BLD_DIR/libcudf/work/cpp/build
@@ -91,6 +97,7 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
       gpuci_logger "Copying build metrics results"
       mkdir -p "$WORKSPACE/build-metrics"
       cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+      cp "$LIBCUDF_BUILD_DIR/ninja.log" "$WORKSPACE/build-metrics/ninja.log"
   fi
 
   gpuci_logger "Build conda pkg for libcudf_kafka"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include <text/subword/detail/codepoint_metadata.ah>
-#include <text/subword/detail/data_normalizer.hpp>
 #include <text/subword/detail/tokenizer_utils.cuh>
 
 #include <nvtext/detail/load_hash_file.hpp>
@@ -37,87 +36,32 @@
 namespace nvtext {
 namespace detail {
 
-namespace {
-struct get_codepoint_metadata_init {
-  rmm::cuda_stream_view stream;
-
-  rmm::device_uvector<codepoint_metadata_type>* operator()() const
-  {
-    auto table_vector =
-      new rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
-    auto table = table_vector->data();
-    thrust::fill(rmm::exec_policy(stream),
-                 table + cp_section1_end,
-                 table + codepoint_metadata_size,
-                 codepoint_metadata_default_value);
-    CUDA_TRY(cudaMemcpyAsync(table,
-                             codepoint_metadata,
-                             cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + cp_section2_begin,
-      cp_metadata_917505_917999,
-      (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
-      cudaMemcpyHostToDevice,
-      stream.value()));
-    return table_vector;
-  };
-};
-
-struct get_aux_codepoint_data_init {
-  rmm::cuda_stream_view stream;
-
-  rmm::device_uvector<aux_codepoint_data_type>* operator()() const
-  {
-    auto table_vector =
-      new rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
-    auto table = table_vector->data();
-    thrust::fill(rmm::exec_policy(stream),
-                 table + aux_section1_end,
-                 table + aux_codepoint_data_size,
-                 aux_codepoint_default_value);
-    CUDA_TRY(cudaMemcpyAsync(table,
-                             aux_codepoint_data,
-                             aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + aux_section2_begin,
-      aux_cp_data_44032_55203,
-      (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
-      cudaMemcpyHostToDevice,
-      stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + aux_section3_begin,
-      aux_cp_data_70475_71099,
-      (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
-      cudaMemcpyHostToDevice,
-      stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + aux_section4_begin,
-      aux_cp_data_119134_119232,
-      (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
-      cudaMemcpyHostToDevice,
-      stream.value()));
-    return table_vector;
-  }
-};
-}  // namespace
-
 /**
  * @brief Retrieve the code point metadata table.
  *
  * Build the code point metadata table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
-const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stream)
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream)
 {
-  static cudf::strings::detail::thread_safe_per_context_cache<
-    rmm::device_uvector<codepoint_metadata_type>>
-    g_codepoint_metadata;
-
-  return g_codepoint_metadata.find_or_initialize(get_codepoint_metadata_init{stream})->data();
+  auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
+  auto table        = table_vector.data();
+  thrust::fill(rmm::exec_policy(stream),
+               table + cp_section1_end,
+               table + codepoint_metadata_size,
+               codepoint_metadata_default_value);
+  CUDA_TRY(cudaMemcpyAsync(table,
+                           codepoint_metadata,
+                           cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(
+    table + cp_section2_begin,
+    cp_metadata_917505_917999,
+    (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
+    cudaMemcpyHostToDevice,
+    stream.value()));
+  return table_vector;
 }
 
 /**
@@ -126,13 +70,38 @@ const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stre
  * Build the aux code point data table in device memory
  * using the vector pieces from codepoint_metadata.ah
  */
-const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stream)
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream)
 {
-  static cudf::strings::detail::thread_safe_per_context_cache<
-    rmm::device_uvector<aux_codepoint_data_type>>
-    g_aux_codepoint_data;
-
-  return g_aux_codepoint_data.find_or_initialize(get_aux_codepoint_data_init{stream})->data();
+  auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
+  auto table        = table_vector.data();
+  thrust::fill(rmm::exec_policy(stream),
+               table + aux_section1_end,
+               table + aux_codepoint_data_size,
+               aux_codepoint_default_value);
+  CUDA_TRY(cudaMemcpyAsync(table,
+                           aux_codepoint_data,
+                           aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section2_begin,
+    aux_cp_data_44032_55203,
+    (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
+    cudaMemcpyHostToDevice,
+    stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section3_begin,
+    aux_cp_data_70475_71099,
+    (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
+    cudaMemcpyHostToDevice,
+    stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(
+    table + aux_section4_begin,
+    aux_cp_data_119134_119232,
+    (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
+    cudaMemcpyHostToDevice,
+    stream.value()));
+  return table_vector;
 }
 
 namespace {
@@ -293,10 +262,15 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
                            cudaMemcpyHostToDevice,
                            stream.value()));
 
-  // this just initializes some constant tables into device memory
-  // to help speed up the runtime
-  detail::get_codepoint_metadata(stream);
-  detail::get_aux_codepoint_data(stream);
+  auto cp_metadata            = detail::get_codepoint_metadata(stream);
+  auto const cp_metadata_size = static_cast<cudf::size_type>(cp_metadata.size());
+  result.cp_metadata          = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::UINT32}, cp_metadata_size, cp_metadata.release());
+
+  auto aux_cp_table            = detail::get_aux_codepoint_data(stream);
+  auto const aux_cp_table_size = static_cast<cudf::size_type>(aux_cp_table.size());
+  result.aux_cp_table          = std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_id::UINT64}, aux_cp_table_size, aux_cp_table.release());
 
   return std::make_unique<hashed_vocabulary>(std::move(result));
 }

@@ -246,17 +246,15 @@ def test_series_init_none():
     sr1 = cudf.Series()
     got = sr1.to_string()
 
-    expect = sr1.to_pandas().__repr__()
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = repr(sr1.to_pandas())
+    assert got == expect
 
     # 2: Using `None` as an initializer
     sr2 = cudf.Series(None)
     got = sr2.to_string()
 
-    expect = sr2.to_pandas().__repr__()
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = repr(sr2.to_pandas())
+    assert got == expect
 
 
 def test_dataframe_basic():
@@ -843,21 +841,20 @@ def test_dataframe_to_string_with_masked_data():
 def test_dataframe_to_string_wide(monkeypatch):
     monkeypatch.setenv("COLUMNS", "79")
     # Test basic
-    df = cudf.DataFrame()
-    for i in range(100):
-        df["a{}".format(i)] = list(range(3))
-    pd.options.display.max_columns = 0
-    got = df.to_string()
+    df = cudf.DataFrame({f"a{i}": [0, 1, 2] for i in range(100)})
+    with pd.option_context("display.max_columns", 0):
+        got = df.to_string()
 
-    expect = """
-    a0  a1  a2  a3  a4  a5  a6  a7 ...  a92 a93 a94 a95 a96 a97 a98 a99
-0    0   0   0   0   0   0   0   0 ...    0   0   0   0   0   0   0   0
-1    1   1   1   1   1   1   1   1 ...    1   1   1   1   1   1   1   1
-2    2   2   2   2   2   2   2   2 ...    2   2   2   2   2   2   2   2
-[3 rows x 100 columns]
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a0  a1  a2  a3  a4  a5  a6  a7  ...  a92  a93  a94  a95  a96  a97  a98  a99
+        0   0   0   0   0   0   0   0   0  ...    0    0    0    0    0    0    0    0
+        1   1   1   1   1   1   1   1   1  ...    1    1    1    1    1    1    1    1
+        2   2   2   2   2   2   2   2   2  ...    2    2    2    2    2    2    2    2
+
+        [3 rows x 100 columns]"""  # noqa: E501
+    )
+    assert got == expect
 
 
 def test_dataframe_empty_to_string():
@@ -865,9 +862,8 @@ def test_dataframe_empty_to_string():
     df = cudf.DataFrame()
     got = df.to_string()
 
-    expect = "Empty DataFrame\nColumns: []\nIndex: []\n"
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = "Empty DataFrame\nColumns: []\nIndex: []"
+    assert got == expect
 
 
 def test_dataframe_emptycolumns_to_string():
@@ -877,9 +873,8 @@ def test_dataframe_emptycolumns_to_string():
     df["b"] = []
     got = df.to_string()
 
-    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []"
+    assert got == expect
 
 
 def test_dataframe_copy():
@@ -890,14 +885,14 @@ def test_dataframe_copy():
     df2["b"] = [4, 5, 6]
     got = df.to_string()
 
-    expect = """
-     a
-0    1
-1    2
-2    3
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a
+        0  1
+        1  2
+        2  3"""
+    )
+    assert got == expect
 
 
 def test_dataframe_copy_shallow():
@@ -908,14 +903,14 @@ def test_dataframe_copy_shallow():
     df2["b"] = [4, 2, 3]
     got = df.to_string()
 
-    expect = """
-     a
-0    1
-1    2
-2    3
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a
+        0  1
+        1  2
+        2  3"""
+    )
+    assert got == expect
 
 
 def test_dataframe_dtypes():
@@ -968,7 +963,7 @@ def test_dataframe_dir_and_getattr():
         df.not_a_column
 
 
-def test_empty_dataframe_to_array():
+def test_empty_dataframe_to_cupy():
     df = cudf.DataFrame()
 
     # Check fully empty dataframe.
@@ -1023,7 +1018,7 @@ def test_dataframe_to_cupy_null_values():
     for k in "abcd":
         df[k] = data = np.random.random(nelem)
         bitmask = utils.random_bitmask(nelem)
-        df[k] = df[k].set_mask(bitmask)
+        df[k] = df[k]._column.set_mask(bitmask)
         boolmask = np.asarray(
             utils.expand_bits_to_bytes(bitmask)[:nelem], dtype=np.bool_
         )
@@ -1163,7 +1158,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     gdf = cudf.DataFrame()
     keycols = []
     for i in range(nkeys):
-        keyname = "key{}".format(i)
+        keyname = f"key{i}"
         gdf[keyname] = np.random.randint(0, 7 - i, nrows)
         keycols.append(keyname)
     gdf["val1"] = np.random.randint(0, nrows * 2, nrows)
@@ -1194,7 +1189,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
     gdf["val"] = np.arange(nrows) + 100
     bitmask = utils.random_bitmask(nrows)
     bytemask = utils.expand_bits_to_bytes(bitmask)
-    gdf["val"] = gdf["val"].set_mask(bitmask)
+    gdf["val"] = gdf["val"]._column.set_mask(bitmask)
     parted = gdf.partition_by_hash(["key"], nparts=3)
     # Verify that the valid mask is correct
     for p in parted:
@@ -1215,7 +1210,7 @@ def test_dataframe_hash_partition_masked_keys(nrows):
     gdf["val"] = np.arange(nrows) + 100
     bitmask = utils.random_bitmask(nrows)
     bytemask = utils.expand_bits_to_bytes(bitmask)
-    gdf["key"] = gdf["key"].set_mask(bitmask)
+    gdf["key"] = gdf["key"]._column.set_mask(bitmask)
     parted = gdf.partition_by_hash(["key"], nparts=3, keep_index=False)
     # Verify that the valid mask is correct
     for p in parted:
@@ -1463,11 +1458,8 @@ def test_nonmatching_index_setitem(nrows):
     test_values = np.random.randint(2147483647, size=nrows)
     gdf["c"] = test_values
     assert len(test_values) == len(gdf["c"])
-    assert (
-        gdf["c"]
-        .to_pandas()
-        .equals(cudf.Series(test_values).set_index(gdf._index).to_pandas())
-    )
+    gdf_series = cudf.Series(test_values, index=gdf.index, name="c")
+    assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
 def test_from_pandas():
@@ -5473,12 +5465,17 @@ def test_memory_usage_list():
 
 @pytest.mark.parametrize("rows", [10, 100])
 def test_memory_usage_multi(rows):
-    deep = True
+    # We need to sample without replacement to guarantee that the size of the
+    # levels are always the same.
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
-            "B": np.random.choice(np.arange(3, dtype="int64"), rows),
-            "C": np.random.choice(np.arange(3, dtype="float64"), rows),
+            "B": np.random.choice(
+                np.arange(rows, dtype="int64"), rows, replace=False
+            ),
+            "C": np.random.choice(
+                np.arange(rows, dtype="float64"), rows, replace=False
+            ),
         }
     ).set_index(["B", "C"])
     gdf = cudf.from_pandas(df)
@@ -5486,10 +5483,10 @@ def test_memory_usage_multi(rows):
     # of the underlying columns, levels, and codes
     expect = rows * 16  # Source Columns
     expect += rows * 16  # Codes
-    expect += 3 * 8  # Level 0
-    expect += 3 * 8  # Level 1
+    expect += rows * 8  # Level 0
+    expect += rows * 8  # Level 1
 
-    assert expect == gdf.index.memory_usage(deep=deep)
+    assert expect == gdf.index.memory_usage(deep=True)
 
 
 @pytest.mark.parametrize(
@@ -9077,3 +9074,37 @@ def test_dataframe_assign_cp_np_array():
     gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+)
+def test_dataframe_nunique(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.nunique()
+    expected = pdf.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
+)
+def test_dataframe_nunique_index(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.index.nunique()
+    expected = pdf.index.nunique()
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_rename_duplicate_column():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gdf.rename(columns={"a": "b"}, inplace=True)

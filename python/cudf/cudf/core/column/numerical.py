@@ -217,6 +217,13 @@ class NumericalColumn(NumericalBaseColumn):
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 
+    def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
+        # Only floats can contain nan.
+        if self.dtype.kind != "f" or self.nan_count == 0:
+            return self
+        newmask = libcudf.transform.nans_to_nulls(self)
+        return self.set_mask(newmask)
+
     def normalize_binop_value(
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:
@@ -347,20 +354,6 @@ class NumericalColumn(NumericalBaseColumn):
         return super()._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-
-    def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column"""
-        dkind = self.dtype.kind
-        if dkind == "f":
-            return self.dtype.type(np.nan)
-        elif dkind == "i":
-            return np.iinfo(self.dtype).min
-        elif dkind == "u":
-            return np.iinfo(self.dtype).max
-        elif dkind == "b":
-            return self.dtype.type(False)
-        else:
-            raise TypeError(f"numeric column of {self.dtype} has no NaN value")
 
     def find_and_replace(
         self,

@@ -29,9 +29,12 @@ namespace {
 // memory resource factory helpers
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
-inline auto make_pool()
+inline auto make_pool_instance()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+  static rmm::mr::cuda_memory_resource cuda_mr;
+  static auto pool_mr =
+    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(&cuda_mr);
+  return pool_mr;
 }
 }  // namespace
 
@@ -68,9 +71,15 @@ inline auto make_pool()
  */
 class benchmark : public ::benchmark::Fixture {
  public:
+  benchmark() : ::benchmark::Fixture()
+  {
+    const char* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
+    if (env_iterations != nullptr) { this->Iterations(std::max(0L, atol(env_iterations))); }
+  }
+
   void SetUp(const ::benchmark::State& state) override
   {
-    mr = make_pool();
+    mr = make_pool_instance();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
