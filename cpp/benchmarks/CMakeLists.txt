@@ -158,6 +158,8 @@ ConfigureBench(
   reduction/scan.cpp reduction/minmax.cpp
 )
 
+ConfigureBench(RANK_BENCH reduction/rank.cpp)
+
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(REPLACE_BENCH replace/clamp.cpp replace/nans.cpp)
