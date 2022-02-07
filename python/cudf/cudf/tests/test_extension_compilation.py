@@ -5,9 +5,15 @@ import pytest
 from numba import cuda, types
 from numba.cuda import compile_ptx
 
+from cudf.testing._utils import deduped_numeric_dtype_tests
+
+
+import numpy as np
 from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.typing import MaskedType
+
+from numba.np.numpy_support import from_dtype
 
 arith_ops = (
     operator.add,
@@ -159,18 +165,20 @@ def test_compile_arith_na_vs_masked(op, ty):
 
 
 @pytest.mark.parametrize("op", ops)
-@pytest.mark.parametrize("ty1", number_types, ids=number_ids)
-@pytest.mark.parametrize("ty2", number_types, ids=number_ids)
+@deduped_numeric_dtype_tests
 @pytest.mark.parametrize(
     "masked",
     ((False, True), (True, False), (True, True)),
     ids=("um", "mu", "mm"),
 )
-def test_compile_arith_masked_ops(op, ty1, ty2, masked):
+def test_compile_arith_masked_ops(op, left_dtype, right_dtype, masked):
     def func(x, y):
         return op(x, y)
 
     cc = (7, 5)
+
+    ty1 = from_dtype(np.dtype(left_dtype))
+    ty2 = from_dtype(np.dtype(right_dtype))
 
     if masked[0]:
         ty1 = MaskedType(ty1)

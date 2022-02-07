@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 from numba import cuda
 
+from cudf.testing._utils import deduped_numeric_dtype_tests
+
 import cudf
 from cudf.core.scalar import NA
 from cudf.core.udf._ops import (
@@ -238,10 +240,9 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("dtype_a", ['uint64', 'int64', 'float64'])
-@pytest.mark.parametrize("dtype_b", ['uint64', 'int64', 'float64'])
+@deduped_numeric_dtype_tests
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
-def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
+def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
     """
     Test that operations can be performed between columns
     of different dtypes and return a column with the correct
@@ -251,7 +252,7 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
     # First perform the op on two dummy data on host, if numpy can
     # safely type cast, we should expect it to work in udf too.
     try:
-        op(getattr(np, dtype_a)(0), getattr(np, dtype_b)(42))
+        op(getattr(np, left_dtype)(0), getattr(np, right_dtype)(42))
     except TypeError:
         pytest.skip("Operation is unsupported for corresponding dtype.")
 
@@ -261,8 +262,8 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1.5, None, 3, None], "b": [4, 5, None, None]})
-    gdf["a"] = gdf["a"].astype(dtype_a)
-    gdf["b"] = gdf["b"].astype(dtype_b)
+    gdf["a"] = gdf["a"].astype(left_dtype)
+    gdf["b"] = gdf["b"].astype(right_dtype)
 
     run_masked_udf_test(func, gdf, check_dtype=False)
 

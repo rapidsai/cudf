@@ -5,7 +5,7 @@ from __future__ import division
 import decimal
 import operator
 import random
-from itertools import product
+from itertools import combinations, product, combinations_with_replacement
 
 import cupy as cp
 import numpy as np
@@ -219,12 +219,10 @@ def test_series_compare(cmpop, obj_class, dtype):
 def _series_compare_nulls_typegen():
     tests = []
 
-    numeric_type_subset = ['uint64', 'int64', 'float64', 'bool']
-
-    tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
-    tests += list(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
-    tests += list(product(numeric_type_subset, numeric_type_subset))
-    tests += list(product(STRING_TYPES, STRING_TYPES))
+    tests += list(combinations_with_replacement(DATETIME_TYPES, 2))
+    tests += list(combinations_with_replacement(DATETIME_TYPES, 2))
+    tests += list(combinations_with_replacement(NUMERIC_TYPES, 2))
+    tests += list(combinations_with_replacement(STRING_TYPES, 2))
 
     return tests
 
