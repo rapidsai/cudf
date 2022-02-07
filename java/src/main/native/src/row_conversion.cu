@@ -200,8 +200,7 @@ rmm::device_uvector<size_type> build_string_row_offsets(table_view const &tbl,
       tbl.begin(), [](auto const &col) -> strings_column_view::offset_iterator {
         if (!is_fixed_width(col.type())) {
           CUDF_EXPECTS(col.type().id() == type_id::STRING, "only string columns are supported!");
-          strings_column_view scv = col;
-          return scv.offsets_begin();
+          return strings_column_view(col).offsets_begin();
         } else {
           return nullptr;
         }
