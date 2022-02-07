@@ -244,7 +244,7 @@ def assert_column_equal(
                 left.isnull().values == right.isnull().values
             )
 
-            if is_numeric_dtype(left) and columns_equal and not check_exact:
+            if columns_equal and not check_exact and is_numeric_dtype(left):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
                     left[left.isnull().unary_operator("not")].values,
