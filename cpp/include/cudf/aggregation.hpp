@@ -316,12 +316,12 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *  [ //      venue,           driver,           time
  *    {   "silverstone",  "HAM" ("hamilton"),   15823},
  *    {   "silverstone",  "LEC" ("leclerc"),    15827},
- *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- TIE!
- *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- TIE!
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
  *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
  *    {      "monza",     "RIC" ("ricciardo"),  12154},
- *    {      "monza",     "NOR" ("norris"),     12156},  // <-- TIE!
- *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- TIE!
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
  *    {      "monza",     "LEC" ("leclerc"),    12201},
  *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
@@ -368,12 +368,12 @@ std::unique_ptr<Base> make_rank_aggregation();
  *  [ //      venue,           driver,           time
  *    {   "silverstone",  "HAM" ("hamilton"),   15823},
  *    {   "silverstone",  "LEC" ("leclerc"),    15827},
- *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- TIE!
- *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- TIE!
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
  *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
  *    {      "monza",     "RIC" ("ricciardo"),  12154},
- *    {      "monza",     "NOR" ("norris"),     12156},  // <-- TIE!
- *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- TIE!
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
  *    {      "monza",     "LEC" ("leclerc"),    12201},
  *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
@@ -423,12 +423,12 @@ std::unique_ptr<Base> make_dense_rank_aggregation();
  *  [ //      venue,           driver,           time
  *    {   "silverstone",  "HAM" ("hamilton"),   15823},
  *    {   "silverstone",  "LEC" ("leclerc"),    15827},
- *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- TIE!
- *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- TIE!
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
  *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
  *    {      "monza",     "RIC" ("ricciardo"),  12154},
- *    {      "monza",     "NOR" ("norris"),     12156},  // <-- TIE!
- *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- TIE!
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
  *    {      "monza",     "LEC" ("leclerc"),    12201},
  *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
