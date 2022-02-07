@@ -14,26 +14,25 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
-
 #include <benchmark/benchmark.h>
+#include <common/generate_input.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <fixture/templated_benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/transform.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <list>
-#include <numeric>
-#include <random>
+#include <memory>
 #include <vector>
 
 enum class TreeType {
@@ -51,35 +50,18 @@ static void BM_ast_transform(benchmark::State& state)
   const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
 
   // Create table data
-  auto n_cols          = reuse_columns ? 1 : tree_levels + 1;
-  auto column_wrappers = std::vector<cudf::test::fixed_width_column_wrapper<key_type>>(n_cols);
-  auto columns         = std::vector<cudf::column_view>(n_cols);
+  auto n_cols  = reuse_columns ? 1 : tree_levels + 1;
+  auto columns = std::vector<std::unique_ptr<cudf::column>>(n_cols);
 
-  auto data_iterator = thrust::make_counting_iterator(0);
+  auto init = cudf::make_fixed_width_scalar<key_type>(static_cast<key_type>(0));
+  std::generate_n(columns.begin(), n_cols, [&]() { return cudf::sequence(table_size, *init); });
 
   if constexpr (Nullable) {
-    auto validities = std::vector<bool>(table_size);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    std::generate(
-      validities.begin(), validities.end(), [&]() { return gen() > (0.5 * gen.max()); });
-    std::generate_n(column_wrappers.begin(), n_cols, [=]() {
-      return cudf::test::fixed_width_column_wrapper<key_type>(
-        data_iterator, data_iterator + table_size, validities.begin());
-    });
-  } else {
-    std::generate_n(column_wrappers.begin(), n_cols, [=]() {
-      return cudf::test::fixed_width_column_wrapper<key_type>(data_iterator,
-                                                              data_iterator + table_size);
-    });
+    for (auto i = 0; i < n_cols; i++) {
+      columns[i]->set_null_mask(create_random_null_mask(columns[i]->size(), 0.5));
+    }
   }
-  std::transform(
-    column_wrappers.begin(), column_wrappers.end(), columns.begin(), [](auto const& col) {
-      return static_cast<cudf::column_view>(col);
-    });
-
-  cudf::table_view table{columns};
+  cudf::table table{std::move(columns)};
 
   // Create column references
   auto column_refs = std::vector<cudf::ast::column_reference>();
@@ -119,7 +101,7 @@ static void BM_ast_transform(benchmark::State& state)
   // Execute benchmark
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::compute_column(table, expression_tree_root);
+    cudf::compute_column(table.view(), expression_tree_root);
   }
 
   // Use the number of bytes read from global memory
