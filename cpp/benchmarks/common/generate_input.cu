@@ -39,6 +39,8 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -53,6 +55,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <future>
 #include <memory>
@@ -991,6 +994,26 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
     if (type != cudf::type_id::EMPTY && fn(cudf::data_type(type))) types.push_back(type);
   }
   return types;
+}
+
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   cudf::size_type num_cols,
+                                                   row_count num_rows)
+{
+  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
+  auto columns             = std::vector<std::unique_ptr<cudf::column>>(num_cols);
+  auto init                = cudf::make_default_constructed_scalar(cudf::data_type{dtype_ids[0]});
+  if (dtype_ids.size() == 1) {
+    std::generate_n(
+      columns.begin(), num_cols, [&]() { return cudf::sequence(num_rows.count, *init); });
+  } else {
+    std::transform(
+      out_dtype_ids.begin(), out_dtype_ids.end(), columns.begin(), [num_rows](auto dtype) {
+        auto init = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
+        return cudf::sequence(num_rows.count, *init);
+      });
+  }
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::vector<cudf::type_id> get_type_or_group(std::vector<int32_t> const& ids)

@@ -403,6 +403,23 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  row_count num_rows,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
+
+/**
+ * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
+ * subsequent rows.
+ *
+ * If the number of passed types is smaller than the number of requested column, the columns types
+ * with be repeated in round-robin order to fill the table.
+ *
+ * @param dtype_ids Vector of requested column types
+ * @param num_cols Number of columns in the output table
+ * @param num_rows Number of rows in the output table
+ * @return A table with the sequence columns.
+ */
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   cudf::size_type num_cols,
+                                                   row_count num_rows);
+
 /**
  * @brief Create a random null mask object
  *
