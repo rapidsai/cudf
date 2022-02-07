@@ -564,7 +564,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
                                                                         jlong input_handle,
                                                                         jstring delimiter,
-                                                                        jint max_split,
+                                                                        jint limit,
                                                                         jboolean split_by_regex) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
   try {
@@ -578,6 +578,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
     auto const str_delimiter = std::string(delimiter_chars, delimiter_size);
     env->ReleaseStringUTFChars(delimiter, delimiter_chars);
 
+    if (limit == 0 || limit == 1) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "limit == 0 or limit == 1 are not supported", 0);
+    }
+    auto const max_split = limit > 1 ? limit - 1 : limit;
+
     auto result =
         split_by_regex ?
             cudf::strings::split_re(strs_input, str_delimiter, max_split) :
@@ -590,7 +596,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
                                                                          jlong input_handle,
                                                                          jstring delimiter,
-                                                                         jint max_split,
+                                                                         jint limit,
                                                                          jboolean split_by_regex) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
   try {
@@ -603,6 +609,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
     auto const delimiter_size = env->GetStringUTFLength(delimiter);
     auto const str_delimiter = std::string(delimiter_chars, delimiter_size);
     env->ReleaseStringUTFChars(delimiter, delimiter_chars);
+
+    if (limit == 0 || limit == 1) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "limit == 0 or limit == 1 are not supported", 0);
+    }
+    auto const max_split = limit > 1 ? limit - 1 : limit;
 
     auto result =
         split_by_regex ?
