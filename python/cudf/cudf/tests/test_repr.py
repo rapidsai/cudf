@@ -85,9 +85,7 @@ def test_full_series(nrows, dtype):
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 1, 10, 20, 21])
-@pytest.mark.parametrize("ncols", [0, 1, 10, 20, 21])
-def test_full_dataframe_20(dtype, nrows, ncols):
+def test_full_dataframe_20(dtype):
     size = 20
     pdf = pd.DataFrame(
         {idx: np.random.randint(0, 100, size) for idx in range(size)}
