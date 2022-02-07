@@ -4761,7 +4761,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testStringSplit() {
     String pattern = " ";
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "", "ARé some things", "test strings here");
-         Table expectedSplitOnce = new Table.TestBuilder()
+         Table expectedSplitLimit2 = new Table.TestBuilder()
          .column("Héllo", "thésé", null, "", "ARé", "test")
          .column("there all", null, null, null, "some things", "strings here")
          .build();
@@ -4770,9 +4770,9 @@ public class ColumnVectorTest extends CudfTestBase {
          .column("there", null, null, null, "some", "strings")
          .column("all", null, null, null, "things", "here")
          .build();
-         Table resultSplitOnce = v.stringSplit(pattern, 1);
+         Table resultSplitLimit2 = v.stringSplit(pattern, 2);
          Table resultSplitAll = v.stringSplit(pattern)) {
-          assertTablesAreEqual(expectedSplitOnce, resultSplitOnce);
+          assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
           assertTablesAreEqual(expectedSplitAll, resultSplitAll);
     }
   }
