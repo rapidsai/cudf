@@ -129,8 +129,13 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 
     thrust::host_vector<T> result_init(9);  // +3 padding for int8 tests
     result_init[0] = cudf::test::make_type_param_scalar<T>(0);
-    result_init[1] = std::numeric_limits<T>::max();
-    result_init[2] = std::numeric_limits<T>::min();
+    if constexpr (cudf::is_chrono<T>()) {
+      result_init[1] = T::max();
+      result_init[2] = T::min();
+    } else {
+      result_init[1] = std::numeric_limits<T>::max();
+      result_init[2] = std::numeric_limits<T>::min();
+    }
     result_init[3] = result_init[0];
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];

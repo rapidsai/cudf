@@ -78,32 +78,3 @@ static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 
 /** @} */  // end of group
 }  // namespace cudf
-
-namespace std {
-/**
- * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
- *
- * Pass through to return the limits of the underlying numeric representation.
- */
-#define TIMESTAMP_LIMITS(TypeName)                                                                \
-  template <>                                                                                     \
-  struct numeric_limits<TypeName> {                                                               \
-    static constexpr TypeName max() noexcept { return TypeName::max(); }                          \
-    static constexpr TypeName lowest() noexcept                                                   \
-    {                                                                                             \
-      return TypeName{TypeName::duration{std::numeric_limits<typename TypeName::rep>::lowest()}}; \
-    }                                                                                             \
-    static constexpr TypeName min() noexcept { return TypeName::min(); }                          \
-  }
-
-TIMESTAMP_LIMITS(cudf::timestamp_D);
-TIMESTAMP_LIMITS(cudf::timestamp_h);
-TIMESTAMP_LIMITS(cudf::timestamp_m);
-TIMESTAMP_LIMITS(cudf::timestamp_s);
-TIMESTAMP_LIMITS(cudf::timestamp_ms);
-TIMESTAMP_LIMITS(cudf::timestamp_us);
-TIMESTAMP_LIMITS(cudf::timestamp_ns);
-
-#undef TIMESTAMP_LIMITS
-
-}  // namespace std

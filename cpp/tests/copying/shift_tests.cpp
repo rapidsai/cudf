@@ -54,10 +54,18 @@ std::unique_ptr<cudf::scalar> make_scalar(
 }
 
 template <typename T>
-auto lowest = std::numeric_limits<T>::lowest();
+constexpr auto highest()
+{
+  if constexpr (cudf::is_chrono<T>()) return T::max();
+  return std::numeric_limits<T>::max();
+}
 
 template <typename T>
-auto highest = std::numeric_limits<T>::max();
+constexpr auto lowest()
+{
+  if constexpr (cudf::is_chrono<T>()) return T::min();
+  return std::numeric_limits<T>::lowest();
+}
 
 template <typename T>
 struct ShiftTest : public cudf::test::BaseFixture {
@@ -101,16 +109,16 @@ TYPED_TEST(ShiftTest, OneColumn)
 {
   using T = TypeParam;
 
-  auto input    = fixed_width_column_wrapper<T>{lowest<T>,
+  auto input    = fixed_width_column_wrapper<T>{lowest<T>(),
                                              cudf::test::make_type_param_scalar<T>(1),
                                              cudf::test::make_type_param_scalar<T>(2),
                                              cudf::test::make_type_param_scalar<T>(3),
                                              cudf::test::make_type_param_scalar<T>(4),
                                              cudf::test::make_type_param_scalar<T>(5),
-                                             highest<T>};
+                                             highest<T>()};
   auto expected = fixed_width_column_wrapper<T>{cudf::test::make_type_param_scalar<T>(7),
                                                 cudf::test::make_type_param_scalar<T>(7),
-                                                lowest<T>,
+                                                lowest<T>(),
                                                 cudf::test::make_type_param_scalar<T>(1),
                                                 cudf::test::make_type_param_scalar<T>(2),
                                                 cudf::test::make_type_param_scalar<T>(3),
@@ -126,16 +134,16 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift)
 {
   using T = TypeParam;
 
-  auto input    = fixed_width_column_wrapper<T>{lowest<T>,
+  auto input    = fixed_width_column_wrapper<T>{lowest<T>(),
                                              cudf::test::make_type_param_scalar<T>(1),
                                              cudf::test::make_type_param_scalar<T>(2),
                                              cudf::test::make_type_param_scalar<T>(3),
                                              cudf::test::make_type_param_scalar<T>(4),
                                              cudf::test::make_type_param_scalar<T>(5),
-                                             highest<T>};
+                                             highest<T>()};
   auto expected = fixed_width_column_wrapper<T>{cudf::test::make_type_param_scalar<T>(4),
                                                 cudf::test::make_type_param_scalar<T>(5),
-                                                highest<T>,
+                                                highest<T>(),
                                                 cudf::test::make_type_param_scalar<T>(7),
                                                 cudf::test::make_type_param_scalar<T>(7),
                                                 cudf::test::make_type_param_scalar<T>(7),
@@ -151,16 +159,16 @@ TYPED_TEST(ShiftTest, OneColumnNullFill)
 {
   using T = TypeParam;
 
-  auto input    = fixed_width_column_wrapper<T>{lowest<T>,
+  auto input    = fixed_width_column_wrapper<T>{lowest<T>(),
                                              cudf::test::make_type_param_scalar<T>(5),
                                              cudf::test::make_type_param_scalar<T>(0),
                                              cudf::test::make_type_param_scalar<T>(3),
                                              cudf::test::make_type_param_scalar<T>(0),
                                              cudf::test::make_type_param_scalar<T>(1),
-                                             highest<T>};
+                                             highest<T>()};
   auto expected = fixed_width_column_wrapper<T>({cudf::test::make_type_param_scalar<T>(0),
                                                  cudf::test::make_type_param_scalar<T>(0),
-                                                 lowest<T>,
+                                                 lowest<T>(),
                                                  cudf::test::make_type_param_scalar<T>(5),
                                                  cudf::test::make_type_param_scalar<T>(0),
                                                  cudf::test::make_type_param_scalar<T>(3),
