@@ -14,63 +14,41 @@
  * limitations under the License.
  */
 
-#include <cudf_test/column_wrapper.hpp>
+#include <benchmark/benchmark.h>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 
-#include <benchmark/benchmark.h>
-
-#include <random>
-
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf_test/base_fixture.hpp>
-
 class Search : public cudf::benchmark {
 };
-
-auto make_validity_iter()
-{
-  static constexpr int r_min = 1;
-  static constexpr int r_max = 10;
-
-  cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
-  uint8_t mod_base = rand_gen.generate();
-  return cudf::detail::make_counting_transform_iterator(
-    0, [mod_base](auto row) { return (row % mod_base) > 0; });
-}
 
 void BM_column(benchmark::State& state, bool nulls)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  auto col_data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return static_cast<float>(row); });
-  auto val_data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
+  auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
+  auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
+  auto step       = cudf::make_fixed_width_scalar<float>(static_cast<float>(-1));
+  auto column     = cudf::sequence(column_size, *init_data);
+  auto values     = cudf::sequence(values_size, *init_value, *step);
+  if (nulls) {
+    column->set_null_mask(create_random_null_mask(column->size(), 0.1));
+    values->set_null_mask(create_random_null_mask(values->size(), 0.1));
+  }
 
-  auto column = [&]() {
-    return nulls ? cudf::test::fixed_width_column_wrapper<float>(
-                     col_data_it, col_data_it + column_size, make_validity_iter())
-                 : cudf::test::fixed_width_column_wrapper<float>(col_data_it,
-                                                                 col_data_it + column_size);
-  }();
-  auto values = [&]() {
-    return nulls ? cudf::test::fixed_width_column_wrapper<float>(
-                     val_data_it, val_data_it + values_size, make_validity_iter())
-                 : cudf::test::fixed_width_column_wrapper<float>(val_data_it,
-                                                                 val_data_it + values_size);
-  }();
-
-  auto data_table = cudf::sort(cudf::table_view({column}));
+  auto data_table = cudf::sort(cudf::table_view({*column}));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound(data_table->view(),
-                                 cudf::table_view({values}),
+                                 cudf::table_view({*values}),
                                  {cudf::order::ASCENDING},
                                  {cudf::null_order::BEFORE});
   }
@@ -91,38 +69,27 @@ BENCHMARK_REGISTER_F(Search, Column_Nulls)
 
 void BM_table(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<float>;
-
+  using Type = int;
   const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(1)};
   const cudf::size_type values_size = column_size;
 
-  auto make_table = [&](cudf::size_type col_size) {
-    cudf::test::UniformRandomGenerator<int> random_gen(0, 100);
-    auto data_it = cudf::detail::make_counting_transform_iterator(
-      0, [&](cudf::size_type row) { return random_gen.generate(); });
-    auto valid_it = cudf::detail::make_counting_transform_iterator(
-      0, [&](cudf::size_type row) { return random_gen.generate() < 90; });
-
-    std::vector<std::unique_ptr<cudf::column>> cols;
-    for (cudf::size_type i = 0; i < num_columns; i++) {
-      wrapper temp(data_it, data_it + col_size, valid_it);
-      cols.emplace_back(temp.release());
-    }
-
-    return cudf::table(std::move(cols));
-  };
-
-  auto data_table   = make_table(column_size);
-  auto values_table = make_table(values_size);
+  data_profile profile;
+  profile.set_cardinality(0);
+  profile.set_null_frequency(0.1);
+  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  auto data_table =
+    create_random_table({cudf::type_to_id<Type>()}, num_columns, row_count{column_size}, profile);
+  auto values_table =
+    create_random_table({cudf::type_to_id<Type>()}, num_columns, row_count{values_size}, profile);
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
-  auto sorted = cudf::sort(data_table);
+  auto sorted = cudf::sort(*data_table);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::lower_bound(sorted->view(), values_table, orders, null_orders);
+    auto col = cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
   }
 }
 
@@ -145,27 +112,19 @@ void BM_contains(benchmark::State& state, bool nulls)
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  auto col_data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return static_cast<float>(row); });
-  auto val_data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
-
-  auto column = [&]() {
-    return nulls ? cudf::test::fixed_width_column_wrapper<float>(
-                     col_data_it, col_data_it + column_size, make_validity_iter())
-                 : cudf::test::fixed_width_column_wrapper<float>(col_data_it,
-                                                                 col_data_it + column_size);
-  }();
-  auto values = [&]() {
-    return nulls ? cudf::test::fixed_width_column_wrapper<float>(
-                     val_data_it, val_data_it + values_size, make_validity_iter())
-                 : cudf::test::fixed_width_column_wrapper<float>(val_data_it,
-                                                                 val_data_it + values_size);
-  }();
+  auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
+  auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
+  auto step       = cudf::make_fixed_width_scalar<float>(static_cast<float>(-1));
+  auto column     = cudf::sequence(column_size, *init_data);
+  auto values     = cudf::sequence(values_size, *init_value, *step);
+  if (nulls) {
+    column->set_null_mask(create_random_null_mask(column->size(), 0.1, 1));
+    values->set_null_mask(create_random_null_mask(values->size(), 0.1, 2));
+  }
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto col = cudf::contains(column, values);
+    auto col = cudf::contains(*column, *values);
   }
 }
 
