@@ -563,7 +563,7 @@ class Frame:
 
         """
         data = self._data.select_by_index(indices)
-        return self.__class__(
+        return self.__class__._from_data(
             data, columns=data.to_pandas_index(), index=self.index
         )
 
