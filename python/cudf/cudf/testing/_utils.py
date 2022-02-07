@@ -4,7 +4,6 @@ import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from decimal import Decimal
-from tkinter import NUMERIC
 
 import cupy
 import numpy as np
