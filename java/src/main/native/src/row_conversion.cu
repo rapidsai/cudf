@@ -870,6 +870,21 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
 #endif // ASYNC_MEMCPY_SUPPORTED
 }
 
+/**
+ * @brief kernel to copy string data to JCUDF row format
+ *
+ * @tparam RowOffsetIter iterator for row offsets into the destination data
+ * @param num_rows number of rows in this portion of the table
+ * @param num_variable_columns number of columns of variable-width data
+ * @param variable_input_data variable width data column pointers
+ * @param variable_col_output_offsets output offset information for variable-width columns
+ * @param variable_col_offsets input offset information for variable-width columns
+ * @param fixed_width_row_size offset to variable-width data in a row
+ * @param row_offsets offsets for each row in output data
+ * @param batch_row_offset row start for this batch
+ * @param output_data pointer to output data for this batch
+ *
+ */
 template <typename RowOffsetIter>
 __global__ void copy_strings_to_rows(size_type const num_rows, size_type const num_variable_columns,
                                      int8_t const **variable_input_data,
@@ -1338,6 +1353,10 @@ static inline int32_t compute_fixed_width_layout(std::vector<data_type> const &s
   return util::round_up_unsafe(at_offset, JCUDF_ROW_ALIGNMENT);
 }
 
+/**
+ * @brief column sizes and column start offsets for a table
+ *
+ */
 struct column_info_s {
   size_type fixed_width_size_per_row;
   std::vector<size_type> fixed_width_column_starts;
@@ -1911,6 +1930,14 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
 } // namespace detail
 
+/**
+ * @brief convert a cudf table to JCUDF row format
+ *
+ * @param tbl incoming table to convert
+ * @param stream stream to use for operations
+ * @param mr memory resource used for returned data
+ * @return vector of list columns containing byte columns of the JCUDF row data
+ */
 std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource *mr) {
@@ -2035,6 +2062,15 @@ convert_to_rows_fixed_width_optimized(table_view const &tbl, rmm::cuda_stream_vi
   }
 }
 
+/**
+ * @brief convert from JCUDF row format to cudf columns
+ *
+ * @param input vector of list columns containing byte columns of the JCUDF row data
+ * @param schema incoming schema of the data
+ * @param stream stream to use for compute
+ * @param mr memory resource for returned data
+ * @return cudf table of the data
+ */
 std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
                                          std::vector<data_type> const &schema,
                                          rmm::cuda_stream_view stream,
