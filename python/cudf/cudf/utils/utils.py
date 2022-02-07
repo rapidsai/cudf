@@ -2,6 +2,8 @@
 
 import decimal
 import functools
+import os
+import traceback
 from collections.abc import Sequence
 from typing import FrozenSet, Set, Union
 
@@ -35,6 +37,45 @@ _EQUALITY_OPS = {
     "__le__",
     "__ge__",
 }
+
+
+NO_EXTERNAL_ONLY_APIS = os.getenv("NO_EXTERNAL_ONLY_APIS")
+
+if NO_EXTERNAL_ONLY_APIS in ("True", "1", "TRUE"):
+    _cudf_root = os.path.join("python", "cudf", "cudf")
+    _tests_root = os.path.join(_cudf_root, "tests")
+
+    def _external_only_api(func):
+        """Decorator to indicate that a function should not be used internally.
+
+        cudf contains many APIs that exist for pandas compatibility but are
+        intrinsically inefficient. For some of these cudf has internal
+        equivalents that are much faster. Usage of the slow public APIs inside
+        our implementation can lead to unnecessary performance bottlenecks.
+        Applying this decorator to such functions and then setting the
+        environment variable NO_EXTERNAL_ONLY_APIS will cause such functions to
+        raise exceptions if they are called from anywhere inside cudf, making
+        it easy to identify and excise such usage.
+        """
+
+        def wrapper(*args, **kwargs):
+            # Check the immediately preceding frame to see if it's in cudf.
+            frame, lineno = next(traceback.walk_stack(None))
+            fn = frame.f_code.co_filename
+            if _cudf_root in fn and _tests_root not in fn:
+                raise RuntimeError(
+                    f"External-only API called in {fn} at line {lineno}."
+                )
+            return func(*args, **kwargs)
+
+        return wrapper
+
+
+else:
+
+    def _external_only_api(func):
+        """The default implementation is a no-op."""
+        return func
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
