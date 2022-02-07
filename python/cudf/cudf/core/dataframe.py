@@ -568,6 +568,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         for k in columns
                     }
                 )
+        elif isinstance(data, ColumnAccessor):
+            result = self._from_data(data, index, columns)
+            self._data = result._data
+            self._index = result._index
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
 
