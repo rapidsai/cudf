@@ -41,9 +41,7 @@ inline void test_rank_scans(column_view const& keys,
                             column_view const& order,
                             column_view const& expected_dense,
                             column_view const& expected_rank,
-                            column_view const& expected_percent_rank,
-                            null_policy include_null_keys = null_policy::INCLUDE,
-                            sorted keys_are_sorted        = sorted::YES)
+                            column_view const& expected_percent_rank)
 {
   test_single_scan(keys,
                    order,

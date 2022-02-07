@@ -627,7 +627,7 @@ template std::unique_ptr<aggregation> make_dense_rank_aggregation<aggregation>()
 template std::unique_ptr<groupby_scan_aggregation>
 make_dense_rank_aggregation<groupby_scan_aggregation>();
 
-/// Factory to create a PERCENT aggregation
+/// Factory to create a PERCENT_RANK aggregation
 template <typename Base>
 std::unique_ptr<Base> make_percent_rank_aggregation()
 {

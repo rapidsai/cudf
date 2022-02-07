@@ -118,7 +118,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
     order_by,
     group_labels,
     group_offsets,
-    [] __device__(bool unequal, auto row_index_in_group) { return unequal; },
+    [] __device__(bool unequal, auto row_index_in_group) { return unequal ? 1 : 0; },
     DeviceSum{},
     has_nested_nulls(table_view{{order_by}}),
     stream,
@@ -131,7 +131,8 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  auto const rank_column     = rank_scan(order_by, group_labels, group_offsets, stream, mr);
+  auto const rank_column = rank_scan(
+    order_by, group_labels, group_offsets, stream, rmm::mr::get_current_device_resource());
   auto const rank            = rank_column->view();
   auto const group_size_iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -152,7 +153,7 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
                     group_size_iter,
                     percent_rank_result->mutable_view().begin<double>(),
                     [] __device__(auto const& rank, auto const& group_size) {
-                      return group_size == 1 ? 0.0 : (rank - 1.0) / (group_size - 1);
+                      return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
                     });
 
   return percent_rank_result;
