@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import itertools
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
@@ -10,8 +11,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas import testing as tm
-
-import itertools
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
@@ -324,10 +323,8 @@ def does_not_raise():
 def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
 
+
 deduped_numeric_dtype_tests = pytest.mark.parametrize(
-    "left_dtype,right_dtype", list(
-        itertools.combinations_with_replacement(
-                NUMERIC_TYPES, 2
-            )
-        )
-    )
+    "left_dtype,right_dtype",
+    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
+)

@@ -5,7 +5,7 @@ from __future__ import division
 import decimal
 import operator
 import random
-from itertools import combinations, product, combinations_with_replacement
+from itertools import combinations, combinations_with_replacement, product
 
 import cupy as cp
 import numpy as np

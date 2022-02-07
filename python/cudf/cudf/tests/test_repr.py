@@ -13,7 +13,7 @@ from cudf.core._compat import PANDAS_GE_110
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
-repr_categories =  ["int64" , "float64", "str", "category", "datetime64[ns]"]
+repr_categories = ["int64", "float64", "str", "category", "datetime64[ns]"]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)

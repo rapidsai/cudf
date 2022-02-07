@@ -1,19 +1,16 @@
 import operator
 
 import cupy as cp
+import numpy as np
 import pytest
 from numba import cuda, types
 from numba.cuda import compile_ptx
+from numba.np.numpy_support import from_dtype
 
-from cudf.testing._utils import deduped_numeric_dtype_tests
-
-
-import numpy as np
 from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.typing import MaskedType
-
-from numba.np.numpy_support import from_dtype
+from cudf.testing._utils import deduped_numeric_dtype_tests
 
 arith_ops = (
     operator.add,
