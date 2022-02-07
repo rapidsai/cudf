@@ -207,7 +207,7 @@ rmm::device_uvector<size_type> build_string_row_offsets(table_view const &tbl,
       });
   std::copy_if(column_ptrs, column_ptrs + tbl.num_columns(),
                std::back_inserter(string_columns_offsets),
-               [](auto const &i) { return i != nullptr; });
+               [](auto const offset_ptr) { return offset_ptr != nullptr; });
 
   auto const num_columns = static_cast<size_type>(string_columns_offsets.size());
 
