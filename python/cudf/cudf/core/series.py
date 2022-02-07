@@ -976,6 +976,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             "floor_divide": "floordiv",
             "power": "pow",
             "float_power": "pow",
+            "remainder": "mod",
             "mod": "mod",
             "fmod": "mod",
             # Bitwise binary operations.
