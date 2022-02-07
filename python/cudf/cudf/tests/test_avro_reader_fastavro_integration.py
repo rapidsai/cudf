@@ -210,7 +210,7 @@ def test_can_parse_no_schema():
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("rows", [0, 1, 10, 100000])
+@pytest.mark.parametrize("rows", [0, 1, 10, 1000])
 @pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
 def test_avro_compression(rows, codec):
     schema = {

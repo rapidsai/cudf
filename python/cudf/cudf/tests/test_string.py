@@ -535,8 +535,6 @@ def _cat_convert_seq_to_cudf(others):
     "index",
     [
         ["1", "2", "3", "4", "5"],
-        pd.Series(["1", "2", "3", "4", "5"]),
-        pd.Index(["1", "2", "3", "4", "5"]),
     ],
 )
 def test_string_cat(ps_gs, others, sep, na_rep, index):

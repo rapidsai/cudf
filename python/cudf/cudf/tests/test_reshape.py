@@ -17,9 +17,9 @@ from cudf.testing._utils import (
 )
 
 
-@pytest.mark.parametrize("num_id_vars", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_value_vars", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_rows", [1, 2, 1000])
+@pytest.mark.parametrize("num_id_vars", [0, 1, 2])
+@pytest.mark.parametrize("num_value_vars", [0, 1, 2])
+@pytest.mark.parametrize("num_rows", [1, 2, 100])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):

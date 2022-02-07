@@ -238,8 +238,8 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("dtype_a", list(NUMERIC_TYPES))
-@pytest.mark.parametrize("dtype_b", list(NUMERIC_TYPES))
+@pytest.mark.parametrize("dtype_a", ['uint64', 'int64', 'float64'])
+@pytest.mark.parametrize("dtype_b", ['uint64', 'int64', 'float64'])
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
 def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
     """

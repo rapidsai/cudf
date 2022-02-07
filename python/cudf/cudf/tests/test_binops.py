@@ -218,9 +218,12 @@ def test_series_compare(cmpop, obj_class, dtype):
 
 def _series_compare_nulls_typegen():
     tests = []
+
+    numeric_type_subset = ['uint64', 'int64', 'float64', 'bool']
+
     tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
     tests += list(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
-    tests += list(product(NUMERIC_TYPES, NUMERIC_TYPES))
+    tests += list(product(numeric_type_subset, numeric_type_subset))
     tests += list(product(STRING_TYPES, STRING_TYPES))
 
     return tests

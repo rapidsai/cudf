@@ -13,7 +13,7 @@ from cudf.core._compat import PANDAS_GE_110
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
-repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+repr_categories =  ["int64" , "float64", "str", "category", "datetime64[ns]"]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -85,15 +85,14 @@ def test_full_series(nrows, dtype):
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
-@pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
+@pytest.mark.parametrize("nrows", [0, 1, 10, 20, 21])
+@pytest.mark.parametrize("ncols", [0, 1, 10, 20, 21])
 def test_full_dataframe_20(dtype, nrows, ncols):
     size = 20
     pdf = pd.DataFrame(
         {idx: np.random.randint(0, 100, size) for idx in range(size)}
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
-
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
