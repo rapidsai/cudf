@@ -23,18 +23,15 @@
 #include <cudf/filling.hpp>
 #include <cudf/reduction.hpp>
 
-namespace cudf {
-namespace test {
-
 struct ListRankScanTest : public cudf::test::BaseFixture {
   inline void test_ungrouped_rank_scan(cudf::column_view const& input,
                                        cudf::column_view const& expect_vals,
-                                       std::unique_ptr<aggregation> const& agg,
-                                       null_policy null_handling)
+                                       std::unique_ptr<cudf::aggregation> const& agg,
+                                       cudf::null_policy null_handling)
   {
-    auto col_out = cudf::scan(input, agg, scan_type::INCLUSIVE, null_handling);
+    auto col_out = cudf::scan(input, agg, cudf::scan_type::INCLUSIVE, null_handling);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-      expect_vals, col_out->view(), debug_output_level::ALL_ERRORS);
+      expect_vals, col_out->view(), cudf::test::debug_output_level::ALL_ERRORS);
   }
 };
 
@@ -46,7 +43,7 @@ TEST_F(ListRankScanTest, BasicList)
   auto const expected_dense_vals =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 3, 4, 5, 6, 7, 7, 8, 9, 9};
   this->test_ungrouped_rank_scan(
-    col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
+    col, expected_dense_vals, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);
 }
 
 TEST_F(ListRankScanTest, DeepList)
@@ -74,26 +71,24 @@ TEST_F(ListRankScanTest, DeepList)
   auto const expected_dense_vals = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     1, 1, 2, 3, 4, 5, 5, 5, 6, 6, 7, 7, 8, 9, 10, 11};
   this->test_ungrouped_rank_scan(
-    col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
+    col, expected_dense_vals, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);
 }
 
 TEST_F(ListRankScanTest, test)
 {
   data_profile table_data_profile;
-  table_data_profile.set_distribution_params(type_id::LIST, distribution_id::UNIFORM, 0, 5);
+  table_data_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
   table_data_profile.set_null_frequency(0);
-  auto const tbl = create_random_table({type_id::LIST}, 1, row_count{10}, table_data_profile);
-  print(tbl->get_column(0));
+  auto const tbl = create_random_table({cudf::type_id::LIST}, 1, row_count{10}, table_data_profile);
+  cudf::test::print(tbl->get_column(0));
   auto const new_tbl = cudf::repeat(tbl->view(), 2);
-  print(new_tbl->get_column(0));
+  cudf::test::print(new_tbl->get_column(0));
   auto const expected_dense_vals = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     1, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
   this->test_ungrouped_rank_scan(new_tbl->get_column(0),
                                  expected_dense_vals,
                                  cudf::make_dense_rank_aggregation(),
-                                 null_policy::INCLUDE);
+                                 cudf::null_policy::INCLUDE);
 }
-}  // namespace test
-}  // namespace cudf
 
 CUDF_TEST_PROGRAM_MAIN()

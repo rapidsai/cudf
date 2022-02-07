@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/filling.hpp"
 #include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -22,6 +21,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
