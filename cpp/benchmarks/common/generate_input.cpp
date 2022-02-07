@@ -103,7 +103,7 @@ struct non_fixed_width_size_fn {
 
 size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
-  if (is_fixed_width(dtype)) { return size_of(dtype); }
+  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
   return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
 
