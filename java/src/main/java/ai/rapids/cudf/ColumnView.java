@@ -4012,20 +4012,29 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       if (mainColOffsets != null) {
         // The offset buffer has (no. of rows + 1) entries, where each entry is INT32.sizeInBytes
-        long offsetsLen = OFFSET_SIZE * (mainColRows + 1);
+        long offsetsLen = ((long)OFFSET_SIZE) * (mainColRows + 1);
         mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
       long[] childHandles = new long[devChildren.size()];
-      for (ColumnView.NestedColumnVector ncv : devChildren) {
-        toClose.addAll(ncv.getBuffersToClose());
+      try {
+        for (ColumnView.NestedColumnVector ncv : devChildren) {
+          toClose.addAll(ncv.getBuffersToClose());
+        }
+        for (int i = 0; i < devChildren.size(); i++) {
+          childHandles[i] = devChildren.get(i).createViewHandle();
+        }
+        return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
+            mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
+      } finally {
+        for (int i = 0; i < childHandles.length; i++) {
+          if (childHandles[i] != 0) {
+            ColumnView.deleteColumnView(childHandles[i]);
+            childHandles[i] = 0;
+          }
+        }
       }
-      for (int i = 0; i < devChildren.size(); i++) {
-        childHandles[i] = devChildren.get(i).getViewHandle();
-      }
-      return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
-        mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
     }
 
     private static NestedColumnVector createNewNestedColumnVector(
@@ -4048,21 +4057,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         children);
     }
 
-    long getViewHandle() {
+    private long createViewHandle() {
       long[] childrenColViews = null;
-      if (children != null) {
-        childrenColViews = new long[children.size()];
-        for (int i = 0; i < children.size(); i++) {
-          childrenColViews[i] = children.get(i).getViewHandle();
+      try {
+        if (children != null) {
+          childrenColViews = new long[children.size()];
+          for (int i = 0; i < children.size(); i++) {
+            childrenColViews[i] = children.get(i).createViewHandle();
+          }
+        }
+        long dataAddr = data == null ? 0 : data.address;
+        long dataLen = data == null ? 0 : data.length;
+        long offsetAddr = offsets == null ? 0 : offsets.address;
+        long validAddr = valid == null ? 0 : valid.address;
+        int nc = nullCount.orElse(ColumnVector.OffHeapState.UNKNOWN_NULL_COUNT).intValue();
+        return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale(), dataAddr, dataLen,
+            offsetAddr, validAddr, nc, (int) rows, childrenColViews);
+      } finally {
+        if (childrenColViews != null) {
+          for (int i = 0; i < childrenColViews.length; i++) {
+            if (childrenColViews[i] != 0) {
+              deleteColumnView(childrenColViews[i]);
+              childrenColViews[i] = 0;
+            }
+          }
         }
       }
-      long dataAddr = data == null ? 0 : data.address;
-      long dataLen = data == null ? 0 : data.length;
-      long offsetAddr = offsets == null ? 0 : offsets.address;
-      long validAddr = valid == null ? 0 : valid.address;
-      int nc = nullCount.orElse(ColumnVector.OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale() , dataAddr, dataLen,
-          offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 
     List<DeviceMemoryBuffer> getBuffersToClose() {
