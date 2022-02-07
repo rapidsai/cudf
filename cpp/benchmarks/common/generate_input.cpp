@@ -65,13 +65,13 @@ T get_distribution_mean(distribution_params<T> const& dist)
 }
 
 // Utilities to determine the mean size of an element, given the data profile
-template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
 size_t non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("Should not be called, use `size_of` for this type instead");
 }
 
-template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
 size_t non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
