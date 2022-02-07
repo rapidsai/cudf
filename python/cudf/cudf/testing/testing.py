@@ -269,8 +269,6 @@ def assert_column_equal(
     if not columns_equal:
         ldata = str([val for val in left.to_pandas(nullable=True)])
         rdata = str([val for val in right.to_pandas(nullable=True)])
-        msg1 = f"{ldata}"
-        msg2 = f"{rdata}"
         try:
             diff = 0
             for i in range(left.size):
