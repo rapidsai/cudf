@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <sstream>
 #include <string>
 
 namespace cudf::io::detail {
@@ -23,7 +24,17 @@ namespace cudf::io::detail {
  * @brief Returns the value of the environment variable, or a default value if the variable is not
  * present.
  */
-std::string getenv_or(std::string const& env_var_name, std::string_view default_val);
+template <typename T>
+T getenv_or(std::string_view env_var_name, T default_val)
+{
+  auto const env_val = std::getenv(env_var_name.data());
+  if (env_val == nullptr) { return default_val; }
+
+  std::stringstream sstream(env_val);
+  T converted_val;
+  sstream >> converted_val;
+  return converted_val;
+}
 
 namespace cufile_integration {
 
