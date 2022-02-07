@@ -403,3 +403,14 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  row_count num_rows,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
+/**
+ * @brief Create a random null mask object
+ *
+ * @param size number of rows
+ * @param null_probability probability of a null value
+ * @param seed optional, seed for the pseudo-random engine
+ * @return null mask device buffer with random null mask data
+ */
+rmm::device_buffer create_random_null_mask(cudf::size_type size,
+                                           float null_probability,
+                                           unsigned seed = 1);

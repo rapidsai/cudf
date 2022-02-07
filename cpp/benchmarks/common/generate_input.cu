@@ -275,11 +275,26 @@ struct valid_generator {
     : engine(engine), dist{0, 1}, valid_prob{valid_probability}
   {
   }
+  valid_generator(unsigned seed, float valid_probability)
+    : engine(seed), dist{0, 1}, valid_prob{valid_probability}
+  {
+  }
+
   __device__ bool operator()(size_t n)
   {
     engine.discard(n);
     return dist(engine) < valid_prob;
   }
+};
+
+rmm::device_buffer create_random_null_mask(cudf::size_type size,
+                                           float null_probability,
+                                           unsigned seed)
+{
+  return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                thrust::make_counting_iterator<cudf::size_type>(size),
+                                valid_generator{seed, 1.0f - null_probability})
+    .first;
 };
 
 /**
