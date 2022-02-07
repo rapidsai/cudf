@@ -4012,7 +4012,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       if (mainColOffsets != null) {
         // The offset buffer has (no. of rows + 1) entries, where each entry is INT32.sizeInBytes
-        long offsetsLen = ((long)OFFSET_SIZE) * (mainColRows + 1);
+        long offsetsLen = OFFSET_SIZE * (((long)mainColRows) + 1);
         mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
