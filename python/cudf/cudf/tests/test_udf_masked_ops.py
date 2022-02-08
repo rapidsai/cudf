@@ -17,7 +17,7 @@ from cudf.core.udf.utils import precompiled
 from cudf.testing._utils import (
     _decimal_series,
     assert_eq,
-    deduped_numeric_dtype_tests,
+    numeric_dtypes_pairwise,
 )
 
 
@@ -242,7 +242,7 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
-@deduped_numeric_dtype_tests
+@numeric_dtypes_pairwise
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
 def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
     """

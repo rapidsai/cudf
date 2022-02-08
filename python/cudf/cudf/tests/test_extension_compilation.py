@@ -10,7 +10,7 @@ from numba.np.numpy_support import from_dtype
 from cudf import NA
 from cudf.core.udf.api import Masked
 from cudf.core.udf.typing import MaskedType
-from cudf.testing._utils import deduped_numeric_dtype_tests
+from cudf.testing._utils import numeric_dtypes_pairwise
 
 arith_ops = (
     operator.add,
@@ -162,7 +162,7 @@ def test_compile_arith_na_vs_masked(op, ty):
 
 
 @pytest.mark.parametrize("op", ops)
-@deduped_numeric_dtype_tests
+@numeric_dtypes_pairwise
 @pytest.mark.parametrize(
     "masked",
     ((False, True), (True, False), (True, True)),
