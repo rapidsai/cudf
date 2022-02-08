@@ -36,8 +36,8 @@ using keys_col = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 template <class T>
 using vals_col = cudf::test::fixed_width_column_wrapper<T>;
 
-template <class T>
-using M2s_col = cudf::test::fixed_width_column_wrapper<T>;
+using double_col  = vals_col<double>;
+using structs_col = cudf::test::structs_column_wrapper;
 
 auto compute_M2(cudf::column_view const& keys, cudf::column_view const& values)
 {
@@ -64,53 +64,54 @@ TYPED_TEST_SUITE(GroupbyM2TypedTest, TestTypes);
 TYPED_TEST(GroupbyM2TypedTest, EmptyInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   auto const keys = keys_col<T>{};
   auto const vals = vals_col<T>{};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_M2s        = M2s_col<R>{};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_vals        = structs_col{};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, AllNullKeysInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   auto const keys = keys_col<T>{{1, 2, 3}, all_nulls()};
   auto const vals = vals_col<T>{3, 4, 5};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{};
-  auto const expected_M2s        = M2s_col<R>{};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{};
+  auto const expected_vals        = structs_col{};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, AllNullValuesInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   auto const keys = keys_col<T>{1, 2, 3};
   auto const vals = vals_col<T>{{3, 4, 5}, all_nulls()};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_M2s        = M2s_col<R>{{null, null, null}, all_nulls()};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_vals        = [] {
+    auto counts = double_col{0, 0, 0};
+    auto means  = double_col{{null, null, null}, all_nulls()};
+    auto m2s    = double_col{{null, null, null}, all_nulls()};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SimpleInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   // key = 1: vals = [0, 3, 6]
   // key = 2: vals = [1, 4, 5, 9]
@@ -118,18 +119,22 @@ TYPED_TEST(GroupbyM2TypedTest, SimpleInput)
   auto const keys = keys_col<T>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto const vals = vals_col<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{1, 2, 3};
-  auto const expected_M2s        = M2s_col<R>{18.0, 32.75, 20.0 + 2.0 / 3.0};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{1, 2, 3};
+  auto const expected_vals        = [] {
+    auto counts = double_col{3, 4, 3};
+    auto means  = double_col{3.0, 4.75, 17.0 / 3.0};
+    auto m2s    = double_col{18.0, 32.75, 20.0 + 2.0 / 3.0};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SimpleInputHavingNegativeValues)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   // key = 1: vals = [0,  3, -6]
   // key = 2: vals = [1, -4, -5, 9]
@@ -137,34 +142,47 @@ TYPED_TEST(GroupbyM2TypedTest, SimpleInputHavingNegativeValues)
   auto const keys = keys_col<T>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto const vals = vals_col<T>{0, 1, -2, 3, -4, -5, -6, 7, -8, 9};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{1, 2, 3};
-  auto const expected_M2s        = M2s_col<R>{42.0, 122.75, 114.0};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{1, 2, 3};
+  auto const expected_vals        = [] {
+    auto counts = double_col{3, 4, 3};
+    auto means  = double_col{-1.0, 0.25, -1.0};
+    auto m2s    = double_col{42.0, 122.75, 114.0};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, ValuesHaveNulls)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
+  // key = 1: vals = [0]
+  // key = 2: vals = [null, 5, 7]
+  // key = 3: vals = [2, 6]
+  // key = 4: vals = [3]
+  // key = 5: vals = [null]
   auto const keys = keys_col<T>{1, 2, 3, 4, 5, 2, 3, 2};
   auto const vals = vals_col<T>{{0, null, 2, 3, null, 5, 6, 7}, nulls_at({1, 4})};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{1, 2, 3, 4, 5};
-  auto const expected_M2s        = M2s_col<R>{{0.0, 2.0, 8.0, 0.0, 0.0 /*NULL*/}, null_at(4)};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{1, 2, 3, 4, 5};
+  auto const expected_vals        = [] {
+    auto counts = double_col{1, 2, 2, 1, 0};
+    auto means  = double_col{{0, 6, 4, 3, null}, null_at(4)};
+    auto m2s    = double_col{{0.0, 2.0, 8.0, 0.0, 0.0 /*NULL*/}, null_at(4)};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, KeysAndValuesHaveNulls)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   // key = 1: vals = [null, 3, 6]
   // key = 2: vals = [1, 4, null, 9]
@@ -173,18 +191,22 @@ TYPED_TEST(GroupbyM2TypedTest, KeysAndValuesHaveNulls)
   auto const keys = keys_col<T>{{1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4}, null_at(7)};
   auto const vals = vals_col<T>{{null, 1, 2, 3, 4, null, 6, 7, 8, 9, null}, nulls_at({0, 5, 10})};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s = M2s_col<R>{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{1, 2, 3, 4};
+  auto const expected_vals        = [] {
+    auto counts = double_col{2, 3, 2, 0};
+    auto means  = double_col{{4.5, 14.0 / 3.0, 5.0, 0.0 /*NULL*/}, null_at(3)};
+    auto m2s    = double_col{{4.5, 32.0 + 2.0 / 3.0, 18.0, 0.0 /*NULL*/}, null_at(3)};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, InputHaveNullsAndNaNs)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   // key = 1: vals = [0, 3, 6]
   // key = 2: vals = [1, 4, NaN, 9]
@@ -195,18 +217,22 @@ TYPED_TEST(GroupbyM2TypedTest, InputHaveNullsAndNaNs)
     {0.0 /*NULL*/, 0.0 /*NULL*/, 0.0, 1.0, 2.0, 3.0, 4.0, NaN, 6.0, 7.0, 8.0, 9.0, 10.0, NaN},
     nulls_at({0, 1})};
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s        = M2s_col<R>{18.0, NaN, 18.0, NaN};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{1, 2, 3, 4};
+  auto const expected_vals        = [] {
+    auto counts = double_col{3, 4, 2, 2};
+    auto means  = double_col{3.0, NaN, 5.0, NaN};
+    auto m2s    = double_col{18.0, NaN, 18.0, NaN};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }
 
 TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
 {
   using T = TypeParam;
-  using R = cudf::detail::target_type_t<T, cudf::aggregation::M2>;
 
   // This test should compute M2 aggregation on the same dataset as the InputHaveNullsAndNaNs test.
   // i.e.:
@@ -234,10 +260,15 @@ TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
   auto const keys = cudf::slice(keys_original, {10, 24})[0];
   auto const vals = cudf::slice(vals_original, {10, 24})[0];
 
-  auto const [out_keys, out_M2s] = compute_M2(keys, vals);
-  auto const expected_keys       = keys_col<T>{1, 2, 3, 4};
-  auto const expected_M2s        = M2s_col<R>{18.0, NaN, 18.0, NaN};
+  auto const [out_keys, out_vals] = compute_M2(keys, vals);
+  auto const expected_keys        = keys_col<T>{1, 2, 3, 4};
+  auto const expected_vals        = [] {
+    auto counts = double_col{3, 4, 2, 2};
+    auto means  = double_col{3.0, NaN, 5.0, NaN};
+    auto m2s    = double_col{18.0, NaN, 18.0, NaN};
+    return structs_col{{counts, means, m2s}};
+  }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *out_keys, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, *out_M2s, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_vals, *out_vals, verbosity);
 }

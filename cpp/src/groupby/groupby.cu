@@ -99,9 +99,9 @@ namespace {
 /**
  * @brief Factory to construct empty result columns.
  *
- * Adds special handling for COLLECT_LIST/COLLECT_SET, because:
+ * Adds special handling for COLLECT_LIST/COLLECT_SET/M2/MERGE_M2, because:
  * 1. `make_empty_column()` does not support construction of nested columns.
- * 2. Empty lists need empty child columns, to persist type information.
+ * 2. Empty lists and structs need empty child columns, to persist type information.
  */
 struct empty_column_constructor {
   column_view values;
@@ -115,6 +115,14 @@ struct empty_column_constructor {
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
         0, make_empty_column(type_to_id<offset_type>()), empty_like(values), 0, {});
+    }
+
+    if constexpr (k == aggregation::Kind::M2 || k == aggregation::Kind::MERGE_M2) {
+      std::vector<std::unique_ptr<column>> child_columns;
+      for (size_type i = 0; i < 3; ++i) {
+        child_columns.emplace_back(make_empty_column(type_id::FLOAT64));
+      }
+      return make_structs_column(0, std::move(child_columns), 0, {});
     }
 
     // If `values` is LIST typed, and the aggregation results match the type,

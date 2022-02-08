@@ -254,14 +254,19 @@ void aggregate_result_functor::operator()<aggregation::M2>(aggregation const& ag
 {
   if (cache.has_result(values, agg)) return;
 
-  auto const mean_agg = make_mean_aggregation();
+  auto const count_agg = make_count_aggregation();
+  auto const mean_agg  = make_mean_aggregation();
+  operator()<aggregation::COUNT_VALID>(*count_agg);
   operator()<aggregation::MEAN>(*mean_agg);
-  auto const mean_result = cache.get_result(values, *mean_agg);
+
+  auto const count_result = cache.get_result(values, *count_agg);
+  auto const mean_result  = cache.get_result(values, *mean_agg);
 
   cache.add_result(
     values,
     agg,
-    detail::group_m2(get_grouped_values(), mean_result, helper.group_labels(stream), stream, mr));
+    detail::group_m2(
+      get_grouped_values(), count_result, mean_result, helper.group_labels(stream), stream, mr));
 };
 
 template <>
