@@ -257,11 +257,13 @@ class regex_parser {
     if (quoted) {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
       if (yy >= '0' && yy <= '7') {
-        yy         = yy - '0';
-        char32_t c = *exprp;
-        while (c >= '0' && c <= '7') {
+        yy          = yy - '0';
+        auto c      = *exprp;
+        auto digits = 1;
+        while (c >= '0' && c <= '7' && digits < 3) {
           yy = (yy << 3) | (c - '0');
           c  = *(++exprp);
+          ++digits;
         }
         return CHAR;
       } else {

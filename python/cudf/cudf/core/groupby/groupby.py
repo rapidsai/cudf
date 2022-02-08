@@ -1468,7 +1468,7 @@ class SeriesGroupBy(GroupBy):
 
 
 # TODO: should we define this as a dataclass instead?
-class Grouper(object):
+class Grouper:
     def __init__(
         self, key=None, level=None, freq=None, closed=None, label=None
     ):

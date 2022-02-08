@@ -408,7 +408,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
   JNI_NULL_CHECK(env, keys_vals_handle, "keys_vals_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const *input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
     CUDF_EXPECTS(input_cv->offset() == 0, "Input column has non-zero offset.");
     CUDF_EXPECTS(input_cv->type().id() == cudf::type_id::LIST,
                  "Input column is not a lists column.");
@@ -460,7 +460,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
     auto out_structs =
         cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0, {});
     return release_as_jlong(cudf::make_lists_column(input_cv->size(), std::move(out_offsets),
-                                                    std::move(out_structs), 0, {}));
+                                                    std::move(out_structs), input_cv->null_count(),
+                                                    cudf::copy_bitmask(*input_cv)));
   }
   CATCH_STD(env, 0);
 }
@@ -1786,16 +1787,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
       result = cudf::bitmask_allocation_size_bytes(column->size());
     }
     return result;
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize(JNIEnv *env,
-                                                                                 jobject j_object,
-                                                                                 jint size) {
-  try {
-    cudf::jni::auto_set_device(env);
-    return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
   }
   CATCH_STD(env, 0);
 }

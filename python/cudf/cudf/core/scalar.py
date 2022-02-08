@@ -17,7 +17,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Scalar(object):
+class Scalar:
     """
     A GPU-backed scalar object with NumPy scalar like properties
     May be used in binary operations against other scalars, cuDF
