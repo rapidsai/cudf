@@ -156,6 +156,27 @@ TYPED_TEST(groupby_sum_test, dictionary)
                   force_use_sort_impl::YES);
 }
 
+struct overflow_test : public cudf::test::BaseFixture {
+};
+TEST_F(overflow_test, overflow_integer)
+{
+  using int32_col = fixed_width_column_wrapper<int32_t>;
+  using int64_col = fixed_width_column_wrapper<int64_t>;
+
+  auto const keys        = int32_col{0, 0};
+  auto const vals        = int32_col{-2147483648, -2147483648};
+  auto const expect_keys = int32_col{0};
+  auto const expect_vals = int64_col{-4294967296L};
+
+  auto test_sum = [&](auto const use_sort) {
+    auto agg = make_sum_aggregation<groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), use_sort);
+  };
+
+  test_sum(force_use_sort_impl::NO);
+  test_sum(force_use_sort_impl::YES);
+}
+
 template <typename T>
 struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
