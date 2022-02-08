@@ -56,8 +56,9 @@ add_custom_command(
 function(ConfigureBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+    ${CMAKE_BENCH_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
@@ -69,6 +70,13 @@ function(ConfigureBench CMAKE_BENCH_NAME)
     APPEND
     COMMENT "Adding ${CMAKE_BENCH_NAME}"
   )
+
+  install(
+    TARGETS ${CMAKE_BENCH_NAME}
+    COMPONENT testing
+    DESTINATION bin/benchmarks/libcudf
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # This function takes in a benchmark name and benchmark source for nvbench benchmarks and handles
@@ -76,11 +84,18 @@ endfunction()
 function(ConfigureNVBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+    ${CMAKE_BENCH_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+  )
+  install(
+    TARGETS ${CMAKE_BENCH_NAME}
+    COMPONENT testing
+    DESTINATION bin/benchmarks/libcudf
+    EXCLUDE_FROM_ALL
   )
 endfunction()
 
