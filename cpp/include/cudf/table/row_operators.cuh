@@ -523,7 +523,7 @@ class element_hasher_with_seed {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return _null_hash; }
+    if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
