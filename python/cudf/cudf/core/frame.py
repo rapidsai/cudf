@@ -1260,7 +1260,7 @@ class Frame:
 
         return self._mimic_inplace(
             self._from_data(
-                data=ColumnAccessor(filled_data), index=self._index
+                data=filled_data, index=self._index
             ),
             inplace=inplace,
         )

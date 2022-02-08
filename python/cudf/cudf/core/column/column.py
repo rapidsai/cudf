@@ -1168,7 +1168,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self
 
     def can_fillna(self) -> bool:
-        return bool(self.null_count)
+        return self.null_count != 0
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
