@@ -47,6 +47,7 @@ std::unique_ptr<column> scan(column_view const& input,
                  "Percent rank aggregation operator requires an inclusive scan");
     return inclusive_percent_rank_scan(input, rmm::cuda_stream_default, mr);
   }
+
   return inclusive == scan_type::EXCLUSIVE
            ? detail::scan_exclusive(input, agg, null_handling, rmm::cuda_stream_default, mr)
            : detail::scan_inclusive(input, agg, null_handling, rmm::cuda_stream_default, mr);

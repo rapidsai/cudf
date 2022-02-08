@@ -34,7 +34,7 @@ using rank_result_col    = fixed_width_column_wrapper<size_type>;
 using percent_result_col = fixed_width_column_wrapper<double>;
 using null_iter_t        = decltype(nulls_at({}));
 
-auto constexpr X     = int32_t{-1};  // Placeholder for NULL rows.
+auto constexpr X     = int32_t{0};  // Placeholder for NULL rows.
 auto const all_valid = nulls_at({});
 
 inline void test_rank_scans(column_view const& keys,

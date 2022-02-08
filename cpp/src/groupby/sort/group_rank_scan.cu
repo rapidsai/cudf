@@ -118,7 +118,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
     order_by,
     group_labels,
     group_offsets,
-    [] __device__(bool unequal, auto row_index_in_group) { return unequal ? 1 : 0; },
+    [] __device__(bool const unequal, size_type const) { return unequal ? 1 : 0; },
     DeviceSum{},
     has_nested_nulls(table_view{{order_by}}),
     stream,
@@ -133,7 +133,7 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
 {
   auto const rank_column = rank_scan(
     order_by, group_labels, group_offsets, stream, rmm::mr::get_current_device_resource());
-  auto const rank            = rank_column->view();
+  auto const rank_view       = rank_column->view();
   auto const group_size_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [labels  = group_labels.begin(),
@@ -145,14 +145,14 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
     });
 
   auto percent_rank_result = cudf::make_fixed_width_column(
-    data_type{type_to_id<double>()}, rank.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<double>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
 
   thrust::transform(rmm::exec_policy(stream),
-                    rank.begin<size_type>(),
-                    rank.end<size_type>(),
+                    rank_view.begin<size_type>(),
+                    rank_view.end<size_type>(),
                     group_size_iter,
                     percent_rank_result->mutable_view().begin<double>(),
-                    [] __device__(auto const& rank, auto const& group_size) {
+                    [] __device__(auto const rank, auto const group_size) {
                       return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
                     });
 
