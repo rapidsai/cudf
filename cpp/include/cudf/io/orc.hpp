@@ -220,7 +220,9 @@ class orc_reader_options {
    *
    * @param val Vector of fully qualified column names.
    */
-  void set_decimal_cols_as_float(std::vector<std::string> val)
+  [[deprecated(
+    "Decimal to float conversion is deprecated and will be remove in future release")]] void
+  set_decimal_cols_as_float(std::vector<std::string> val)
   {
     _decimal_cols_as_float = std::move(val);
   }
@@ -344,7 +346,10 @@ class orc_reader_options_builder {
    * @param val Vector of column names.
    * @return this for chaining.
    */
-  orc_reader_options_builder& decimal_cols_as_float(std::vector<std::string> val)
+  [[deprecated(
+    "Decimal to float conversion is deprecated and will be remove in future "
+    "release")]] orc_reader_options_builder&
+  decimal_cols_as_float(std::vector<std::string> val)
   {
     options._decimal_cols_as_float = std::move(val);
     return *this;

@@ -763,7 +763,7 @@ def test_read_text(datadir):
     chess_file = str(datadir) + "/chess.pgn"
     delimiter = "1."
 
-    with open(chess_file, "r") as f:
+    with open(chess_file) as f:
         content = f.read().split(delimiter)
 
     # Since Python split removes the delimiter and read_text does

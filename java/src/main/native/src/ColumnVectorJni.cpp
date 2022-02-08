@@ -252,8 +252,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeListFromOffsets(
   JNI_NULL_CHECK(env, offsets_handle, "offsets_handle is null", 0)
   try {
     cudf::jni::auto_set_device(env);
-    auto const *child_cv = reinterpret_cast<cudf::column_view const *>(child_handle);
-    auto const *offsets_cv = reinterpret_cast<cudf::column_view const *>(offsets_handle);
+    auto const child_cv = reinterpret_cast<cudf::column_view const *>(child_handle);
+    auto const offsets_cv = reinterpret_cast<cudf::column_view const *>(offsets_handle);
     CUDF_EXPECTS(offsets_cv->type().id() == cudf::type_id::INT32,
                  "Input offsets does not have type INT32.");
 

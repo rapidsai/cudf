@@ -561,7 +561,9 @@ def test_series_value_counts(dropna, normalize):
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+        sr = cudf.Series.from_masked_array(
+            arr, cudf.Series(mask)._column.as_mask()
+        )
         sr.name = "col"
 
         expect = (
@@ -1517,3 +1519,74 @@ def test_series_transpose(data):
     assert_eq(pd_transposed, cudf_transposed)
     assert_eq(pd_property, cudf_property)
     assert_eq(cudf_transposed, csr)
+
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.nunique()
+    expected = pd_s.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique_index(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.index.nunique()
+    expected = pd_s.index.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "fill_value,data",
+    [
+        (7, [6, 3, 4]),
+        ("x", ["a", "b", "c", "d", "e", "f"]),
+        (7, [6, 3, 4, 2, 1, 7, 8, 5]),
+        (0.8, [0.6, 0.3, 0.4, 0.2, 0.1, 0.7, 0.8, 0.5]),
+        ("b", pd.Categorical(["a", "b", "c"])),
+        (None, [0.0, 1.0, 2.0, 3.0]),
+    ],
+)
+@pytest.mark.parametrize(
+    "begin,end",
+    [
+        (0, -1),
+        (0, 4),
+        (1, -1),
+        (1, 4),
+        (-2, 1),
+        (-2, -1),
+        (10, 12),
+        (8, 10),
+        (10, 8),
+        (-10, -8),
+        (-2, 6),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fill(data, fill_value, begin, end, inplace):
+    gs = cudf.Series(data)
+    ps = gs.to_pandas()
+
+    actual = gs
+    gs[begin:end] = fill_value
+    ps[begin:end] = fill_value
+
+    assert_eq(ps, actual)
+
+
+@pytest.mark.xfail(raises=ValueError)
+def test_fill_new_category():
+    gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
+    gs[0:1] = "d"

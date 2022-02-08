@@ -24,11 +24,12 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
-from cudf.core.column import arange
+from cudf.core.column import arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
+from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
@@ -472,6 +473,68 @@ class IndexedFrame(Frame):
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
 
+    def memory_usage(self, index=True, deep=False):
+        """Return the memory usage of an object.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        Series or scalar
+            For DataFrame, a Series whose index is the original column names
+            and whose values is the memory usage of each column in bytes. For a
+            Series the total memory usage.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> dtypes = ['int64', 'float64', 'object', 'bool']
+        >>> data = dict([(t, np.ones(shape=5000).astype(t))
+        ...              for t in dtypes])
+        >>> df = cudf.DataFrame(data)
+        >>> df.head()
+           int64  float64  object  bool
+        0      1      1.0     1.0  True
+        1      1      1.0     1.0  True
+        2      1      1.0     1.0  True
+        3      1      1.0     1.0  True
+        4      1      1.0     1.0  True
+        >>> df.memory_usage(index=False)
+        int64      40000
+        float64    40000
+        object     40000
+        bool        5000
+        dtype: int64
+
+        Use a Categorical for efficient storage of an object-dtype column with
+        many repeated values.
+
+        >>> df['object'].astype('category').memory_usage(deep=True)
+        5008
+
+        **Series**
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        43
+
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+
+        >>> s.memory_usage(index=False)
+        24
+        """
+        usage = super().memory_usage(deep=deep)
+        if index:
+            usage["Index"] = self.index.memory_usage()
+        return usage
+
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
 
@@ -755,6 +818,51 @@ class IndexedFrame(Frame):
             "`IndexedFrame.add_suffix` not currently implemented. \
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
+
+    @annotate("APPLY", color="purple", domain="cudf_python")
+    def _apply(self, func, kernel_getter, *args, **kwargs):
+        """Apply `func` across the rows of the frame."""
+        if kwargs:
+            raise ValueError("UDFs using **kwargs are not yet supported.")
+
+        try:
+            kernel, retty = _compile_or_get(
+                self, func, args, kernel_getter=kernel_getter
+            )
+        except Exception as e:
+            raise ValueError(
+                "user defined function compilation failed."
+            ) from e
+
+        # Mask and data column preallocated
+        ans_col = cp.empty(len(self), dtype=retty)
+        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        launch_args = [(ans_col, ans_mask), len(self)]
+        offsets = []
+
+        # if _compile_or_get succeeds, it is safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for col in _supported_cols_from_frame(self).values():
+            data = col.data
+            mask = col.mask
+            if mask is None:
+                launch_args.append(data)
+            else:
+                launch_args.append((data, mask))
+            offsets.append(col.offset)
+        launch_args += offsets
+        launch_args += list(args)
+
+        try:
+            kernel.forall(len(self))(*launch_args)
+        except Exception as e:
+            raise RuntimeError("UDF kernel execution failed.") from e
+
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
+
+        return result
 
     def sort_values(
         self,
@@ -1413,18 +1521,9 @@ class IndexedFrame(Frame):
         0  1.0  a
         2  3.0  c
         """
-        axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
+        if self._get_axis_from_axis_arg(axis) != 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):
