@@ -23,8 +23,7 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.expanduser(__file__)))
 
 # Add the scripts dir for gitutils
-sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR,
-                                              "../../cpp/scripts")))
+sys.path.append(os.path.normpath(SCRIPT_DIR))
 
 # Now import gitutils. Ignore flake8 error here since there is no other way to
 # set up imports
@@ -38,7 +37,7 @@ FilesToCheck = [
     re.compile(r"[.]flake8[.]cython$"),
     re.compile(r"meta[.]yaml$")
 ]
-ExemptFiles = ['cpp/src/tsne/cannylab/bh.cu']
+ExemptFiles = ['']
 
 # this will break starting at year 10000, which is probably OK :)
 CheckSimple = re.compile(
@@ -188,18 +187,9 @@ def checkCopyright_main():
                            help="If set, "
                            "only files seen as modified by git will be "
                            "processed.")
-    # argparser.add_argument("--exclude",
-    #                        dest='exclude',
-    #                        action="append",
-    #                        required=False,
-    #                        default=["python/cuml/_thirdparty/"],
-    #                        help=("Exclude the paths specified (regexp). "
-    #                              "Can be specified multiple times.")
-                                #  )
 
     (args, dirs) = argparser.parse_known_args()
     try:
-        ExemptFiles = ExemptFiles
         ExemptFiles = [re.compile(file) for file in ExemptFiles]
     except re.error as reException:
         print("Regular expression error:")
