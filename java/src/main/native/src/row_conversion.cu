@@ -189,42 +189,66 @@ struct batch_data {
   std::vector<row_batch> row_batches; // information about each batch such as byte count
 };
 
+/**
+ * @brief functor to compute row size with alignment
+ *
+ */
+struct aligned_row_size_functor {
+  aligned_row_size_functor(size_type _fixed_width_and_validity_size)
+      : fixed_width_and_validity_size(_fixed_width_and_validity_size) {}
+
+  __device__ size_type operator()(size_type row_size) {
+    return util::round_up_unsafe(fixed_width_and_validity_size + row_size, JCUDF_ROW_ALIGNMENT);
+  }
+
+  size_type fixed_width_and_validity_size;
+};
+
+/**
+ * @brief builds row size information for tables that contain strings
+ *
+ * @param tbl table from which to compute row size information
+ * @param fixed_width_and_validity_size size of fixed-width and validity data in this table
+ * @param stream cuda stream on which to operate
+ * @return device vector of size_types of the row sizes of the table
+ */
 rmm::device_uvector<size_type> build_string_row_sizes(table_view const &tbl,
                                                       size_type fixed_width_and_validity_size,
                                                       rmm::cuda_stream_view stream) {
   auto const num_rows = tbl.num_rows();
   rmm::device_uvector<size_type> d_row_sizes(num_rows, stream);
+  thrust::uninitialized_fill(thrust::cuda::par.on(stream), d_row_sizes.begin(), d_row_sizes.end(),
+                             0);
 
-  std::vector<strings_column_view::offset_iterator> offsets_columns;
-  auto offsets_iter = thrust::make_transform_iterator(
-      tbl.begin(), [](auto const &col) -> strings_column_view::offset_iterator {
-        if (!is_fixed_width(col.type())) {
-          CUDF_EXPECTS(col.type().id() == type_id::STRING, "only string columns are supported!");
-          return strings_column_view(col).offsets_begin();
-        } else {
-          return nullptr;
-        }
-      });
-  std::copy_if(offsets_iter, offsets_iter + tbl.num_columns(), std::back_inserter(offsets_columns),
-               [](auto const offset_ptr) { return offset_ptr != nullptr; });
+  auto d_offsets_iterators = [&]() {
+    std::vector<strings_column_view::offset_iterator> offsets_iterators;
+    auto offsets_iter = thrust::make_transform_iterator(
+        tbl.begin(), [](auto const &col) -> strings_column_view::offset_iterator {
+          if (!is_fixed_width(col.type())) {
+            CUDF_EXPECTS(col.type().id() == type_id::STRING, "only string columns are supported!");
+            return strings_column_view(col).offsets_begin();
+          } else {
+            return nullptr;
+          }
+        });
+    std::copy_if(offsets_iter, offsets_iter + tbl.num_columns(),
+                 std::back_inserter(offsets_iterators),
+                 [](auto const &offset_ptr) { return offset_ptr != nullptr; });
+    return make_device_uvector_async(offsets_iterators, stream);
+  }();
 
-  auto const num_columns = static_cast<size_type>(offsets_columns.size());
+  auto const num_columns = static_cast<size_type>(d_offsets_iterators.size());
 
-  auto d_offsets_columns = make_device_uvector_async(offsets_columns, stream);
-  auto key_iter = cudf::detail::make_counting_transform_iterator(
-      0, [num_columns] __device__(auto element_idx) { return element_idx / num_columns; });
-  auto data_iter = cudf::detail::make_counting_transform_iterator(
-      0, [d_offsets_columns = d_offsets_columns.data(), num_columns,
-          num_rows] __device__(auto element_idx) {
-        auto const row = element_idx / num_columns;
-        auto const col = element_idx % num_columns;
-
-        return d_offsets_columns[col][row + 1] - d_offsets_columns[col][row];
-      });
-
-  // reduce by key to collapse string sizes for a specific row
-  thrust::reduce_by_key(rmm::exec_policy(stream), key_iter, key_iter + num_columns * num_rows,
-                        data_iter, thrust::make_discard_iterator(), d_row_sizes.begin());
+  thrust::for_each(rmm::exec_policy(stream), thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(num_columns * num_rows),
+                   [d_offsets_iterators = d_offsets_iterators.data(), num_columns, num_rows,
+                    d_row_sizes = d_row_sizes.data()] __device__(auto element_idx) {
+                     auto const row = element_idx % num_rows;
+                     auto const col = element_idx / num_rows;
+                     auto const val =
+                         d_offsets_iterators[col][row + 1] - d_offsets_iterators[col][row];
+                     atomicAdd(&d_row_sizes[row], val);
+                   });
 
   // transform the row sizes to include fixed width size and alignment
   thrust::transform(rmm::exec_policy(stream), d_row_sizes.begin(), d_row_sizes.end(),
@@ -236,18 +260,27 @@ rmm::device_uvector<size_type> build_string_row_sizes(table_view const &tbl,
   return d_row_sizes;
 }
 
+/**
+ * @brief functor to return the offset of a row in a table with string columns
+ *
+ */
 struct string_row_offset_functor {
-  string_row_offset_functor(device_span<size_type> d_row_offsets) : _d_row_offsets(d_row_offsets){};
+  string_row_offset_functor(device_span<size_type> _d_row_offsets)
+      : d_row_offsets(_d_row_offsets){};
 
   __device__ inline size_type operator()(int row_number, int) const {
-    return _d_row_offsets[row_number];
+    return d_row_offsets[row_number];
   }
 
-  device_span<size_type> _d_row_offsets;
+  device_span<size_type> d_row_offsets;
 };
 
-struct row_offset_functor {
-  row_offset_functor(size_type fixed_width_only_row_size)
+/**
+ * @brief functor to return the offset of a row in a table with only fixed-width columns
+ *
+ */
+struct fixed_width_row_offset_functor {
+  fixed_width_row_offset_functor(size_type fixed_width_only_row_size)
       : _fixed_width_only_row_size(fixed_width_only_row_size){};
 
   __device__ inline size_type operator()(int row_number, int tile_row_start) const {
@@ -1573,9 +1606,23 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
   }
 }
 
-template <typename RowSizeIter>
+/**
+ * @brief convert cudf table into JCUDF row format
+ *
+ * @tparam RowSizeIter iterator with size of each row including variable-width data
+ * @param tbl table to convert to JCUDF row format
+ * @param row_sizes iterator with size of each row including variable-width data
+ * @param column_starts starting offset of a column in a row
+ * @param column_sizes size of each element in a column
+ * @param fixed_width_only only fixed-width data in this table
+ * @param fixed_width_size_per_row size of fixed-width data in a row of this table
+ * @param stream stream used
+ * @param mr selected memory resource for returned data
+ * @return vector of list columns containing byte columns of the JCUDF row data
+ */
+template <typename offsetFunctor>
 std::vector<std::unique_ptr<column>>
-convert_to_rows(table_view const &tbl, RowSizeIter row_sizes,
+convert_to_rows(table_view const &tbl, batch_data &batch_info, offsetFunctor offset_functor,
                 std::vector<size_type> const &column_starts,
                 std::vector<size_type> const &column_sizes, bool fixed_width_only,
                 size_type const fixed_width_size_per_row, rmm::cuda_stream_view stream,
@@ -1595,10 +1642,8 @@ convert_to_rows(table_view const &tbl, RowSizeIter row_sizes,
   auto const num_columns = tbl.num_columns();
   auto dev_col_sizes = make_device_uvector_async(column_sizes, stream, mr);
   auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
-  auto batch_info = detail::build_batches(num_rows, row_sizes, fixed_width_only, stream, mr);
 
   // Get the pointers to the input columnar data ready
-
   auto data_begin = thrust::make_transform_iterator(
       tbl.begin(), [](auto const &c) { return c.template data<int8_t>(); });
   std::vector<int8_t const *> input_data(data_begin, data_begin + tbl.num_columns());
@@ -1660,36 +1705,17 @@ convert_to_rows(table_view const &tbl, RowSizeIter row_sizes,
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
   dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
 
-  if (fixed_width_only) {
-    detail::row_offset_functor offset_functor(
-        util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
+  detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
+      num_rows, num_columns, shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
+      dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
+      batch_info.d_batch_row_boundaries.data(),
+      reinterpret_cast<int8_t **>(dev_output_data.data()));
 
-    detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
-        num_rows, num_columns, shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
-        dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
-        batch_info.d_batch_row_boundaries.data(),
-        reinterpret_cast<int8_t **>(dev_output_data.data()));
-
-    detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
-                                    stream.value()>>>(
-        num_rows, num_columns, shmem_limit_per_tile, offset_functor,
-        batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), column_starts.back(),
-        dev_validity_tile_infos, dev_input_nm.data());
-  } else {
-    detail::string_row_offset_functor offset_functor(batch_info.batch_row_offsets);
-
-    detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
-        num_rows, num_columns, shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
-        dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
-        batch_info.d_batch_row_boundaries.data(),
-        reinterpret_cast<int8_t **>(dev_output_data.data()));
-
-    detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
-                                    stream.value()>>>(
-        num_rows, num_columns, shmem_limit_per_tile, offset_functor,
-        batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), column_starts.back(),
-        dev_validity_tile_infos, dev_input_nm.data());
-  }
+  detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
+                                  stream.value()>>>(
+      num_rows, num_columns, shmem_limit_per_tile, offset_functor,
+      batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), column_starts.back(),
+      dev_validity_tile_infos, dev_input_nm.data());
 
   // split up the output buffer into multiple buffers based on row batch sizes
   // and create list of byte columns
@@ -1760,7 +1786,12 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
     auto row_size_iter = thrust::make_constant_iterator<uint64_t>(
         util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
 
-    return detail::convert_to_rows(tbl, row_size_iter, column_starts, column_sizes,
+    auto batch_info = detail::build_batches(num_rows, row_size_iter, fixed_width_only, stream, mr);
+
+    detail::fixed_width_row_offset_functor offset_functor(
+        util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
+
+    return detail::convert_to_rows(tbl, batch_info, offset_functor, column_starts, column_sizes,
                                    fixed_width_only, fixed_width_size_per_row, stream, mr);
   } else {
     auto row_sizes = detail::build_string_row_sizes(tbl, fixed_width_size_per_row, stream);
@@ -1768,7 +1799,11 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
     auto row_size_iter = cudf::detail::make_counting_transform_iterator(
         0, detail::row_size_functor(num_rows, row_sizes.data(), 0));
 
-    return detail::convert_to_rows(tbl, row_size_iter, column_starts, column_sizes,
+    auto batch_info = detail::build_batches(num_rows, row_size_iter, fixed_width_only, stream, mr);
+
+    detail::string_row_offset_functor offset_functor(batch_info.batch_row_offsets);
+
+    return detail::convert_to_rows(tbl, batch_info, offset_functor, column_starts, column_sizes,
                                    fixed_width_only, fixed_width_size_per_row, stream, mr);
   }
 
@@ -1945,7 +1980,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
 
-  detail::row_offset_functor offset_functor(fixed_width_size_per_row);
+  detail::fixed_width_row_offset_functor offset_functor(fixed_width_size_per_row);
 
   detail::copy_from_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_tile, offset_functor, gpu_batch_row_boundaries.data(),
