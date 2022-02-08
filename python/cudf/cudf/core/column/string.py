@@ -3469,7 +3469,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         data, index = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(
