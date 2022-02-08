@@ -43,13 +43,16 @@ auto const rank         = cudf::make_rank_aggregation();
 auto const dense_rank   = cudf::make_dense_rank_aggregation();
 auto const percent_rank = cudf::make_percent_rank_aggregation();
 
+auto constexpr INCLUSIVE_SCAN = cudf::scan_type::INCLUSIVE;
+auto constexpr INCLUDE_NULLS  = cudf::null_policy::INCLUDE;
+
 template <typename T>
 struct TypedRankScanTest : BaseScanTest<T> {
   inline void test_ungrouped_rank_scan(cudf::column_view const& input,
                                        cudf::column_view const& expect_vals,
                                        std::unique_ptr<aggregation> const& agg)
   {
-    auto col_out = cudf::scan(input, agg, scan_type::INCLUSIVE, cudf::null_policy::INCLUDE);
+    auto col_out = cudf::scan(input, agg, INCLUSIVE_SCAN, INCLUDE_NULLS);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
@@ -191,20 +194,16 @@ TYPED_TEST(TypedRankScanTest, NestedStructs)
     return structs_column_wrapper{{col, strings_col, nuther_col}};
   }();
 
-  auto const dense_out =
-    cudf::scan(nested_col, dense_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto const dense_expected =
-    cudf::scan(flat_col, dense_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto const dense_out      = cudf::scan(nested_col, dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto const dense_expected = cudf::scan(flat_col, dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view());
 
-  auto const rank_out = cudf::scan(nested_col, rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto const rank_expected = cudf::scan(flat_col, rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto const rank_out      = cudf::scan(nested_col, rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto const rank_expected = cudf::scan(flat_col, rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view());
 
-  auto const percent_out =
-    cudf::scan(nested_col, percent_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto const percent_expected =
-    cudf::scan(flat_col, percent_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto const percent_out      = cudf::scan(nested_col, percent_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto const percent_expected = cudf::scan(flat_col, percent_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(percent_out->view(), percent_expected->view());
 }
 
@@ -219,16 +218,12 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
     auto const expected_null_result = rank_result_col{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     auto const expected_percent_rank_null_result =
       percent_result_col{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    auto const dense_null_out =
-      cudf::scan(*struct_col, dense_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-    auto const rank_null_out =
-      cudf::scan(*struct_col, rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-    auto const percent_null_out =
-      cudf::scan(*struct_col, percent_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_null_out->view(), expected_null_result);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_null_out->view(), expected_null_result);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(percent_null_out->view(),
-                                        expected_percent_rank_null_result);
+    auto const dense_out   = cudf::scan(*struct_col, dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+    auto const rank_out    = cudf::scan(*struct_col, rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+    auto const percent_out = cudf::scan(*struct_col, percent_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), expected_null_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), expected_null_result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(percent_out->view(), expected_percent_rank_null_result);
   }
 
   // Next, verify that if the structs column a null mask that is NOT pushed down to members,
@@ -251,11 +246,9 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
                                                      9.0 / 11,
                                                      9.0 / 11,
                                                      11.0 / 11};
-    auto const dense_out =
-      cudf::scan(*struct_col, dense_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-    auto const rank_out = cudf::scan(*struct_col, rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-    auto const percent_out =
-      cudf::scan(*struct_col, percent_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
+    auto const dense_out   = cudf::scan(*struct_col, dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+    auto const rank_out    = cudf::scan(*struct_col, rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+    auto const percent_out = cudf::scan(*struct_col, percent_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), expected_dense);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), expected_rank);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(percent_out->view(), expected_percent);
@@ -283,10 +276,9 @@ TEST(RankScanTest, BoolRank)
                                                    3.0 / 11,
                                                    3.0 / 11};
 
-  auto const dense_out = cudf::scan(vals, dense_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto const rank_out  = cudf::scan(vals, rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto const percent_out =
-    cudf::scan(vals, percent_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto const dense_out   = cudf::scan(vals, dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto const rank_out    = cudf::scan(vals, rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto const percent_out = cudf::scan(vals, percent_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense, dense_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank, rank_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_percent, percent_out->view());
@@ -310,11 +302,9 @@ TEST(RankScanTest, BoolRankWithNull)
                                                    8.0 / 11,
                                                    8.0 / 11};
 
-  auto nullable_dense_out =
-    cudf::scan(vals, dense_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto nullable_rank_out = cudf::scan(vals, rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto nullable_percent_out =
-    cudf::scan(vals, percent_rank, scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto nullable_dense_out   = cudf::scan(vals, dense_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto nullable_rank_out    = cudf::scan(vals, rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
+  auto nullable_percent_out = cudf::scan(vals, percent_rank, INCLUSIVE_SCAN, INCLUDE_NULLS);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense, nullable_dense_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank, nullable_rank_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_percent, nullable_percent_out->view());
@@ -324,14 +314,12 @@ TEST(RankScanTest, ExclusiveScan)
 {
   auto const vals = input<uint32_t>{3, 4, 5};
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    cudf::scan(vals, dense_rank, scan_type::EXCLUSIVE, null_policy::INCLUDE),
-    "Dense rank aggregation operator requires an inclusive scan");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, rank, scan_type::EXCLUSIVE, null_policy::INCLUDE),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, dense_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+                            "Dense rank aggregation operator requires an inclusive scan");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
                             "Rank aggregation operator requires an inclusive scan");
-  CUDF_EXPECT_THROW_MESSAGE(
-    cudf::scan(vals, percent_rank, scan_type::EXCLUSIVE, null_policy::INCLUDE),
-    "Percent rank aggregation operator requires an inclusive scan");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+                            "Percent rank aggregation operator requires an inclusive scan");
 }
 
 }  // namespace cudf::test
