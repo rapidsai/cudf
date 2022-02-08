@@ -1246,7 +1246,7 @@ class Frame:
                 for key, value in value.items()
             }
 
-        copy_data = {}
+        filled_data = {}
         for col_name, col in self._data.items():
             should_fill = (
                 col_name in value
@@ -1254,12 +1254,14 @@ class Frame:
                 and not libcudf.scalar._is_null_host_scalar(value[col_name])
             ) or method is not None
             if should_fill:
-                copy_data[col_name] = col.fillna(value[col_name], method)
+                filled_data[col_name] = col.fillna(value[col_name], method)
             else:
-                copy_data[col_name] = col.copy(deep=True)
-        result = self._from_data(ColumnAccessor(copy_data), self._index)
+                filled_data[col_name] = col.copy(deep=True)
 
-        return self._mimic_inplace(result, inplace=inplace)
+        return self._mimic_inplace(
+            self._from_data(ColumnAccessor(filled_data), self._index),
+            inplace=inplace,
+        )
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
