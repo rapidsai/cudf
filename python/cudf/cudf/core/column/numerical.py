@@ -326,7 +326,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self._nan_count
 
     def can_fillna(self) -> bool:
-        return bool(self.nan_count or self.null_count)
+        return (self.nan_count != 0) or (self.null_count != 0)
 
     def _process_values_for_isin(
         self, values: Sequence
