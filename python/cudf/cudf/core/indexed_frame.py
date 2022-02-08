@@ -444,12 +444,11 @@ class IndexedFrame(Frame):
                 out = self._gather(inds)
                 # TODO: frame factory function should handle multilevel column
                 # names
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out.columns = self._data.to_pandas_index()
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -459,12 +458,11 @@ class IndexedFrame(Frame):
                     ascending=ascending, na_position=na_position
                 )
                 out = self._gather(inds)
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out.columns = self._data.to_pandas_index()
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
@@ -938,10 +936,11 @@ class IndexedFrame(Frame):
             ),
             keep_index=not ignore_index,
         )
-        if isinstance(self, cudf.core.dataframe.DataFrame) and isinstance(
-            self.columns, pd.core.indexes.multi.MultiIndex
+        if (
+            isinstance(self, cudf.core.dataframe.DataFrame)
+            and self._data.multiindex
         ):
-            out.columns = self.columns
+            out.columns = self._data.to_pandas_index()
         return out
 
     def _n_largest_or_smallest(self, largest, n, columns, keep):

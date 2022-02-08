@@ -334,8 +334,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 else:
                     df[name] = col
 
-        result_columns = objs[0].columns.append(
-            [obj.columns for obj in objs[1:]]
+        result_columns = (
+            objs[0]
+            ._data.to_pandas_index()
+            .append([obj._data.to_pandas_index() for obj in objs[1:]])
         )
 
         if ignore_index:

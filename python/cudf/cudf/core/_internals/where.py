@@ -264,7 +264,7 @@ def where(
                 )
             # Setting `frame` column names to `cond`
             # as `cond` has no column names.
-            cond.columns = frame.columns
+            cond.columns = frame._data.to_pandas_index()
 
         (source_df, others,) = _normalize_columns_and_scalars_type(
             frame, other
