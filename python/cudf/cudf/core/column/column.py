@@ -1167,6 +1167,9 @@ class ColumnBase(Column, Serializable, NotIterable):
     def nans_to_nulls(self: T) -> T:
         return self
 
+    def can_fillna(self) -> bool:
+        return bool(self.null_count)
+
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
     ) -> Union[ColumnBase, ScalarLike]:

@@ -325,6 +325,9 @@ class NumericalColumn(NumericalBaseColumn):
             self._nan_count = nan_col.sum()
         return self._nan_count
 
+    def can_fillna(self) -> bool:
+        return bool(self.nan_count or self.null_count)
+
     def _process_values_for_isin(
         self, values: Sequence
     ) -> Tuple[ColumnBase, ColumnBase]:

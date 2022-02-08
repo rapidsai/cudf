@@ -1250,7 +1250,7 @@ class Frame:
         for col_name, col in self._data.items():
             should_fill = (
                 col_name in value
-                and (col.null_count or col.nan_count)
+                and col.can_fillna()
                 and not libcudf.scalar._is_null_host_scalar(value[col_name])
             ) or method is not None
             if should_fill:
