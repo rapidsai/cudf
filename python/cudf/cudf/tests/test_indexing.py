@@ -1296,7 +1296,6 @@ def test_loc_datetime_index(sli, is_dataframe):
     [
         cudf.DataFrame({"a": range(100000)}),
         cudf.DataFrame({"a": range(100000), "b": range(100000)}),
-        cudf.DataFrame({"a": range(20), "b": range(20)}),
         cudf.DataFrame(
             {
                 "a": range(20),
