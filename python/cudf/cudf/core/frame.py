@@ -1248,13 +1248,17 @@ class Frame:
 
         filled_data = {}
         for col_name, col in self._data.items():
+            if col_name in value and method is None:
+                replace_val = value[col_name]
+            else:
+                replace_val = None
             should_fill = (
                 col_name in value
                 and col.contains_na_entries
-                and not libcudf.scalar._is_null_host_scalar(value[col_name])
+                and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:
-                filled_data[col_name] = col.fillna(value[col_name], method)
+                filled_data[col_name] = col.fillna(replace_val, method)
             else:
                 filled_data[col_name] = col.copy(deep=True)
 

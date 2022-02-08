@@ -1168,7 +1168,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self
 
     @property
-    def contains_fillable_entries(self) -> bool:
+    def contains_na_entries(self) -> bool:
         return self.null_count != 0
 
     def _process_for_reduction(
