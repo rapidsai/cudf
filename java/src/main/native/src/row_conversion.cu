@@ -237,13 +237,13 @@ rmm::device_uvector<size_type> build_string_row_sizes(table_view const &tbl,
 }
 
 struct string_row_offset_functor {
-  string_row_offset_functor(device_span<size_type> d_row_sizes) : _d_row_sizes(d_row_sizes){};
+  string_row_offset_functor(device_span<size_type> d_row_offsets) : _d_row_offsets(d_row_offsets){};
 
   __device__ inline size_type operator()(int row_number, int) const {
-    return _d_row_sizes[row_number];
+    return _d_row_offsets[row_number];
   }
 
-  device_span<size_type> _d_row_sizes;
+  device_span<size_type> _d_row_offsets;
 };
 
 struct row_offset_functor {
