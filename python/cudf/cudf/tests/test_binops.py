@@ -219,7 +219,7 @@ def _series_compare_nulls_typegen():
     tests = []
 
     tests += list(combinations_with_replacement(DATETIME_TYPES, 2))
-    tests += list(combinations_with_replacement(DATETIME_TYPES, 2))
+    tests += list(combinations_with_replacement(TIMEDELTA_TYPES, 2))
     tests += list(combinations_with_replacement(NUMERIC_TYPES, 2))
     tests += list(combinations_with_replacement(STRING_TYPES, 2))
 
