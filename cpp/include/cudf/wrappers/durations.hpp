@@ -68,32 +68,3 @@ static_assert(sizeof(duration_ns) == sizeof(typename duration_ns::rep), "");
 
 /** @} */  // end of group
 }  // namespace cudf
-
-namespace std {
-/**
- * @brief Specialization of std::numeric_limits for cudf::detail::duration
- *
- * Pass through to return the limits of the underlying numeric representation.
- */
-#define DURATION_LIMITS(TypeName)                                             \
-  template <>                                                                 \
-  struct numeric_limits<TypeName> {                                           \
-    static constexpr TypeName max() noexcept { return TypeName::max(); }      \
-    static constexpr TypeName lowest() noexcept                               \
-    {                                                                         \
-      return TypeName(std::numeric_limits<typename TypeName::rep>::lowest()); \
-    }                                                                         \
-    static constexpr TypeName min() noexcept { return TypeName::min(); }      \
-  }
-
-DURATION_LIMITS(cudf::duration_D);
-DURATION_LIMITS(cudf::duration_h);
-DURATION_LIMITS(cudf::duration_m);
-DURATION_LIMITS(cudf::duration_s);
-DURATION_LIMITS(cudf::duration_ms);
-DURATION_LIMITS(cudf::duration_us);
-DURATION_LIMITS(cudf::duration_ns);
-
-#undef DURATION_LIMITS
-
-}  // namespace std
