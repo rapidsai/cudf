@@ -33,6 +33,7 @@ if [ "$CR_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: copyright check; end output\n\n"
 else
   echo -e "\n\n>>>> PASSED: copyright check\n\n"
+  echo -e "$COPYRIGHT"
 fi
 
 # Run clang-format and check for a consistent code format
