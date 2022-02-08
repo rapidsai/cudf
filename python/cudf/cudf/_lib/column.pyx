@@ -270,6 +270,10 @@ cdef class Column:
         return self._null_count
 
     @property
+    def nan_count(self):
+        return 0
+
+    @property
     def offset(self):
         return self._offset
 

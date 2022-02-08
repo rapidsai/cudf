@@ -1246,16 +1246,18 @@ class Frame:
                 for key, value in value.items()
             }
 
-        copy_data = self._data.copy(deep=True)
-
-        for name in copy_data.keys():
+        copy_data = {}
+        for col_name, col in self._data.items():
             should_fill = (
-                name in value
-                and not libcudf.scalar._is_null_host_scalar(value[name])
+                col_name in value
+                and (col.null_count or col.nan_count)
+                and not libcudf.scalar._is_null_host_scalar(value[col_name])
             ) or method is not None
             if should_fill:
-                copy_data[name] = copy_data[name].fillna(value[name], method)
-        result = self._from_data(copy_data, self._index)
+                copy_data[col_name] = col.fillna(value[col_name], method)
+            else:
+                copy_data[col_name] = col.copy(deep=True)
+        result = self._from_data(ColumnAccessor(copy_data), self._index)
 
         return self._mimic_inplace(result, inplace=inplace)
 
