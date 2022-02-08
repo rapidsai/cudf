@@ -1259,7 +1259,9 @@ class Frame:
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(ColumnAccessor(filled_data), self._index),
+            self._from_data(
+                data=ColumnAccessor(filled_data), index=self._index
+            ),
             inplace=inplace,
         )
 
