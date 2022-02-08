@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <limits>
-
 #include <cuda/std/chrono>
 
 namespace cudf {
