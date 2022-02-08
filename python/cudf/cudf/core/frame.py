@@ -563,7 +563,7 @@ class Frame:
 
         """
         data = self._data.select_by_index(indices)
-        return self.__class__(
+        return self.__class__._from_data(
             data, columns=data.to_pandas_index(), index=self.index
         )
 
@@ -3220,9 +3220,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.ceil and DataFrame.ceil are deprecated and will be "
+            "removed in the future",
+            FutureWarning,
         )
 
         return self._unaryop("ceil")
@@ -3259,9 +3259,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.floor and DataFrame.floor are deprecated and will be "
+            "removed in the future.",
+            FutureWarning,
         )
 
         return self._unaryop("floor")
