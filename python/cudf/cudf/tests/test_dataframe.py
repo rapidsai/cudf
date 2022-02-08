@@ -9261,6 +9261,18 @@ def test_diff_dataframe_invalid_axis():
         gdf.diff(periods=1, axis=1)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "int_col": [1, 2, 3, 4, 5],
+            "float_col": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "string_col": ["a", "b", "c", "d", "e"],
+        },
+        ["a", "b", "c", "d", "e"],
+        [np.nan, None, np.nan, None],
+    ],
+)
 def test_diff_dataframe_non_numeric_dypes(data):
     gdf = cudf.DataFrame(data)
     with pytest.raises(
