@@ -745,6 +745,17 @@ void isolated_helper_function(...);
 
 [**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file)
 
+# Deprecating and Removing Code
+
+If changes to libcudf involve breaking existing APIs, libcudf follows the following policy:
+- Code should be deprecated for one release prior to removal.
+- Deprecations should be indicated using the [deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute.
+- Deprecated APIs should be documented using Doxygen's [deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) command.
+
+PRs containing deprecations should be labeled as "non-breaking".
+The subsequent pull request in which deprecated code is moved should be labeled as "breaking".
+
+
 # Error Handling
 
 libcudf follows conventions (and provides utilities) enforcing compile-time and run-time
