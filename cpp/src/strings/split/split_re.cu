@@ -98,7 +98,7 @@ struct token_reader_fn {
     d_result[token_idx] = string_index_pair{d_str.data() + last_pos, d_str.size_bytes() - last_pos};
 
     if (direction == split_direction::BACKWARD) {
-      // update first entry -- this happens when max-tokens is hit before the end of the string
+      // update first entry -- this happens when max_tokens is hit before the end of the string
       auto const first_offset =
         d_result[0].first
           ? static_cast<size_type>(thrust::distance(d_str.data(), d_result[0].first))
@@ -117,6 +117,7 @@ struct token_reader_fn {
  *
  * @param d_strings Strings to split
  * @param d_prog Regex to evaluate against each string
+ * @param direction Whether tokens are generated forwards or backwards.
  * @param max_tokens The maximum number of tokens for each split.
  * @param offsets The number of matches on input.
  *                The offsets for each token in each string on output.
@@ -125,11 +126,13 @@ struct token_reader_fn {
 rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const& d_strings,
                                                        reprog_device& d_prog,
                                                        split_direction direction,
-                                                       size_type max_tokens,
+                                                       size_type maxsplit,
                                                        mutable_column_view& offsets,
                                                        rmm::cuda_stream_view stream)
 {
   auto const strings_count = d_strings.size();
+
+  auto const max_tokens = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
 
   auto const begin     = thrust::make_counting_iterator<size_type>(0);
   auto const end       = thrust::make_counting_iterator<size_type>(strings_count);
@@ -182,7 +185,7 @@ struct tokens_transform_fn {
   {
     auto const offset      = d_token_offsets[idx];
     auto const token_count = d_token_offsets[idx + 1] - offset;
-    return (column_index > token_count - 1) || d_strings.is_null(idx)
+    return (column_index >= token_count) || d_strings.is_null(idx)
              ? string_index_pair{nullptr, 0}
              : d_tokens[offset + column_index];
   }
@@ -197,7 +200,6 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 {
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
 
-  auto const max_tokens    = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
   auto const strings_count = input.size();
 
   std::vector<std::unique_ptr<column>> results;
@@ -216,7 +218,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto d_offsets    = offsets_view.data<offset_type>();
 
   // get the split tokens from the input column; this also converts the counts into offsets
-  auto tokens = generate_tokens(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
+  auto tokens = generate_tokens(*d_strings, *d_prog, direction, maxsplit, offsets_view, stream);
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
@@ -266,7 +268,6 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 {
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
 
-  auto const max_tokens    = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
   auto const strings_count = input.size();
 
   // create the regex device prog from the given pattern
@@ -278,7 +279,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto offsets_view = offsets->mutable_view();
 
   // get the split tokens from the input column; this also converts the counts into offsets
-  auto tokens = generate_tokens(*d_strings, *d_prog, direction, max_tokens, offsets_view, stream);
+  auto tokens = generate_tokens(*d_strings, *d_prog, direction, maxsplit, offsets_view, stream);
 
   // convert the tokens into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
