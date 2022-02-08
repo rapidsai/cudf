@@ -199,7 +199,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                                 weight.begin<double>(),
                                 cumulative_weights->mutable_view().begin<double>());
 
-  auto percentiles_cdv = column_device_view::create(percentiles);
+  auto percentiles_cdv = column_device_view::create(percentiles, stream);
 
   // leaf is a column of size input.size() * percentiles.size()
   auto const num_output_values = input.size() * percentiles.size();
@@ -212,7 +212,9 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                  thrust::make_counting_iterator<size_type>(0) + num_output_values,
                  [percentiles = *percentiles_cdv] __device__(size_type i) {
                    return percentiles.is_valid(i % percentiles.size());
-                 })
+                 },
+                 stream,
+                 mr)
              : std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, 0};
   }();
 
@@ -263,8 +265,8 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
     cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, mr);
 
   // grouped into lists
-  auto tdigest =
-    cudf::make_lists_column(num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {});
+  auto tdigest = cudf::make_lists_column(
+    num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {}, stream, mr);
 
   // create the final column
   std::vector<std::unique_ptr<column>> children;
@@ -334,7 +336,9 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       cudf::make_empty_column(type_id::FLOAT64),
       input.size(),
       cudf::detail::create_null_mask(
-        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr));
+        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr),
+      stream,
+      mr);
   }
 
   // if any of the input digests are empty, nullify the corresponding output rows (values will be

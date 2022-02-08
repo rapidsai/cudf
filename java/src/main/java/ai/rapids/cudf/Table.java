@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -233,6 +233,11 @@ public final class Table implements AutoCloseable {
                                        int headerRow, byte delim, byte quote,
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
+
+  private static native long[] readJSON(String[] columnNames,
+                                        int[] dTypeIds, int[] dTypeScales,
+                                        String filePath, long address, long length,
+                                        boolean dayFirst, boolean lines) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -611,10 +616,6 @@ public final class Table implements AutoCloseable {
   private static native long[] conditionalFullJoinGatherMaps(long leftTable, long rightTable,
                                                              long condition) throws CudfException;
 
-  private static native long[] conditionalFullJoinGatherMapsWithCount(long leftTable, long rightTable,
-                                                                      long condition,
-                                                                      long rowCount) throws CudfException;
-
   private static native long conditionalLeftSemiJoinRowCount(long leftTable, long rightTable,
                                                              long condition) throws CudfException;
 
@@ -635,6 +636,62 @@ public final class Table implements AutoCloseable {
                                                                          long condition,
                                                                          long rowCount) throws CudfException;
 
+  private static native long[] mixedLeftJoinSize(long leftKeysTable, long rightKeysTable,
+                                                 long leftConditionTable, long rightConditionTable,
+                                                 long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftJoinGatherMaps(long leftKeysTable, long rightKeysTable,
+                                                       long leftConditionTable, long rightConditionTable,
+                                                       long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
+                                                               long leftConditionTable, long rightConditionTable,
+                                                               long condition, boolean compareNullsEqual,
+                                                               long outputRowCount, long matchesColumnView);
+
+  private static native long[] mixedInnerJoinSize(long leftKeysTable, long rightKeysTable,
+                                                  long leftConditionTable, long rightConditionTable,
+                                                  long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedInnerJoinGatherMaps(long leftKeysTable, long rightKeysTable,
+                                                        long leftConditionTable, long rightConditionTable,
+                                                        long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedInnerJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
+                                                                long leftConditionTable, long rightConditionTable,
+                                                                long condition, boolean compareNullsEqual,
+                                                                long outputRowCount, long matchesColumnView);
+
+  private static native long[] mixedFullJoinGatherMaps(long leftKeysTable, long rightKeysTable,
+                                                       long leftConditionTable, long rightConditionTable,
+                                                       long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftSemiJoinSize(long leftKeysTable, long rightKeysTable,
+                                                     long leftConditionTable, long rightConditionTable,
+                                                     long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftSemiJoinGatherMap(long leftKeysTable, long rightKeysTable,
+                                                          long leftConditionTable, long rightConditionTable,
+                                                          long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftSemiJoinGatherMapWithSize(long leftKeysTable, long rightKeysTable,
+                                                                  long leftConditionTable, long rightConditionTable,
+                                                                  long condition, boolean compareNullsEqual,
+                                                                  long outputRowCount, long matchesColumnView);
+
+  private static native long[] mixedLeftAntiJoinSize(long leftKeysTable, long rightKeysTable,
+                                                     long leftConditionTable, long rightConditionTable,
+                                                     long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftAntiJoinGatherMap(long leftKeysTable, long rightKeysTable,
+                                                          long leftConditionTable, long rightConditionTable,
+                                                          long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftAntiJoinGatherMapWithSize(long leftKeysTable, long rightKeysTable,
+                                                                  long leftConditionTable, long rightConditionTable,
+                                                                  long condition, boolean compareNullsEqual,
+                                                                  long outputRowCount, long matchesColumnView);
+
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
@@ -649,9 +706,20 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
+  private static native long[] scatterTable(long srcTableHandle, long scatterView,
+                                            long targetTableHandle, boolean checkBounds)
+                                            throws CudfException;
+  private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
+                                             long targetTableHandle, boolean checkBounds)
+                                             throws CudfException;
+
   private static native long[] convertToRows(long nativeHandle);
 
+  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
+
   private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
+
+  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
 
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
@@ -788,6 +856,97 @@ public final class Table implements AutoCloseable {
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  /**
+   * Read a JSON file using the default JSONOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, File path) {
+    return readJSON(schema, JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read JSON formatted data using the default JSONOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, byte[] buffer) {
+    return readJSON(schema, JSONOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer) {
+    return readJSON(schema, opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read a JSON file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    return new Table(
+        readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+            path.getAbsolutePath(),
+            0, 0,
+            opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readJSON(schema, opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+        null, buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
   }
 
   /**
@@ -2047,7 +2206,7 @@ public final class Table implements AutoCloseable {
    * `n` is the number of rows in this table.
    *
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`.
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
@@ -2055,7 +2214,66 @@ public final class Table implements AutoCloseable {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
-  private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
+  /**
+   * Scatters values from the source table into the target table out-of-place, returning a new
+   * result table. The scatter is performed according to a scatter map such that row `scatterMap[i]`
+   * of the destination table gets row `i` of the source table. All other rows of the destination
+   * table equal corresponding rows of the target table.
+   *
+   * The number of columns in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which rows from the current table are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source table into the
+   *         target table.
+   */
+  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
+        checkBounds));
+  }
+
+  /**
+   * Scatters values from the source rows into the target table out-of-place, returning a new result
+   * table. The scatter is performed according to a scatter map such that row `scatterMap[i]` of the
+   * destination table is replaced by the source row `i`. All other rows of the destination table
+   * equal corresponding rows of the target table.
+   *
+   * The number of elements in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param source The input scalars containing values to be scattered into the target table.
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which the values from source are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source values into the
+   *         target table.
+   */
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
+                              boolean checkBounds) {
+    long[] srcScalarHandles = new long[source.length];
+    for(int i = 0; i < source.length; ++i) {
+      assert source[i] != null : "Scalar vectors passed in should not contain null";
+      srcScalarHandles[i] = source[i].getScalarHandle();
+    }
+    return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
+        target.getNativeView(), checkBounds));
+  }
+
+  private static GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -2209,6 +2427,94 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes output size information for a left join between two tables using a mix of equality
+   * and inequality conditions. The entire join condition is assumed to be a logical AND of the
+   * equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedLeftJoinSize(Table leftKeys, Table rightKeys,
+                                                Table leftConditional, Table rightConditional,
+                                                CompiledExpression condition,
+                                                NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftJoinSize(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedLeftJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] gatherMapData = mixedLeftJoinGatherMaps(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedLeftJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedLeftJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality,
+                                                    MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftJoinGatherMapsWithSize(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL,
+            joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of an inner equi-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
@@ -2349,6 +2655,94 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes output size information for an inner join between two tables using a mix of equality
+   * and inequality conditions. The entire join condition is assumed to be a logical AND of the
+   * equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedInnerJoinSize(Table leftKeys, Table rightKeys,
+                                                 Table leftConditional, Table rightConditional,
+                                                 CompiledExpression condition,
+                                                 NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedInnerJoinSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedInnerJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality) {
+    long[] gatherMapData = mixedInnerJoinGatherMaps(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedInnerJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedInnerJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality,
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedInnerJoinGatherMapsWithSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of an full equi-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
@@ -2454,7 +2848,34 @@ public final class Table implements AutoCloseable {
     return buildJoinGatherMaps(gatherMapData);
   }
 
-  private GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedFullJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] gatherMapData = mixedFullJoinGatherMaps(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  private static GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -2541,6 +2962,94 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes output size information for a left semi join between two tables using a mix of
+   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
+   * of the equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedLeftSemiJoinSize(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftSemiJoinSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftSemiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality) {
+    long[] gatherMapData = mixedLeftSemiJoinGatherMap(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedLeftSemiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftSemiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality,
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftSemiJoinGatherMapWithSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
    * Computes the gather map that can be used to manifest the result of a left anti-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. The {@link GatherMap}
@@ -2620,6 +3129,111 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes output size information for a left anti join between two tables using a mix of
+   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
+   * of the equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedLeftAntiJoinSize(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftAntiJoinSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftAntiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality) {
+    long[] gatherMapData = mixedLeftAntiJoinGatherMap(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedLeftAntiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftAntiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality,
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftAntiJoinGatherMapWithSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * For details about how this method functions refer to
+   * {@link #convertToRowsFixedWidthOptimized()}.
+   *
+   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
+   * is that this can handle rougly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
+   * can only handle columns less than 100
+   */
+  public ColumnVector[] convertToRows() {
+    long[] ptrs = convertToRows(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
+  }
+
+  /**
    * Convert this table of columns into a row major format that is useful for interacting with other
    * systems that do row major processing of the data. Currently only fixed-width column types are
    * supported.
@@ -2693,8 +3307,8 @@ public final class Table implements AutoCloseable {
    * There are some limits on the size of a single row.  If the row is larger than 1KB this will
    * throw an exception.
    */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
+  public ColumnVector[] convertToRowsFixedWidthOptimized() {
+    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
     for (int i = 0; i < ptrs.length; i++) {
       ret[i] = new ColumnVector(ptrs[i]);
@@ -2705,13 +3319,14 @@ public final class Table implements AutoCloseable {
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
    * @param vec the row data to process.
    * @param schema the types of each column.
    * @return the parsed table.
    */
   public static Table convertFromRows(ColumnView vec, DType ... schema) {
-    // TODO at some point we need a schema that support nesting so we can support nested types
-    // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
     int[] scale = new int[schema.length];
     for (int i = 0; i < schema.length; i++) {
@@ -2720,6 +3335,27 @@ public final class Table implements AutoCloseable {
 
     }
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
+  }
+
+  /**
+   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
+   * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
+   * @param vec the row data to process.
+   * @param schema the types of each column.
+   * @return the parsed table.
+   */
+  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
+    int[] types = new int[schema.length];
+    int[] scale = new int[schema.length];
+    for (int i = 0; i < schema.length; i++) {
+      types[i] = schema[i].typeId.nativeId;
+      scale[i] = schema[i].getScale();
+
+    }
+    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
   }
 
   /**

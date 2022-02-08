@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   cudaError_t dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
                        cudf::io::gpu_inflate_status_s* d_inf_stat)
   {
-    return cudf::io::gpuinflate(d_inf_args, d_inf_stat, 1, 1);
+    return cudf::io::gpuinflate(d_inf_args, d_inf_stat, 1, 1, rmm::cuda_stream_default);
   }
 };
 
@@ -108,7 +108,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   cudaError_t dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
                        cudf::io::gpu_inflate_status_s* d_inf_stat)
   {
-    return cudf::io::gpu_unsnap(d_inf_args, d_inf_stat, 1);
+    return cudf::io::gpu_unsnap(d_inf_args, d_inf_stat, 1, rmm::cuda_stream_default);
   }
 };
 
@@ -122,7 +122,8 @@ struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
     rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
                                  rmm::cuda_stream_default};
 
-    return cudf::io::gpu_debrotli(d_inf_args, d_inf_stat, d_scratch.data(), d_scratch.size(), 1);
+    return cudf::io::gpu_debrotli(
+      d_inf_args, d_inf_stat, d_scratch.data(), d_scratch.size(), 1, rmm::cuda_stream_default);
   }
 };
 

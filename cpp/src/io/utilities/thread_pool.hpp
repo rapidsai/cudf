@@ -44,7 +44,7 @@ namespace detail {
  * and/or obtain its eventual return value.
  */
 class thread_pool {
-  typedef std::uint_fast32_t ui32;
+  using ui32 = int;
 
  public:
   /**
@@ -79,7 +79,7 @@ class thread_pool {
    *
    * @return The number of queued tasks.
    */
-  size_t get_tasks_queued() const
+  [[nodiscard]] size_t get_tasks_queued() const
   {
     const std::scoped_lock lock(queue_mutex);
     return tasks.size();
@@ -90,7 +90,7 @@ class thread_pool {
    *
    * @return The number of running tasks.
    */
-  ui32 get_tasks_running() const { return tasks_total - (ui32)get_tasks_queued(); }
+  [[nodiscard]] ui32 get_tasks_running() const { return tasks_total - (ui32)get_tasks_queued(); }
 
   /**
    * @brief Get the total number of unfinished tasks - either still in the queue, or running in a
@@ -98,14 +98,14 @@ class thread_pool {
    *
    * @return The total number of tasks.
    */
-  ui32 get_tasks_total() const { return tasks_total; }
+  [[nodiscard]] ui32 get_tasks_total() const { return tasks_total; }
 
   /**
    * @brief Get the number of threads in the pool.
    *
    * @return The number of threads.
    */
-  ui32 get_thread_count() const { return thread_count; }
+  [[nodiscard]] ui32 get_thread_count() const { return thread_count; }
 
   /**
    * @brief Parallelize a loop by splitting it into blocks, submitting each block separately to the

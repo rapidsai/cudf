@@ -10,8 +10,19 @@ from numba import cuda
 import cudf
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
+from cudf.utils.dtypes import (
+    BOOL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+)
 
 ENVREF_PREFIX = "__CUDF_ENVREF__"
+
+SUPPORTED_QUERY_TYPES = {
+    np.dtype(dt)
+    for dt in NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES
+}
 
 
 class QuerySyntaxError(ValueError):
@@ -125,7 +136,7 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = "queryexpr_{:x}".format(np.uintp(hash(expr)))
+    funcid = f"queryexpr_{np.uintp(hash(expr)):x}"
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found
@@ -136,7 +147,7 @@ def query_compile(expr):
         # compile
         devicefn = cuda.jit(device=True)(fn)
 
-        kernelid = "kernel_{}".format(funcid)
+        kernelid = f"kernel_{funcid}"
         kernel = _wrap_query_expr(kernelid, devicefn, args)
 
         compiled = info.copy()
@@ -162,10 +173,10 @@ def _wrap_query_expr(name, fn, args):
         if arg.startswith(ENVREF_PREFIX):
             return arg
         else:
-            return "{}[idx]".format(arg)
+            return f"{arg}[idx]"
 
     def _add_prefix(arg):
-        return "_args_{}".format(arg)
+        return f"_args_{arg}"
 
     glbls = {"queryfn": fn, "cuda": cuda}
     kernargs = map(_add_prefix, args)
@@ -197,6 +208,20 @@ def query_execute(df, expr, callenv):
 
     # compile
     compiled = query_compile(expr)
+    columns = compiled["colnames"]
+
+    # prepare col args
+    colarrays = [cudf.core.dataframe.extract_col(df, col) for col in columns]
+
+    # wait to check the types until we know which cols are used
+    if any(col.dtype not in SUPPORTED_QUERY_TYPES for col in colarrays):
+        raise TypeError(
+            "query only supports numeric, datetime, timedelta, "
+            "or bool dtypes."
+        )
+
+    colarrays = [col.data_array_view for col in colarrays]
+
     kernel = compiled["kernel"]
     # process env args
     envargs = []
@@ -214,13 +239,6 @@ def query_execute(df, expr, callenv):
             raise NameError(msg.format(name))
         else:
             envargs.append(val)
-    columns = compiled["colnames"]
-    # prepare col args
-
-    colarrays = [
-        cudf.core.dataframe.extract_col(df, col).data_array_view
-        for col in columns
-    ]
 
     # allocate output buffer
     nrows = len(df)

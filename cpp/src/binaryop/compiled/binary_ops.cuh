@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,9 @@ constexpr bool is_bool_result()
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE CastType operator()(cudf::size_type i,
-                                           column_device_view const& col,
-                                           bool is_scalar) const
+  __device__ inline CastType operator()(cudf::size_type i,
+                                        column_device_view const& col,
+                                        bool is_scalar) const
   {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)
@@ -61,9 +61,9 @@ struct type_casted_accessor {
 template <typename FromType>
 struct typed_casted_writer {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE void operator()(cudf::size_type i,
-                                       mutable_column_device_view const& col,
-                                       FromType val) const
+  __device__ inline void operator()(cudf::size_type i,
+                                    mutable_column_device_view const& col,
+                                    FromType val) const
   {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
@@ -103,6 +103,8 @@ struct ops_wrapper {
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
                       std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
@@ -150,6 +152,8 @@ struct ops2_wrapper {
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
                       std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;

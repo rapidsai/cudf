@@ -32,7 +32,8 @@ def test_series_reductions(method, dtype, skipna):
     arr = arr.astype(dtype)
     if dtype in (np.float32, np.float64):
         arr[[2, 5, 14, 19, 50, 70]] = np.nan
-    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+    sr = cudf.Series(arr)
+    sr[~mask] = None
     psr = sr.to_pandas()
     psr[~mask] = np.nan
 
@@ -83,7 +84,8 @@ def test_series_unique():
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+        sr = cudf.Series(arr)
+        sr[~mask] = None
         assert set(arr[mask]) == set(sr.unique().dropna().to_numpy())
         assert len(set(arr[mask])) == sr.nunique()
 
@@ -298,7 +300,8 @@ def test_series_median(dtype, num_na):
     mask = np.arange(100) >= num_na
 
     arr = arr.astype(dtype)
-    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+    sr = cudf.Series(arr)
+    sr[~mask] = None
     arr2 = arr[mask]
     ps = pd.Series(arr2, dtype=dtype)
 
@@ -460,7 +463,8 @@ def test_df_corr():
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_nans_stats(data, ops, skipna):
     psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
+
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
@@ -486,7 +490,7 @@ def test_nans_stats(data, ops, skipna):
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
 def test_min_count_ops(data, ops, skipna, min_count):
     psr = pd.Series(data)
-    gsr = cudf.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pandas as pd
 
@@ -11,10 +11,10 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
-    distinct_count as cpp_distinct_count,
     drop_duplicates as cpp_drop_duplicates,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
+    unordered_distinct_count as cpp_unordered_distinct_count,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -75,24 +75,22 @@ def drop_nulls(columns: list, how="any", keys=None, thresh=None):
     return columns_from_unique_ptr(move(c_result))
 
 
-def apply_boolean_mask(source_table, Column boolean_mask):
+def apply_boolean_mask(columns: list, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
 
     Parameters
     ----------
-    source_table : source table whose rows are dropped as per boolean_mask
+    columns : list of columns whose rows are dropped as per boolean_mask
     boolean_mask : a boolean column of same size as source_table
 
     Returns
     -------
-    Frame obtained from applying mask
+    columns obtained from applying mask
     """
 
-    assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
-
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_table(source_table)
+    cdef table_view source_table_view = table_view_from_columns(columns)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     with nogil:
@@ -103,13 +101,7 @@ def apply_boolean_mask(source_table, Column boolean_mask):
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def drop_duplicates(columns: list,
@@ -198,7 +190,7 @@ def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
-        count = cpp_distinct_count(
+        count = cpp_unordered_distinct_count(
             source_column_view,
             cpp_null_handling,
             cpp_nan_handling

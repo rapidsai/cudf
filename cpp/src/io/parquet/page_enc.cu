@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.hpp"
+#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -25,10 +25,11 @@
 
 #include <cub/cub.cuh>
 
-#include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
+#include <thrust/binary_search.h>
+#include <thrust/gather.h>
+#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
 namespace io {
@@ -49,7 +50,6 @@ constexpr uint32_t rle_buffer_size = (1 << 9);
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
-  size_type start_value_idx;
 };
 
 struct page_enc_state_s {
@@ -114,24 +114,14 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
   return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
-/**
- * @brief Initializes encoder page fragments
- *
- * Based on the number of rows in each fragment, populates the value count, the size of data in the
- * fragment, the number of unique values, and the data size of unique values.
- *
- * @param[in] frag Fragment array [fragment_id][column_id]
- * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
- * @param[in] num_columns Number of columns
- */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuInitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       uint32_t fragment_size,
-                       uint32_t max_num_rows)
+                       device_span<partition_info const> partitions,
+                       device_span<int const> part_frag_offset,
+                       uint32_t fragment_size)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -140,53 +130,36 @@ __global__ void __launch_bounds__(block_size)
 
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
+  int frag_y                 = blockIdx.y;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
   __syncthreads();
-  uint32_t const start_row = blockIdx.y * fragment_size;
   if (!t) {
-    // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
+    // Find which partition this fragment came from
+    auto it =
+      thrust::upper_bound(thrust::seq, part_frag_offset.begin(), part_frag_offset.end(), frag_y);
+    int p             = it - part_frag_offset.begin() - 1;
+    int part_end_row  = partitions[p].start_row + partitions[p].num_rows;
+    s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
+
+    // frag.num_rows = fragment_size except for the last fragment in partition which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
-    s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
+    s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
     s->frag.num_dict_vals      = 0;
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
 
-    // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
-    // For list<list<int>>, values between i and i+50 can be calculated by
-    // off_11 = off[i], off_12 = off[i+50]
-    // off_21 = child.off[off_11], off_22 = child.off[off_12]
-    // etc...
-    size_type end_value_idx = start_row + s->frag.num_rows;
-    if (s->col.parent_column == nullptr) {
-      s->start_value_idx = start_row;
-    } else {
-      auto col                     = *(s->col.parent_column);
-      auto current_start_value_idx = start_row;
-      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-        if (col.type().id() == type_id::STRUCT) {
-          current_start_value_idx += col.offset();
-          end_value_idx += col.offset();
-          col = col.child(0);
-        } else {
-          auto offset_col = col.child(lists_column_view::offsets_column_index);
-          current_start_value_idx =
-            offset_col.element<size_type>(current_start_value_idx + col.offset());
-          end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-          col           = col.child(lists_column_view::child_column_index);
-        }
-      }
-      s->start_value_idx = current_start_value_idx;
-    }
-    s->frag.start_value_idx = s->start_value_idx;
-    s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
+    auto col                = *(s->col.parent_column);
+    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col);
+    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, col);
+    s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {
       // For nested schemas, the number of values in a fragment is not directly related to the
       // number of encoded data elements or the number of rows.  It is simply the number of
       // repetition/definition values which together encode validity and nesting information.
-      size_type first_level_val_idx = s->col.level_offsets[start_row];
-      size_type last_level_val_idx  = s->col.level_offsets[start_row + s->frag.num_rows];
+      size_type first_level_val_idx = s->col.level_offsets[s->frag.start_row];
+      size_type last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
       s->frag.num_values            = last_level_val_idx - first_level_val_idx;
     } else {
       s->frag.num_values = s->frag.num_rows;
@@ -197,7 +170,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
-  size_type start_value_idx = s->start_value_idx;
+  size_type start_value_idx = s->frag.start_value_idx;
 
   for (uint32_t i = 0; i < nvals; i += block_size) {
     uint32_t val_idx  = start_value_idx + i + t;
@@ -912,28 +885,9 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    s->page_start_val    = s->page.start_row;  // Dictionary page's start row is chunk's start row
-    auto chunk_start_val = s->ck.start_row;
-    if (s->col.parent_column != nullptr) {  // TODO: remove this check. parent is now never nullptr
-      auto col                    = *(s->col.parent_column);
-      auto current_page_start_val = s->page_start_val;
-      // TODO: We do this so much. Add a global function that converts row idx to val idx
-      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-        if (col.type().id() == type_id::STRUCT) {
-          current_page_start_val += col.offset();
-          chunk_start_val += col.offset();
-          col = col.child(0);
-        } else {
-          auto offset_col = col.child(lists_column_view::offsets_column_index);
-          current_page_start_val =
-            offset_col.element<size_type>(current_page_start_val + col.offset());
-          chunk_start_val = offset_col.element<size_type>(chunk_start_val + col.offset());
-          col             = col.child(lists_column_view::child_column_index);
-        }
-      }
-      s->page_start_val  = current_page_start_val;
-      s->chunk_start_val = chunk_start_val;
-    }
+    auto col           = *(s->col.parent_column);
+    s->page_start_val  = row_to_value_idx(s->page.start_row, col);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, col);
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
@@ -1114,7 +1068,7 @@ __global__ void __launch_bounds__(128, 8)
   }
   if (t == 0) {
     uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
-    uint32_t actual_data_size    = static_cast<uint32_t>(s->cur - base);
+    auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
     s->comp_in.srcDevice         = base;
@@ -1290,7 +1244,7 @@ class header_encoder {
     *header_end = current_header_ptr;
   }
 
-  inline __device__ uint8_t* get_ptr(void) { return current_header_ptr; }
+  inline __device__ uint8_t* get_ptr() { return current_header_ptr; }
 
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
@@ -1944,36 +1898,20 @@ dremel_data get_dremel_data(column_view h_col,
     std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
 }
 
-/**
- * @brief Launches kernel for initializing encoder page fragments
- *
- * @param[in,out] frag Fragment array [column_id][fragment_id]
- * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
- * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
- */
 void InitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
+                       device_span<partition_info const> partitions,
+                       device_span<int const> part_frag_offset,
                        uint32_t fragment_size,
-                       uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
   auto num_columns              = frag.size().first;
   auto num_fragments_per_column = frag.size().second;
   dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
-  gpuInitPageFragments<512>
-    <<<dim_grid, 512, 0, stream.value()>>>(frag, col_desc, fragment_size, num_rows);
+  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
+    frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
 
-/**
- * @brief Launches kernel for initializing fragment statistics groups
- *
- * @param[out] groups Statistics groups [num_columns x num_fragments]
- * @param[in] fragments Page fragments [num_columns x num_fragments]
- * @param[in] col_desc Column description [num_columns]
- * @param[in] stream CUDA stream to use, default 0
- */
 void InitFragmentStatistics(device_2dspan<statistics_group> groups,
                             device_2dspan<PageFragment const> fragments,
                             device_span<parquet_column_device_view const> col_desc,
@@ -1986,19 +1924,6 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 
-/**
- * @brief Launches kernel for initializing encoder data pages
- *
- * @param[in,out] chunks Column chunks [rowgroup][column]
- * @param[out] pages Encode page array (null if just counting pages)
- * @param[in] col_desc Column description array [column_id]
- * @param[in] num_rowgroups Number of fragments per column
- * @param[in] num_columns Number of columns
- * @param[out] page_grstats Setup for page-level stats
- * @param[out] chunk_grstats Setup for chunk-level stats
- * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
- * @param[in] stream CUDA stream to use, default 0
- */
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
@@ -2014,14 +1939,6 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
     chunks, pages, col_desc, page_grstats, chunk_grstats, max_page_comp_data_size, num_columns);
 }
 
-/**
- * @brief Launches kernel for packing column data into parquet pages
- *
- * @param[in,out] pages Device array of EncPages (unordered)
- * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_stat Optionally initializes compressor status
- * @param[in] stream CUDA stream to use, default 0
- */
 void EncodePages(device_span<gpu::EncPage> pages,
                  device_span<gpu_inflate_input_s> comp_in,
                  device_span<gpu_inflate_status_s> comp_stat,
@@ -2033,26 +1950,11 @@ void EncodePages(device_span<gpu::EncPage> pages,
   gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_stat);
 }
 
-/**
- * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
- *
- * @param[in,out] chunks Column chunks
- * @param[in] stream CUDA stream to use, default 0
- */
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks);
 }
 
-/**
- * @brief Launches kernel to encode page headers
- *
- * @param[in,out] pages Device array of EncPages
- * @param[in] comp_stat Compressor status or nullptr if no compression
- * @param[in] page_stats Optional page-level statistics to be included in page header
- * @param[in] chunk_stats Optional chunk-level statistics to be encoded
- * @param[in] stream CUDA stream to use, default 0
- */
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
@@ -2065,13 +1967,6 @@ void EncodePageHeaders(device_span<EncPage> pages,
     pages, comp_stat, page_stats, chunk_stats);
 }
 
-/**
- * @brief Launches kernel to gather pages to a single contiguous block per chunk
- *
- * @param[in,out] chunks Column chunks
- * @param[in] pages Device array of EncPages
- * @param[in] stream CUDA stream to use, default 0
- */
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream)

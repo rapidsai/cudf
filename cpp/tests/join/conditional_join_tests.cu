@@ -30,6 +30,7 @@
 #include <thrust/sort.h>
 
 #include <algorithm>
+#include <iostream>
 #include <random>
 #include <stdexcept>
 #include <tuple>
@@ -125,7 +126,7 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 }  // namespace
 
 /**
- * The principal fixture for all conditional joins.
+ * Fixture for all nested loop conditional joins.
  */
 template <typename T>
 struct ConditionalJoinTest : public cudf::test::BaseFixture {
@@ -341,7 +342,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
 };
 
 /**
- * Tests of inner joins.
+ * Tests of conditional inner joins.
  */
 template <typename T>
 struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
@@ -527,7 +528,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsNoOutputRowAllEqual)
 };
 
 /**
- * Tests of left joins.
+ * Tests of conditional left joins.
  */
 template <typename T>
 struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
@@ -582,7 +583,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHashNulls)
 };
 
 /**
- * Tests of full joins.
+ * Tests of conditional full joins.
  */
 template <typename T>
 struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
@@ -762,7 +763,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
 };
 
 /**
- * Tests of left semi joins.
+ * Tests of conditional left semi joins.
  */
 template <typename T>
 struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
@@ -809,7 +810,7 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHashNulls)
 };
 
 /**
- * Tests of left anti joins.
+ * Tests of conditional left anti joins.
  */
 template <typename T>
 struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
-from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -15,7 +14,6 @@ from typing import Any, MutableMapping, Optional, Set, Union
 import cupy
 import numpy as np
 import pandas as pd
-from numba import cuda
 from pandas._config import get_option
 
 import cudf
@@ -65,8 +63,10 @@ from cudf.core.indexed_frame import (
     _FrameIndexer,
     _get_label_range_or_mask,
     _indices_from_labels,
+    doc_reset_index_template,
 )
 from cudf.core.single_column_frame import SingleColumnFrame
+from cudf.core.udf.scalar_function import _get_scalar_kernel
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -133,11 +133,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (
-                    cudf.Decimal64Dtype,
-                    cudf.Decimal32Dtype,
-                    cudf.CategoricalDtype,
-                ),
+                (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
@@ -171,7 +167,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame._index.nlevels
-                and not any((isinstance(x, slice) for x in arg))
+                and not any(isinstance(x, slice) for x in arg)
             ):
                 result = result.iloc[0]
             return result
@@ -412,7 +408,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
         elif isinstance(data, ColumnAccessor):
-            name, data = data.names[0], data.columns[0]
+            raise TypeError(
+                "Use cudf.Series._from_data for constructing a Series from "
+                "ColumnAccessor"
+            )
 
         if isinstance(data, Series):
             index = data._index if index is None else index
@@ -512,13 +511,26 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property
     def dt(self):
         """
-        Accessor object for datetimelike properties of the Series values.
+        Accessor object for datetime-like properties of the Series values.
 
         Examples
         --------
+        >>> s = cudf.Series(cudf.date_range(
+        ...   start='2001-02-03 12:00:00',
+        ...   end='2001-02-03 14:00:00',
+        ...   freq='1H'))
         >>> s.dt.hour
+        0    12
+        1    13
+        dtype: int16
         >>> s.dt.second
+        0    0
+        1    0
+        dtype: int16
         >>> s.dt.day
+        0    3
+        1    3
+        dtype: int16
 
         Returns
         -------
@@ -550,19 +562,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        if "column" in header:
-            warnings.warn(
-                "Series objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
-            )
-
         index_nframes = header["index_frame_count"]
         obj = super().deserialize(
             header, frames[header["index_frame_count"] :]
@@ -583,7 +582,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         new_data = super()._get_columns_by_label(labels, downcast)
 
         return (
-            self.__class__(data=new_data, index=self.index)
+            self.__class__._from_data(data=new_data, index=self.index)
             if len(new_data) > 0
             else self.__class__(dtype=self.dtype, name=self.name)
         )
@@ -674,10 +673,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
            y    3
         2  x    4
            y    5
+        dtype: int64
         >>> s.drop(labels='y', level=1)
         0  x    0
         1  x    2
         2  x    4
+        Name: 2, dtype: int64
         """
         if labels is not None:
             if index is not None or columns is not None:
@@ -831,30 +832,22 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
-    def reset_index(self, drop=False, inplace=False):
-        """
-        Reset index to RangeIndex
-
-        Parameters
-        ----------
-        drop : bool, default False
-            Just reset the index, without inserting it as a column in
-            the new DataFrame.
-        inplace : bool, default False
-            Modify the Series in place (do not create a new object).
-
-        Returns
-        -------
-        Series or DataFrame or None
-            When `drop` is False (the default), a DataFrame is returned.
-            The newly created columns will come first in the DataFrame,
-            followed by the original Series values.
-            When `drop` is True, a `Series` is returned.
-            In either case, if ``inplace=True``, no value is returned.
-
-        Examples
-        --------
-        >>> import cudf
+    @docutils.doc_apply(
+        doc_reset_index_template.format(
+            klass="Series",
+            argument="""
+        name : object, optional
+            The name to use for the column containing the original Series
+            values. Uses self.name by default. This argument is ignored when
+            ``drop`` is True.""",
+            return_type="Series or DataFrame or None",
+            return_doc=""" For Series, When drop is False (the default), a DataFrame
+            is returned. The newly created columns will come first in the
+            DataFrame, followed by the original Series values. When `drop` is
+            True, a `Series` is returned. In either case, if ``inplace=True``,
+            no value is returned.
+""",
+            example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
         10    a
@@ -874,58 +867,51 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    c
         3    d
         dtype: object
-        """
-        if not drop:
-            if inplace is True:
-                raise TypeError(
-                    "Cannot reset_index inplace on a Series "
-                    "to create a DataFrame"
-                )
-            return self.to_frame().reset_index(drop=drop)
-        else:
-            if inplace is True:
-                self._index = RangeIndex(len(self))
-            else:
-                return self._from_data(self._data, index=RangeIndex(len(self)))
 
-    def set_index(self, index):
-        """Returns a new Series with a different index.
+        You can also use ``reset_index`` with MultiIndex.
 
-        Parameters
-        ----------
-        index : Index, Series-convertible
-            the new index or values for the new index
-
-        Returns
-        -------
-        Series
-            A new Series with assigned index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 13, 14])
-        >>> series
-        0    10
-        1    11
-        2    12
-        3    13
-        4    14
-        dtype: int64
-        >>> series.set_index(['a', 'b', 'c', 'd', 'e'])
-        a    10
-        b    11
-        c    12
-        d    13
-        e    14
-        dtype: int64
-        """
-        warnings.warn(
-            "Series.set_index is deprecated and will be removed in the future",
-            FutureWarning,
+        >>> s2 = cudf.Series(
+        ...             range(4), name='foo',
+        ...             index=cudf.MultiIndex.from_tuples([
+        ...                     ('bar', 'one'), ('bar', 'two'),
+        ...                     ('baz', 'one'), ('baz', 'two')],
+        ...                     names=['a', 'b']
+        ...      ))
+        >>> s2
+        a    b
+        bar  one    0
+             two    1
+        baz  one    2
+             two    3
+        Name: foo, dtype: int64
+        >>> s2.reset_index(level='a')
+               a  foo
+        b
+        one  bar    0
+        two  bar    1
+        one  baz    2
+        two  baz    3
+""",
         )
-        index = index if isinstance(index, BaseIndex) else as_index(index)
-        return self._from_data(self._data, index, self.name)
+    )
+    def reset_index(self, level=None, drop=False, name=None, inplace=False):
+        if not drop and inplace:
+            raise TypeError(
+                "Cannot reset_index inplace on a Series "
+                "to create a DataFrame"
+            )
+        data, index = self._reset_index(level=level, drop=drop)
+        if not drop:
+            if name is None:
+                name = 0 if self.name is None else self.name
+            data[name] = data.pop(self.name)
+            return cudf.core.dataframe.DataFrame._from_data(data, index)
+        # For ``name`` behavior, see:
+        # https://github.com/pandas-dev/pandas/issues/44575
+        return self._mimic_inplace(
+            Series._from_data(data, index, name if inplace else None),
+            inplace=inplace,
+        )
 
     def to_frame(self, name=None):
         """Convert Series into a DataFrame
@@ -969,62 +955,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return cudf.DataFrame({col: self._column}, index=self.index)
 
-    def set_mask(self, mask, null_count=None):
-        warnings.warn(
-            "Series.set_mask is deprecated and will be removed in the future.",
-            FutureWarning,
-        )
-        return self._from_data(
-            {self.name: self._column.set_mask(mask)}, self._index
-        )
-
     def memory_usage(self, index=True, deep=False):
-        """
-        Return the memory usage of the Series.
-
-        The memory usage can optionally include the contribution of
-        the index and of elements of `object` dtype.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the Series index.
-        deep : bool, default False
-            If True, introspect the data deeply by interrogating
-            `object` dtypes for system-level memory consumption, and include
-            it in the returned value.
-
-        Returns
-        -------
-        int
-            Bytes of memory consumed.
-
-        See Also
-        --------
-        cudf.DataFrame.memory_usage : Bytes consumed by
-            a DataFrame.
-
-        Examples
-        --------
-        >>> s = cudf.Series(range(3), index=['a','b','c'])
-        >>> s.memory_usage()
-        48
-
-        Not including the index gives the size of the rest of the data, which
-        is necessarily smaller:
-
-        >>> s.memory_usage(index=False)
-        24
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        n = self._column.memory_usage()
-        if index:
-            n += self._index.memory_usage()
-        return n
+        return sum(super().memory_usage(index, deep).values())
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
@@ -1169,11 +1101,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             self.iloc[key] = value
         else:
             self.loc[key] = value
-
-    def take(self, indices, axis=0, keep_index=True):
-        # Validate but don't use the axis.
-        _ = self._get_axis_from_axis_arg(axis)
-        return super().take(indices, keep_index)
 
     def __repr__(self):
         _, height = get_terminal_size()
@@ -1424,10 +1351,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.Decimal64Column):
-            col = col._with_type_metadata(objs[0]._column.dtype)
-
-        if isinstance(col, cudf.core.column.StructColumn):
+        # Reassign precision for decimal cols & type schema for struct cols
+        if isinstance(
+            col,
+            (
+                cudf.core.column.DecimalBaseColumn,
+                cudf.core.column.StructColumn,
+            ),
+        ):
             col = col._with_type_metadata(objs[0].dtype)
 
         return cls(data=col, index=index, name=name)
@@ -1474,7 +1405,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> series.dropna().has_nulls
         False
         """
-        return self._column.has_nulls
+        return self._column.has_nulls()
 
     def dropna(self, axis=0, inplace=False, how=None):
         """
@@ -1514,7 +1445,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser
         0       1
         1       2
-        2    null
+        2    <NA>
         dtype: int64
 
         Drop null values from a Series.
@@ -1628,9 +1559,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def fill(self, fill_value, begin=0, end=-1, inplace=False):
-        return self._fill([fill_value], begin, end, inplace)
-
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
@@ -1653,15 +1581,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
-
-    # TODO: When this method is removed we can also remove ColumnBase.to_array.
-    def to_array(self, fillna=None):
-        warnings.warn(
-            "The to_array method will be removed in a future cuDF "
-            "release. Consider using `to_numpy` instead.",
-            FutureWarning,
-        )
-        return self._column.to_array(fillna=fillna)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
@@ -1759,7 +1678,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         dtype: int64
         >>> series.data
-        <cudf.core.buffer.Buffer object at 0x7f23c192d110>
+        <cudf.core.buffer.Buffer object at 0x...>
         >>> series.data.to_host_array()
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
@@ -1770,34 +1689,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def nullmask(self):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
-
-    def as_mask(self):
-        """Convert booleans to bitmask
-
-        Returns
-        -------
-        device array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([True, False, True])
-        >>> s.as_mask()
-        <cudf.core.buffer.Buffer object at 0x7f23c3eed0d0>
-        >>> s.as_mask().to_host_array()
-        array([  5,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,
-                 0,   0,   0,   2,   0,   0,   0,   0,   0,   0,   0, 181, 164,
-               188,   1,   0,   0,   0,   0, 255, 255, 255, 255, 255, 255, 255,
-               127, 253, 214,  62, 241,   1,   0,   0,   0,   0,   0,   0,   0,
-                 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
-             dtype=uint8)
-        """
-        if not is_bool_dtype(self.dtype):
-            raise TypeError(
-                f"Series must of boolean dtype, found: {self.dtype}"
-            )
-
-        return self._column.as_mask()
 
     def astype(self, dtype, copy=False, errors="raise"):
         """
@@ -2239,153 +2130,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         self.mask(mask, other, inplace=True)
 
-    def reverse(self):
-        warnings.warn(
-            "Series.reverse is deprecated and will be removed in the future.",
-            FutureWarning,
-        )
-        rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
-        return self._from_data(
-            {self.name: self._column[rinds]}, self.index._values[rinds]
-        )
-
-    def one_hot_encoding(self, cats, dtype="float64"):
-        """Perform one-hot-encoding
-
-        Parameters
-        ----------
-        cats : sequence of values
-                values representing each category.
-        dtype : numpy.dtype
-                specifies the output dtype.
-
-        Returns
-        -------
-        Sequence
-            A sequence of new series for each category. Its length is
-            determined by the length of ``cats``.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['a', 'b', 'c', 'a'])
-        >>> s
-        0    a
-        1    b
-        2    c
-        3    a
-        dtype: object
-        >>> s.one_hot_encoding(['a', 'c', 'b'])
-        [0    1.0
-        1    0.0
-        2    0.0
-        3    1.0
-        dtype: float64, 0    0.0
-        1    0.0
-        2    1.0
-        3    0.0
-        dtype: float64, 0    0.0
-        1    1.0
-        2    0.0
-        3    0.0
-        dtype: float64]
-        """
-
-        warnings.warn(
-            "Series.one_hot_encoding is deprecated and will be removed in "
-            "future, use `get_dummies` instead.",
-            FutureWarning,
-        )
-
-        if hasattr(cats, "to_arrow"):
-            cats = cats.to_pandas()
-        else:
-            cats = pd.Series(cats, dtype="object")
-        dtype = cudf.dtype(dtype)
-
-        try:
-            cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
-        except TypeError:
-            raise ValueError("Cannot convert `cats` as cudf column.")
-
-        if self._column.size * cats_col.size >= np.iinfo("int32").max:
-            raise ValueError(
-                "Size limitation exceeded: series.size * category.size < "
-                "np.iinfo('int32').max. Consider reducing size of category"
-            )
-
-        res = libcudf.transform.one_hot_encode(self._column, cats_col)
-        if dtype.type == np.bool_:
-            return [
-                Series._from_data({None: x}, index=self._index)
-                for x in list(res.values())
-            ]
-        else:
-            return [
-                Series._from_data({None: x.astype(dtype)}, index=self._index)
-                for x in list(res.values())
-            ]
-
-    def label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        """Perform label encoding.
-
-        Parameters
-        ----------
-        values : sequence of input values
-        dtype : numpy.dtype; optional
-            Specifies the output dtype.  If `None` is given, the
-            smallest possible integer dtype (starting with np.int8)
-            is used.
-        na_sentinel : number, default -1
-            Value to indicate missing category.
-
-        Returns
-        -------
-        A sequence of encoded labels with value between 0 and n-1 classes(cats)
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 3, 4, 10])
-        >>> s.label_encoding([2, 3])
-        0   -1
-        1    0
-        2    1
-        3   -1
-        4   -1
-        dtype: int8
-
-        `na_sentinel` parameter can be used to
-        control the value when there is no encoding.
-
-        >>> s.label_encoding([2, 3], na_sentinel=10)
-        0    10
-        1     0
-        2     1
-        3    10
-        4    10
-        dtype: int8
-
-        When none of `cats` values exist in s, entire
-        Series will be `na_sentinel`.
-
-        >>> s.label_encoding(['a', 'b', 'c'])
-        0   -1
-        1   -1
-        2   -1
-        3   -1
-        4   -1
-        dtype: int8
-        """
-
-        warnings.warn(
-            "Series.label_encoding is deprecated and will be removed in the "
-            "future. Consider using cuML's LabelEncoder instead.",
-            FutureWarning,
-        )
-
-        return self._label_encoding(cats, dtype, na_sentinel)
-
     def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
         # Private implementation of deprecated public label_encoding method
         def _return_sentinel_series():
@@ -2447,7 +2191,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             by numba based on the function logic and argument types.
             See examples for details.
         args : tuple
-            Not supported
+            Positional arguments passed to func after the series value.
         **kwargs
             Not supported
 
@@ -2513,20 +2257,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
         """
-        if args or kwargs:
-            raise ValueError(
-                "UDFs using *args or **kwargs are not yet supported."
-            )
-
-        # these functions are generally written as functions of scalar
-        # values rather than rows. Rather than writing an entirely separate
-        # numba kernel that is not built around a row object, its simpler
-        # to just turn this into the equivalent single column dataframe case
-        name = self.name or "__temp_srname"
-        df = cudf.DataFrame({name: self})
-        f_ = cuda.jit(device=True)(func)
-
-        return df.apply(lambda row: f_(row[name]))
+        if convert_dtype is not True:
+            raise ValueError("Series.apply only supports convert_dtype=True")
+        return self._apply(func, _get_scalar_kernel, *args, **kwargs)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
@@ -2841,11 +2574,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05, 0.17])
         >>> s.autocorr()
-        0.10355263309024071
+        0.1438853844...
         >>> s.autocorr(lag=2)
-        -0.9999999999999999
+        -0.9647548490...
         """
         return self.corr(self.shift(lag))
 
@@ -2946,42 +2679,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         res = self._column.unique()
         return Series(res, name=self.name)
-
-    def nunique(self, method="sort", dropna=True):
-        """Returns the number of unique values of the Series: approximate version,
-        and exact version to be moved to libcudf
-
-        Excludes NA values by default.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NA values in the count.
-
-        Returns
-        -------
-        int
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 3, 5, 7, 7])
-        >>> s
-        0    1
-        1    3
-        2    5
-        3    7
-        4    7
-        dtype: int64
-        >>> s.nunique()
-        4
-        """
-        if method != "sort":
-            msg = "non sort based distinct_count() not implemented yet"
-            raise NotImplementedError(msg)
-        if self.null_count == len(self):
-            return 0
-        return self._column.distinct_count(method, dropna)
 
     def value_counts(
         self,
@@ -3105,121 +2802,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res / float(res._column.sum())
         return res
 
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in this column.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 120, 30])
-        >>> series
-        0     10
-        1    120
-        2     30
-        dtype: int64
-        >>> series.hash_values(method="murmur3")
-        0   -1930516747
-        1     422619251
-        2    -941520876
-        dtype: int32
-        >>> series.hash_values(method="md5")
-        0    7be4bbacbfdb05fb3044e36c22b41e8b
-        1    947ca8d2c5f0f27437f156cfbfab0969
-        2    d0580ef52d27c043c8e341fd5039b166
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
-
-    def hash_encode(self, stop, use_name=False):
-        """Encode column values as ints in [0, stop) using hash function.
-
-        This method is deprecated. Replace ``series.hash_encode(stop,
-        use_name=False)`` with ``series.hash_values(method="murmur3") % stop``.
-
-        Parameters
-        ----------
-        stop : int
-            The upper bound on the encoding range.
-        use_name : bool
-            If ``True`` then combine hashed column values
-            with hashed column name. This is useful for when the same
-            values in different columns should be encoded
-            with different hashed values.
-
-        Returns
-        -------
-        result : Series
-            The encoded Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 120, 30])
-        >>> series.hash_encode(stop=200)
-        0     53
-        1     51
-        2    124
-        dtype: int32
-
-        You can choose to include name while hash
-        encoding by specifying `use_name=True`
-
-        >>> series.hash_encode(stop=200, use_name=True)
-        0    131
-        1     29
-        2     76
-        dtype: int32
-        """
-        warnings.warn(
-            "The `hash_encode` method will be removed in a future cuDF "
-            "release. Replace `series.hash_encode(stop, use_name=False)` "
-            'with `series.hash_values(method="murmur3") % stop`.',
-            FutureWarning,
-        )
-
-        if not stop > 0:
-            raise ValueError("stop must be a positive integer.")
-
-        if use_name:
-            name_hasher = sha256()
-            name_hasher.update(str(self.name).encode())
-            name_hash_bytes = name_hasher.digest()[:4]
-            name_hash_int = (
-                int.from_bytes(name_hash_bytes, "little", signed=False)
-                & 0xFFFFFFFF
-            )
-            initial_hash = [name_hash_int]
-        else:
-            initial_hash = None
-
-        hashed_values = Series._from_data(
-            {
-                self.name: self._hash(
-                    method="murmur3", initial_hash=initial_hash
-                )
-            },
-            self.index,
-        )
-
-        if hashed_values.has_nulls:
-            raise ValueError("Column must have no nulls.")
-
-        return hashed_values % stop
-
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):
@@ -3309,54 +2891,58 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return percentiles
 
         def _format_percentile_names(percentiles):
-            return ["{0}%".format(int(x * 100)) for x in percentiles]
+            return [f"{int(x * 100)}%" for x in percentiles]
 
         def _format_stats_values(stats_data):
-            return list(map(lambda x: round(x, 6), stats_data))
+            return map(lambda x: round(x, 6), stats_data)
 
         def _describe_numeric(self):
             # mimicking pandas
-            index = (
-                ["count", "mean", "std", "min"]
-                + _format_percentile_names(percentiles)
-                + ["max"]
-            )
-            data = (
-                [self.count(), self.mean(), self.std(), self.min()]
-                + self.quantile(percentiles).to_numpy(na_value=np.nan).tolist()
-                + [self.max()]
-            )
-            data = _format_stats_values(data)
+            data = {
+                "count": self.count(),
+                "mean": self.mean(),
+                "std": self.std(),
+                "min": self.min(),
+                **dict(
+                    zip(
+                        _format_percentile_names(percentiles),
+                        self.quantile(percentiles)
+                        .to_numpy(na_value=np.nan)
+                        .tolist(),
+                    )
+                ),
+                "max": self.max(),
+            }
 
             return Series(
-                data=data, index=index, nan_as_null=False, name=self.name,
+                data=_format_stats_values(data.values()),
+                index=data.keys(),
+                nan_as_null=False,
+                name=self.name,
             )
 
         def _describe_timedelta(self):
             # mimicking pandas
-            index = (
-                ["count", "mean", "std", "min"]
-                + _format_percentile_names(percentiles)
-                + ["max"]
-            )
-
-            data = (
-                [
-                    str(self.count()),
-                    str(self.mean()),
-                    str(self.std()),
-                    str(pd.Timedelta(self.min())),
-                ]
-                + self.quantile(percentiles)
-                .astype("str")
-                .to_numpy(na_value=None)
-                .tolist()
-                + [str(pd.Timedelta(self.max()))]
-            )
+            data = {
+                "count": str(self.count()),
+                "mean": str(self.mean()),
+                "std": str(self.std()),
+                "min": str(pd.Timedelta(self.min())),
+                **dict(
+                    zip(
+                        _format_percentile_names(percentiles),
+                        self.quantile(percentiles)
+                        .astype("str")
+                        .to_numpy(na_value=np.nan)
+                        .tolist(),
+                    )
+                ),
+                "max": str(pd.Timedelta(self.max())),
+            }
 
             return Series(
-                data=data,
-                index=index,
+                data=data.values(),
+                index=data.keys(),
                 dtype="str",
                 nan_as_null=False,
                 name=self.name,
@@ -3365,51 +2951,55 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         def _describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
-            index = ["count", "unique", "top", "freq"]
-            val_counts = self.value_counts(ascending=False)
-            data = [self.count(), self.unique().size]
-
-            if data[1] > 0:
-                top, freq = val_counts.index[0], val_counts.iloc[0]
-                data += [str(top), freq]
-            # If the DataFrame is empty, set 'top' and 'freq' to None
-            # to maintain output shape consistency
-            else:
-                data += [None, None]
+            data = {
+                "count": self.count(),
+                "unique": len(self.unique()),
+                "top": None,
+                "freq": None,
+            }
+            if data["count"] > 0:
+                # In case there's a tie, break the tie by sorting the index
+                # and take the top.
+                val_counts = self.value_counts(ascending=False)
+                tied_val_counts = val_counts[
+                    val_counts == val_counts.iloc[0]
+                ].sort_index()
+                data.update(
+                    {
+                        "top": tied_val_counts.index[0],
+                        "freq": tied_val_counts.iloc[0],
+                    }
+                )
 
             return Series(
-                data=data,
+                data=data.values(),
                 dtype="str",
-                index=index,
+                index=data.keys(),
                 nan_as_null=False,
                 name=self.name,
             )
 
         def _describe_timestamp(self):
-
-            index = (
-                ["count", "mean", "min"]
-                + _format_percentile_names(percentiles)
-                + ["max"]
-            )
-
-            data = (
-                [
-                    str(self.count()),
-                    str(self.mean().to_numpy().astype("datetime64[ns]")),
-                    str(pd.Timestamp(self.min().astype("datetime64[ns]"))),
-                ]
-                + self.quantile(percentiles)
-                .astype("str")
-                .to_numpy(na_value=None)
-                .tolist()
-                + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
-            )
+            data = {
+                "count": str(self.count()),
+                "mean": str(pd.Timestamp(self.mean())),
+                "min": str(pd.Timestamp(self.min())),
+                **dict(
+                    zip(
+                        _format_percentile_names(percentiles),
+                        self.quantile(percentiles)
+                        .astype(self.dtype)
+                        .astype("str")
+                        .to_numpy(na_value=np.nan),
+                    )
+                ),
+                "max": str(pd.Timestamp(self.max())),
+            }
 
             return Series(
-                data=data,
+                data=data.values(),
                 dtype="str",
-                index=index,
+                index=data.keys(),
                 nan_as_null=False,
                 name=self.name,
             )
@@ -3641,12 +3231,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> renamed_series.name
         'numeric_series'
         """
-        out = self.copy(deep=False)
-        out = out.set_index(self.index)
-        if index:
-            out.name = index
-
-        return out.copy(deep=copy)
+        out_data = self._data.copy(deep=copy)
+        return Series._from_data(out_data, self.index, name=index)
 
     def merge(
         self,
@@ -3663,6 +3249,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
+        warnings.warn(
+            "Series.merge is deprecated and will be removed in a future "
+            "release. Use cudf.merge instead.",
+            FutureWarning,
+        )
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
@@ -3727,7 +3318,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         >>> sr.keys()
-        RangeIndex(start=0, stop=6)
+        RangeIndex(start=0, stop=6, step=1)
         >>> sr = cudf.Series(['a', 'b', 'c'])
         >>> sr
         0    a
@@ -3735,7 +3326,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    c
         dtype: object
         >>> sr.keys()
-        RangeIndex(start=0, stop=3)
+        RangeIndex(start=0, stop=3, step=1)
         >>> sr = cudf.Series([1, 2, 3], index=['a', 'b', 'c'])
         >>> sr
         a    1
@@ -3886,7 +3477,7 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class DatetimeProperties(object):
+class DatetimeProperties:
     """
     Accessor object for datetimelike properties of the Series values.
 
@@ -4707,6 +4298,45 @@ class DatetimeProperties(object):
             data={self.series.name: out_column}, index=self.series._index
         )
 
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_sr = cudf.Series([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_sr.dt.round("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.round(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
     def strftime(self, date_format, *args, **kwargs):
         """
         Convert to Series using specified ``date_format``.
@@ -4789,7 +4419,7 @@ class DatetimeProperties(object):
         )
 
 
-class TimedeltaProperties(object):
+class TimedeltaProperties:
     """
     Accessor object for timedeltalike properties of the Series values.
 

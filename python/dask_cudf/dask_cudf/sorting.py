@@ -222,6 +222,8 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
+    sort_function=None,
+    sort_function_kwargs=None,
 ):
     """Sort by the given list/tuple of column names."""
     if not isinstance(ascending, bool):
@@ -234,6 +236,21 @@ def sort_values(
         by = list(by)
     elif not isinstance(by, list):
         by = [by]
+
+    # parse custom sort function / kwargs if provided
+    sort_kwargs = {
+        "by": by,
+        "ascending": ascending,
+        "na_position": na_position,
+    }
+    if sort_function is None:
+        sort_function = M.sort_values
+    if sort_function_kwargs is not None:
+        sort_kwargs.update(sort_function_kwargs)
+
+    # handle single partition case
+    if npartitions == 1:
+        return df.map_partitions(sort_function, **sort_kwargs)
 
     # Step 1 - Calculate new divisions (if necessary)
     if divisions is None:
@@ -265,9 +282,7 @@ def sort_values(
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
-    df4 = df3.map_partitions(
-        M.sort_values, by, ascending=ascending, na_position=na_position
-    )
+    df4 = df3.map_partitions(sort_function, **sort_kwargs)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)

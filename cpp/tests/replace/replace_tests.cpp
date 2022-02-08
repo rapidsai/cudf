@@ -31,11 +31,11 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <gtest/gtest.h>
 #include <cstdlib>
+#include <cudf/types.hpp>
+#include <gtest/gtest.h>
 #include <iostream>
 #include <vector>
-#include "cudf/types.hpp"
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture {
 };
@@ -298,7 +298,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
     std::srand(number_of_instantiations++);
   }
 
-  ~ReplaceTest() {}
+  ~ReplaceTest() override {}
 };
 
 /**

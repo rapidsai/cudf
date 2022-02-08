@@ -16,15 +16,13 @@
 
 #pragma once
 
-#include <reductions/arg_minmax_util.cuh>
+#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -53,7 +51,7 @@ struct element_arg_minmax_fn {
   bool const has_nulls;
   bool const arg_min;
 
-  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
+  __device__ inline auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
     // github.com/NVIDIA/thrust/issues/1525
@@ -244,18 +242,6 @@ struct group_reduction_functor<
 
     if (values.is_empty()) { return result; }
 
-    // When finding ARGMIN, we need to consider nulls as larger than non-null elements.
-    // Thing is opposite for ARGMAX.
-    auto const null_precedence =
-      (K == aggregation::ARGMIN) ? null_order::AFTER : null_order::BEFORE;
-    auto const flattened_values = structs::detail::flatten_nested_columns(
-      table_view{{values}}, {}, std::vector<null_order>{null_precedence});
-    auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
-    auto const flattened_null_precedences =
-      (K == aggregation::ARGMIN)
-        ? cudf::detail::make_device_uvector_async(flattened_values.null_orders(), stream)
-        : rmm::device_uvector<null_order>(0, stream);
-
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
       thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -270,12 +256,9 @@ struct group_reduction_functor<
 
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
-    auto const binop        = cudf::reduction::detail::row_arg_minmax_fn(values.size(),
-                                                                  *d_flattened_values_ptr,
-                                                                  values.has_nulls(),
-                                                                  flattened_null_precedences.data(),
-                                                                  K == aggregation::ARGMIN);
-    do_reduction(count_iter, result_begin, binop);
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
+    do_reduction(count_iter, result_begin, binop_generator.binop());
 
     if (values.has_nulls()) {
       // Generate bitmask for the output by segmented reduction of the input bitmask.

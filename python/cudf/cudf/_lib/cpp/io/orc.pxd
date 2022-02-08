@@ -2,6 +2,7 @@
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -36,7 +37,6 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
         void set_decimal_cols_as_float(vector[string] val) except+
-        void enable_decimal128(bool val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -58,7 +58,6 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& decimal_cols_as_float(
             vector[string] val
         ) except+
-        orc_reader_options_builder& decimal128(bool val) except+
 
         orc_reader_options build() except+
 
@@ -85,6 +84,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void set_row_index_stride(size_type val) except+
         void set_table(cudf_table_view.table_view tbl) except+
         void set_metadata(cudf_io_types.table_input_metadata* meta) except+
+        void set_key_value_metadata(map[string, string] kvm) except +
 
         @staticmethod
         orc_writer_options_builder builder(
@@ -106,6 +106,9 @@ cdef extern from "cudf/io/orc.hpp" \
         ) except+
         orc_writer_options_builder& metadata(
             cudf_io_types.table_input_metadata *meta
+        ) except+
+        orc_writer_options_builder& key_value_metadata(
+            map[string, string] kvm
         ) except+
 
         orc_writer_options build() except+
@@ -134,6 +137,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void set_metadata(
             cudf_io_types.table_input_metadata* meta
         ) except+
+        void set_key_value_metadata(map[string, string] kvm) except +
 
         @staticmethod
         chunked_orc_writer_options_builder builder(
@@ -154,6 +158,9 @@ cdef extern from "cudf/io/orc.hpp" \
         ) except+
         chunked_orc_writer_options_builder& metadata(
             cudf_io_types.table_input_metadata *meta
+        ) except+
+        chunked_orc_writer_options_builder& key_value_metadata(
+            map[string, string] kvm
         ) except+
 
         chunked_orc_writer_options build() except+

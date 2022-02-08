@@ -228,3 +228,65 @@ def test_dropna_dataframe_np_nan(data, axis):
     pdf = pd.DataFrame(pd_data)
 
     assert_eq(pdf.dropna(axis=axis), gdf.dropna(axis=axis), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data, dtype",
+    [
+        ([1, float("nan"), 2], "float64"),
+        (["x", None, "y"], "str"),
+        (["x", None, "y"], "category"),
+        (["2020-01-20", pd.NaT, "2020-03-15"], "datetime64[ns]"),
+        (["1s", pd.NaT, "3d"], "timedelta64[ns]"),
+    ],
+)
+def test_dropna_index(data, dtype):
+    pi = pd.Index(data, dtype=dtype)
+    gi = cudf.from_pandas(pi)
+
+    expect = pi.dropna()
+    got = gi.dropna()
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("data", [[[1, None, 2], [None, None, 2]]])
+@pytest.mark.parametrize("how", ["all", "any"])
+def test_dropna_multiindex(data, how):
+    pi = pd.MultiIndex.from_arrays(data)
+    gi = cudf.from_pandas(pi)
+
+    expect = pi.dropna(how)
+    got = gi.dropna(how)
+
+    with pytest.raises(AssertionError, match="different"):
+        # pandas-gh44792. Pandas infers the dtypes as (int64, int64), though
+        # int64 doesn't really store null/nans. The dtype propagates to the
+        # result of dropna. cuDF infers the dtypes as (float, float), which
+        # differs from pandas.
+        assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            [pd.Timestamp("2020-01-01"), pd.NaT, pd.Timestamp("2020-02-01")],
+            [pd.NaT, pd.NaT, pd.Timestamp("2020-03-01")],
+        ],
+        [
+            [pd.Timestamp("2020-01-01"), pd.NaT, pd.Timestamp("2020-02-01")],
+            [np.nan, np.nan, 1.0],
+        ],
+        [[1.0, np.nan, 2.0], [np.nan, np.nan, 1.0]],
+    ],
+)
+@pytest.mark.parametrize("how", ["all", "any"])
+def test_dropna_multiindex_2(data, how):
+    pi = pd.MultiIndex.from_arrays(data)
+    gi = cudf.from_pandas(pi)
+
+    expect = pi.dropna(how)
+    got = gi.dropna(how)
+
+    assert_eq(expect, got)

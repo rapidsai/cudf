@@ -151,61 +151,87 @@ struct host_buffer {
  * @brief Source information for read interfaces
  */
 struct source_info {
-  io_type type = io_type::FILEPATH;
-  std::vector<std::string> filepaths;
-  std::vector<host_buffer> buffers;
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> files;
-  std::vector<cudf::io::datasource*> user_sources;
+  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;
 
   source_info() = default;
 
-  explicit source_info(std::vector<std::string> const& file_paths)
-    : type(io_type::FILEPATH), filepaths(file_paths)
-  {
-  }
-  explicit source_info(std::string const& file_path)
-    : type(io_type::FILEPATH), filepaths({file_path})
-  {
-  }
+  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
 
   explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : type(io_type::HOST_BUFFER), buffers(host_buffers)
+    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
   {
   }
   explicit source_info(const char* host_data, size_t size)
-    : type(io_type::HOST_BUFFER), buffers({{host_data, size}})
+    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
   {
   }
 
   explicit source_info(std::vector<cudf::io::datasource*> const& sources)
-    : type(io_type::USER_IMPLEMENTED), user_sources(sources)
+    : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
   {
   }
   explicit source_info(cudf::io::datasource* source)
-    : type(io_type::USER_IMPLEMENTED), user_sources({source})
+    : _type(io_type::USER_IMPLEMENTED), _user_sources({source})
   {
   }
+
+  [[nodiscard]] auto type() const { return _type; }
+  [[nodiscard]] auto const& filepaths() const { return _filepaths; }
+  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& files() const { return _files; }
+  [[nodiscard]] auto const& user_sources() const { return _user_sources; }
+
+ private:
+  io_type _type = io_type::FILEPATH;
+  std::vector<std::string> _filepaths;
+  std::vector<host_buffer> _buffers;
+  std::vector<cudf::io::datasource*> _user_sources;
 };
 
 /**
  * @brief Destination information for write interfaces
  */
 struct sink_info {
-  io_type type = io_type::VOID;
-  std::string filepath;
-  std::vector<char>* buffer      = nullptr;
-  cudf::io::data_sink* user_sink = nullptr;
-
   sink_info() = default;
+  sink_info(size_t num_sinks) : _num_sinks(num_sinks) {}
 
-  explicit sink_info(const std::string& file_path) : type(io_type::FILEPATH), filepath(file_path) {}
-
-  explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffer(buffer) {}
-
-  explicit sink_info(class cudf::io::data_sink* user_sink_)
-    : type(io_type::USER_IMPLEMENTED), user_sink(user_sink_)
+  explicit sink_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
   {
   }
+  explicit sink_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
+
+  explicit sink_info(std::vector<std::vector<char>*> const& buffers)
+    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
+  {
+  }
+  explicit sink_info(std::vector<char>* buffer) : _type(io_type::HOST_BUFFER), _buffers({buffer}) {}
+
+  explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
+    : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
+  {
+  }
+  explicit sink_info(class cudf::io::data_sink* user_sink)
+    : _type(io_type::USER_IMPLEMENTED), _user_sinks({user_sink})
+  {
+  }
+
+  [[nodiscard]] auto type() const { return _type; }
+  [[nodiscard]] auto num_sinks() const { return _num_sinks; }
+  [[nodiscard]] auto const& filepaths() const { return _filepaths; }
+  [[nodiscard]] auto const& buffers() const { return _buffers; }
+  [[nodiscard]] auto const& user_sinks() const { return _user_sinks; }
+
+ private:
+  io_type _type     = io_type::VOID;
+  size_t _num_sinks = 1;
+  std::vector<std::string> _filepaths;
+  std::vector<std::vector<char>*> _buffers;
+  std::vector<cudf::io::data_sink*> _user_sinks;
 };
 
 class table_input_metadata;
@@ -312,51 +338,51 @@ class column_in_metadata {
    * @param i Index of the child to get
    * @return this for chaining
    */
-  column_in_metadata const& child(size_type i) const { return children[i]; }
+  [[nodiscard]] column_in_metadata const& child(size_type i) const { return children[i]; }
 
   /**
    * @brief Get the name of this column
    */
-  std::string get_name() const { return _name; }
+  [[nodiscard]] std::string get_name() const { return _name; }
 
   /**
    * @brief Get whether nullability has been explicitly set for this column.
    */
-  bool is_nullability_defined() const { return _nullable.has_value(); }
+  [[nodiscard]] bool is_nullability_defined() const { return _nullable.has_value(); }
 
   /**
    * @brief Gets the explicitly set nullability for this column.
    * @throws If nullability is not explicitly defined for this column.
    *         Check using `is_nullability_defined()` first.
    */
-  bool nullable() const { return _nullable.value(); }
+  [[nodiscard]] bool nullable() const { return _nullable.value(); }
 
   /**
    * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
    */
-  bool is_map() const { return _list_column_is_map; }
+  [[nodiscard]] bool is_map() const { return _list_column_is_map; }
 
   /**
    * @brief Get whether to encode this timestamp column using deprecated int96 physical type
    */
-  bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
+  [[nodiscard]] bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
 
   /**
    * @brief Get whether precision has been set for this decimal column
    */
-  bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
+  [[nodiscard]] bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
 
   /**
    * @brief Get the decimal precision that was set for this column.
    * @throws If decimal precision was not set for this column.
    *         Check using `is_decimal_precision_set()` first.
    */
-  uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+  [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
 
   /**
    * @brief Get the number of children of this column
    */
-  size_type num_children() const { return children.size(); }
+  [[nodiscard]] size_type num_children() const { return children.size(); }
 };
 
 class table_input_metadata {
@@ -369,12 +395,26 @@ class table_input_metadata {
    * The constructed table_input_metadata has the same structure as the passed table_view
    *
    * @param table The table_view to construct metadata for
-   * @param user_data Optional Additional metadata to encode, as key-value pairs
    */
-  table_input_metadata(table_view const& table, std::map<std::string, std::string> user_data = {});
+  table_input_metadata(table_view const& table);
 
   std::vector<column_in_metadata> column_metadata;
-  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
+};
+
+/**
+ * @brief Information used while writing partitioned datasets
+ *
+ * This information defines the slice of an input table to write to file. In partitioned dataset
+ * writing, one partition_info struct defines one partition and corresponds to one output file
+ */
+struct partition_info {
+  size_type start_row;
+  size_type num_rows;
+
+  partition_info() = default;
+  partition_info(size_type start_row, size_type num_rows) : start_row(start_row), num_rows(num_rows)
+  {
+  }
 };
 
 }  // namespace io
