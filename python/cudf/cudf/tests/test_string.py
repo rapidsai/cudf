@@ -834,7 +834,7 @@ def test_string_join(ps_gs, sep):
 )
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
-    expectation = raise_builder([flags_raise], ValueError)
+    expectation = raise_builder([flags_raise], NotImplementedError)
 
     with expectation:
         expect = ps.str.extract(pat, flags=flags, expand=expand)
@@ -864,9 +864,7 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
     expectation = does_not_raise()
-    if flags_raise:
-        expectation = pytest.raises(ValueError)
-    if na_raise:
+    if flags_raise or na_raise:
         expectation = pytest.raises(NotImplementedError)
 
     with expectation:

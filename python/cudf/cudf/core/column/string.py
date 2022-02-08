@@ -621,7 +621,9 @@ class StringMethods(ColumnMethods):
         dtype: object
         """  # noqa W605
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         data, index = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
@@ -754,7 +756,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         if pat is None:
             result_col = column.column_empty(
@@ -3395,7 +3399,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         return self._return_or_inplace(
             libstrings.count_re(self._column, pat, flags)
@@ -3963,7 +3969,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         return self._return_or_inplace(
             libstrings.match_re(self._column, pat, flags)
