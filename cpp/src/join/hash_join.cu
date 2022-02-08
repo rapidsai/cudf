@@ -235,7 +235,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
                                           null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
   : _is_empty{build.num_rows() == 0},
-    _hash_table{compute_hash_table_size(build.num_rows()),
+    _hash_table{0,
                 std::numeric_limits<hash_value_type>::max(),
                 cudf::detail::JoinNoneValue,
                 stream.value(),
@@ -253,7 +253,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
 
   if (_is_empty) { return; }
 
-  build_join_hash_table(_build, _hash_table, compare_nulls, stream);
+  _hash_table = std::move(build_join_hash_table(_build, compare_nulls, stream));
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
