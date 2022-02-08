@@ -60,7 +60,7 @@ namespace strings {
  *       ["bc def_g", "_bc", "ab cd", "cd "] ]
  * @endcode
  *
- * @throw cudf:logic_error if `pattern` is empty.
+ * @throw cudf::logic_error if `pattern` is empty.
  *
  * @param input A column of string elements to be split.
  * @param pattern The regex pattern for delimiting characters within each string.
@@ -110,7 +110,7 @@ std::unique_ptr<table> split_re(
  *       ["g", "bc", "cd", "cd "] ]
  * @endcode
  *
- * @throw cudf:logic_error if `pattern` is empty.
+ * @throw cudf::logic_error if `pattern` is empty.
  *
  * @param input A column of string elements to be split.
  * @param pattern The regex pattern for delimiting characters within each string.
@@ -160,7 +160,7 @@ std::unique_ptr<table> rsplit_re(
  *       ["ab", "cd "] ]
  * @endcode
  *
- * @throw cudf:logic_error if `pattern` is empty.
+ * @throw cudf::logic_error if `pattern` is empty.
  *
  * @param input A column of string elements to be split.
  * @param pattern The regex pattern for delimiting characters within each string.
@@ -212,7 +212,7 @@ std::unique_ptr<column> split_record_re(
  *       ["ab_cd", ""] ]
  * @endcode
  *
- * @throw cudf:logic_error if `pattern` is empty.
+ * @throw cudf::logic_error if `pattern` is empty.
  *
  * @param input A column of string elements to be split.
  * @param pattern The regex pattern for delimiting characters within each string.
