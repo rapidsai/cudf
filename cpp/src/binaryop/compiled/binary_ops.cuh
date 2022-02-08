@@ -309,7 +309,7 @@ void apply_binary_op(mutable_column_view& out,
 
     detail::struct_compare(
       out,
-      row_lexicographic_comparator{
+      row_lexicographic_comparator<nullate::DYNAMIC, true>{
         nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
         *d_lhs,
         *d_rhs,

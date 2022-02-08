@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,5 +51,13 @@ void struct_compare(mutable_column_view& out,
     mutable_column_view&, comp_op, bool, bool, bool, rmm::cuda_stream_view);
 
 INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<nullate::DYNAMIC>);
-INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<nullate::DYNAMIC>);
+// INSTANTIATE_STRUCT_COMPARE does not work with the optional template argument
+template void
+binops::compiled::detail::struct_compare<row_lexicographic_comparator<nullate::DYNAMIC, true>>(
+  mutable_column_view&,
+  row_lexicographic_comparator<nullate::DYNAMIC, true>,
+  bool,
+  bool,
+  bool,
+  rmm::cuda_stream_view);
 }  //  namespace cudf
