@@ -1615,7 +1615,6 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
  * @param offset_functor functor that returns the starting offset of each row
  * @param column_starts starting offset of a column in a row
  * @param column_sizes size of each element in a column
- * @param fixed_width_only only fixed-width data in this table
  * @param fixed_width_size_per_row size of fixed-width data in a row of this table
  * @param stream stream used
  * @param mr selected memory resource for returned data
@@ -1625,7 +1624,7 @@ template <typename offsetFunctor>
 std::vector<std::unique_ptr<column>>
 convert_to_rows(table_view const &tbl, batch_data &batch_info, offsetFunctor offset_functor,
                 std::vector<size_type> const &column_starts,
-                std::vector<size_type> const &column_sizes, bool fixed_width_only,
+                std::vector<size_type> const &column_sizes,
                 size_type const fixed_width_size_per_row, rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource *mr) {
   int device_id;
@@ -1793,7 +1792,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
         util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
 
     return detail::convert_to_rows(tbl, batch_info, offset_functor, column_starts, column_sizes,
-                                   fixed_width_only, fixed_width_size_per_row, stream, mr);
+                                   fixed_width_size_per_row, stream, mr);
   } else {
     auto row_sizes = detail::build_string_row_sizes(tbl, fixed_width_size_per_row, stream);
 
@@ -1805,7 +1804,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
     detail::string_row_offset_functor offset_functor(batch_info.batch_row_offsets);
 
     return detail::convert_to_rows(tbl, batch_info, offset_functor, column_starts, column_sizes,
-                                   fixed_width_only, fixed_width_size_per_row, stream, mr);
+                                   fixed_width_size_per_row, stream, mr);
   }
 
 #else
