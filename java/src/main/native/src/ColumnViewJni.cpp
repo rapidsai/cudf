@@ -580,7 +580,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 
     if (limit == 0 || limit == 1) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "limit == 0 or limit == 1 are not supported", 0);
+                    "limit == 0 and limit == 1 are not supported", 0);
     }
     auto const max_split = limit > 1 ? limit - 1 : limit;
 
@@ -612,7 +612,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
 
     if (limit == 0 || limit == 1) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "limit == 0 or limit == 1 are not supported", 0);
+                    "limit == 0 and limit == 1 are not supported", 0);
     }
     auto const max_split = limit > 1 ? limit - 1 : limit;
 
