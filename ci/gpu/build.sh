@@ -86,6 +86,8 @@ conda list --show-channel-urls
 gpuci_logger "Install dependencies"
 gpuci_mamba_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
+                  "rapids-build-env=$MINOR_VERSION.*" \
+                  "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
                   "ucx-py=${UCX_PY_VERSION}"
