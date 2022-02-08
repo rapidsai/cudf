@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-#include "cudf/aggregation.hpp"
-#include "cudf/types.hpp"
 #include "scan_tests.hpp"
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
-#include <type_traits>
+#include <cudf/types.hpp>
 
 using aggregation = cudf::aggregation;
 using cudf::null_policy;
