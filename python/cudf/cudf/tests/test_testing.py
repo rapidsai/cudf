@@ -5,12 +5,14 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column.column import as_column, full
 from cudf.testing import (
     assert_frame_equal,
     assert_index_equal,
     assert_series_equal,
 )
 from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf.testing.testing import assert_column_equal
 
 
 @pytest.mark.parametrize("rdata", [[1, 2, 5], [1, 2, 6], [1, 2, 5, 6]])
@@ -117,6 +119,36 @@ def test_basic_assert_series_equal(
             check_categorical=check_categorical,
             check_category_order=check_category_order,
         )
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        as_column(["1", "2", "3"]),
+        as_column([[1], [2], [3]]),
+        as_column([{"a": 1}, {"a": 2}, {"a": 3}]),
+    ],
+)
+def test_assert_column_equal_dtype_edge_cases(other):
+    # string series should be 100% different
+    # even when the elements are the same
+    base = as_column([1, 2, 3])
+
+    # for these dtypes, the diff should always be 100% regardless of the values
+    with pytest.raises(
+        AssertionError, match=r".*values are different \(100.0 %\).*"
+    ):
+        assert_column_equal(base, other, check_dtype=False)
+
+    # the exceptions are the empty and all null cases
+    assert_column_equal(base[:0], other[:0], check_dtype=False)
+    assert_column_equal(other[:0], base[:0], check_dtype=False)
+
+    base = full(len(base), fill_value=cudf.NA, dtype=base.dtype)
+    other = full(len(other), fill_value=cudf.NA, dtype=other.dtype)
+
+    assert_column_equal(base, other, check_dtype=False)
+    assert_column_equal(other, base, check_dtype=False)
 
 
 @pytest.mark.parametrize(
