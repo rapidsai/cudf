@@ -1609,9 +1609,10 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
 /**
  * @brief convert cudf table into JCUDF row format
  *
- * @tparam RowSizeIter iterator with size of each row including variable-width data
+ * @tparam offsetFunctor functor type for offset functor
  * @param tbl table to convert to JCUDF row format
- * @param row_sizes iterator with size of each row including variable-width data
+ * @param batch_info information about the batches of data
+ * @param offset_functor functor that returns the starting offset of each row
  * @param column_starts starting offset of a column in a row
  * @param column_sizes size of each element in a column
  * @param fixed_width_only only fixed-width data in this table
