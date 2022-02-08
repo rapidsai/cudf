@@ -385,11 +385,13 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
         else:
             print(type(excpr).__name__)
 
-    expect = orcfile.read(columns=columns).to_pandas()
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, compression=compression)
-    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    expect = cudf.from_pandas(orcfile.read(columns=columns).to_pandas())
+    expect.to_orc(gdf_fname.strpath, compression=compression)
+    got = cudf.from_pandas(
+        pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    )
 
-    assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
+    assert_frame_equal(expect, got)
 
 
 @pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
@@ -406,11 +408,11 @@ def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
         else:
             print(type(excpr).__name__)
 
-    expect = orcfile.read().to_pandas()
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, statistics=stats_freq)
-    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    expect = cudf.from_pandas(orcfile.read().to_pandas())
+    expect.to_orc(gdf_fname.strpath, statistics=stats_freq)
+    got = cudf.from_pandas(pa.orc.ORCFile(gdf_fname).read().to_pandas())
 
-    assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
+    assert_frame_equal(expect, got)
 
 
 @pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
