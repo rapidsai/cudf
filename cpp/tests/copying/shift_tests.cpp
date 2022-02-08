@@ -56,6 +56,8 @@ std::unique_ptr<cudf::scalar> make_scalar(
 template <typename T>
 constexpr auto highest()
 {
+  // chrono types do not have std::numeric_limits specializations and should use T::max()
+  // https://eel.is/c++draft/numeric.limits.general#6
   if constexpr (cudf::is_chrono<T>()) return T::max();
   return std::numeric_limits<T>::max();
 }
@@ -63,6 +65,8 @@ constexpr auto highest()
 template <typename T>
 constexpr auto lowest()
 {
+  // chrono types do not have std::numeric_limits specializations and should use T::min()
+  // https://eel.is/c++draft/numeric.limits.general#6
   if constexpr (cudf::is_chrono<T>()) return T::min();
   return std::numeric_limits<T>::lowest();
 }
