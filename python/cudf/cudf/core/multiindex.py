@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
-import warnings
 from collections.abc import Sequence
 from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
@@ -23,10 +22,14 @@ from cudf.core import column
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
-from cudf.utils.utils import _maybe_indices_to_slice, cached_property
+from cudf.utils.utils import (
+    NotIterable,
+    _maybe_indices_to_slice,
+    cached_property,
+)
 
 
-class MultiIndex(Frame, BaseIndex):
+class MultiIndex(Frame, BaseIndex, NotIterable):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -115,7 +118,7 @@ class MultiIndex(Frame, BaseIndex):
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
             )
-        if len(set(c.size for c in codes._data.columns)) != 1:
+        if len({c.size for c in codes._data.columns}) != 1:
             raise ValueError(
                 "MultiIndex length of codes does not match "
                 "and is inconsistent!"
@@ -366,9 +369,6 @@ class MultiIndex(Frame, BaseIndex):
             mi.names = self.names.copy()
 
         return mi
-
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __repr__(self):
         max_seq_items = get_option("display.max_seq_items") or len(self)
@@ -752,7 +752,7 @@ class MultiIndex(Frame, BaseIndex):
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             result = cudf.Series._from_data(
-                {}, name=tuple((col[0] for col in index._data.columns))
+                {}, name=tuple(col[0] for col in index._data.columns)
             )
         elif out_index._num_columns == 1:
             # If there's only one column remaining in the output index, convert
@@ -775,7 +775,7 @@ class MultiIndex(Frame, BaseIndex):
             )
 
         if isinstance(index_key, tuple):
-            result = result.set_index(index)
+            result.index = index
         return result
 
     def _get_row_major(
@@ -859,28 +859,8 @@ class MultiIndex(Frame, BaseIndex):
 
     @classmethod
     def deserialize(cls, header, frames):
-        if "names" in header:
-            warnings.warn(
-                "MultiIndex objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["column_names"] = header["names"]
-        column_names = pickle.loads(header["column_names"])
-        if "source_data" in header:
-            warnings.warn(
-                "MultiIndex objects serialized in cudf version "
-                "21.08 or older will no longer be deserializable "
-                "after version 21.10. Please load and resave any "
-                "pickles before upgrading to version 21.12.",
-                FutureWarning,
-            )
-            df = cudf.DataFrame.deserialize(header["source_data"], frames)
-            return cls.from_frame(df)._set_names(column_names)
-
         # Spoof the column names to construct the frame, then set manually.
+        column_names = pickle.loads(header["column_names"])
         header["column_names"] = pickle.dumps(range(0, len(column_names)))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
@@ -1222,7 +1202,7 @@ class MultiIndex(Frame, BaseIndex):
         if not pd.api.types.is_list_like(level):
             level = (level,)
 
-        ilevels = sorted([self._level_index_from_level(lev) for lev in level])
+        ilevels = sorted(self._level_index_from_level(lev) for lev in level)
 
         if not ilevels:
             return None
@@ -1432,22 +1412,14 @@ class MultiIndex(Frame, BaseIndex):
         )
 
     def memory_usage(self, deep=False):
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-
-        n = 0
-        for col in self._data.columns:
-            n += col.memory_usage()
+        usage = sum(super().memory_usage(deep=deep).values())
         if self.levels:
             for level in self.levels:
-                n += level.memory_usage(deep=deep)
+                usage += level.memory_usage(deep=deep)
         if self.codes:
             for col in self.codes._data.columns:
-                n += col.memory_usage()
-        return n
+                usage += col.memory_usage()
+        return usage
 
     def difference(self, other, sort=None):
         if hasattr(other, "to_pandas"):

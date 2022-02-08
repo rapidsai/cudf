@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -523,14 +523,19 @@ class ColumnAccessor(MutableMapping):
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"
                 )
+
             if isinstance(mapper, Mapping):
-                new_names = (
+                new_col_names = [
                     mapper.get(col_name, col_name) for col_name in self.keys()
-                )
+                ]
             else:
-                new_names = (mapper(col_name) for col_name in self.keys())
+                new_col_names = [mapper(col_name) for col_name in self.keys()]
+
+            if len(new_col_names) != len(set(new_col_names)):
+                raise ValueError("Duplicate column names are not allowed")
+
             ca = ColumnAccessor(
-                dict(zip(new_names, self.values())),
+                dict(zip(new_col_names, self.values())),
                 level_names=self.level_names,
                 multiindex=self.multiindex,
             )

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final DType type;
   protected final long rows;
   protected final long nullCount;
+  protected final ColumnVector.OffHeapState offHeap;
 
   /**
    * Constructs a Column View given a native view address
@@ -50,6 +51,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+    this.offHeap = null;
+  }
+
+
+  /**
+   * Intended to be called from ColumnVector when it is being constructed. Because state creates a
+   * cudf::column_view instance and will close it in all cases, we don't want to have to double
+   * close it.
+   * @param state the state this view is based off of.
+   */
+  protected ColumnView(ColumnVector.OffHeapState state) {
+    offHeap = state;
+    viewHandle = state.getViewHandle();
+    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+    rows = ColumnView.getNativeRowCount(viewHandle);
+    nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
   /**
@@ -265,7 +282,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   @Override
   public void close() {
-    ColumnView.deleteColumnView(viewHandle);
+    // close the view handle so long as offHeap is not going to do it for us.
+    if (offHeap == null) {
+      ColumnView.deleteColumnView(viewHandle);
+    }
     viewHandle = 0;
   }
 
@@ -2331,13 +2351,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null string entries return corresponding null output columns.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
-  public final Table stringSplit(Scalar delimiter) {
+  public final Table stringSplit(Scalar delimiter, int maxSplit) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
+  }
+  
+  /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  An empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public final Table stringSplit(Scalar delimiter) {
+    return stringSplit(delimiter, -1);
   }
 
   /**
@@ -2349,7 +2383,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Table stringSplit() {
     try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplit(emptyString);
+      return stringSplit(emptyString, -1);
     }
   }
 
@@ -2362,7 +2396,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
   public final ColumnVector stringSplitRecord(int maxSplit) {
     try (Scalar emptyString = Scalar.fromString("")) {
@@ -2384,7 +2418,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * string using the specified delimiter.
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    * @return New table of strings columns.
    */
   public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
@@ -3234,7 +3268,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * The index is set to null if one of the following is true: 
    * 1. The search key row is null.
    * 2. The list row is null.
-   * @param key ColumnView of search keys.
+   * @param keys ColumnView of search keys.
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
    */
@@ -3268,6 +3302,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Scalar getScalarElement(int index) {
     return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
+  /**
+   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
+   * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
+   */
+  static long getValidityBufferSize(int numRows) {
+    // number of bytes required = Math.ceil(number of bits / 8)
+    long actualBytes = ((long) numRows + 7) >> 3;
+    // padding to the multiplies of the padding boundary(64 bytes)
+    return ((actualBytes + 63) >> 6) << 6;
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3490,8 +3535,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * delimiter.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   * @param maxSplit the maximum number of splits to perform, or -1 for all possible splits.
    */
-  private static native long[] stringSplit(long columnView, long delimiter);
+  private static native long[] stringSplit(long columnView, long delimiter, int maxSplit);
 
   private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
 
@@ -3686,7 +3732,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method to find the first (or last) index of each search key in the specified column,
    * in each row of a list column.
    * @param nativeView the column view handle of the list
-   * @param scalarColumnHandle handle to the search key column
+   * @param keyColumnHandle handle to the search key column
    * @param isFindFirst Whether to find the first index of the key, or the last.
    * @return column handle of the resultant column of int32 indices
    */
@@ -3866,11 +3912,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
                                                              long boolColumnViewHandle) throws CudfException;
 
-  /**
-   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
-   */
-  static native long getNativeValidPointerSize(int size);
-
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
   // should typically only be called from the OffHeap inner class.
@@ -3960,7 +4001,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       DeviceMemoryBuffer mainValidDevBuff = null;
       DeviceMemoryBuffer mainOffsetsDevBuff = null;
       if (mainColValid != null) {
-        long validLen = getNativeValidPointerSize(mainColRows);
+        long validLen = getValidityBufferSize(mainColRows);
         mainValidDevBuff = DeviceMemoryBuffer.allocate(validLen);
         mainValidDevBuff.copyFromHostBuffer(mainColValid, 0, validLen);
       }
@@ -3971,20 +4012,29 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       if (mainColOffsets != null) {
         // The offset buffer has (no. of rows + 1) entries, where each entry is INT32.sizeInBytes
-        long offsetsLen = OFFSET_SIZE * (mainColRows + 1);
+        long offsetsLen = OFFSET_SIZE * (((long)mainColRows) + 1);
         mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
       long[] childHandles = new long[devChildren.size()];
-      for (ColumnView.NestedColumnVector ncv : devChildren) {
-        toClose.addAll(ncv.getBuffersToClose());
+      try {
+        for (ColumnView.NestedColumnVector ncv : devChildren) {
+          toClose.addAll(ncv.getBuffersToClose());
+        }
+        for (int i = 0; i < devChildren.size(); i++) {
+          childHandles[i] = devChildren.get(i).createViewHandle();
+        }
+        return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
+            mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
+      } finally {
+        for (int i = 0; i < childHandles.length; i++) {
+          if (childHandles[i] != 0) {
+            ColumnView.deleteColumnView(childHandles[i]);
+            childHandles[i] = 0;
+          }
+        }
       }
-      for (int i = 0; i < devChildren.size(); i++) {
-        childHandles[i] = devChildren.get(i).getViewHandle();
-      }
-      return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
-        mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
     }
 
     private static NestedColumnVector createNewNestedColumnVector(
@@ -4007,21 +4057,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         children);
     }
 
-    long getViewHandle() {
+    private long createViewHandle() {
       long[] childrenColViews = null;
-      if (children != null) {
-        childrenColViews = new long[children.size()];
-        for (int i = 0; i < children.size(); i++) {
-          childrenColViews[i] = children.get(i).getViewHandle();
+      try {
+        if (children != null) {
+          childrenColViews = new long[children.size()];
+          for (int i = 0; i < children.size(); i++) {
+            childrenColViews[i] = children.get(i).createViewHandle();
+          }
+        }
+        long dataAddr = data == null ? 0 : data.address;
+        long dataLen = data == null ? 0 : data.length;
+        long offsetAddr = offsets == null ? 0 : offsets.address;
+        long validAddr = valid == null ? 0 : valid.address;
+        int nc = nullCount.orElse(ColumnVector.OffHeapState.UNKNOWN_NULL_COUNT).intValue();
+        return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale(), dataAddr, dataLen,
+            offsetAddr, validAddr, nc, (int) rows, childrenColViews);
+      } finally {
+        if (childrenColViews != null) {
+          for (int i = 0; i < childrenColViews.length; i++) {
+            if (childrenColViews[i] != 0) {
+              deleteColumnView(childrenColViews[i]);
+              childrenColViews[i] = 0;
+            }
+          }
         }
       }
-      long dataAddr = data == null ? 0 : data.address;
-      long dataLen = data == null ? 0 : data.length;
-      long offsetAddr = offsets == null ? 0 : offsets.address;
-      long validAddr = valid == null ? 0 : valid.address;
-      int nc = nullCount.orElse(ColumnVector.OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale() , dataAddr, dataLen,
-          offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 
     List<DeviceMemoryBuffer> getBuffersToClose() {
@@ -4069,7 +4130,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
       }
       if (validityBuffer != null) {
-        long validLen = getNativeValidPointerSize((int)rows);
+        long validLen = getValidityBufferSize((int)rows);
         valid = DeviceMemoryBuffer.allocate(validLen);
         valid.copyFromHostBuffer(validityBuffer, 0, validLen);
       }

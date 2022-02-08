@@ -94,27 +94,27 @@ T get_distribution_mean(distribution_params<T> const& dist)
 }
 
 // Utilities to determine the mean size of an element, given the data profile
-template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
+template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
+size_t non_fixed_width_size(data_profile const& profile)
 {
-  return sizeof(T);
+  CUDF_FAIL("Should not be called, use `size_of` for this type instead");
 }
 
-template <typename T>
-std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
+template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
+size_t non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
 }
 
 template <>
-size_t avg_element_size<cudf::string_view>(data_profile const& profile)
+size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
   return get_distribution_mean(dist);
 }
 
 template <>
-size_t avg_element_size<cudf::list_view>(data_profile const& profile)
+size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
@@ -122,17 +122,18 @@ size_t avg_element_size<cudf::list_view>(data_profile const& profile)
   return element_size * pow(single_level_mean, dist_params.max_depth);
 }
 
-struct avg_element_size_fn {
+struct non_fixed_width_size_fn {
   template <typename T>
   size_t operator()(data_profile const& profile)
   {
-    return avg_element_size<T>(profile);
+    return non_fixed_width_size<T>(profile);
   }
 };
 
-size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
+size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
-  return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{}, profile);
+  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
+  return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
 
 /**
@@ -901,7 +902,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
     std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
-      return sum + avg_element_bytes(profile, tid);
+      return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
 
