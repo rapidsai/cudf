@@ -325,7 +325,8 @@ class NumericalColumn(NumericalBaseColumn):
             self._nan_count = nan_col.sum()
         return self._nan_count
 
-    def can_fillna(self) -> bool:
+    @property
+    def contains_na_entries(self) -> bool:
         return (self.nan_count != 0) or (self.null_count != 0)
 
     def _process_values_for_isin(

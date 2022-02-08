@@ -1250,7 +1250,7 @@ class Frame:
         for col_name, col in self._data.items():
             should_fill = (
                 col_name in value
-                and col.can_fillna()
+                and col.contains_na_entries
                 and not libcudf.scalar._is_null_host_scalar(value[col_name])
             ) or method is not None
             if should_fill:
@@ -1259,9 +1259,7 @@ class Frame:
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(
-                data=filled_data, index=self._index
-            ),
+            self._from_data(data=filled_data, index=self._index),
             inplace=inplace,
         )
 

@@ -1167,7 +1167,8 @@ class ColumnBase(Column, Serializable, NotIterable):
     def nans_to_nulls(self: T) -> T:
         return self
 
-    def can_fillna(self) -> bool:
+    @property
+    def contains_fillable_entries(self) -> bool:
         return self.null_count != 0
 
     def _process_for_reduction(
