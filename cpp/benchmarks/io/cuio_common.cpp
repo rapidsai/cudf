@@ -16,6 +16,7 @@
 
 #include <benchmarks/io/cuio_common.hpp>
 
+#include <fstream>
 #include <numeric>
 #include <string>
 
@@ -53,9 +54,21 @@ cudf_io::source_info cuio_source_sink_pair::make_source_info()
 cudf_io::sink_info cuio_source_sink_pair::make_sink_info()
 {
   switch (type) {
-    case io_type::VOID: return cudf_io::sink_info();
+    case io_type::VOID: return cudf_io::sink_info(&void_sink);
     case io_type::FILEPATH: return cudf_io::sink_info(file_name);
     case io_type::HOST_BUFFER: return cudf_io::sink_info(&buffer);
+    default: CUDF_FAIL("invalid output type");
+  }
+}
+
+size_t cuio_source_sink_pair::size()
+{
+  switch (type) {
+    case io_type::VOID: return void_sink.bytes_written();
+    case io_type::FILEPATH:
+      return static_cast<size_t>(
+        std::ifstream(file_name, std::ifstream::ate | std::ifstream::binary).tellg());
+    case io_type::HOST_BUFFER: return buffer.size();
     default: CUDF_FAIL("invalid output type");
   }
 }

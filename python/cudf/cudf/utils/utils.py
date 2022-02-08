@@ -206,12 +206,13 @@ class GetAttrGetItemMixin:
             )
 
 
-def raise_iteration_error(obj):
-    raise TypeError(
-        f"{obj.__class__.__name__} object is not iterable. "
-        f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-        f"if you wish to iterate over the values."
-    )
+class NotIterable:
+    def __iter__(self):
+        raise TypeError(
+            f"{self.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        )
 
 
 def pa_mask_buffer_to_mask(mask_buf, size):

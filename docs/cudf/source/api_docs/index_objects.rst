@@ -22,7 +22,6 @@ Properties
    :toctree: api/
 
    Index.empty
-   Index.gpu_values
    Index.has_duplicates
    Index.is_monotonic
    Index.is_monotonic_increasing
@@ -93,9 +92,9 @@ Conversion
    :toctree: api/
 
    Index.astype
-   Index.to_array
    Index.to_arrow
    Index.to_list
+   Index.to_numpy
    Index.to_series
    Index.to_frame
    Index.to_pandas

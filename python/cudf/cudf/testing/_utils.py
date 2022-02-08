@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from decimal import Decimal
@@ -109,7 +110,15 @@ def assert_eq(left, right, **kwargs):
     if isinstance(left, pd.DataFrame):
         tm.assert_frame_equal(left, right, **kwargs)
     elif isinstance(left, pd.Series):
-        tm.assert_series_equal(left, right, **kwargs)
+        # TODO: A warning is emitted from the function
+        # pandas.testing.assert_series_equal for some inputs:
+        # "DeprecationWarning: elementwise comparison failed; this will raise
+        # an error in the future."
+        # This warning comes from a call from pandas to numpy. It is ignored
+        # here because it cannot be fixed within cudf.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            tm.assert_series_equal(left, right, **kwargs)
     elif isinstance(left, pd.Index):
         tm.assert_index_equal(left, right, **kwargs)
     elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):

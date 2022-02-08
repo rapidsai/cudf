@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import builtins
 from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -14,11 +15,12 @@ from cudf._typing import Dtype
 from cudf.api.types import _is_scalar_or_zero_d_array
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
+from cudf.utils.utils import NotIterable
 
 T = TypeVar("T", bound="Frame")
 
 
-class SingleColumnFrame(Frame):
+class SingleColumnFrame(Frame, NotIterable):
     """A one-dimensional frame.
 
     Frames with only a single column share certain logic that is encoded in
@@ -83,12 +85,6 @@ class SingleColumnFrame(Frame):
     def shape(self):
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
-
-    def __iter__(self):
-        # Iterating over a GPU object is not efficient and hence not supported.
-        # Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
-        # if you wish to iterate over the values.
-        cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __bool__(self):
         raise TypeError(
@@ -325,3 +321,23 @@ class SingleColumnFrame(Frame):
                 return NotImplemented
 
         return {result_name: (self._column, other, reflect, fill_value)}
+
+    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+        """
+        Return count of unique values for the column.
+
+        Parameters
+        ----------
+        method : builtins.str, default "sort"
+            Method used by cpp_distinct_count
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        int
+            Number of unique values in the column.
+        """
+        if self._column.null_count == len(self):
+            return 0
+        return self._column.distinct_count(method=method, dropna=dropna)
