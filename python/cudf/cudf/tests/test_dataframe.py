@@ -9075,7 +9075,7 @@ def test_dataframe_add_suffix():
                 "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
                 "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
             },
-            ["id", "val1", "val2"],
+            ["id"],
         ),
         (
             {
@@ -9119,11 +9119,18 @@ def test_groupby_covariance(data, gkey, min_per, d_dof):
 
 def test_groupby_covariance_multiindex_dataframe():
     gdf = cudf.DataFrame(
-        {"a": [1, 1, 2, 2], "b": [1, 1, 2, 3], "c": [2, 3, 4, 5]}
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 1, 2, 3],
+            "c": [2, 3, 4, 5],
+            "d": [6, 8, 9, 1],
+        }
     ).set_index(["a", "b"])
 
-    actual = gdf.groupby(level="a").cov(min_periods=0, ddof=1)
-    expected = gdf.to_pandas().groupby(level="a").cov(min_periods=0, ddof=1)
+    actual = gdf.groupby(level=["a", "b"]).cov(min_periods=0, ddof=1)
+    expected = (
+        gdf.to_pandas().groupby(level=["a", "b"]).cov(min_periods=0, ddof=1)
+    )
 
     assert_eq(expected, actual)
 
