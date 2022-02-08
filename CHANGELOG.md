@@ -2,7 +2,6 @@
 
 Please see https://github.com/rapidsai/cudf/releases/tag/v22.04.00a for the latest changes to this development branch.
 
-# cuDF 22.02.00 (Date TBD)
 # cuDF 22.02.00 (2 Feb 2022)
 
 ## 🚨 Breaking Changes
