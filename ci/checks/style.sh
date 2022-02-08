@@ -19,12 +19,14 @@ export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.
 mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
-pre-commit run --hook-stage manual --all-files
-PRE_COMMIT_RETVAL=$?
-
 # Check for copyright headers in the files modified currently
 COPYRIGHT=`python ci/checks/copyright.py --git-modified-only 2>&1`
 CR_RETVAL=$?
+
+pre-commit run --hook-stage manual --all-files
+PRE_COMMIT_RETVAL=$?
+
+
 
 # Output results if failure otherwise show pass
 if [ "$CR_RETVAL" != "0" ]; then
