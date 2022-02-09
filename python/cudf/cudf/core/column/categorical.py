@@ -61,7 +61,6 @@ class CategoricalAccessor(ColumnMethods):
     --------
     >>> s = cudf.Series([1,2,3], dtype='category')
     >>> s
-    >>> s
     0    1
     1    2
     2    3

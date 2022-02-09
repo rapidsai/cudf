@@ -77,8 +77,8 @@ struct tagged_element_relational_comparator {
   {
   }
 
-  __device__ weak_ordering compare(index_type lhs_tagged_index,
-                                   index_type rhs_tagged_index) const noexcept
+  [[nodiscard]] __device__ weak_ordering compare(index_type lhs_tagged_index,
+                                                 index_type rhs_tagged_index) const noexcept
   {
     auto const [l_side, l_indx] = lhs_tagged_index;
     auto const [r_side, r_indx] = rhs_tagged_index;
