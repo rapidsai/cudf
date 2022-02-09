@@ -333,7 +333,7 @@ def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
 
 
-numeric_dtypes_pairwise = pytest.mark.parametrize(
+parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
     "left_dtype,right_dtype",
     list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
 )

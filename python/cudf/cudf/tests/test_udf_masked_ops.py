@@ -255,7 +255,7 @@ def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
     # First perform the op on two dummy data on host, if numpy can
     # safely type cast, we should expect it to work in udf too.
     try:
-        op(getattr(np, left_dtype)(0), getattr(np, right_dtype)(42))
+        op(np.dtype(left_dtype).type(0), np.dtype(right_dtype).type(42))
     except TypeError:
         pytest.skip("Operation is unsupported for corresponding dtype.")
 
