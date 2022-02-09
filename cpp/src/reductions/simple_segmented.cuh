@@ -68,6 +68,7 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   auto simple_op         = Op{};
   size_type num_segments = offsets.size() - 1;
 
+  // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
   auto result = [&] {
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
@@ -144,14 +145,13 @@ struct same_column_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
+    return !(cudf::is_fixed_point<ElementType>() || cudf::is_dictionary<ElementType>() ||
+             std::is_same_v<ElementType, cudf::list_view> ||
              std::is_same_v<ElementType, cudf::struct_view>);
   }
 
  public:
-  template <typename ElementType,
-            std::enable_if_t<is_supported<ElementType>() &&
-                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType, std::enable_if_t<is_supported<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
@@ -162,9 +162,7 @@ struct same_column_type_dispatcher {
       col, offsets, null_handling, stream, mr);
   }
 
-  template <typename ElementType,
-            std::enable_if_t<not is_supported<ElementType>() or
-                             cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
