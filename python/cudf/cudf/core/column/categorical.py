@@ -1082,6 +1082,7 @@ class CategoricalColumn(column.ColumnBase):
         # represents the original ints that map to the categories
         old_cats = cudf.DataFrame()
         old_cats["cats"] = column.as_column(replaced.dtype.categories)
+        # TODO: PREM
         new_cats = old_cats.copy(deep=True)
 
         # Create a column with the appropriate labels replaced

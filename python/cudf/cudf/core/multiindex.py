@@ -92,6 +92,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             raise TypeError("Codes is not a Sequence of sequences")
 
         if copy:
+            # TODO: PREM
             if isinstance(codes, cudf.DataFrame):
                 codes = codes.copy(deep=True)
             if len(levels) > 0 and isinstance(levels[0], cudf.Series):

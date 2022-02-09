@@ -2172,6 +2172,7 @@ class CategoricalIndex(GenericIndex):
                     "`ordered` together with `dtype`."
                 )
         if copy:
+            # TODO: PREM
             data = column.as_column(data, dtype=dtype).copy(deep=True)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
