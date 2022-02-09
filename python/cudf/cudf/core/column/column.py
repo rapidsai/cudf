@@ -2093,24 +2093,16 @@ def as_column(
                         dtype = "bool"
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
-                # TODO: A warning is emitted from pyarrow 5.0.0's function
-                # pyarrow.lib._sequence_to_array:
-                # "DeprecationWarning: an integer is required (got type float).
-                # Implicit conversion to integers using __int__ is deprecated,
-                # and may be removed in a future version of Python."
-                # This warning does not appear in pyarrow 6.0.1 and will be
-                # resolved by https://github.com/rapidsai/cudf/pull/9686/.
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", DeprecationWarning)
-                    pa_array = pa.array(
+                data = as_column(
+                    pa.array(
                         arbitrary,
                         type=pa_type,
                         from_pandas=True
                         if nan_as_null is None
                         else nan_as_null,
-                    )
-                data = as_column(
-                    pa_array, dtype=dtype, nan_as_null=nan_as_null,
+                    ),
+                    dtype=dtype,
+                    nan_as_null=nan_as_null,
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
