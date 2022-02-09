@@ -7,6 +7,7 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
+from itertools import repeat
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -958,13 +959,122 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def memory_usage(self, index=True, deep=False):
         return sum(super().memory_usage(index, deep).values())
 
+    # For more detail on this function and how it should work, see
+    # https://numpy.org/doc/stable/reference/ufuncs.html
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__":
-            return get_appropriate_dispatched_func(
-                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
-            )
-        else:
+        # We don't currently support reduction, accumulation, etc. We also
+        # don't support any special kwargs or higher arity ufuncs than binary.
+        if method != "__call__" or kwargs or ufunc.nin > 2:
             return NotImplemented
+
+        # Binary operations
+        binary_operations = {
+            # Arithmetic binary operations.
+            "add": "add",
+            "subtract": "sub",
+            "multiply": "mul",
+            "matmul": "matmul",
+            "divide": "truediv",
+            "true_divide": "truediv",
+            "floor_divide": "floordiv",
+            "power": "pow",
+            "float_power": "pow",
+            "remainder": "mod",
+            "mod": "mod",
+            "fmod": "mod",
+            # Bitwise binary operations.
+            "bitwise_and": "and",
+            "bitwise_or": "or",
+            "bitwise_xor": "xor",
+            # Comparison binary operators
+            "greater": "gt",
+            "greater_equal": "ge",
+            "less": "lt",
+            "less_equal": "le",
+            "not_equal": "ne",
+            "equal": "eq",
+        }
+
+        # First look for methods of the class.
+        fname = ufunc.__name__
+        if fname in binary_operations:
+            not_reflect = self is inputs[0]
+            other = inputs[not_reflect]
+            op = f"__{'' if not_reflect else 'r'}{binary_operations[fname]}__"
+
+            # pandas bitwise operations return bools if indexes are misaligned.
+            # TODO: Generalize for other types of Frames
+            if (
+                "bitwise" in fname
+                and isinstance(other, Series)
+                and not self.index.equals(other.index)
+            ):
+                return getattr(self, op)(other).astype(bool)
+            # Float_power returns float irrespective of the input type.
+            if fname == "float_power":
+                return getattr(self, op)(other).astype(float)
+            return getattr(self, op)(other)
+
+        # Special handling for unary operations.
+        if fname == "negative":
+            return self * -1
+        if fname == "positive":
+            return self.copy(deep=True)
+        if fname == "invert":
+            return ~self
+        if fname == "absolute":
+            return self.abs()
+        if fname == "fabs":
+            return self.abs().astype(np.float64)
+
+        # Note: There are some operations that may be supported by libcudf but
+        # are not supported by pandas APIs. In particular, libcudf binary
+        # operations support logical and/or operations, but those operations
+        # are not defined on pd.Series/DataFrame. For now those operations will
+        # dispatch to cupy, but if ufuncs are ever a bottleneck we could add
+        # special handling to dispatch those (or any other) functions that we
+        # could implement without cupy.
+
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cupy, fname)
+        if cupy_func:
+            # Indices must be aligned before converting to arrays.
+            if ufunc.nin == 2 and all(map(isinstance, inputs, repeat(Series))):
+                inputs = _align_indices(inputs, allow_non_unique=True)
+                index = inputs[0].index
+            else:
+                index = self.index
+
+            cupy_inputs = []
+            mask = None
+            for inp in inputs:
+                # TODO: Generalize for other types of Frames
+                if isinstance(inp, Series) and inp.has_nulls:
+                    new_mask = as_column(inp.nullmask)
+
+                    # TODO: This is a hackish way to perform a bitwise and of
+                    # bitmasks. Once we expose cudf::detail::bitwise_and, then
+                    # we can use that instead.
+                    mask = new_mask if mask is None else (mask & new_mask)
+
+                    # Arbitrarily fill with zeros. For ufuncs, we assume that
+                    # the end result propagates nulls via a bitwise and, so
+                    # these elements are irrelevant.
+                    inp = inp.fillna(0)
+                cupy_inputs.append(cupy.asarray(inp))
+
+            cp_output = cupy_func(*cupy_inputs, **kwargs)
+
+            def make_frame(arr):
+                return self.__class__._from_data(
+                    {self.name: as_column(arr).set_mask(mask)}, index=index
+                )
+
+            if ufunc.nout > 1:
+                return tuple(make_frame(out) for out in cp_output)
+            return make_frame(cp_output)
+
+        return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
         handled_types = [cudf.Series]
@@ -1257,15 +1367,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     def logical_and(self, other):
+        warnings.warn(
+            "Series.logical_and is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_and").astype(np.bool_)
 
     def remainder(self, other):
+        warnings.warn(
+            "Series.remainder is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "mod")
 
     def logical_or(self, other):
+        warnings.warn(
+            "Series.logical_or is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_or").astype(np.bool_)
 
     def logical_not(self):
+        warnings.warn(
+            "Series.logical_not is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
