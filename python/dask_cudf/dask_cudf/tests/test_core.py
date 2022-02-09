@@ -284,7 +284,7 @@ def test_assign():
     got = dgf.assign(z=newcol)
 
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
+    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])

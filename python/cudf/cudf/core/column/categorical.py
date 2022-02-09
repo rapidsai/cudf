@@ -46,6 +46,9 @@ if TYPE_CHECKING:
     )
 
 
+_DEFAULT_CATEGORICAL_VALUE = -1
+
+
 class CategoricalAccessor(ColumnMethods):
     """
     Accessor object for categorical properties of the Series values.
@@ -940,7 +943,11 @@ class CategoricalColumn(column.ColumnBase):
             col = self
 
         signed_dtype = min_signed_type(len(col.categories))
-        codes = col.codes.astype(signed_dtype).fillna(-1).to_array()
+        codes = (
+            col.codes.astype(signed_dtype)
+            .fillna(_DEFAULT_CATEGORICAL_VALUE)
+            .values_host
+        )
         if is_interval_dtype(col.categories.dtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
@@ -1009,12 +1016,9 @@ class CategoricalColumn(column.ColumnBase):
         return self.categories.find_first_value(value)
 
     def _decode(self, value: int) -> ScalarLike:
-        if value == self._default_na_value():
+        if value == _DEFAULT_CATEGORICAL_VALUE:
             return None
         return self.categories.element_indexing(value)
-
-    def _default_na_value(self) -> ScalarLike:
-        return -1
 
     def find_and_replace(
         self,
@@ -1172,7 +1176,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_is_scalar = np.isscalar(fill_value)
 
             if fill_is_scalar:
-                if fill_value == self._default_na_value():
+                if fill_value == _DEFAULT_CATEGORICAL_VALUE:
                     fill_value = self.codes.dtype.type(fill_value)
                 else:
                     try:
@@ -1572,7 +1576,7 @@ def _create_empty_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
             cudf.utils.utils.scalar_broadcast_to(
-                categorical_column._default_na_value(),
+                _DEFAULT_CATEGORICAL_VALUE,
                 categorical_column.size,
                 categorical_column.codes.dtype,
             )
@@ -1595,7 +1599,7 @@ def pandas_categorical_as_column(
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes != codes.dtype.type(-1)
+    valid_codes = codes != codes.dtype.type(_DEFAULT_CATEGORICAL_VALUE)
 
     mask = None
     if not valid_codes.all():

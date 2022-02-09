@@ -34,7 +34,11 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 export DASK_DISTRIBUTED_GIT_TAG='2022.01.0'
 
 # ucx-py version
-export UCX_PY_VERSION='0.24.*'
+export UCX_PY_VERSION='0.25.*'
+
+export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
+export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
+export CMAKE_C_COMPILER_LAUNCHER="sccache"
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -245,15 +249,15 @@ fi
 
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python py.test for cuDF"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-dask-cudf.xml" -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:"$WORKSPACE/python/dask_cudf/dask-cudf-coverage.xml" --cov-report term
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-dask-cudf.xml" -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:"$WORKSPACE/python/dask_cudf/dask-cudf-coverage.xml" --cov-report term
 
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
-py.test -n 6 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log

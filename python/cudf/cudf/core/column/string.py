@@ -3410,6 +3410,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Pattern or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3419,7 +3421,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        `flags` parameter is currently not supported.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -3462,10 +3465,15 @@ class StringMethods(ColumnMethods):
         1  <NA>  <NA>
         2     b     b
         """
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
-        data, index = libstrings.findall(self._column, pat)
+        data, index = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(
             cudf.core.frame.Frame(data, index), expand=expand
         )
@@ -5083,7 +5091,7 @@ class StringColumn(column.ColumnBase):
         """
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))]
+                pa.null(), len(self), [pa.py_buffer(b"")]
             )
         else:
             return super().to_arrow()
@@ -5217,26 +5225,6 @@ class StringColumn(column.ColumnBase):
         Return a CuPy representation of the StringColumn.
         """
         raise TypeError("String Arrays is not yet implemented in cudf")
-
-    # TODO: This method is deprecated and should be removed when the associated
-    # Frame methods are removed.
-    def to_array(self, fillna: bool = None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Raises
-        ------
-        ``NotImplementedError`` if there are nulls
-        """
-        if fillna is not None:
-            warnings.warn("fillna parameter not supported for string arrays")
-
-        return self.to_arrow().to_pandas().values
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
@@ -5401,9 +5389,6 @@ class StringColumn(column.ColumnBase):
             return col
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
-
-    def _default_na_value(self) -> ScalarLike:
-        return None
 
     def binary_operator(
         self, op: builtins.str, rhs, reflect: bool = False

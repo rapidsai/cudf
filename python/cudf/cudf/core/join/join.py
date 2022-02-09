@@ -259,13 +259,11 @@ class Merge:
             if on
             else set()
             if (self._using_left_index or self._using_right_index)
-            else set(
-                [
-                    lkey.name
-                    for lkey, rkey in zip(self._left_keys, self._right_keys)
-                    if lkey.name == rkey.name
-                ]
-            )
+            else {
+                lkey.name
+                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                if lkey.name == rkey.name
+            }
         )
 
     def perform_merge(self) -> Frame:

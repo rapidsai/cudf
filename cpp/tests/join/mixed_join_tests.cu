@@ -641,3 +641,302 @@ TYPED_TEST(MixedFullJoinTest, Basic2)
               {JoinNoneValue, 1},
               {JoinNoneValue, 2}});
 }
+
+template <typename T>
+struct MixedJoinSingleReturnTest : public MixedJoinTest<T> {
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * verify that the outputs match the expected outputs (up to order).
+   */
+  virtual void _test(cudf::table_view left_equality,
+                     cudf::table_view right_equality,
+                     cudf::table_view left_conditional,
+                     cudf::table_view right_conditional,
+                     cudf::ast::operation predicate,
+                     std::vector<cudf::size_type> expected_outputs,
+                     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+  {
+    auto [result_size, actual_counts] = this->join_size(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+    EXPECT_TRUE(result_size == expected_outputs.size());
+
+    auto result = this->join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+    std::vector<cudf::size_type> resulting_indices;
+    for (size_t i = 0; i < result->size(); ++i) {
+      // Note: Not trying to be terribly efficient here since these tests are
+      // small, otherwise a batch copy to host before constructing the tuples
+      // would be important.
+      resulting_indices.push_back(result->element(i, rmm::cuda_stream_default));
+    }
+    std::sort(resulting_indices.begin(), resulting_indices.end());
+    std::sort(expected_outputs.begin(), expected_outputs.end());
+    EXPECT_TRUE(
+      std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
+  }
+
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
+  void test(ColumnVector<T> left_data,
+            ColumnVector<T> right_data,
+            std::vector<cudf::size_type> equality_columns,
+            std::vector<cudf::size_type> conditional_columns,
+            cudf::ast::operation predicate,
+            std::vector<cudf::size_type> expected_outputs)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers,
+          right_wrappers,
+          left_columns,
+          right_columns,
+          left_equality,
+          right_equality,
+          left_conditional,
+          right_conditional] =
+      this->parse_input(left_data, right_data, equality_columns, conditional_columns);
+    this->_test(left_equality,
+                right_equality,
+                left_conditional,
+                right_conditional,
+                predicate,
+                expected_outputs);
+  }
+
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
+  void test_nulls(NullableColumnVector<T> left_data,
+                  NullableColumnVector<T> right_data,
+                  std::vector<cudf::size_type> equality_columns,
+                  std::vector<cudf::size_type> conditional_columns,
+                  cudf::ast::operation predicate,
+                  std::vector<cudf::size_type> expected_outputs,
+                  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers,
+          right_wrappers,
+          left_columns,
+          right_columns,
+          left_equality,
+          right_equality,
+          left_conditional,
+          right_conditional] =
+      this->parse_input(left_data, right_data, equality_columns, conditional_columns);
+    this->_test(left_equality,
+                right_equality,
+                left_conditional,
+                right_conditional,
+                predicate,
+                expected_outputs,
+                compare_nulls);
+  }
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * mixed join API.
+   */
+  virtual SingleJoinReturn join(cudf::table_view left_equality,
+                                cudf::table_view right_equality,
+                                cudf::table_view left_conditional,
+                                cudf::table_view right_conditional,
+                                cudf::ast::operation predicate,
+                                cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * mixed join size computation API.
+   */
+  virtual std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) = 0;
+};
+
+/**
+ * Tests of mixed left semi joins.
+ */
+template <typename T>
+struct MixedLeftSemiJoinTest : public MixedJoinSingleReturnTest<T> {
+  SingleJoinReturn join(cudf::table_view left_equality,
+                        cudf::table_view right_equality,
+                        cudf::table_view left_conditional,
+                        cudf::table_view right_conditional,
+                        cudf::ast::operation predicate,
+                        cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  {
+    return cudf::mixed_left_semi_join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+  }
+
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  {
+    return cudf::mixed_left_semi_join_size(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+  }
+};
+
+TYPED_TEST_SUITE(MixedLeftSemiJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(MixedLeftSemiJoinTest, BasicEquality)
+{
+  this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {1});
+}
+
+TYPED_TEST(MixedLeftSemiJoinTest, BasicEqualityDuplicates)
+{
+  this->test({{0, 1, 2, 1}, {3, 4, 5, 6}, {10, 20, 30, 40}},
+             {{0, 1, 3, 1}, {5, 4, 5, 6}, {30, 40, 50, 40}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {1, 3});
+}
+
+TYPED_TEST(MixedLeftSemiJoinTest, BasicNullEqualityEqual)
+{
+  this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},
+                   {{{0, 1, 3}, {1, 1, 0}}, {{5, 4, 5}, {1, 1, 1}}, {{30, 40, 30}, {1, 1, 1}}},
+                   {0},
+                   {1, 2},
+                   left_zero_eq_right_zero,
+                   {1, 2},
+                   cudf::null_equality::EQUAL);
+};
+
+TYPED_TEST(MixedLeftSemiJoinTest, BasicNullEqualityUnequal)
+{
+  this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},
+                   {{{0, 1, 3}, {1, 1, 0}}, {{5, 4, 5}, {1, 1, 1}}, {{30, 40, 30}, {1, 1, 1}}},
+                   {0},
+                   {1, 2},
+                   left_zero_eq_right_zero,
+                   {1},
+                   cudf::null_equality::UNEQUAL);
+};
+
+TYPED_TEST(MixedLeftSemiJoinTest, AsymmetricEquality)
+{
+  this->test({{0, 2, 1}, {3, 5, 4}, {10, 30, 20}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {2});
+}
+
+TYPED_TEST(MixedLeftSemiJoinTest, AsymmetricLeftLargerEquality)
+{
+  this->test({{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {2});
+}
+
+/**
+ * Tests of mixed left semi joins.
+ */
+template <typename T>
+struct MixedLeftAntiJoinTest : public MixedJoinSingleReturnTest<T> {
+  SingleJoinReturn join(cudf::table_view left_equality,
+                        cudf::table_view right_equality,
+                        cudf::table_view left_conditional,
+                        cudf::table_view right_conditional,
+                        cudf::ast::operation predicate,
+                        cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  {
+    return cudf::mixed_left_anti_join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+  }
+
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate,
+    cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
+  {
+    return cudf::mixed_left_anti_join_size(
+      left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
+  }
+};
+
+TYPED_TEST_SUITE(MixedLeftAntiJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(MixedLeftAntiJoinTest, BasicEquality)
+{
+  this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 2});
+}
+
+TYPED_TEST(MixedLeftAntiJoinTest, BasicNullEqualityEqual)
+{
+  this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},
+                   {{{0, 1, 3}, {1, 1, 0}}, {{5, 4, 5}, {1, 1, 1}}, {{30, 40, 30}, {1, 1, 1}}},
+                   {0},
+                   {1, 2},
+                   left_zero_eq_right_zero,
+                   {0},
+                   cudf::null_equality::EQUAL);
+};
+
+TYPED_TEST(MixedLeftAntiJoinTest, BasicNullEqualityUnequal)
+{
+  this->test_nulls({{{0, 1, 2}, {1, 1, 0}}, {{3, 4, 5}, {1, 1, 1}}, {{10, 20, 30}, {1, 1, 1}}},
+                   {{{0, 1, 3}, {1, 1, 0}}, {{5, 4, 5}, {1, 1, 1}}, {{30, 40, 30}, {1, 1, 1}}},
+                   {0},
+                   {1, 2},
+                   left_zero_eq_right_zero,
+                   {0, 2},
+                   cudf::null_equality::UNEQUAL);
+};
+
+TYPED_TEST(MixedLeftAntiJoinTest, AsymmetricEquality)
+{
+  this->test({{0, 2, 1}, {3, 5, 4}, {10, 30, 20}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 1});
+}
+
+TYPED_TEST(MixedLeftAntiJoinTest, AsymmetricLeftLargerEquality)
+{
+  this->test({{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 1, 3});
+}
