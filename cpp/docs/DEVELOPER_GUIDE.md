@@ -747,13 +747,18 @@ void isolated_helper_function(...);
 
 # Deprecating and Removing Code
 
-If changes to libcudf involve breaking existing APIs, libcudf follows the following policy:
-- Code should be deprecated for one release prior to removal.
-- Deprecations should be indicated using the [deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute.
-- Deprecated APIs should be documented using Doxygen's [deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) command.
+To minimize disruption for users, any breaking changes must be signaled by deprecation warnings for one release prior to the change.
+This includes wholesale removals of functions/methods/classes *and* changes to existing function signatures.
+Deprecations should be indicated using the [deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute.
+Deprecated APIs should be documented using Doxygen's [deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) command.
+
+When an API is deprecated, if a replacement exists the replacement should be mentioned in both the deprecation message and the deprecation documentation.
+Changes to function parameters should be accompanied by the introduction of suitable overloads to avoid API breaks for one release cycle.
+Where possible, deprecated APIs should call new APIs, but duplication in deprecated code is acceptable at the discretion of PR reviewers if avoiding it imposes an undue burden on developers.
 
 PRs containing deprecations should be labeled as "non-breaking".
 The subsequent pull request in which deprecated code is moved should be labeled as "breaking".
+The PRs introducing deprecations should also be labeled "deprecation" to facilitate discovery and removal in the subsequent release.
 
 
 # Error Handling
