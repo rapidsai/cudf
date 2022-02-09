@@ -155,8 +155,9 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
-  reduction/reduce.cpp reduction/scan.cpp reduction/segment_reduce.cpp
+  reduction/reduce.cpp reduction/scan.cpp
 )
+ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
