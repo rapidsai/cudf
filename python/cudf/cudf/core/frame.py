@@ -4830,12 +4830,9 @@ class Frame:
         """
         result_data = {}
         for name, col in self._data.items():
-            if (
-                isinstance(col, cudf.core.column.NumericalColumn)
-                and col.nan_count
-            ):
+            try:
                 result_data[name] = col.nans_to_nulls()
-            else:
+            except AttributeError:
                 result_data[name] = col.copy()
         return self._from_data(result_data, self._index,)
 
