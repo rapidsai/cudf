@@ -552,7 +552,7 @@ def _extract_meta(x):
     elif isinstance(x, list):
         return [_extract_meta(_x) for _x in x]
     elif isinstance(x, tuple):
-        return tuple([_extract_meta(_x) for _x in x])
+        return tuple(_extract_meta(_x) for _x in x)
     elif isinstance(x, dict):
         return {k: _extract_meta(v) for k, v in x.items()}
     return x
@@ -650,9 +650,7 @@ def reduction(
     if not isinstance(args, (tuple, list)):
         args = [args]
 
-    npartitions = set(
-        arg.npartitions for arg in args if isinstance(arg, _Frame)
-    )
+    npartitions = {arg.npartitions for arg in args if isinstance(arg, _Frame)}
     if len(npartitions) > 1:
         raise ValueError("All arguments must have same number of partitions")
     npartitions = npartitions.pop()
@@ -675,7 +673,7 @@ def reduction(
     )
 
     # Chunk
-    a = "{0}-chunk-{1}".format(token or funcname(chunk), token_key)
+    a = f"{token or funcname(chunk)}-chunk-{token_key}"
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
         dsk = {
             (a, 0, i): (chunk, key)
@@ -693,7 +691,7 @@ def reduction(
         }
 
     # Combine
-    b = "{0}-combine-{1}".format(token or funcname(combine), token_key)
+    b = f"{token or funcname(combine)}-combine-{token_key}"
     k = npartitions
     depth = 0
     while k > split_every:
@@ -709,7 +707,7 @@ def reduction(
         depth += 1
 
     # Aggregate
-    b = "{0}-agg-{1}".format(token or funcname(aggregate), token_key)
+    b = f"{token or funcname(aggregate)}-agg-{token_key}"
     conc = (list, [(a, depth, i) for i in range(k)])
     if aggregate_kwargs:
         dsk[(b, 0)] = (apply, aggregate, [conc], aggregate_kwargs)
