@@ -97,6 +97,51 @@ TEST_F(StringsFindallTests, FindallRecord)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
+TEST_F(StringsFindallTests, Multiline)
+{
+  cudf::test::strings_column_wrapper input({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto view = cudf::strings_column_view(input);
+
+  {
+    auto results = cudf::strings::findall(view, "(^abc$)", cudf::strings::regex_flags::MULTILINE);
+    auto col0 =
+      cudf::test::strings_column_wrapper({"abc", "abc", "abc", "", "abc"}, {1, 1, 1, 0, 1});
+    auto col1     = cudf::test::strings_column_wrapper({"abc", "", "", "", ""}, {1, 0, 0, 0, 0});
+    auto expected = cudf::table_view({col0, col1});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected);
+  }
+  {
+    auto results =
+      cudf::strings::findall_record(view, "(^abc$)", cudf::strings::regex_flags::MULTILINE);
+    bool valids[] = {1, 1, 1, 0, 1};
+    using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+    LCW expected({LCW{"abc", "abc"}, LCW{"abc"}, LCW{"abc"}, LCW{}, LCW{"abc"}}, valids);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  }
+}
+
+TEST_F(StringsFindallTests, DotAll)
+{
+  cudf::test::strings_column_wrapper input({"abc\nfa\nef", "fff\nabbc\nfff", "abcdef", ""});
+  auto view = cudf::strings_column_view(input);
+
+  {
+    auto results = cudf::strings::findall(view, "(b.*f)", cudf::strings::regex_flags::DOTALL);
+    auto col0 =
+      cudf::test::strings_column_wrapper({"bc\nfa\nef", "bbc\nfff", "bcdef", ""}, {1, 1, 1, 0});
+    auto expected = cudf::table_view({col0});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected);
+  }
+  {
+    auto results =
+      cudf::strings::findall_record(view, "(b.*f)", cudf::strings::regex_flags::DOTALL);
+    bool valids[] = {1, 1, 1, 0};
+    using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+    LCW expected({LCW{"bc\nfa\nef"}, LCW{"bbc\nfff"}, LCW{"bcdef"}, LCW{}}, valids);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  }
+}
+
 TEST_F(StringsFindallTests, MediumRegex)
 {
   // This results in 15 regex instructions and falls in the 'medium' range.
