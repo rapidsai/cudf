@@ -530,7 +530,6 @@ class hash_join {
    * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -543,7 +542,6 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             null_equality compare_nulls            = null_equality::EQUAL,
              std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
              rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
@@ -554,7 +552,6 @@ class hash_join {
    * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -567,7 +564,6 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
-            null_equality compare_nulls            = null_equality::EQUAL,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
@@ -578,7 +574,6 @@ class hash_join {
    * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -591,7 +586,6 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
-            null_equality compare_nulls            = null_equality::EQUAL,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
@@ -601,39 +595,32 @@ class hash_join {
    * probe table.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
-    cudf::table_view const& probe,
-    null_equality compare_nulls  = null_equality::EQUAL,
-    rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a left join with the specified probe
    * table.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
-    cudf::table_view const& probe,
-    null_equality compare_nulls  = null_equality::EQUAL,
-    rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a full join with the specified probe
    * table.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
@@ -643,7 +630,6 @@ class hash_join {
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
-    null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
