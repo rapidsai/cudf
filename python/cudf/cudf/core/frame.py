@@ -4397,16 +4397,18 @@ class Frame:
         results = {}
         for name, col in self._data.items():
             if skipna:
-                result_col = self._data[name].nans_to_nulls()
+                result_col = col.nans_to_nulls()
             else:
-                result_col = self._data[name].copy()
-                if result_col.has_nulls(include_nan=True):
+                if col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
                     # incase of bools.
                     first_index = int(
-                        result_col.isnull().astype("int8").find_first_value(1)
+                        col.isnull().astype("int8").find_first_value(1)
                     )
+                    result_col = col.copy()
                     result_col[first_index:] = None
+                else:
+                    result_col = col.copy()
 
             if (
                 cast_to_int
@@ -4826,13 +4828,16 @@ class Frame:
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        return self._from_data(
-            {
-                name: col.copy().nans_to_nulls()
-                for name, col in self._data.items()
-            },
-            self._index,
-        )
+        result_data = {}
+        for name, col in self._data.items():
+            if (
+                isinstance(col, cudf.core.column.NumericalColumn)
+                and col.nan_count
+            ):
+                result_data[name] = col.nans_to_nulls()
+            else:
+                result_data[name] = col.copy()
+        return self._from_data(result_data, self._index,)
 
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
