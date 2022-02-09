@@ -4397,7 +4397,10 @@ class Frame:
         results = {}
         for name, col in self._data.items():
             if skipna:
-                result_col = col.nans_to_nulls()
+                try:
+                    result_col = col.nans_to_nulls()
+                except AttributeError:
+                    result_col = col
             else:
                 if col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work

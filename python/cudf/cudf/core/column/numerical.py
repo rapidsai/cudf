@@ -20,6 +20,7 @@ import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.stream_compaction import drop_nulls
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
 from cudf.api.types import is_integer_dtype, is_number
 from cudf.core.buffer import Buffer
@@ -316,6 +317,27 @@ class NumericalColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
+    def all(self, skipna: bool = True) -> bool:
+        # If all entries are null the result is True, including when the column
+        # is empty.
+        result_col = self.nans_to_nulls() if skipna else self
+
+        if result_col.null_count == result_col.size:
+            return True
+
+        return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
+
+    def any(self, skipna: bool = True) -> bool:
+        # Early exit for fast cases.
+        result_col = self.nans_to_nulls() if skipna else self
+
+        if not skipna and result_col.has_nulls():
+            return True
+        elif skipna and result_col.null_count == result_col.size:
+            return False
+
+        return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
+
     @property
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
@@ -324,6 +346,10 @@ class NumericalColumn(NumericalBaseColumn):
             nan_col = libcudf.unary.is_nan(self)
             self._nan_count = nan_col.sum()
         return self._nan_count
+
+    def dropna(self, drop_nan: bool = False) -> NumericalColumn:
+        col = self.nans_to_nulls() if drop_nan else self
+        return drop_nulls([col])[0]
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -351,9 +377,15 @@ class NumericalColumn(NumericalBaseColumn):
 
         if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        return super()._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
+
+        if skipna:
+            return super(
+                NumericalColumn, self.nans_to_nulls()
+            )._process_for_reduction(skipna=skipna, min_count=min_count)
+        else:
+            return super()._process_for_reduction(
+                skipna=skipna, min_count=min_count
+            )
 
     def find_and_replace(
         self,

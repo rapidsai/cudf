@@ -179,32 +179,24 @@ class ColumnBase(Column, Serializable, NotIterable):
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
         # is empty.
-        result_col = self.nans_to_nulls() if skipna else self
 
-        if result_col.null_count == result_col.size:
+        if self.null_count == self.size:
             return True
 
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
-
-        return result_col
+        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
-        result_col = self.nans_to_nulls() if skipna else self
-        if not skipna and result_col.has_nulls():
+
+        if not skipna and self.has_nulls():
             return True
-        elif skipna and result_col.null_count == result_col.size:
+        elif skipna and self.null_count == self.size:
             return False
 
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
-
-        return result_col
+        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
+        return drop_nulls([self])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -1164,8 +1156,8 @@ class ColumnBase(Column, Serializable, NotIterable):
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    def nans_to_nulls(self: T) -> T:
-        return self
+    # def nans_to_nulls(self: T) -> T:
+    #     return self
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
@@ -1173,14 +1165,13 @@ class ColumnBase(Column, Serializable, NotIterable):
         skipna = True if skipna is None else skipna
 
         if skipna:
-            result_col = self.nans_to_nulls()
-            if result_col.has_nulls():
-                result_col = result_col.dropna()
+            if self.has_nulls():
+                result_col = self.dropna()
         else:
             if self.has_nulls():
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-            result_col = self
+        result_col = self
 
         if min_count > 0:
             valid_count = len(result_col) - result_col.null_count
