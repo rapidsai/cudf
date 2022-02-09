@@ -5,6 +5,7 @@ from libcpp.string cimport string
 
 from cudf._lib.cpp.column.column cimport column
 
+
 cdef extern from "cudf/io/text/byte_range_info.hpp" \
         namespace "cudf::io::text" nogil:
     

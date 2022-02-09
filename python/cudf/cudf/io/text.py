@@ -24,5 +24,7 @@ def read_text(
     )
 
     return cudf.Series._from_data(
-        libtext.read_text(filepath_or_buffer, delimiter=delimiter, byte_range=byte_range)
+        libtext.read_text(
+            filepath_or_buffer, delimiter=delimiter, byte_range=byte_range
+        )
     )
