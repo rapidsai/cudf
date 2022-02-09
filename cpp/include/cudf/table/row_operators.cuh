@@ -99,7 +99,8 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * to derive the order of the elements with respect to `lhs`. Returns specified weak_ordering if
  * either value is `nan`, enabling IEEE 754 compliant comparison.
  *
- * This specialization allows `nan` values to be evaluated as not equal to any other value, while also not evaluating as greater or less than
+ * This specialization allows `nan` values to be evaluated as not equal to any other value, while
+ * also not evaluating as greater or less than
  *
  * @param lhs first element
  * @param rhs second element
@@ -346,7 +347,7 @@ class element_relational_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-  * @param nan_result specifies what value should be returned if either element is `nan`
+   * @param nan_result specifies what value should be returned if either element is `nan`
    * @return Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    */
@@ -373,7 +374,7 @@ class element_relational_comparator {
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index,
                                       size_type rhs_element_index,
-                                      weak_ordering nan_result=weak_ordering::LESS)
+                                      weak_ordering nan_result = weak_ordering::LESS)
   {
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
     return weak_ordering::LESS;
