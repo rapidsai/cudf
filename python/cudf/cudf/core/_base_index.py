@@ -1,9 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import pickle
-import warnings
 from typing import Any, Set
 
 import pandas as pd
@@ -568,17 +567,6 @@ class BaseIndex(Serializable):
         """{docstring}"""
 
         return cudf.io.dlpack.to_dlpack(self)
-
-    @property
-    def gpu_values(self):
-        """
-        View the data as a numba device array object
-        """
-        warnings.warn(
-            "The gpu_values property is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._values.data_array_view
 
     def append(self, other):
         """
@@ -1254,10 +1242,6 @@ class BaseIndex(Serializable):
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
 
-    # TODO: This method is deprecated and can be removed.
-    def to_array(self, fillna=None):
-        return self._values.to_array(fillna=fillna)
-
     def to_series(self, index=None, name=None):
         """
         Create a Series with both index and values equal to the index keys.
@@ -1364,28 +1348,6 @@ class BaseIndex(Serializable):
         """
 
         return self._values.isin(values).values
-
-    def memory_usage(self, deep=False):
-        """
-        Memory usage of the values.
-
-        Parameters
-        ----------
-            deep : bool
-                Introspect the data deeply,
-                interrogate `object` dtypes for system-level
-                memory consumption.
-
-        Returns
-        -------
-            bytes used
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        return self._values.memory_usage()
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
@@ -1536,14 +1498,6 @@ class BaseIndex(Serializable):
                 "`allow_fill` and `fill_value` are unsupported."
             )
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _apply_boolean_mask(self, boolean_mask):

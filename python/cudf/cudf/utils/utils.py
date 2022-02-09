@@ -204,12 +204,13 @@ class GetAttrGetItemMixin:
             )
 
 
-def raise_iteration_error(obj):
-    raise TypeError(
-        f"{obj.__class__.__name__} object is not iterable. "
-        f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-        f"if you wish to iterate over the values."
-    )
+class NotIterable:
+    def __iter__(self):
+        raise TypeError(
+            f"{self.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        )
 
 
 def pa_mask_buffer_to_mask(mask_buf, size):
@@ -242,7 +243,6 @@ def _fillna_natwise(col):
     return column.build_column(
         data=result.base_data,
         dtype=result.dtype,
-        mask=col.base_mask,
         size=result.size,
         offset=result.offset,
         children=result.base_children,
@@ -361,7 +361,10 @@ def get_appropriate_dispatched_func(
             cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
             if cupy_compatible_args:
                 cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                return _cast_to_appropriate_cudf_type(cupy_output, index)
+                if isinstance(cupy_output, cp.ndarray):
+                    return _cast_to_appropriate_cudf_type(cupy_output, index)
+                else:
+                    return cupy_output
 
     return NotImplemented
 

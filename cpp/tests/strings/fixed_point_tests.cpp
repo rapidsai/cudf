@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,6 +109,22 @@ TEST_F(StringsConvertTest, ToFixedPointDecimal128)
   auto const max      = cuda::std::numeric_limits<__int128_t>::max();
   auto const expected = fp_wrapper{{12, -8, 5, 0, 0, 0, 0, 0, 1701411834604692317, max}, scale};
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
+TEST_F(StringsConvertTest, ToFixedPointLargeScale)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const strings = cudf::test::strings_column_wrapper({"0.05", "0.06", "0.50", "5.01"});
+
+  auto const scale   = scale_type{-25};
+  auto const type    = cudf::data_type{cudf::type_to_id<decimal128>(), scale};
+  auto const results = cudf::strings::to_fixed_point(cudf::strings_column_view(strings), type);
+
+  auto const expected = fp_wrapper{{5, 6, 50, 501}, scale_type{-2}};
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 

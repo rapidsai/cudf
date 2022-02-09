@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division
+from __future__ import annotations
 
 import functools
 import inspect
@@ -17,9 +17,9 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
+from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
@@ -63,6 +63,7 @@ from cudf.core.indexed_frame import (
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
+from cudf.core.udf.row_function import _get_row_kernel
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -268,7 +269,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
-                    df.index = self._frame.index.take(row_selection)
+                    df.index = self._frame.index._apply_boolean_mask(
+                        row_selection
+                    )
                 else:
                     df.index = as_index(row_selection)
         # Step 4: Downcast
@@ -346,7 +349,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = DataFrame(self._frame._get_columns_by_index(arg[1]))
+        columns_df = self._frame._get_columns_by_index(arg[1])
 
         columns_df._index = self._frame._index
 
@@ -396,7 +399,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        columns = DataFrame(self._frame._get_columns_by_index(key[1]))
+        columns = self._frame._get_columns_by_index(key[1])
 
         for col in columns:
             self._frame[col].iloc[key[0]] = value
@@ -565,6 +568,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         for k in columns
                     }
                 )
+        elif isinstance(data, ColumnAccessor):
+            raise TypeError(
+                "Use cudf.Series._from_data for constructing a Series from "
+                "ColumnAccessor"
+            )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
 
@@ -1240,66 +1248,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 return result
 
     def memory_usage(self, index=True, deep=False):
-        """
-        Return the memory usage of each column in bytes.
-        The memory usage can optionally include the contribution of
-        the index and elements of `object` dtype.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the DataFrame's
-            index in returned Series. If ``index=True``, the memory usage of
-            the index is the first item in the output.
-        deep : bool, default False
-            If True, introspect the data deeply by interrogating
-            `object` dtypes for system-level memory consumption, and include
-            it in the returned values.
-
-        Returns
-        -------
-        Series
-            A Series whose index is the original column names and whose values
-            is the memory usage of each column in bytes.
-
-        Examples
-        --------
-        >>> dtypes = ['int64', 'float64', 'object', 'bool']
-        >>> data = dict([(t, np.ones(shape=5000).astype(t))
-        ...              for t in dtypes])
-        >>> df = cudf.DataFrame(data)
-        >>> df.head()
-           int64  float64  object  bool
-        0      1      1.0     1.0  True
-        1      1      1.0     1.0  True
-        2      1      1.0     1.0  True
-        3      1      1.0     1.0  True
-        4      1      1.0     1.0  True
-        >>> df.memory_usage(index=False)
-        int64      40000
-        float64    40000
-        object     40000
-        bool        5000
-        dtype: int64
-
-        Use a Categorical for efficient storage of an object-dtype column with
-        many repeated values.
-
-        >>> df['object'].astype('category').memory_usage(deep=True)
-        5008
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        ind = list(self.columns)
-        sizes = [col.memory_usage() for col in self._data.columns]
-        if index:
-            ind.append("Index")
-            ind = cudf.Index(ind, dtype="str")
-            sizes.append(self.index.memory_usage())
-        return Series(sizes, index=ind)
+        return Series(
+            {str(k): v for k, v in super().memory_usage(index, deep).items()}
+        )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
@@ -2545,11 +2496,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             inplace=inplace,
         )
 
-    def take(self, indices, axis=0):
-        out = super().take(indices)
-        out.columns = self.columns
-        return out
-
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value, nan_as_null=None):
         """Add a column to DataFrame at the index specified by loc.
@@ -2601,6 +2547,80 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         value = column.as_column(value, nan_as_null=nan_as_null)
 
         self._data.insert(name, value, loc=loc)
+
+    def diff(self, periods=1, axis=0):
+        """
+        First discrete difference of element.
+
+        Calculates the difference of a DataFrame element compared with another
+        element in the DataFrame (default is element in previous row).
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        DataFrame
+            First differences of the DataFrame.
+
+        Notes
+        -----
+        Diff currently only supports numeric dtype columns.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+        ...                       'b': [1, 1, 2, 3, 5, 8],
+        ...                       'c': [1, 4, 9, 16, 25, 36]})
+        >>> gdf
+           a  b   c
+        0  1  1   1
+        1  2  1   4
+        2  3  2   9
+        3  4  3  16
+        4  5  5  25
+        5  6  8  36
+        >>> gdf.diff(periods=2)
+              a     b     c
+        0  <NA>  <NA>  <NA>
+        1  <NA>  <NA>  <NA>
+        2     2     1     8
+        3     2     2    12
+        4     2     3    16
+        5     2     5    20
+
+        """
+        if not is_integer(periods):
+            if not (is_float(periods) and periods.is_integer()):
+                raise ValueError("periods must be an integer")
+            periods = int(periods)
+
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        if not all(is_numeric_dtype(i) for i in self.dtypes):
+            raise NotImplementedError(
+                "DataFrame.diff only supports numeric dtypes"
+            )
+
+        if abs(periods) > len(self):
+            df = cudf.DataFrame._from_data(
+                {
+                    name: column_empty(len(self), dtype=dtype, masked=True)
+                    for name, dtype in zip(self.columns, self.dtypes)
+                }
+            )
+            return df
+
+        return self - self.shift(periods=periods)
 
     def drop(
         self,
@@ -3020,124 +3040,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             col_name + suffix for col_name in list(self._data.keys())
         ]
         return out
-
-    def as_gpu_matrix(self, columns=None, order="F"):
-        warnings.warn(
-            "The as_gpu_matrix method will be removed in a future cuDF "
-            "release. Consider using `to_cupy` instead.",
-            FutureWarning,
-        )
-        if columns is None:
-            columns = self._data.names
-
-        cols = [self._data[k] for k in columns]
-        ncol = len(cols)
-        nrow = len(self)
-        if ncol < 1:
-            # This is the case for empty dataframe - construct empty cupy array
-            matrix = cupy.empty(
-                shape=(0, 0), dtype=cudf.dtype("float64"), order=order
-            )
-            return cuda.as_cuda_array(matrix)
-
-        if any(
-            (is_categorical_dtype(c) or np.issubdtype(c, cudf.dtype("object")))
-            for c in cols
-        ):
-            raise TypeError("non-numeric data not yet supported")
-
-        dtype = find_common_type([col.dtype for col in cols])
-        for k, c in self._data.items():
-            if c.has_nulls():
-                raise ValueError(
-                    f"column '{k}' has null values. "
-                    f"hint: use .fillna() to replace null values"
-                )
-        cupy_dtype = dtype
-        if np.issubdtype(cupy_dtype, np.datetime64):
-            cupy_dtype = cudf.dtype("int64")
-
-        if order not in ("F", "C"):
-            raise ValueError(
-                "order parameter should be 'C' for row major or 'F' for"
-                "column major GPU matrix"
-            )
-
-        matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
-        for colidx, inpcol in enumerate(cols):
-            dense = inpcol.astype(cupy_dtype)
-            matrix[:, colidx] = cupy.asarray(dense)
-        return cuda.as_cuda_array(matrix).view(dtype)
-
-    def as_matrix(self, columns=None):
-        warnings.warn(
-            "The as_matrix method will be removed in a future cuDF "
-            "release. Consider using `to_numpy` instead.",
-            FutureWarning,
-        )
-        return self.as_gpu_matrix(columns=columns).copy_to_host()
-
-    def label_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
-    ):
-        """Encode labels in a column with label encoding.
-
-        Parameters
-        ----------
-        column : str
-            the source column with binary encoding for the data.
-        prefix : str
-            the new column name prefix.
-        cats : sequence of ints
-            the sequence of categories as integers.
-        prefix_sep : str
-            the separator between the prefix and the category.
-        dtype :
-            the dtype for the outputs; see Series.label_encoding
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        -------
-        A new DataFrame with a new column appended for the coded values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a':[1, 2, 3], 'b':[10, 10, 20]})
-        >>> df
-           a   b
-        0  1  10
-        1  2  10
-        2  3  20
-        >>> df.label_encoding(column="b", prefix="b_col", cats=[10, 20])
-           a   b  b_col_labels
-        0  1  10             0
-        1  2  10             0
-        2  3  20             1
-        """
-
-        warnings.warn(
-            "DataFrame.label_encoding is deprecated and will be removed in "
-            "the future. Consider using cuML's LabelEncoder instead.",
-            FutureWarning,
-        )
-
-        return self._label_encoding(
-            column, prefix, cats, prefix_sep, dtype, na_sentinel
-        )
-
-    def _label_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
-    ):
-        # Private implementation of deprecated public label_encoding method
-        newname = prefix_sep.join([prefix, "labels"])
-        newcol = self[column]._label_encoding(
-            cats=cats, dtype=dtype, na_sentinel=na_sentinel
-        )
-        outdf = self.copy()
-        outdf.insert(len(outdf._data), newname, newcol)
-        return outdf
 
     def agg(self, aggs, axis=None):
         """
@@ -3926,10 +3828,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("The `raw` kwarg is not yet supported.")
         if result_type is not None:
             raise ValueError("The `result_type` kwarg is not yet supported.")
-        if kwargs:
-            raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        return self._apply(func, *args)
+        return self._apply(func, _get_row_kernel, *args, **kwargs)
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -4347,7 +4247,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 dtype = self.dtypes.iloc[i]
                 col = pprint_thing(col)
 
-                line_no = _put_str(" {num}".format(num=i), space_num)
+                line_no = _put_str(f" {i}", space_num)
                 count = ""
                 if show_counts:
                     count = counts[i]
@@ -4705,10 +4605,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a: int64
         b: int64
         index: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
+        index: [[1,2,3]]
         >>> df.to_arrow(preserve_index=False)
         pyarrow.Table
         a: int64
         b: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
         """
 
         data = self.copy(deep=False)
@@ -5536,7 +5443,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                     .fillna(np.nan)
                 )
-        arr = cupy.asarray(prepared.as_gpu_matrix())
+        arr = prepared.to_cupy()
 
         if skipna is not False and method in _cupy_nan_methods_map:
             method = _cupy_nan_methods_map[method]
@@ -5694,9 +5601,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if issubclass(dtype.type, e_dtype):
                         exclude_subtypes.add(dtype.type)
 
-        include_all = set(
-            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
-        )
+        include_all = {cudf_dtype_from_pydata_dtype(d) for d in self.dtypes}
 
         if include:
             inclusion = include_all & include_subtypes
@@ -6145,6 +6050,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
 
+    def nunique(self, axis=0, dropna=True):
+        """
+        Count number of distinct elements in specified axis.
+        Return Series with number of distinct elements. Can ignore NaN values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            The axis to use. 0 or 'index' for row-wise, 1 or 'columns' for
+            column-wise.
+        dropna : bool, default True
+            Don't include NaN in the counts.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A': [4, 5, 6], 'B': [4, 1, 1]})
+        >>> df.nunique()
+        A    3
+        B    2
+        dtype: int64
+        """
+        if axis != 0:
+            raise NotImplementedError("axis parameter is not supported yet.")
+
+        return cudf.Series(super().nunique(method="sort", dropna=dropna))
+
 
 def from_dataframe(df, allow_copy=False):
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
@@ -6416,8 +6352,8 @@ def _align_indices(lhs, rhs):
         lhs_out = DataFrame(index=df.index)
         rhs_out = DataFrame(index=df.index)
         common = set(lhs.columns) & set(rhs.columns)
-        common_x = set(["{}_x".format(x) for x in common])
-        common_y = set(["{}_y".format(x) for x in common])
+        common_x = {f"{x}_x" for x in common}
+        common_y = {f"{x}_y" for x in common}
         for col in df.columns:
             if col in common_x:
                 lhs_out[col[:-2]] = df[col]

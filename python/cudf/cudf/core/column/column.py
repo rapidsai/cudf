@@ -77,12 +77,12 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import NotIterable, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
 
-class ColumnBase(Column, Serializable):
+class ColumnBase(Column, Serializable, NotIterable):
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
@@ -129,9 +129,6 @@ class ColumnBase(Column, Serializable):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
     def values_host(self) -> "np.ndarray":
@@ -313,51 +310,6 @@ class ColumnBase(Column, Serializable):
         if self.nullable:
             n += bitmask_allocation_size_bytes(self.size)
         return n
-
-    def _default_na_value(self) -> Any:
-        raise NotImplementedError()
-
-    # TODO: This method is deprecated and can be removed when the associated
-    # Frame methods are removed.
-    def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        if fillna:
-            return self.fillna(self._default_na_value()).data_array_view
-        else:
-            return self.dropna(drop_nan=False).data_array_view
-
-    # TODO: This method is deprecated and can be removed when the associated
-    # Frame methods are removed.
-    def to_array(self, fillna=None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-
-        return self.to_gpu_array(fillna=fillna).copy_to_host()
 
     def _fill(
         self,
@@ -1031,7 +983,7 @@ class ColumnBase(Column, Serializable):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed. To explicitly construct a host array, consider using "
-            ".to_array()"
+            ".to_numpy()"
         )
 
     @property
@@ -1315,6 +1267,12 @@ def column_empty(
         children = tuple(
             column_empty(row_count, field_dtype)
             for field_dtype in dtype.fields.values()
+        )
+    elif is_list_dtype(dtype):
+        data = None
+        children = (
+            full(row_count + 1, 0, dtype="int32"),
+            column_empty(row_count, dtype=dtype.element_type),
         )
     elif is_categorical_dtype(dtype):
         data = None
