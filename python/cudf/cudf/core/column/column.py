@@ -1156,9 +1156,6 @@ class ColumnBase(Column, Serializable, NotIterable):
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    # def nans_to_nulls(self: T) -> T:
-    #     return self
-
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
     ) -> Union[ColumnBase, ScalarLike]:
