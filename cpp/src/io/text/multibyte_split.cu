@@ -191,7 +191,8 @@ __global__ void multibyte_split_kernel(
   if (abs_output_delimiter_offsets.size() > 0) {
     for (int32_t i = 0; i < ITEMS_PER_THREAD and i < thread_input_size; i++) {
       if (trie.is_match(thread_states[i])) {
-        auto const match_end = static_cast<int64_t>(base_tile_idx) * ITEMS_PER_TILE + thread_input_offset + i + 1;
+        auto const match_end =
+          static_cast<int64_t>(base_tile_idx) * ITEMS_PER_TILE + thread_input_offset + i + 1;
         abs_output_delimiter_offsets[thread_offsets[i]] = match_end;
       }
     }
@@ -352,7 +353,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // allocate results
   auto num_tiles =
     cudf::util::div_rounding_up_safe(bytes_total, static_cast<int64_t>(ITEMS_PER_TILE));
-  auto num_results    = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
+  auto num_results = tile_offsets.get_inclusive_prefix(num_tiles - 1, stream);
 
   auto string_offsets = rmm::device_uvector<int64_t>(num_results + 2, stream);
 
