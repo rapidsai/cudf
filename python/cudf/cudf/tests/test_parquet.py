@@ -1105,7 +1105,7 @@ def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("skip", range(0, 10))
+@pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 10
     src = pd.DataFrame(
@@ -1124,7 +1124,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 10))
+@pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_num_rows(skip, tmpdir):
     num_rows = 20
     src = pd.DataFrame(

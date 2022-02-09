@@ -216,14 +216,12 @@ def test_series_compare(cmpop, obj_class, dtype):
 
 
 def _series_compare_nulls_typegen():
-    tests = []
-
-    tests += list(combinations_with_replacement(DATETIME_TYPES, 2))
-    tests += list(combinations_with_replacement(TIMEDELTA_TYPES, 2))
-    tests += list(combinations_with_replacement(NUMERIC_TYPES, 2))
-    tests += list(combinations_with_replacement(STRING_TYPES, 2))
-
-    return tests
+    return [
+        *combinations_with_replacement(DATETIME_TYPES, 2),
+        *combinations_with_replacement(TIMEDELTA_TYPES, 2),
+        *combinations_with_replacement(NUMERIC_TYPES, 2),
+        *combinations_with_replacement(STRING_TYPES, 2),
+    ]
 
 
 @pytest.mark.parametrize("cmpop", _cmpops)

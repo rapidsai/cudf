@@ -14,7 +14,6 @@ from cudf.testing import _utils as utils
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 repr_categories = [
-    "bool",
     "uint16",
     "int64",
     "float64",
@@ -102,15 +101,12 @@ def test_full_dataframe_20(dtype, size, nrows, ncols):
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-
-    assert pdf.__repr__() == gdf.__repr__()
-    assert pdf._repr_html_() == gdf._repr_html_()
-    assert pdf._repr_latex_() == gdf._repr_latex_()
-
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
+    with pd.option_context(
+        "display.max_rows", int(nrows), "display.max_columns", int(ncols)
+    ):
+        assert repr(pdf) == repr(gdf)
+        assert pdf._repr_html_() == gdf._repr_html_()
+        assert pdf._repr_latex_() == gdf._repr_latex_()
 
 
 @given(
