@@ -361,7 +361,10 @@ def get_appropriate_dispatched_func(
             cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
             if cupy_compatible_args:
                 cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                return _cast_to_appropriate_cudf_type(cupy_output, index)
+                if isinstance(cupy_output, cp.ndarray):
+                    return _cast_to_appropriate_cudf_type(cupy_output, index)
+                else:
+                    return cupy_output
 
     return NotImplemented
 
