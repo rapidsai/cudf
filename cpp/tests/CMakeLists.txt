@@ -300,6 +300,8 @@ ConfigureTest(
   stream_compaction/drop_duplicates_tests.cpp
 )
 
+ConfigureTest(LIST_DD_TEST stream_compaction/list_drop_duplicates_tests.cpp)
+
 # ##################################################################################################
 # * rolling tests ---------------------------------------------------------------------------------
 ConfigureTest(

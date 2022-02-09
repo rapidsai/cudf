@@ -287,5 +287,142 @@ class row_equality_comparator {
   null_equality nulls_are_equal;
 };
 
+/**
+ * @brief Computes the hash value of an element in the given column.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ */
+template <template <typename> class hash_function, typename Nullate>
+class element_hasher {
+ public:
+  template <typename T,
+            typename hash_combiner,
+            CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view col,
+                                        size_type row_index,
+                                        hash_combiner const& hash_combine) const
+  {
+    if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
+    return hash_function<T>{}(col.element<T>(row_index));
+  }
+
+  template <typename T,
+            typename hash_combiner,
+            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
+                           not std::is_same_v<T, cudf::list_view>)>
+  __device__ hash_value_type operator()(column_device_view col,
+                                        size_type row_index,
+                                        hash_combiner const& hash_combine) const
+  {
+    cudf_assert(false && "Unsupported type in hash.");
+    return {};
+  }
+
+  template <typename T,
+            typename hash_combiner,
+            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
+                           std::is_same_v<T, cudf::list_view>)>
+  __device__ hash_value_type operator()(column_device_view col,
+                                        size_type row_index,
+                                        hash_combiner const& hash_combine) const
+  {
+    auto hash                   = hash_value_type{0};
+    column_device_view curr_col = col;
+    int start_off               = row_index;
+    int end_off                 = row_index + 1;
+    while (curr_col.type().id() == type_id::LIST) {
+      auto size = end_off - start_off;
+
+      auto offsets = curr_col.child(lists_column_view::offsets_column_index);
+      for (int i = 0; i < size; ++i) {
+        auto const child_size =
+          offsets.element<size_type>(start_off + i + 1) - offsets.element<size_type>(start_off + i);
+        hash = hash_combine(hash, hash_function<decltype(child_size)>{}(child_size));
+      }
+      curr_col  = curr_col.child(lists_column_view::child_column_index);
+      start_off = offsets.element<size_type>(start_off);
+      end_off   = offsets.element<size_type>(end_off);
+    }
+    auto size = end_off - start_off;
+    hash      = hash_combine(hash, hash_function<decltype(size)>{}(size));
+    for (int i = 0; i < size; ++i) {
+      hash = hash_combine(hash,
+                          type_dispatcher2(curr_col.type(),
+                                           element_hasher<hash_function, Nullate>{has_nulls},
+                                           curr_col,
+                                           start_off + i,
+                                           hash_combine));
+    }
+    // printf("hash %d\n", hash);
+    return hash;
+    // return hash_value_type{0};
+  }
+
+  Nullate has_nulls;
+};
+
+/**
+ * @brief Computes the hash value of a row in the given table.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ */
+template <template <typename> class hash_function, typename Nullate>
+class row_hasher {
+ public:
+  row_hasher() = delete;
+  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t)
+    : _table{t}, _has_nulls{has_nulls}
+  {
+  }
+  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
+    : _table{t}, _seed(seed), _has_nulls{has_nulls}
+  {
+  }
+
+  __device__ auto operator()(size_type row_index) const
+  {
+    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
+      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
+    };
+
+    // Hash the first column w/ the seed
+    auto const initial_hash = hash_combiner(
+      hash_value_type{0},
+      type_dispatcher<dispatch_storage_type>(_table.column(0).type(),
+                                             // TODO: revert back to using seed
+                                             element_hasher<hash_function, Nullate>{_has_nulls},
+                                             _table.column(0),
+                                             row_index,
+                                             hash_combiner));
+
+    // Hashes an element in a column
+    auto hasher = [=](size_type column_index) {
+      return cudf::type_dispatcher<dispatch_storage_type>(
+        _table.column(column_index).type(),
+        element_hasher<hash_function, Nullate>{_has_nulls},
+        _table.column(column_index),
+        row_index,
+        hash_combiner);
+    };
+
+    // Hash each element and combine all the hash values together
+    return thrust::transform_reduce(
+      thrust::seq,
+      // note that this starts at 1 and not 0 now since we already hashed the first column
+      thrust::make_counting_iterator(1),
+      thrust::make_counting_iterator(_table.num_columns()),
+      hasher,
+      initial_hash,
+      hash_combiner);
+  }
+
+ private:
+  table_device_view _table;
+  Nullate _has_nulls;
+  uint32_t _seed{DEFAULT_HASH_SEED};
+};
+
 }  // namespace experimental
 }  // namespace cudf

@@ -28,6 +28,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/table/row_operator_list.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -156,7 +157,8 @@ std::unique_ptr<table> unordered_drop_duplicates(table_view const& input,
                         stream.value()};
 
   compaction_hash hash_key{has_null, *table_ptr};
-  row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
+  cudf::experimental::row_equality_comparator row_equal(
+    has_null, *table_ptr, *table_ptr, nulls_equal);
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });

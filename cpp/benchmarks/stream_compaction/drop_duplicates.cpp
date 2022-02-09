@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/types.hpp>
@@ -114,3 +116,31 @@ NVBENCH_BENCH_TYPES(nvbench_unordered_drop_duplicates, NVBENCH_TYPE_AXES(data_ty
   .set_name("unordered_drop_duplicates")
   .set_type_axes_names({"Type"})
   .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
+
+template <typename Type>
+void nvbench_unordered_drop_duplicates_list(nvbench::state& state, nvbench::type_list<Type>)
+{
+  cudf::rmm_pool_raii pool_raii;
+
+  auto const size  = state.get_int64("ColumnSize");
+  auto const dtype = cudf::type_to_id<Type>();
+
+  data_profile table_data_profile;
+  table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 5);
+  table_data_profile.set_null_frequency(0);
+
+  auto const table = create_random_table(
+    {dtype}, 1, table_size_bytes{static_cast<size_t>(size)}, table_data_profile);
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+    auto result =
+      cudf::detail::unordered_drop_duplicates(*table, {0}, cudf::null_equality::EQUAL, stream_view);
+  });
+}
+
+NVBENCH_BENCH_TYPES(nvbench_unordered_drop_duplicates_list,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, cudf::list_view>))
+  .set_name("unordered_drop_duplicates_list")
+  .set_type_axes_names({"Type"})
+  .add_int64_axis("ColumnSize", {10'000'000});
