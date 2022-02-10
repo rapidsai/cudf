@@ -390,6 +390,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
+  text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp

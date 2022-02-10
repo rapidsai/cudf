@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -203,6 +203,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
     - test -f $PREFIX/include/cudf/strings/detail/json.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/split.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
