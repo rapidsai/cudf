@@ -175,10 +175,3 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ctypedef enum sample_with_replacement:
         FALSE 'cudf::sample_with_replacement::FALSE',
         TRUE 'cudf::sample_with_replacement::TRUE',
-
-    cdef unique_ptr[table] sample (
-        table_view input,
-        size_type n,
-        sample_with_replacement replacement,
-        int64_t seed
-    ) except +

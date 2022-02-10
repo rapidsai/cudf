@@ -26,6 +26,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
+from cudf._typing import ColumnLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -6080,6 +6081,42 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis parameter is not supported yet.")
 
         return cudf.Series(super().nunique(method="sort", dropna=dropna))
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: ColumnLike,
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        if replace:
+            raise NotImplementedError(
+                "Sample is not supported for axis 1/'columns' "
+                "when 'replace=True'"
+            )
+
+        if n > 0 and self.shape[1] == 0:
+            raise ValueError(
+                "Cannot take a sample larger than 0 when axis is empty"
+            )
+
+        columns = np.asarray(self._data.names)
+        if not replace and n > columns.size:
+            raise ValueError(
+                "Cannot take a larger sample "
+                "than population when 'replace=False'"
+            )
+
+        sampled_column_labels = random_state.choice(
+            columns, size=n, replace=False, p=weights
+        )
+
+        result = self._get_columns_by_label(sampled_column_labels)
+        if ignore_index:
+            result.reset_index(drop=True)
+
+        return result
 
 
 def from_dataframe(df, allow_copy=False):

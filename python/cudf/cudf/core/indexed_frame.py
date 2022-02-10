@@ -6,7 +6,7 @@ from __future__ import annotations
 import operator
 import warnings
 from collections import Counter, abc
-from typing import Callable, Type, TypeVar
+from typing import Callable, Optional, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -30,6 +30,7 @@ from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.utils.dtypes import is_column_like
 from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
@@ -1695,6 +1696,175 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        ignore_index=False,
+    ):
+        """Return a random sample of items from an axis of object.
+
+        You can use random_state for reproducibility.
+
+        Notes
+        -----
+        When sampling from ``axis=0/'index'``, ``random_state`` can be either
+        a host random state (``numpy.random.RandomState``) or a device random
+        state (``cupy.random.RandomState``). If a host random state is used,
+        the rows sampled is guarenteed to match pandas result, but performance
+        may be decreased if the item count is too high. Optionally, user may
+        specify a device random state to achieve better performance at high
+        item counts.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of items from axis to return. Cannot be used with frac.
+            Default = 1 if frac = None.
+        frac : float, optional
+            Fraction of axis items to return. Cannot be used with n.
+        replace : bool, default False
+            Allow or disallow sampling of the same row more than once.
+            replace == True is not yet supported for axis = 1/"columns"
+        weights : str or ndarray-like, optional
+            Only supported for axis=1/"columns"
+        random_state : int, numpy/cupy RandomState, or None, default None
+            If None, default cupy random state is chosen.
+            If int, as seed for the default cupy random state.
+            If RandomState, rows-to-sample are generated from the RandomState.
+        axis : {0 or `index`, 1 or `columns`, None}, default None
+            Axis to sample. Accepts axis number or name.
+            Default is stat axis for given data type
+            (0 for Series and DataFrames). Series and Index doesn't
+            support axis=1.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        Series or DataFrame
+            A new object of same type as caller containing n items
+            randomly sampled from the caller object.
+
+        Examples
+        --------
+        >>> import cudf as cudf
+        >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
+        >>> df.sample(3)
+           a
+        1  2
+        3  4
+        0  1
+
+        >>> sr = cudf.Series([1, 2, 3, 4, 5])
+        >>> sr.sample(10, replace=True)
+        1    4
+        3    1
+        2    4
+        0    5
+        0    1
+        4    5
+        4    1
+        0    2
+        0    3
+        3    2
+        dtype: int64
+
+        >>> df = cudf.DataFrame(
+        ... {"a":[1, 2], "b":[2, 3], "c":[3, 4], "d":[4, 5]})
+        >>> df.sample(2, axis=1)
+           a  c
+        0  1  3
+        1  2  4
+        """
+        if frac is not None and frac > 1 and not replace:
+            raise ValueError(
+                "Replace has to be set to `True` "
+                "when upsampling the population `frac` > 1."
+            )
+        elif frac is not None and n is not None:
+            raise ValueError(
+                "Please enter a value for `frac` OR `n`, not both"
+            )
+
+        axis = self._get_axis_from_axis_arg(axis)
+
+        if frac is None and n is None:
+            n = 1
+        elif frac is not None:
+            if axis == 0:
+                n = int(round(self.shape[0] * frac))
+            else:
+                n = int(round(self.shape[1] * frac))
+
+        size = self.shape[axis]
+        weights = preprocess_weights(weights, size)
+        random_state = preprocess_random_state(random_state, axis)
+
+        if axis == 0:
+            return self._sample_axis_0(
+                n, weights, replace, random_state, ignore_index
+            )
+        else:
+            if isinstance(random_state, cp.random.RandomState):
+                raise ValueError(
+                    "Use a host random state when sampling from "
+                    "axis=1/columns."
+                )
+            return self._sample_axis_1(
+                n, weights, replace, random_state, ignore_index
+            )
+
+    def _sample_axis_0(
+        self,
+        n: int,
+        weights: None,
+        replace: bool,
+        random_state: Union[np.random.RandomState, cp.random.RandomState],
+        ignore_index: bool,
+    ):
+        if n > 0 and self.shape[0] == 0:
+            raise ValueError(
+                "Cannot take a sample larger than 0 when axis is empty"
+            )
+
+        if not replace and n > self.shape[0]:
+            raise ValueError(
+                "Cannot take a larger sample than population "
+                "when 'replace=False'"
+            )
+
+        if weights is not None:
+            raise NotImplementedError(
+                "weights is not yet supported for axis=0/index"
+            )
+
+        # Dynamic dispatch to host/device depending on state provided.
+        gather_map = cudf.core.column.as_column(
+            random_state.choice(len(self), size=n, replace=replace)
+        )
+
+        return self._gather(
+            gather_map, keep_index=not ignore_index, check_bounds=False
+        )
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: None,
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        raise NotImplementedError(
+            "Sampling from axis 1 is only implemented for Dataframe."
+        )
+
 
 def _check_duplicate_level_names(specified, level_names):
     """Raise if any of `specified` has duplicates in `level_names`."""
@@ -1711,3 +1881,45 @@ def _check_duplicate_level_names(specified, level_names):
             f"The names {duplicates_specified} occurs multiple times, use a"
             " level number"
         )
+
+
+def preprocess_weights(
+    weights: Optional[ColumnLike], size: int
+) -> Optional[ColumnLike]:
+    """If ``weights`` is not None, normalize weights."""
+    if weights is not None:
+        if is_column_like(weights):
+            weights = np.asarray(weights)
+        else:
+            raise NotImplementedError(
+                "Weights specified by string is unsupported yet."
+            )
+
+        if size != len(weights):
+            raise ValueError(
+                "Weights and axis to be sampled must be of same length"
+            )
+
+        total_weight = weights.sum()
+        if total_weight != 1:
+            if not isinstance(weights.dtype, float):
+                weights = weights.astype("float64")
+            weights = weights / total_weight
+    return weights
+
+
+def preprocess_random_state(
+    seed_or_random_state: Union[
+        None, np.number, np.random.RandomState, cp.random.RandomState
+    ],
+    axis: int,
+) -> Union[np.random.RandomState, cp.random.RandomState]:
+    """Construct random state from parameter ``seed_or_random_state``."""
+    if not isinstance(
+        seed_or_random_state, (np.random.RandomState, cp.random.RandomState)
+    ):
+        lib = cp if axis == 0 else np
+        seed_or_random_state = lib.random.RandomState(
+            seed=seed_or_random_state
+        )
+    return seed_or_random_state
