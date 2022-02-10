@@ -2359,10 +2359,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final Table stringSplit(String delimiter, int limit, boolean splitByRegex) {
-    assert delimiter != null : "delimiter is null";
-    assert delimiter.length() > 0 || !splitByRegex : "cannot split by empty regex";
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert limit != 0 && limit != 1;
+    assert delimiter != null : "delimiter is null";
+    assert delimiter.length() > 0 : "empty delimiter is not supported";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new Table(stringSplit(this.getNativeView(), delimiter, limit, splitByRegex));
   }
 
@@ -2411,32 +2411,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a list of columns by splitting each string using whitespace as the delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @param limit the maximum size of the array resulting from splitting the input string,
-   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
-   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @return New table of strings columns.
-   */
-  public final Table stringSplit(int limit) {
-    String emptyString = "";
-    return stringSplit(emptyString, limit, false);
-  }
-
-  /**
-   * Returns a list of columns by splitting each string using whitespace as the delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @return New table of strings columns.
-   */
-  public final Table stringSplit() {
-    return stringSplit(-1);
-  }
-
-  /**
    * Returns a column that is a list of strings. Each string list is made by splitting each input
    * string using the specified delimiter.
    * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
@@ -2449,10 +2423,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final ColumnVector stringSplitRecord(String delimiter, int limit, boolean splitByRegex) {
-    assert delimiter != null : "delimiter is null";
-    assert delimiter.length() > 0 || !splitByRegex : "cannot split by empty regex";
     assert type.equals(DType.STRING) : "column type must be String";
-    assert limit != 0 && limit != 1;
+    assert delimiter != null : "delimiter is null";
+    assert delimiter.length() > 0 : "empty delimiter is not supported";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
         stringSplitRecord(this.getNativeView(), delimiter, limit, splitByRegex));
   }
@@ -2489,24 +2463,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector stringSplitRecord(String delimiter) {
     return stringSplitRecord(delimiter, -1, false);
-  }
-
-  /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   * @param limit the maximum size of the array resulting from splitting the input string,
-   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
-   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   */
-  public final ColumnVector stringSplitRecord(int limit) {
-    String emptyString = "";
-    return stringSplitRecord(emptyString, limit, false);
-  }
-
-  /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   */
-  public final ColumnVector stringSplitRecord() {
-    return stringSplitRecord(-1);
   }
 
   /**

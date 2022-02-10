@@ -70,6 +70,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <nvtext/tokenize.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -567,6 +568,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
                                                                         jint limit,
                                                                         jboolean split_by_regex) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+
+  // Java's split API produces different behaviors than cudf when limit == 0 and limit == 1.
+  if (limit == 0 || limit == 1) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "limit == 0 and limit == 1 are not supported", 0);
+  }
+
   try {
     cudf::jni::auto_set_device(env);
 
@@ -575,14 +583,16 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 
     auto const delimiter_chars = env->GetStringUTFChars(delimiter, nullptr);
     auto const delimiter_size = env->GetStringUTFLength(delimiter);
+
+    // Java's split API produces different behaviors than cudf when splitting with empty delimiter.
+    if (delimiter_size == 0) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty delimiter is not supported",
+                    0);
+    }
+
+    auto const max_split = limit > 1 ? limit - 1 : limit;
     auto const str_delimiter = std::string(delimiter_chars, delimiter_size);
     env->ReleaseStringUTFChars(delimiter, delimiter_chars);
-
-    if (limit == 0 || limit == 1) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "limit == 0 and limit == 1 are not supported", 0);
-    }
-    auto const max_split = limit > 1 ? limit - 1 : limit;
 
     auto result =
         split_by_regex ?
@@ -599,6 +609,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
                                                                          jint limit,
                                                                          jboolean split_by_regex) {
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+
+  // Java's split API produces different behaviors than cudf when limit == 0 and limit == 1.
+  if (limit == 0 || limit == 1) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "limit == 0 and limit == 1 are not supported", 0);
+  }
+
   try {
     cudf::jni::auto_set_device(env);
 
@@ -607,14 +624,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
 
     auto const delimiter_chars = env->GetStringUTFChars(delimiter, nullptr);
     auto const delimiter_size = env->GetStringUTFLength(delimiter);
+
+    // Java's split API produces different behaviors than cudf when splitting with empty delimiter.
+    if (delimiter_size == 0) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty delimiter is not supported",
+                    0);
+    }
+
+    auto const max_split = limit > 1 ? limit - 1 : limit;
     auto const str_delimiter = std::string(delimiter_chars, delimiter_size);
     env->ReleaseStringUTFChars(delimiter, delimiter_chars);
-
-    if (limit == 0 || limit == 1) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                    "limit == 0 and limit == 1 are not supported", 0);
-    }
-    auto const max_split = limit > 1 ? limit - 1 : limit;
 
     auto result =
         split_by_regex ?

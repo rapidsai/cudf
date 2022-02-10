@@ -32,6 +32,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <nvtext/tokenize.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
