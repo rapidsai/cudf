@@ -45,7 +45,7 @@ if NO_EXTERNAL_ONLY_APIS in ("True", "1", "TRUE"):
     _cudf_root = os.path.join("python", "cudf", "cudf")
     _tests_root = os.path.join(_cudf_root, "tests")
 
-    def _external_only_api(func):
+    def _external_only_api(func, alternative=""):
         """Decorator to indicate that a function should not be used internally.
 
         cudf contains many APIs that exist for pandas compatibility but are
@@ -58,13 +58,25 @@ if NO_EXTERNAL_ONLY_APIS in ("True", "1", "TRUE"):
         it easy to identify and excise such usage.
         """
 
+        # If the first arg is a string then an alternative function to use in
+        # place of this API was provided, so we pass that to a subsequent call.
+        # It would be cleaner to implement this pattern by using a class
+        # decorator with a factory method, but there is no way to generically
+        # wrap docstrings on a class (we would need the docstring to be on the
+        # class itself, not instances, because that's what `help` looks at) and
+        # there is also no way to make mypy happy with that approach.
+        if isinstance(func, str):
+            return lambda actual_func: _external_only_api(actual_func, func)
+
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Check the immediately preceding frame to see if it's in cudf.
             frame, lineno = next(traceback.walk_stack(None))
             fn = frame.f_code.co_filename
             if _cudf_root in fn and _tests_root not in fn:
                 raise RuntimeError(
-                    f"External-only API called in {fn} at line {lineno}."
+                    f"External-only API called in {fn} at line {lineno}. "
+                    f"{alternative}"
                 )
             return func(*args, **kwargs)
 
@@ -73,8 +85,11 @@ if NO_EXTERNAL_ONLY_APIS in ("True", "1", "TRUE"):
 
 else:
 
-    def _external_only_api(func):
+    def _external_only_api(func, alternative=""):
         """The default implementation is a no-op."""
+        if isinstance(func, str):
+            return lambda actual_func: _external_only_api(actual_func, func)
+
         return func
 
 
