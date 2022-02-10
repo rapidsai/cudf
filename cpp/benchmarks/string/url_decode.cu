@@ -17,7 +17,6 @@
 #include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/templated_benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -86,8 +85,7 @@ auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, do
 class UrlDecode : public cudf::benchmark {
 };
 
-template <int esc_seq_pct>
-void BM_url_decode(benchmark::State& state)
+void BM_url_decode(benchmark::State& state, int esc_seq_pct)
 {
   cudf::size_type const num_rows      = state.range(0);
   cudf::size_type const chars_per_row = state.range(1);
@@ -104,12 +102,14 @@ void BM_url_decode(benchmark::State& state)
                           (chars_per_row + sizeof(cudf::size_type)));
 }
 
-#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                     \
-  TEMPLATED_BENCHMARK_F(UrlDecode, BM_url_decode, esc_seq_pct) \
-    ->Args({100000000, 10})                                    \
-    ->Args({10000000, 100})                                    \
-    ->Args({1000000, 1000})                                    \
-    ->Unit(benchmark::kMillisecond)                            \
+#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                           \
+  BENCHMARK_DEFINE_F(UrlDecode, BM_url_decode_##esc_seq_pct##_pct)   \
+  (::benchmark::State & st) { BM_url_decode(st, esc_seq_pct); }      \
+  BENCHMARK_REGISTER_F(UrlDecode, BM_url_decode_##esc_seq_pct##_pct) \
+    ->Args({100000000, 10})                                          \
+    ->Args({10000000, 100})                                          \
+    ->Args({1000000, 1000})                                          \
+    ->Unit(benchmark::kMillisecond)                                  \
     ->UseManualTime();
 
 URLD_BENCHMARK_DEFINE(10)
