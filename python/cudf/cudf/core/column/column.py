@@ -78,13 +78,13 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import NotIterable, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)  # WAR for "slice" is taken in ColumnBase
 
 
-class ColumnBase(Column, Serializable):
+class ColumnBase(Column, Serializable, NotIterable):
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
@@ -131,9 +131,6 @@ class ColumnBase(Column, Serializable):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
     def values_host(self) -> "np.ndarray":
@@ -1221,6 +1218,10 @@ class ColumnBase(Column, Serializable):
 
     def nans_to_nulls(self: T) -> T:
         return self
+
+    @property
+    def contains_na_entries(self) -> bool:
+        return self.null_count != 0
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0

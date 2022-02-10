@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -337,6 +337,26 @@ class Frame:
         """
         return self.size == 0
 
+    def memory_usage(self, deep=False):
+        """Return the memory usage of an object.
+
+        Parameters
+        ----------
+        deep : bool
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        The total bytes used.
+        """
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        return {name: col.memory_usage() for name, col in self._data.items()}
+
     def __len__(self):
         return self._num_rows
 
@@ -543,7 +563,7 @@ class Frame:
 
         """
         data = self._data.select_by_index(indices)
-        return self.__class__(
+        return self.__class__._from_data(
             data, columns=data.to_pandas_index(), index=self.index
         )
 
@@ -649,6 +669,12 @@ class Frame:
             matrix[:, i] = get_column_values_na(col)
         return matrix
 
+    # TODO: As of now, calling cupy.asarray is _much_ faster than calling
+    # to_cupy. We should investigate the reasons why and whether we can provide
+    # a more efficient method here by exploiting __cuda_array_interface__. In
+    # particular, we need to benchmark how much of the overhead is coming from
+    # (potentially unavoidable) local copies in to_cupy and how much comes from
+    # inefficiencies in the implementation.
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -1218,7 +1244,7 @@ class Frame:
                 value = value
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
-        elif isinstance(value, abc.Mapping):
+        else:
             value = {
                 key: value.reindex(self.index)
                 if isinstance(value, cudf.Series)
@@ -1226,18 +1252,26 @@ class Frame:
                 for key, value in value.items()
             }
 
-        copy_data = self._data.copy(deep=True)
-
-        for name in copy_data.keys():
+        filled_data = {}
+        for col_name, col in self._data.items():
+            if col_name in value and method is None:
+                replace_val = value[col_name]
+            else:
+                replace_val = None
             should_fill = (
-                name in value
-                and not libcudf.scalar._is_null_host_scalar(value[name])
+                col_name in value
+                and col.contains_na_entries
+                and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:
-                copy_data[name] = copy_data[name].fillna(value[name], method)
-        result = self._from_data(copy_data, self._index)
+                filled_data[col_name] = col.fillna(replace_val, method)
+            else:
+                filled_data[col_name] = col.copy(deep=True)
 
-        return self._mimic_inplace(result, inplace=inplace)
+        return self._mimic_inplace(
+            self._from_data(data=filled_data, index=self._index),
+            inplace=inplace,
+        )
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
@@ -1896,6 +1930,10 @@ class Frame:
         a: int64
         b: int64
         index: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
+        index: [[1,2,3]]
         """
         return pa.Table.from_pydict(
             {name: col.to_arrow() for name, col in self._data.items()}
@@ -3200,9 +3238,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.ceil and DataFrame.ceil are deprecated and will be "
+            "removed in the future",
+            FutureWarning,
         )
 
         return self._unaryop("ceil")
@@ -3239,9 +3277,9 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil and DataFrame.ceil are deprecated and will be \
-                removed in the future",
-            DeprecationWarning,
+            "Series.floor and DataFrame.floor are deprecated and will be "
+            "removed in the future.",
+            FutureWarning,
         )
 
         return self._unaryop("floor")
@@ -3602,6 +3640,8 @@ class Frame:
         >>> [1, 2, 3, 4] @ s
         10
         """
+        # TODO: This function does not currently support nulls.
+        # TODO: This function does not properly support misaligned indexes.
         lhs = self.values
         if isinstance(other, Frame):
             rhs = other.values
@@ -3612,6 +3652,16 @@ class Frame:
         ):
             rhs = cupy.asarray(other)
         else:
+            # TODO: This should raise an exception, not return NotImplemented,
+            # but __matmul__ relies on the current behavior. We should either
+            # move this implementation to __matmul__ and call it from here
+            # (checking for NotImplemented and raising NotImplementedError if
+            # that's what's returned), or __matmul__ should catch a
+            # NotImplementedError from here and return NotImplemented. The
+            # latter feels cleaner (putting the implementation in this method
+            # rather than in the operator) but will be slower in the (highly
+            # unlikely) case that we're multiplying a cudf object with another
+            # type of object that somehow supports this behavior.
             return NotImplemented
         if reflect:
             lhs, rhs = rhs, lhs
@@ -5983,12 +6033,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.eq(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.eq(right, fill_value=7)
-        a     b      c      d
+              a     b      c      d
         0  True  True   True  False
         1  True  True  False  False
         2  True  True  False  False
@@ -6058,12 +6108,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.ne(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.ne(right, fill_value=7)
-        a      b      c     d
+               a      b      c     d
         0  False  False  False  True
         1  False  False   True  True
         2  False  False   True  True
@@ -6133,12 +6183,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.lt(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.lt(right, fill_value=7)
-        a      b      c     d
+               a      b      c     d
         0  False  False  False  True
         1  False  False  False  True
         2  False  False  False  True
@@ -6208,12 +6258,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.le(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.le(right, fill_value=7)
-        a     b      c     d
+              a     b      c     d
         0  True  True   True  True
         1  True  True  False  True
         2  True  True  False  True
@@ -6283,12 +6333,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.gt(right)
-        a      b     c     d
+               a      b     c     d
         0  False  False  <NA>  <NA>
         1  False  False  <NA>  <NA>
         2  False  False  <NA>  <NA>
         >>> left.gt(right, fill_value=7)
-        a      b      c      d
+               a      b      c      d
         0  False  False  False  False
         1  False  False   True  False
         2  False  False   True  False
@@ -6358,12 +6408,12 @@ class Frame:
         ...     'd': [10, 12, 12]}
         ... )
         >>> left.ge(right)
-        a     b     c     d
+              a     b     c     d
         0  True  True  <NA>  <NA>
         1  True  True  <NA>  <NA>
         2  True  True  <NA>  <NA>
         >>> left.ge(right, fill_value=7)
-        a     b     c      d
+              a     b     c      d
         0  True  True  True  False
         1  True  True  True  False
         2  True  True  True  False

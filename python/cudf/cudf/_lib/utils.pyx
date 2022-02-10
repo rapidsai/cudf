@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -190,6 +190,7 @@ cpdef generate_pandas_metadata(table, index):
             col_meta["name"] in table._column_names
             and table._data[col_meta["name"]].nullable
             and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
+            and col_meta["pandas_type"] != "decimal"
         ):
             col_meta["numpy_type"] = PARQUET_META_TYPE_MAP[
                 col_meta["numpy_type"]
