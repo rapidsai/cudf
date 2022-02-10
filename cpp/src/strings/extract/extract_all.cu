@@ -89,13 +89,14 @@ struct extract_fn {
 }  // namespace
 
 /**
- * @copydoc cudf::strings::extract_all
+ * @copydoc cudf::strings::extract_all_record
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> extract_all(
+std::unique_ptr<column> extract_all_record(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -103,7 +104,8 @@ std::unique_ptr<column> extract_all(
   auto const d_strings     = column_device_view::create(strings.parent(), stream);
 
   // Compile regex into device object.
-  auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+  auto d_prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
   // The extract pattern should always include groups.
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "extract_all requires group indicators in the regex pattern.");
@@ -179,12 +181,13 @@ std::unique_ptr<column> extract_all(
 
 // external API
 
-std::unique_ptr<column> extract_all(strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
+                                           std::string const& pattern,
+                                           regex_flags const flags,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::extract_all_record(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
