@@ -77,7 +77,7 @@ double geometric_dist_p(T range_size)
   return p ? p : std::numeric_limits<double>::epsilon();
 }
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 auto make_geometric_dist(T range_start, T range_end)
 {
   using uT = typename std::make_unsigned<T>::type;
