@@ -202,7 +202,7 @@ rmm::device_uvector<size_type> build_string_row_sizes(table_view const &tbl,
                                                       rmm::cuda_stream_view stream) {
   auto const num_rows = tbl.num_rows();
   rmm::device_uvector<size_type> d_row_sizes(num_rows, stream);
-  thrust::uninitialized_fill(thrust::cuda::par.on(stream), d_row_sizes.begin(), d_row_sizes.end(),
+  thrust::uninitialized_fill(rmm::exec_policy(stream), d_row_sizes.begin(), d_row_sizes.end(),
                              0);
 
   auto d_offsets_iterators = [&]() {
