@@ -36,7 +36,7 @@ SUPPORTED_NUMBA_TYPES = (
 )
 
 
-
+# String object definitions
 class StringView(types.Type):
     def __init__(self):
          super().__init__(name="string_view")
@@ -72,6 +72,7 @@ class StrViewArgHandler:
 
 str_view_arg_handler = StrViewArgHandler()
 
+# Masked scalars of all types
 class MaskedType(types.Type):
     """
     A Numba type consisting of a value of some primitive type
@@ -388,6 +389,20 @@ class UnpackReturnToMasked(AbstractTemplate):
             # scalar_type -> MaskedType(scalar_type, True)
             return_type = MaskedType(args[0])
             return nb_signature(return_type, args[0])
+
+
+# String functions
+@cuda_decl_registry.register_global(len)
+class MaskedStringViewLength(AbstractTemplate):
+    """
+    provide the length of a cudf::string_view like struct
+    """
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and isinstance(args[0].value_type, StringView):
+            return nb_signature(types.int32, args[0])
+
+_len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
+
 
 
 for binary_op in arith_ops + bitwise_ops + comparison_ops:

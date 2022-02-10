@@ -16,7 +16,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.typing import MaskedType, NAType, string_view
+from cudf.core.udf.typing import MaskedType, NAType, string_view, _len_string_view
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -366,3 +366,32 @@ def lower_constant_masked(context, builder, ty, val):
     masked.value = context.get_constant(ty.value_type, val.value)
     masked.valid = context.get_constant(types.boolean, val.valid)
     return masked._getvalue()
+
+# String function implementations
+def call_len_string_view(st):
+    return _len_string_view(st)
+
+@cuda_lower(len, MaskedType(types.pyobject))
+def string_view_len_impl(context, builder, sig, args):
+    retty = sig.return_type
+    maskedty = sig.args[0]
+    masked_str = cgutils.create_struct_proxy(maskedty)(
+        context, builder, value=args[0]
+    )
+
+    # the first element is the string_view struct
+    # get a pointer that we will copy the data to
+    strty = masked_str.value.type
+    arg = builder.alloca(strty)
+
+    # store
+    builder.store(masked_str.value, arg)
+    
+    result = context.compile_internal(
+        builder,
+        call_len_string_view,
+        nb_signature(retty, types.CPointer(string_view)),
+        (arg,)
+    )
+    
+    return result
