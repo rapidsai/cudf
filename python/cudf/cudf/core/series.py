@@ -1001,7 +1001,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             not_reflect = self is inputs[0]
             other = inputs[not_reflect]
             op = binary_operations[fname]
-            ops_without_reflection = ("gt", "gte", "lt", "lte", "ne", "eq")
+            ops_without_reflection = ("gt", "ge", "lt", "le", "ne", "eq")
             if op in ops_without_reflection and not not_reflect:
                 # This replacement will ignore eq and ne, which don't need it.
                 op = op.replace(*(("g", "l") if "g" in op else ("l", "g")))
