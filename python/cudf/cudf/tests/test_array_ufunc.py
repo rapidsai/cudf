@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import operator
 from functools import reduce
 
