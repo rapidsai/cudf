@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/row_operators.cuh>
@@ -117,14 +118,17 @@ std::unique_ptr<column> inclusive_percent_rank_scan(column_view const& order_by,
 {
   auto const rank_column =
     inclusive_rank_scan(order_by, stream, rmm::mr::get_current_device_resource());
-  auto const rank_view     = rank_column->view();
+  auto const rank_view = rank_column->view();
+
+  // Result type for PERCENT_RANK is independent of input type.
+  using result_type = cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
   auto percent_rank_result = cudf::make_fixed_width_column(
-    data_type{type_to_id<double>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
 
   thrust::transform(rmm::exec_policy(stream),
                     rank_view.begin<size_type>(),
                     rank_view.end<size_type>(),
-                    percent_rank_result->mutable_view().begin<double>(),
+                    percent_rank_result->mutable_view().begin<result_type>(),
                     [n_rows = rank_view.size()] __device__(auto const rank) {
                       return n_rows == 1 ? 0.0 : ((rank - 1.0) / (n_rows - 1));
                     });

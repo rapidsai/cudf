@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -144,14 +145,17 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
       return group_end - group_start;
     });
 
+  // Result type for PERCENT_RANK is independent of input type.
+  using result_type = cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+
   auto percent_rank_result = cudf::make_fixed_width_column(
-    data_type{type_to_id<double>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
 
   thrust::transform(rmm::exec_policy(stream),
                     rank_view.begin<size_type>(),
                     rank_view.end<size_type>(),
                     group_size_iter,
-                    percent_rank_result->mutable_view().begin<double>(),
+                    percent_rank_result->mutable_view().begin<result_type>(),
                     [] __device__(auto const rank, auto const group_size) {
                       return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
                     });

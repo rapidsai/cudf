@@ -29,9 +29,11 @@ namespace test {
 using namespace iterators;
 
 template <typename T>
-using input              = fixed_width_column_wrapper<T>;
-using rank_result_col    = fixed_width_column_wrapper<size_type>;
-using percent_result_col = fixed_width_column_wrapper<double>;
+using input           = fixed_width_column_wrapper<T>;
+using rank_result_col = fixed_width_column_wrapper<size_type>;
+using percent_result_t =
+  cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
 using null_iter_t        = decltype(nulls_at({}));
 
 auto constexpr X     = int32_t{0};  // Placeholder for NULL rows.
