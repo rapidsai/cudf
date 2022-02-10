@@ -4364,10 +4364,10 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector expected = ColumnVector.fromStrings("Héllo",
                    "thésé",
                    null,
-                   null,
+                   "",
                    "ARé",
                    "test");
-           ColumnVector tmp = v.stringSplitRecord();
+           ColumnVector tmp = v.stringSplitRecord(" ");
            ColumnVector result = tmp.extractListElement(0)) {
           assertColumnsAreEqual(expected, result);
       }
@@ -4813,7 +4813,7 @@ public class ColumnVectorTest extends CudfTestBase {
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("Héllo", "there all"),
              Arrays.asList("thésé"),
-             Arrays.asList((Object) null),
+             null,
              Arrays.asList(""),
              Arrays.asList("ARé", "some things"),
              Arrays.asList("test", "strings here"));
@@ -4822,7 +4822,7 @@ public class ColumnVectorTest extends CudfTestBase {
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("Héllo", "there", "all"),
              Arrays.asList("thésé"),
-             Arrays.asList((Object) null),
+             null,
              Arrays.asList(""),
              Arrays.asList("ARé", "some", "things"),
              Arrays.asList("test", "strings", "here"));
@@ -4843,7 +4843,7 @@ public class ColumnVectorTest extends CudfTestBase {
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("Héllo", "there all"),
              Arrays.asList("thésé"),
-             Arrays.asList((Object) null),
+             null,
              Arrays.asList(""),
              Arrays.asList("ARé", "some_things"),
              Arrays.asList("test", "strings_here"));
@@ -4852,7 +4852,7 @@ public class ColumnVectorTest extends CudfTestBase {
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("Héllo", "there", "all"),
              Arrays.asList("thésé"),
-             Arrays.asList((Object) null),
+             null,
              Arrays.asList(""),
              Arrays.asList("ARé", "some", "things"),
              Arrays.asList("test", "strings", "here"));
