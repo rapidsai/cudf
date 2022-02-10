@@ -1000,7 +1000,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if fname in binary_operations:
             not_reflect = self is inputs[0]
             other = inputs[not_reflect]
-            op = f"__{'' if not_reflect else 'r'}{binary_operations[fname]}__"
+            op = binary_operations[fname]
+            ops_without_reflection = ("gt", "gte", "lt", "lte", "ne", "eq")
+            if op in ops_without_reflection and not not_reflect:
+                # This replacement will ignore eq and ne, which don't need it.
+                op = op.replace(*(("g", "l") if "g" in op else ("l", "g")))
+                not_reflect = True
+            op = f"__{'' if not_reflect else 'r'}{op}__"
 
             # pandas bitwise operations return bools if indexes are misaligned.
             # TODO: Generalize for other types of Frames

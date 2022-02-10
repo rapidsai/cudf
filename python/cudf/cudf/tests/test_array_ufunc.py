@@ -102,12 +102,19 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 @pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
-def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_):
+@pytest.mark.parametrize("reflect", [True, False])
+def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
     fname = ufunc.__name__
     if fname == "greater" and has_nulls:
         pytest.xfail(
             "The way cudf casts nans in arrays to nulls during binops with "
             "cudf objects is currently incompatible with pandas."
+        )
+    if reflect and has_nulls and type_ == "cupy":
+        pytest.skip(
+            "When cupy is the left operand there is no way for us to avoid "
+            "calling its binary operators, which cannot handle cudf objects "
+            "that contain nulls."
         )
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
@@ -136,18 +143,28 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_):
     if type_ == "list":
         arg1 = arg1.tolist()
 
-    got = ufunc(args[0], arg1)
-    expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
+    if reflect:
+        got = ufunc(arg1, args[0])
+        expect = ufunc(args[1].to_numpy(), args[0].to_pandas())
+    else:
+        got = ufunc(args[0], arg1)
+        expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
 
     if ufunc.nout > 1:
         for g, e in zip(got, expect):
             if has_nulls:
                 e[mask] = np.nan
-            assert_eq(g, e)
+            if type_ == "cupy" and reflect:
+                assert (cp.asnumpy(g) == e).all()
+            else:
+                assert_eq(g, e)
     else:
         if has_nulls:
             expect[mask] = np.nan
-        assert_eq(got, expect)
+        if type_ == "cupy" and reflect:
+            assert (cp.asnumpy(got) == expect).all()
+        else:
+            assert_eq(got, expect)
 
 
 @pytest.mark.parametrize(
