@@ -842,6 +842,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @staticmethod
     def _align_input_series_indices(data, index):
+        # TODO: PREM
         data = data.copy()
 
         input_series = [
@@ -1321,10 +1322,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  1  4
         2  2  5
         """
-        new = self.copy()
+        new_df = cudf.DataFrame(index=self.index.copy())
+        for name, col in self._data.items():
+            if name in kwargs:
+                new_df[name] = kwargs.pop(name)
+            else:
+                new_df._data[name] = col.copy()
+
         for k, v in kwargs.items():
-            new[k] = v
-        return new
+            new_df[k] = v
+        return new_df
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
