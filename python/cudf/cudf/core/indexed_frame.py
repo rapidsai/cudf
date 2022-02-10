@@ -448,7 +448,7 @@ class IndexedFrame(Frame):
                     isinstance(self, cudf.core.dataframe.DataFrame)
                     and self._data.multiindex
                 ):
-                    out.columns = self._data.to_pandas_index()
+                    out._set_column_names_like(self)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -462,7 +462,7 @@ class IndexedFrame(Frame):
                     isinstance(self, cudf.core.dataframe.DataFrame)
                     and self._data.multiindex
                 ):
-                    out.columns = self._data.to_pandas_index()
+                    out._set_column_names_like(self)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]

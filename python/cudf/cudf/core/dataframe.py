@@ -999,9 +999,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             super().__setattr__(key, col)
 
         except RuntimeError as e:
-            # Need to allow setting properties that are marked as forbidden for
-            # internal usage.
-            # TODO: Check if there are alternatives that could be used instead.
+            # TODO: This allows setting properties that are marked as forbidden
+            # for internal usage. It is necesary because the __getattribute__
+            # call in the try block will trigger the error. We should see if
+            # setting these variables can also always be disabled
             if "External-only API" not in str(e):
                 raise
             super().__setattr__(key, col)
@@ -1314,7 +1315,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         # Adding index of type RangeIndex back to
                         # result
                         result.index = self.index[start:stop]
-                result.columns = self._data.to_pandas_index()
+                result._set_column_names_like(self)
                 return result
 
     @annotate("DATAFRAME_MEMORY_USAGE", color="blue", domain="cudf_python")
@@ -2191,12 +2192,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"got {len(columns)} elements"
             )
 
-        data = dict(zip(columns, self._data.columns))
-        if len(columns) != len(data):
+        self._set_column_names(columns, is_multiindex, columns.names)
+
+    def _set_column_names(self, names, multiindex=False, level_names=None):
+        data = dict(zip(names, self._data.columns))
+        if len(names) != len(data):
             raise ValueError("Duplicate column names are not allowed")
 
         self._data = ColumnAccessor(
-            data, multiindex=is_multiindex, level_names=columns.names,
+            data, multiindex=multiindex, level_names=level_names,
+        )
+
+    def _set_column_names_like(self, other):
+        self._set_column_names(
+            other._data.names, other._data.multiindex, other._data.level_names
         )
 
     @annotate("DATAFRAME_REINDEX_INTERNAL", color="blue", domain="cudf_python")
@@ -5522,7 +5531,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(df, Series):
             df = df.to_frame()
 
-        df.columns = data_df._data.to_pandas_index()
+        df._set_column_names_like(data_df)
 
         return df
 
@@ -5652,7 +5661,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return Series(result, index=self.index, dtype=result_dtype,)
         else:
             result_df = DataFrame(result).set_index(self.index)
-            result_df.columns = prepared._data.to_pandas_index()
+            result_df._set_column_names_like(prepared)
             return result_df
 
     @annotate("DATAFRAME_COLUMNS_VIEW", color="green", domain="cudf_python")
@@ -5927,20 +5936,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cov : DataFrame
         """
         cov = cupy.cov(self.values, rowvar=False)
-        # TODO: Why are we setting this for both index and columns?
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(cov)).set_index(cols)
-        df.columns = cols
+        df._set_column_names_like(self)
         return df
 
     @annotate("DATAFRAME_CORR", color="green", domain="cudf_python")
     def corr(self):
         """Compute the correlation matrix of a DataFrame."""
         corr = cupy.corrcoef(self.values, rowvar=False)
-        # TODO: Why are we setting this for both index and columns?
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
-        df.columns = cols
+        df._set_column_names_like(self)
         return df
 
     @annotate("DATAFRAME_TO_STRUCT", color="green", domain="cudf_python")
