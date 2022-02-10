@@ -139,10 +139,11 @@ static void BM_case(benchmark::State& state, QueryArg&&... query_arg)
   state.SetBytesProcessed(state.iterations() * num_chars);
 }
 
-#define JSON_BENCHMARK_DEFINE(name, query)                         \
-  BENCHMARK_CAPTURE(BM_case, name, query)                          \
-    ->ArgsProduct({{100, 1000, 100000, 400000}, {300, 600, 4096}}) \
-    ->UseManualTime()                                              \
+#define JSON_BENCHMARK_DEFINE(name, query)                                                  \
+  BENCHMARK_DEFINE_F(JsonPath, name)(::benchmark::State & state) { BM_case(state, query); } \
+  BENCHMARK_REGISTER_F(JsonPath, name)                                                      \
+    ->ArgsProduct({{100, 1000, 100000, 400000}, {300, 600, 4096}})                          \
+    ->UseManualTime()                                                                       \
     ->Unit(benchmark::kMillisecond);
 
 JSON_BENCHMARK_DEFINE(query0, "$");
