@@ -1080,12 +1080,12 @@ class CategoricalColumn(column.ColumnBase):
         # and a copy of them to work with. The index of this dataframe
         # represents the original ints that map to the categories
         old_cats = cudf.DataFrame()
-        old_cats["cats"] = column.as_column(replaced.dtype.categories)
+        old_cats._data["cats"] = column.as_column(replaced.dtype.categories)
         # TODO: PREM
         new_cats = old_cats.copy(deep=True)
 
         # Create a column with the appropriate labels replaced
-        old_cats["cats_replace"] = old_cats["cats"].replace(
+        old_cats._data["cats_replace"] = old_cats["cats"].replace(
             to_replace_col, replacement_col
         )
 
@@ -1095,7 +1095,7 @@ class CategoricalColumn(column.ColumnBase):
         # map it to the new label it is to be replaced by
         dtype_replace = cudf.Series(replacement_col)
         dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
-        new_cats["cats"] = new_cats["cats"].replace(
+        new_cats._data["cats"] = new_cats["cats"].replace(
             to_replace_col, dtype_replace
         )
 
@@ -1104,9 +1104,12 @@ class CategoricalColumn(column.ColumnBase):
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
         bmask = new_cats._data["cats"].notnull()
-        new_cats = cudf.DataFrame(
+        new_cats = cudf.DataFrame._from_data(
             {"cats": new_cats._data["cats"].apply_boolean_mask(bmask)}
-        ).reset_index()
+        )
+        new_cats._data["index"] = cudf.core.column.arange(
+            len(new_cats._data["cats"])
+        )
 
         # old_cats contains replaced categories and the ints that
         # previously mapped to those categories and the index of

@@ -2285,7 +2285,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  4  d  4.0
         4  5  e  5.0
 
-        Set the index to become the ‘b’ column:
+        Set the index to become the 'b' column:
 
         >>> df.set_index('b')
            a    c
@@ -2296,7 +2296,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         d  4  4.0
         e  5  5.0
 
-        Create a MultiIndex using columns ‘a’ and ‘b’:
+        Create a MultiIndex using columns 'a' and 'b':
 
         >>> df.set_index(["a", "b"])
                c
