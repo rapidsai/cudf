@@ -1244,7 +1244,7 @@ class Frame:
                 value = value
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
-        elif isinstance(value, abc.Mapping):
+        else:
             value = {
                 key: value.reindex(self.index)
                 if isinstance(value, cudf.Series)
@@ -1252,18 +1252,26 @@ class Frame:
                 for key, value in value.items()
             }
 
-        copy_data = self._data.copy(deep=True)
-
-        for name in copy_data.keys():
+        filled_data = {}
+        for col_name, col in self._data.items():
+            if col_name in value and method is None:
+                replace_val = value[col_name]
+            else:
+                replace_val = None
             should_fill = (
-                name in value
-                and not libcudf.scalar._is_null_host_scalar(value[name])
+                col_name in value
+                and col.contains_na_entries
+                and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:
-                copy_data[name] = copy_data[name].fillna(value[name], method)
-        result = self._from_data(copy_data, self._index)
+                filled_data[col_name] = col.fillna(replace_val, method)
+            else:
+                filled_data[col_name] = col.copy(deep=True)
 
-        return self._mimic_inplace(result, inplace=inplace)
+        return self._mimic_inplace(
+            self._from_data(data=filled_data, index=self._index),
+            inplace=inplace,
+        )
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
