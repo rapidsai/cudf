@@ -3100,6 +3100,28 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testScanPercentRank() {
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(-97, -97, -97, null, -16, 5, null, null, 6, 6, 34, null);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(  3,   3,   4,    7,   7, 7,    7,    7, 8, 8,  8,    9);
+         ColumnVector struct_order = ColumnVector.makeStruct(col1, col2);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(
+            0.0, 0.0, 2.0/11, 3.0/11, 4.0/11, 5.0/11, 6.0/11, 6.0/11, 8.0/11, 8.0/11, 10.0/11, 1.0)) {
+      try (ColumnVector result = struct_order.scan(ScanAggregation.percentRank(),
+              ScanType.INCLUSIVE, NullPolicy.INCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Exclude should have identical results
+      try (ColumnVector result = struct_order.scan(ScanAggregation.percentRank(),
+              ScanType.INCLUSIVE, NullPolicy.EXCLUDE)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      // Percent rank aggregations do not support ScanType.EXCLUSIVE
+    }
+  }
+
+  @Test
   void testWindowStatic() {
     try (Scalar one = Scalar.fromInt(1);
          Scalar two = Scalar.fromInt(2);
