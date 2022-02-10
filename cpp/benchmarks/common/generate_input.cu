@@ -65,6 +65,9 @@
 #include <utility>
 #include <vector>
 
+#define LINE_PRINT() ;
+// std::cout << "line " << __LINE__ << "\n";
+
 /**
  * @brief Mersenne Twister pseudo-random engine.
  */
@@ -414,7 +417,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     // auto run_len_dist      = create_run_length_dist(avg_run_len);
     rmm::device_uvector<stored_Type> data(0, rmm::cuda_stream_default);
     rmm::device_uvector<bool> null_mask(0, rmm::cuda_stream_default);
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
 
     // Create a run-length values. (sum upto  num_rows) size~=num_rows/avg_run_len. could be more.
     // exclusive scan it. 1+run_len (account for data to be copied.)
@@ -426,7 +429,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     // generate uniform(0, cardinality-1) indices of size~=num_rows/run_len. - samples.
     // transform_if lower_bound on exrun_len, find index, collect from
     // cardinality_array[samples[index]];
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     if (cardinality == 0) {
       data      = value_dist(engine, num_rows);
       null_mask = valid_dist(engine, num_rows);
@@ -435,7 +438,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
         distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
       auto avglen_dist = random_value_fn<int>{
         distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
-      std::cout << "line " << __LINE__ << "\n";
+      LINE_PRINT();
       if (avg_run_len > 1) {
         auto approx_run_len = num_rows / avg_run_len + 1;
         // std::cout << "approx_run_len: " << approx_run_len << std::endl;
@@ -460,32 +463,32 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
             auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
             return samples_indices[sample_idx];
           });
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         thrust::gather(thrust::device,
                        avg_repeated_sample_indices,
                        avg_repeated_sample_indices + num_rows,
                        samples.begin(),
                        data.begin());
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         thrust::gather(thrust::device,
                        avg_repeated_sample_indices,
                        avg_repeated_sample_indices + num_rows,
                        samples_null_mask.begin(),
                        null_mask.begin());
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
       } else {
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         // generate n samples. and gather.
         auto samples_indices = sample_dist(engine, num_rows);
         data                 = rmm::device_uvector<stored_Type>(num_rows, rmm::cuda_stream_default);
         null_mask            = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         thrust::gather(thrust::device,
                        samples_indices.begin(),
                        samples_indices.end(),
                        samples.begin(),
                        data.begin());
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         thrust::gather(thrust::device,
                        samples_indices.begin(),
                        samples_indices.end(),
@@ -493,7 +496,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                        null_mask.begin());
       }
     }
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
 
     auto [result_bitmask, null_count] =
       cudf::detail::valid_if(null_mask.begin(), null_mask.end(), thrust::identity<bool>{});
@@ -590,12 +593,12 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
  thrust::minstd_rand& engine,
  cudf::size_type num_rows)
 {
- std::cout << "line " << __LINE__ << "\n";
+ LINE_PRINT();
  auto len_dist   =
 random_value_fn<uint32_t>{profile.get_distribution_params<cudf::string_view>().length_params};
- std::cout<<"line "<<__LINE__<<"\n";
+ LINE_PRINT();
  auto valid_dist = random_value_fn<bool>(distribution_params<bool>{1. -
-profile.get_null_frequency()}); std::cout<<"line "<<__LINE__<<"\n";
+profile.get_null_frequency()}); LINE_PRINT();
 
  auto lengths       = len_dist(engine, num_rows + 1);
  auto null_mask     = valid_dist(engine, num_rows + 1);  // or cudf::bitmask_type
@@ -610,15 +613,14 @@ profile.get_null_frequency()}); std::cout<<"line "<<__LINE__<<"\n";
    thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
    valid_or_zero{});
  rmm::device_uvector<cudf::size_type> offsets(num_rows+1, rmm::cuda_stream_default);
- std::cout<<"line "<<__LINE__<<"\n";
+ LINE_PRINT();
  thrust::exclusive_scan(thrust::device, valid_lengths, valid_lengths+lengths.size(),
-offsets.begin()); std::cout<<"line "<<__LINE__<<"\n"; auto chars_length =
+offsets.begin()); LINE_PRINT(); auto chars_length =
 *thrust::device_pointer_cast(offsets.end() - 1); auto char_dist    = random_value_fn<unsigned
-char>{distribution_params<unsigned char>{distribution_id::UNIFORM, 32, 137}}; std::cout<<"line
-[char] "<<__LINE__<<"\n"; auto chars = char_dist(engine, chars_length);  // simply generate 32-137.
+char>{distribution_params<unsigned char>{distribution_id::UNIFORM, 32, 137}};
+auto chars = char_dist(engine, chars_length);  // simply generate 32-137.
 // update prev char of any >=7F
  // fix UTF-8 codes.
- std::cout<<"line [after char]"<<__LINE__<<"\n";
  thrust::for_each_n(thrust::device, thrust::make_counting_iterator(0), chars.size()/2+1,
    [chars = chars.begin()] __device__ (int i) {
      if(chars[2*i] >= 0x7F) { // first byte is >= 0x7F
@@ -630,7 +632,7 @@ char>{distribution_params<unsigned char>{distribution_id::UNIFORM, 32, 137}}; st
      }
    });
  // offset boundary fix.
- std::cout<<"line "<<__LINE__<<"\n";
+ LINE_PRINT();
  thrust::for_each(thrust::device, offsets.begin(), offsets.end()-1,
   [chars = chars.begin()] __device__ (cudf::size_type offset) {
    if(offset>0) {
@@ -640,7 +642,7 @@ char>{distribution_params<unsigned char>{distribution_id::UNIFORM, 32, 137}}; st
      }
    }
  });
- std::cout<<"line "<<__LINE__<<"\n";
+ LINE_PRINT();
  auto [result_bitmask, null_count] = cudf::detail::valid_if(null_mask.begin(), null_mask.end()-1,
 thrust::identity<bool>{}); rmm::device_uvector<char> uchars(chars_length, rmm::cuda_stream_default);
  thrust::copy(thrust::device, chars.begin(), chars.end(), uchars.begin());
@@ -677,20 +679,20 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   } else {
     auto sample_dist = random_value_fn<cudf::size_type>{
       distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     auto sample_indices = [&]() {
       if (avg_run_len > 1) {
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         auto avglen_dist = random_value_fn<int>{
           distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
         auto approx_run_len = num_rows / avg_run_len + 1;
         auto run_lens       = avglen_dist(engine, approx_run_len);
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         thrust::inclusive_scan(
           thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         auto samples_indices = sample_dist(engine, approx_run_len + 1);
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         auto avg_repeated_sample_indices = thrust::make_transform_iterator(
           thrust::make_counting_iterator(0),
           [rb              = run_lens.begin(),
@@ -701,21 +703,21 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
           });
         rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
                                                                      rmm::cuda_stream_default);
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         thrust::copy(thrust::device,
                      avg_repeated_sample_indices,
                      avg_repeated_sample_indices + num_rows,
                      repeated_sample_indices.begin());
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         return repeated_sample_indices;
       } else {
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         auto samples_indices = sample_dist(engine, num_rows);
-        std::cout << "line " << __LINE__ << "\n";
+        LINE_PRINT();
         return samples_indices;
       }
     }();
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     auto [free_b, total_b] =
       rmm::mr::get_current_device_resource()->get_mem_info(rmm::cuda_stream_default);
     std::cout << "free= " << free_b << " used= " << total_b - free_b << " total= " << total_b
@@ -738,7 +740,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                            sample_indices,
                            cudf::out_of_bounds_policy::DONT_CHECK,  // TODO ensure no memory errors.
                            cudf::detail::negative_index_policy::NOT_ALLOWED);
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     return std::move(str_table->release()[0]);
   }
 }
@@ -806,7 +808,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
-  std::cout << "line " << __LINE__ << "\n";
+  LINE_PRINT();
 
   // Generate the list column bottom-up
   auto list_column = std::move(leaf_column);
@@ -816,10 +818,10 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
     std::cout << "num_rows: " << num_rows << "\n";
 
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     auto offsets = len_dist(engine, num_rows + 1);
     auto valids  = valid_dist(engine, num_rows);
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     std::cout << "offsets.size(): " << offsets.size() << "\n";
     // to ensure these values <= current_child_column->size()
     auto output_offsets = thrust::make_transform_output_iterator(
@@ -829,13 +831,13 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     auto offsets_column = std::make_unique<cudf::column>(
       cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
     std::cout << "offsets_column: " << offsets_column->size() << "\n";
     // cudf::test::print(*offsets_column);
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
 
     auto [null_mask, null_count] =
       cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
@@ -845,9 +847,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       std::move(current_child_column),
       profile.get_null_frequency() < 0 ? 0 : null_count,  // cudf::UNKNOWN_NULL_COUNT,
       profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(null_mask));
-    std::cout << "line " << __LINE__ << "\n";
+    LINE_PRINT();
   }
-  std::cout << "line " << __LINE__ << "\n";
+  LINE_PRINT();
   return list_column;  // return the top-level column
 }
 
