@@ -435,7 +435,6 @@ class NumericalColumn(NumericalBaseColumn):
             replacement_col = _normalize_find_and_replace_input(
                 self.dtype, replacement
             )
-        replaced = self.copy()
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
                 utils.scalar_broadcast_to(
@@ -443,9 +442,9 @@ class NumericalColumn(NumericalBaseColumn):
                 )
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
-            return replaced
+            return self.copy()
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
-            to_replace_col, replacement_col, replaced
+            to_replace_col, replacement_col, self
         )
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)

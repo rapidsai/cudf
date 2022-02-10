@@ -1058,8 +1058,7 @@ class CategoricalColumn(column.ColumnBase):
                 new_categories = self.categories.append(
                     column.as_column([fill_value])
                 )
-                replaced = self.copy()
-                replaced = replaced._set_categories(new_categories)
+                replaced = self._set_categories(new_categories)
                 replaced = replaced.fillna(fill_value)
             df = df.dropna(subset=["old"])
             to_replace_col = df._data["old"]
@@ -1508,9 +1507,15 @@ class CategoricalColumn(column.ColumnBase):
         old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
         new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
 
-        new_df = cudf.DataFrame({"new_codes": new_codes, "cats": new_cats})
-        old_df = cudf.DataFrame({"old_codes": old_codes, "cats": cur_cats})
-        cur_df = cudf.DataFrame({"old_codes": cur_codes, "order": cur_order})
+        new_df = cudf.DataFrame._from_data(
+            data={"new_codes": new_codes, "cats": new_cats}
+        )
+        old_df = cudf.DataFrame._from_data(
+            data={"old_codes": old_codes, "cats": cur_cats.copy()}
+        )
+        cur_df = cudf.DataFrame._from_data(
+            data={"old_codes": cur_codes.copy(), "order": cur_order}
+        )
 
         # Join the old and new categories and line up their codes
         df = old_df.merge(new_df, on="cats", how="left")
@@ -1520,7 +1525,7 @@ class CategoricalColumn(column.ColumnBase):
         df.reset_index(drop=True, inplace=True)
 
         ordered = ordered if ordered is not None else self.ordered
-        new_codes = df["new_codes"]._column
+        new_codes = df._data["new_codes"]
 
         # codes can't have masks, so take mask out before moving in
         return column.build_categorical_column(

@@ -1206,6 +1206,7 @@ class NumericIndex(GenericIndex):
 
         dtype = type(self)._dtype
         if copy:
+            # TODO: PREM
             data = column.as_column(data, dtype=dtype).copy()
 
         kwargs = _setdefault_name(data, name=name)
@@ -1583,6 +1584,7 @@ class DatetimeIndex(GenericIndex):
             raise TypeError("Invalid dtype")
 
         if copy:
+            # TODO: PREM
             data = column.as_column(data).copy()
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, np.ndarray) and data.dtype.kind == "M":
@@ -2044,6 +2046,7 @@ class TimedeltaIndex(GenericIndex):
             )
 
         if copy:
+            # TODO: PREM
             data = column.as_column(data).copy()
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, np.ndarray) and data.dtype.kind == "m":
@@ -2398,6 +2401,7 @@ class IntervalIndex(GenericIndex):
         self, data, closed=None, dtype=None, copy=False, name=None,
     ):
         if copy:
+            # TODO: PREM
             data = column.as_column(data, dtype=dtype).copy()
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, IntervalColumn):

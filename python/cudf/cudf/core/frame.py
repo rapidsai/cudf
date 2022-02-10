@@ -4423,7 +4423,7 @@ class Frame:
                     result_col = col.copy()
                     result_col[first_index:] = None
                 else:
-                    result_col = col.copy()
+                    result_col = col
 
             if (
                 cast_to_int
