@@ -37,8 +37,8 @@ namespace detail {
 template <typename T>
 T __device__ inline normalize_nans_and_zeros(T const& key)
 {
-  if constexpr (is_floating_point<T>()) {
-    if (isnan(key)) {
+  if constexpr (cudf::is_floating_point<T>()) {
+    if (std::isnan(key)) {
       return std::numeric_limits<T>::quiet_NaN();
     } else if (key == T{0.0}) {
       return T{0.0};
@@ -84,8 +84,7 @@ void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destinatio
 // non-native version will be less than optimal.
 template <typename Key>
 struct MurmurHash3_32 {
-  using argument_type = Key;
-  using result_type   = hash_value_type;
+  using result_type = hash_value_type;
 
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
@@ -105,6 +104,15 @@ struct MurmurHash3_32 {
     return h;
   }
 
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
+  {
+    // Read a 4-byte value from the data pointer as individual bytes for safe
+    // unaligned access (very likely for string types).
+    auto const block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+  }
+
   /* Copyright 2005-2014 Daniel James.
    *
    * Use, modification and distribution is subject to the Boost Software
@@ -122,7 +130,7 @@ struct MurmurHash3_32 {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  __device__ inline result_type hash_combine(result_type lhs, result_type rhs)
+  [[nodiscard]] __device__ inline result_type hash_combine(result_type lhs, result_type rhs)
   {
     result_type combined{lhs};
 
@@ -131,7 +139,11 @@ struct MurmurHash3_32 {
     return combined;
   }
 
-  result_type __device__ inline operator()(Key const& key) const { return compute(key); }
+  // TODO Do we need this operator() and/or compute? Probably not both.
+  [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
+  {
+    return compute(key);
+  }
 
   // compute wrapper for floating point types
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
@@ -139,7 +151,7 @@ struct MurmurHash3_32 {
   {
     if (key == T{0.0}) {
       return compute(T{0.0});
-    } else if (isnan(key)) {
+    } else if (std::isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
@@ -147,44 +159,49 @@ struct MurmurHash3_32 {
     }
   }
 
-  template <typename TKey>
-  result_type __device__ inline compute(TKey const& key) const
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
   {
-    constexpr int len         = sizeof(argument_type);
-    uint8_t const* const data = reinterpret_cast<uint8_t const*>(&key);
-    constexpr int nblocks     = len / 4;
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+  }
 
-    uint32_t h1           = m_seed;
-    constexpr uint32_t c1 = 0xcc9e2d51;
-    constexpr uint32_t c2 = 0x1b873593;
-    //----------
-    // body
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-    for (int i = -nblocks; i; i++) {
-      uint32_t k1 = blocks[i];  // getblock32(blocks,i);
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
+    result_type h1                       = m_seed;
+    constexpr uint32_t c1                = 0xcc9e2d51;
+    constexpr uint32_t c2                = 0x1b873593;
+    constexpr uint32_t c3                = 0xe6546b64;
+    constexpr uint32_t rot_c1            = 15;
+    constexpr uint32_t rot_c2            = 13;
+
+    // Process all four-byte chunks.
+    for (cudf::size_type i = 0; i < nblocks; i++) {
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = rotl32(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = rotl32(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
-    //----------
-    // tail
-    uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
-    uint32_t k1         = 0;
-    switch (len & 3) {
-      case 3: k1 ^= tail[2] << 16;
-      case 2: k1 ^= tail[1] << 8;
+
+    // Process remaining bytes that do not fill a four-byte chunk.
+    uint32_t k1 = 0;
+    switch (len % 4) {
+      case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16;
+      case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8;
       case 1:
-        k1 ^= tail[0];
+        k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = rotl32(k1, 15);
+        k1 = rotl32(k1, rot_c1);
         k1 *= c2;
         h1 ^= k1;
     };
-    //----------
-    // finalization
+
+    // Finalize hash.
     h1 ^= len;
     h1 = fmix32(h1);
     return h1;
@@ -207,49 +224,9 @@ template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
-  auto const len        = key.size_bytes();
-  uint8_t const* data   = reinterpret_cast<uint8_t const*>(key.data());
-  int const nblocks     = len / 4;
-  result_type h1        = m_seed;
-  constexpr uint32_t c1 = 0xcc9e2d51;
-  constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
-    // Individual byte reads for unaligned accesses (very likely)
-    auto q = (uint8_t const*)(p + i);
-    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-  };
-
-  //----------
-  // body
-  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-  for (int i = -nblocks; i; i++) {
-    uint32_t k1 = getblock32(blocks, i);
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // tail
-  uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
-  uint32_t k1         = 0;
-  switch (len & 3) {
-    case 3: k1 ^= tail[2] << 16;
-    case 2: k1 ^= tail[1] << 8;
-    case 1:
-      k1 ^= tail[0];
-      k1 *= c1;
-      k1 = rotl32(k1, 15);
-      k1 *= c2;
-      h1 ^= k1;
-  };
-  //----------
-  // finalization
-  h1 ^= len;
-  h1 = fmix32(h1);
-  return h1;
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
@@ -303,8 +280,7 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
 
 template <typename Key>
 struct SparkMurmurHash3_32 {
-  using argument_type = Key;
-  using result_type   = hash_value_type;
+  using result_type = hash_value_type;
 
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
@@ -330,7 +306,7 @@ struct SparkMurmurHash3_32 {
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
-    if (isnan(key)) {
+    if (std::isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
@@ -338,35 +314,44 @@ struct SparkMurmurHash3_32 {
     }
   }
 
-  template <typename TKey>
-  result_type __device__ inline compute(TKey const& key) const
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
   {
-    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(TKey));
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
   }
 
-  result_type __device__ compute_bytes(std::byte const* const data, cudf::size_type const len) const
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
   {
-    constexpr cudf::size_type block_size = sizeof(uint32_t) / sizeof(std::byte);
-    cudf::size_type const nblocks        = len / block_size;
-    uint32_t h1                          = m_seed;
+    // Individual byte reads for unaligned accesses (very likely for strings)
+    auto block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+  }
+
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    result_type h1                       = m_seed;
     constexpr uint32_t c1                = 0xcc9e2d51;
     constexpr uint32_t c2                = 0x1b873593;
+    constexpr uint32_t c3                = 0xe6546b64;
+    constexpr uint32_t rot_c1            = 15;
+    constexpr uint32_t rot_c2            = 13;
 
-    //----------
-    // Process all four-byte chunks
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data);
+    // Process all four-byte chunks.
     for (cudf::size_type i = 0; i < nblocks; i++) {
-      uint32_t k1 = blocks[i];
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = rotl32(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = rotl32(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
-    //----------
+
     // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
-    // (does not conform to normal MurmurHash3)
+    // (does not conform to normal MurmurHash3).
     for (cudf::size_type i = nblocks * 4; i < len; i++) {
       // We require a two-step cast to get the k1 value from the byte. First,
       // we must cast to a signed int8_t. Then, the sign bit is preserved when
@@ -374,14 +359,14 @@ struct SparkMurmurHash3_32 {
       // signedness when casting byte-to-int, but C++ does not.
       uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = rotl32(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = rotl32(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
-    //----------
-    // finalization
+
+    // Finalize hash.
     h1 ^= len;
     h1 = fmix32(h1);
     return h1;
@@ -501,46 +486,9 @@ template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
-  auto const len        = key.size_bytes();
-  int8_t const* data    = reinterpret_cast<int8_t const*>(key.data());
-  int const nblocks     = len / 4;
-  result_type h1        = m_seed;
-  constexpr uint32_t c1 = 0xcc9e2d51;
-  constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
-    // Individual byte reads for unaligned accesses (very likely)
-    auto q = (const uint8_t*)(p + i);
-    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-  };
-
-  //----------
-  // body
-  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-  for (int i = -nblocks; i; i++) {
-    uint32_t k1 = getblock32(blocks, i);
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // Spark's byte by byte tail processing
-  for (int i = nblocks * 4; i < len; i++) {
-    uint32_t k1 = data[i];
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // finalization
-  h1 ^= len;
-  h1 = fmix32(h1);
-  return h1;
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
