@@ -24,6 +24,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <benchmark/benchmark.h>
+#include <common/generate_input.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
@@ -51,21 +52,10 @@ static void BM_binaryop_transform(benchmark::State& state)
   const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
 
   // Create table data
-  auto n_cols          = reuse_columns ? 1 : tree_levels + 1;
-  auto column_wrappers = std::vector<cudf::test::fixed_width_column_wrapper<key_type>>();
-  auto columns         = std::vector<cudf::column_view>(n_cols);
-
-  auto data_iterator = thrust::make_counting_iterator(0);
-  std::generate_n(std::back_inserter(column_wrappers), n_cols, [=]() {
-    return cudf::test::fixed_width_column_wrapper<key_type>(data_iterator,
-                                                            data_iterator + table_size);
-  });
-  std::transform(
-    column_wrappers.begin(), column_wrappers.end(), columns.begin(), [](auto const& col) {
-      return static_cast<cudf::column_view>(col);
-    });
-
-  cudf::table_view table{columns};
+  auto n_cols = reuse_columns ? 1 : tree_levels + 1;
+  auto source_table =
+    create_sequence_table({cudf::type_to_id<key_type>()}, n_cols, row_count{table_size});
+  cudf::table_view table{*source_table};
 
   // Execute benchmark
   for (auto _ : state) {
@@ -74,13 +64,13 @@ static void BM_binaryop_transform(benchmark::State& state)
     auto const op         = cudf::binary_operator::ADD;
     auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
     if (reuse_columns) {
-      auto result = cudf::binary_operation(columns.at(0), columns.at(0), op, result_data_type);
+      auto result = cudf::binary_operation(table.column(0), table.column(0), op, result_data_type);
       for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-        result = cudf::binary_operation(result->view(), columns.at(0), op, result_data_type);
+        result = cudf::binary_operation(result->view(), table.column(0), op, result_data_type);
       }
     } else {
-      auto result = cudf::binary_operation(columns.at(0), columns.at(1), op, result_data_type);
-      std::for_each(std::next(columns.cbegin(), 2), columns.cend(), [&](auto const& col) {
+      auto result = cudf::binary_operation(table.column(0), table.column(1), op, result_data_type);
+      std::for_each(std::next(table.begin(), 2), table.end(), [&](auto const& col) {
         result = cudf::binary_operation(result->view(), col, op, result_data_type);
       });
     }

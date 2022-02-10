@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
+#include <common/generate_input.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <fixture/templated_benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/binaryop.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 class COMPILED_BINARYOP : public cudf::benchmark {
 };
@@ -32,12 +29,14 @@ void BM_compiled_binaryop(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto data_it = thrust::make_counting_iterator(0);
-  cudf::test::fixed_width_column_wrapper<TypeLhs> input1(data_it, data_it + column_size);
-  cudf::test::fixed_width_column_wrapper<TypeRhs> input2(data_it, data_it + column_size);
+  data_profile profile;
+  profile.set_null_frequency(-0.1);  // no null mask (<0)
+  profile.set_cardinality(0);
+  auto source_table = create_random_table(
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, 2, row_count{column_size}, profile);
 
-  auto lhs          = cudf::column_view(input1);
-  auto rhs          = cudf::column_view(input2);
+  auto lhs          = cudf::column_view(source_table->get_column(0));
+  auto rhs          = cudf::column_view(source_table->get_column(1));
   auto output_dtype = cudf::data_type(cudf::type_to_id<TypeOut>());
 
   // Call once for hot cache.
