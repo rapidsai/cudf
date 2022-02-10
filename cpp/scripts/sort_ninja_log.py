@@ -33,7 +33,7 @@ output_fmt = args.fmt
 
 # build a map of the log entries
 entries = {}
-with open(log_file, "r") as log:
+with open(log_file) as log:
     last = 0
     files = {}
     for line in log:

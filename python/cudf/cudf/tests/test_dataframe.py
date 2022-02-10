@@ -246,17 +246,15 @@ def test_series_init_none():
     sr1 = cudf.Series()
     got = sr1.to_string()
 
-    expect = sr1.to_pandas().__repr__()
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = repr(sr1.to_pandas())
+    assert got == expect
 
     # 2: Using `None` as an initializer
     sr2 = cudf.Series(None)
     got = sr2.to_string()
 
-    expect = sr2.to_pandas().__repr__()
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = repr(sr2.to_pandas())
+    assert got == expect
 
 
 def test_dataframe_basic():
@@ -843,21 +841,20 @@ def test_dataframe_to_string_with_masked_data():
 def test_dataframe_to_string_wide(monkeypatch):
     monkeypatch.setenv("COLUMNS", "79")
     # Test basic
-    df = cudf.DataFrame()
-    for i in range(100):
-        df["a{}".format(i)] = list(range(3))
-    pd.options.display.max_columns = 0
-    got = df.to_string()
+    df = cudf.DataFrame({f"a{i}": [0, 1, 2] for i in range(100)})
+    with pd.option_context("display.max_columns", 0):
+        got = df.to_string()
 
-    expect = """
-    a0  a1  a2  a3  a4  a5  a6  a7 ...  a92 a93 a94 a95 a96 a97 a98 a99
-0    0   0   0   0   0   0   0   0 ...    0   0   0   0   0   0   0   0
-1    1   1   1   1   1   1   1   1 ...    1   1   1   1   1   1   1   1
-2    2   2   2   2   2   2   2   2 ...    2   2   2   2   2   2   2   2
-[3 rows x 100 columns]
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a0  a1  a2  a3  a4  a5  a6  a7  ...  a92  a93  a94  a95  a96  a97  a98  a99
+        0   0   0   0   0   0   0   0   0  ...    0    0    0    0    0    0    0    0
+        1   1   1   1   1   1   1   1   1  ...    1    1    1    1    1    1    1    1
+        2   2   2   2   2   2   2   2   2  ...    2    2    2    2    2    2    2    2
+
+        [3 rows x 100 columns]"""  # noqa: E501
+    )
+    assert got == expect
 
 
 def test_dataframe_empty_to_string():
@@ -865,9 +862,8 @@ def test_dataframe_empty_to_string():
     df = cudf.DataFrame()
     got = df.to_string()
 
-    expect = "Empty DataFrame\nColumns: []\nIndex: []\n"
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = "Empty DataFrame\nColumns: []\nIndex: []"
+    assert got == expect
 
 
 def test_dataframe_emptycolumns_to_string():
@@ -877,9 +873,8 @@ def test_dataframe_emptycolumns_to_string():
     df["b"] = []
     got = df.to_string()
 
-    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []"
+    assert got == expect
 
 
 def test_dataframe_copy():
@@ -890,14 +885,14 @@ def test_dataframe_copy():
     df2["b"] = [4, 5, 6]
     got = df.to_string()
 
-    expect = """
-     a
-0    1
-1    2
-2    3
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a
+        0  1
+        1  2
+        2  3"""
+    )
+    assert got == expect
 
 
 def test_dataframe_copy_shallow():
@@ -908,14 +903,14 @@ def test_dataframe_copy_shallow():
     df2["b"] = [4, 2, 3]
     got = df.to_string()
 
-    expect = """
-     a
-0    1
-1    2
-2    3
-"""
-    # values should match despite whitespace difference
-    assert got.split() == expect.split()
+    expect = textwrap.dedent(
+        """\
+           a
+        0  1
+        1  2
+        2  3"""
+    )
+    assert got == expect
 
 
 def test_dataframe_dtypes():
@@ -1163,7 +1158,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     gdf = cudf.DataFrame()
     keycols = []
     for i in range(nkeys):
-        keyname = "key{}".format(i)
+        keyname = f"key{i}"
         gdf[keyname] = np.random.randint(0, 7 - i, nrows)
         keycols.append(keyname)
     gdf["val1"] = np.random.randint(0, nrows * 2, nrows)
@@ -9070,6 +9065,77 @@ def test_dataframe_add_suffix():
     assert_eq(got, expected)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.random.RandomState(seed=10).randint(-50, 50, (25, 30)),
+        np.random.RandomState(seed=10).random_sample((4, 4)),
+        np.array([1.123, 2.343, 5.890, 0.0]),
+        [True, False, True, False, False],
+        {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
+    ],
+)
+@pytest.mark.parametrize("periods", (-5, -1, 0, 1, 5))
+def test_diff_dataframe_numeric_dtypes(data, periods):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.diff(periods=periods, axis=0)
+    expected = pdf.diff(periods=periods, axis=0)
+
+    assert_eq(
+        expected, actual, check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("precision", "scale"), [(5, 2), (8, 5)],
+)
+@pytest.mark.parametrize(
+    "dtype", [cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+)
+def test_diff_decimal_dtypes(precision, scale, dtype):
+    gdf = cudf.DataFrame(
+        np.random.default_rng(seed=42).uniform(10.5, 75.5, (10, 6)),
+        dtype=dtype(precision=precision, scale=scale),
+    )
+    pdf = gdf.to_pandas()
+
+    actual = gdf.diff()
+    expected = pdf.diff()
+
+    assert_eq(
+        expected, actual, check_dtype=False,
+    )
+
+
+def test_diff_dataframe_invalid_axis():
+    gdf = cudf.DataFrame(np.array([1.123, 2.343, 5.890, 0.0]))
+    with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
+        gdf.diff(periods=1, axis=1)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "int_col": [1, 2, 3, 4, 5],
+            "float_col": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "string_col": ["a", "b", "c", "d", "e"],
+        },
+        ["a", "b", "c", "d", "e"],
+        [np.nan, None, np.nan, None],
+    ],
+)
+def test_diff_dataframe_non_numeric_dypes(data):
+    gdf = cudf.DataFrame(data)
+    with pytest.raises(
+        NotImplementedError,
+        match="DataFrame.diff only supports numeric dtypes",
+    ):
+        gdf.diff(periods=2, axis=0)
+
+
 def test_dataframe_assign_cp_np_array():
     m, n = 5, 3
     cp_ndarray = cupy.random.randn(m, n)
@@ -9079,6 +9145,32 @@ def test_dataframe_assign_cp_np_array():
     gdf[[f"f_{i}" for i in range(n)]] = cp_ndarray
 
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+)
+def test_dataframe_nunique(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.nunique()
+    expected = pdf.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
+)
+def test_dataframe_nunique_index(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.index.nunique()
+    expected = pdf.index.nunique()
+
+    assert_eq(expected, actual)
 
 
 def test_dataframe_rename_duplicate_column():

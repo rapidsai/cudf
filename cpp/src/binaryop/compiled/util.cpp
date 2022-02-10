@@ -45,7 +45,11 @@ struct common_type_functor {
         // Eg. d=t-t
         return data_type{type_to_id<TypeCommon>()};
       }
-      return {};
+
+      // A compiler bug may cause a compilation error when using empty initializer list to construct
+      // an std::optional object containing no `data_type` value. Therefore, we should explicitly
+      // return `std::nullopt` instead.
+      return std::nullopt;
     }
   };
   template <typename TypeLhs, typename TypeRhs>

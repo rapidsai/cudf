@@ -1,6 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import math
 import pickle
@@ -825,6 +825,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         result.name = name
         return result
+
+    def memory_usage(self, deep=False):
+        return sum(super().memory_usage(deep=deep).values())
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
