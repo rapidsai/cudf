@@ -2265,18 +2265,17 @@ def test_parquet_writer_nested(tmpdir, data):
     "decimal_type",
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
-def test_parquet_writer_decimal(tmpdir, decimal_type):
-
-    gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
+@pytest.mark.parametrize("data", [[1, 2, 3], [0.00, 0.01, None, 0.5]])
+def test_parquet_writer_decimal(decimal_type, data):
+    gdf = cudf.DataFrame({"val": data})
 
     gdf["dec_val"] = gdf["val"].astype(decimal_type(7, 2))
 
-    fname = tmpdir.join("test_parquet_writer_decimal.parquet")
-    gdf.to_parquet(fname)
-    assert os.path.exists(fname)
+    buff = BytesIO()
+    gdf.to_parquet(buff)
 
-    got = pd.read_parquet(fname)
-    assert_eq(gdf, got)
+    got = pd.read_parquet(buff, use_nullable_dtypes=True)
+    assert_eq(gdf.to_pandas(nullable=True), got)
 
 
 def test_parquet_writer_column_validation():

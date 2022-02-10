@@ -40,7 +40,7 @@ def test_roundtrip_from_dask(tmpdir, stats):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
     files = sorted(
-        [os.path.join(tmpdir, f) for f in os.listdir(tmpdir)],
+        (os.path.join(tmpdir, f) for f in os.listdir(tmpdir)),
         key=natural_sort_key,
     )
 

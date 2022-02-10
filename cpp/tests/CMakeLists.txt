@@ -20,11 +20,18 @@
 function(ConfigureTest CMAKE_TEST_NAME)
   add_executable(${CMAKE_TEST_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                  "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+    ${CMAKE_TEST_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+  install(
+    TARGETS ${CMAKE_TEST_NAME}
+    COMPONENT testing
+    DESTINATION bin/gtests/libcudf
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################
