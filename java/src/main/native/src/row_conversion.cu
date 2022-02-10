@@ -190,21 +190,6 @@ struct batch_data {
 };
 
 /**
- * @brief functor to compute row size with alignment
- *
- */
-struct aligned_row_size_functor {
-  aligned_row_size_functor(size_type _fixed_width_and_validity_size)
-      : fixed_width_and_validity_size(_fixed_width_and_validity_size) {}
-
-  __device__ size_type operator()(size_type row_size) {
-    return util::round_up_unsafe(fixed_width_and_validity_size + row_size, JCUDF_ROW_ALIGNMENT);
-  }
-
-  size_type fixed_width_and_validity_size;
-};
-
-/**
  * @brief builds row size information for tables that contain strings
  *
  * @param tbl table from which to compute row size information
