@@ -2164,7 +2164,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self.loc
 
     @property  # type: ignore
-    @_external_only_api
+    @_external_only_api(
+        "Use _column_names instead, or _data.to_pandas_index() if a pandas "
+        "index is absolutely necessary. For checking if the columns are a "
+        "MultiIndex, use _data.multiindex."
+    )
     @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns"""
