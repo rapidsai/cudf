@@ -4740,27 +4740,10 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStringSplitRecord() {
-    String pattern = " ";
-    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", "null", "", "ARé some", "test strings");
-         ColumnVector expected = ColumnVector.fromLists(
-                 new HostColumnVector.ListType(true,
-                     new HostColumnVector.BasicType(true, DType.STRING)),
-                 Arrays.asList("Héllo", "there"),
-                 Arrays.asList("thésé"),
-                 Arrays.asList("null"),
-                 Arrays.asList(""),
-                 Arrays.asList("ARé", "some"),
-                 Arrays.asList("test", "strings"));
-         ColumnVector result = v.stringSplitRecord(pattern, -1)) {
-        assertColumnsAreEqual(expected, result);
-    }
-  }
-
-  @Test
   void testStringSplit() {
     String pattern = " ";
-    try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "", "ARé some things", "test strings here");
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",
+        "ARé some things", "test strings here");
          Table expectedSplitLimit2 = new Table.TestBuilder()
          .column("Héllo", "thésé", null, "", "ARé", "test")
          .column("there all", null, null, null, "some things", "strings here")
@@ -4778,13 +4761,83 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStringSplitWhiteSpace() {
-    try (ColumnVector v = ColumnVector.fromStrings("Héllo thesé", null, "are\tsome", "tést\nString", " ");
-         Table expected = new Table.TestBuilder().column("Héllo", null, "are", "tést", null)
-         .column("thesé", null, "some", "String", null)
-         .build();
-         Table result = v.stringSplit()) {
-      assertTablesAreEqual(expected, result);
+  void testStringSplitByRegularExpression() {
+    String pattern = "[_ ]";
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo_there all", "thésé", null, "",
+        "ARé some_things", "test_strings_here");
+         Table expectedSplitLimit2 = new Table.TestBuilder()
+             .column("Héllo", "thésé", null, "", "ARé", "test")
+             .column("there all", null, null, null, "some_things", "strings_here")
+             .build();
+         Table expectedSplitAll = new Table.TestBuilder()
+             .column("Héllo", "thésé", null, "", "ARé", "test")
+             .column("there", null, null, null, "some", "strings")
+             .column("all", null, null, null, "things", "here")
+             .build();
+         Table resultSplitLimit2 = v.stringSplit(pattern, 2, true);
+         Table resultSplitAll = v.stringSplit(pattern, true)) {
+      assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertTablesAreEqual(expectedSplitAll, resultSplitAll);
+    }
+  }
+
+  @Test
+  void testStringSplitRecord() {
+    String pattern = " ";
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there all", "thésé", null, "",
+        "ARé some things", "test strings here");
+         ColumnVector expectedSplitLimit2 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there all"),
+             Arrays.asList("thésé"),
+             Arrays.asList((Object) null),
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some things"),
+             Arrays.asList("test", "strings here"));
+         ColumnVector expectedSplitAll = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there", "all"),
+             Arrays.asList("thésé"),
+             Arrays.asList((Object) null),
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some", "things"),
+             Arrays.asList("test", "strings", "here"));
+         ColumnVector resultSplitLimit2 = v.stringSplitRecord(pattern, 2);
+         ColumnVector resultSplitAll = v.stringSplitRecord(pattern)) {
+      assertColumnsAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertColumnsAreEqual(expectedSplitAll, resultSplitAll);
+    }
+  }
+
+  @Test
+  void testStringSplitRecordByRegularExpression() {
+    String pattern = "[_ ]";
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo_there all", "thésé", null, "",
+        "ARé some_things", "test_strings_here");
+         ColumnVector expectedSplitLimit2 = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there all"),
+             Arrays.asList("thésé"),
+             Arrays.asList((Object) null),
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some_things"),
+             Arrays.asList("test", "strings_here"));
+         ColumnVector expectedSplitAll = ColumnVector.fromLists(
+             new HostColumnVector.ListType(true,
+                 new HostColumnVector.BasicType(true, DType.STRING)),
+             Arrays.asList("Héllo", "there", "all"),
+             Arrays.asList("thésé"),
+             Arrays.asList((Object) null),
+             Arrays.asList(""),
+             Arrays.asList("ARé", "some", "things"),
+             Arrays.asList("test", "strings", "here"));
+         ColumnVector resultSplitLimit2 = v.stringSplitRecord(pattern, 2, true);
+         ColumnVector resultSplitAll = v.stringSplitRecord(pattern, true)) {
+      assertColumnsAreEqual(expectedSplitLimit2, resultSplitLimit2);
+      assertColumnsAreEqual(expectedSplitAll, resultSplitAll);
     }
   }
 
