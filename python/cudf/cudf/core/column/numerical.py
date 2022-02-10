@@ -351,6 +351,10 @@ class NumericalColumn(NumericalBaseColumn):
         col = self.nans_to_nulls() if drop_nan else self
         return drop_nulls([col])[0]
 
+    @property
+    def contains_na_entries(self) -> bool:
+        return (self.nan_count != 0) or (self.null_count != 0)
+
     def _process_values_for_isin(
         self, values: Sequence
     ) -> Tuple[ColumnBase, ColumnBase]:
