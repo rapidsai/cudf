@@ -7,7 +7,6 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
-from itertools import repeat
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -1021,10 +1020,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             op = f"__{'r' if reflect else ''}{op}__"
 
             # pandas bitwise operations return bools if indexes are misaligned.
-            # TODO: Generalize for other types of Frames
             if (
                 "bitwise" in fname
-                and isinstance(other, Series)
+                and isinstance(other, IndexedFrame)
                 and not self.index.equals(other.index)
             ):
                 return getattr(self, op)(other).astype(bool)
@@ -1057,40 +1055,46 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         cupy_func = getattr(cupy, fname)
         if cupy_func:
             # Indices must be aligned before converting to arrays.
-            if ufunc.nin == 2 and all(map(isinstance, inputs, repeat(Series))):
-                inputs = _align_indices(inputs, allow_non_unique=True)
-                index = inputs[0].index
+            if ufunc.nin == 2:
+                other = inputs[self is inputs[0]]
+                inputs, index = self._prep_for_binop(other, fname)
             else:
-                index = self.index
+                inputs = {self.name: (self._column, None, False, None)}
+                index = self._index
 
-            cupy_inputs = []
             mask = None
-            for inp in inputs:
-                # TODO: Generalize for other types of Frames
-                if isinstance(inp, Series) and inp.has_nulls:
-                    new_mask = as_column(inp.nullmask)
+            data = [{} for _ in range(ufunc.nout)]
+            for name, (left, right, _, _) in inputs.items():
+                cupy_inputs = []
+                # TODO: I'm jumping through multiple hoops to get the unary
+                # behavior to match up with the binary. I should see if there
+                # are better patterns to employ here.
+                for inp in (left, right) if ufunc.nin == 2 else (left,):
+                    if isinstance(inp, column.ColumnBase) and inp.has_nulls():
+                        new_mask = as_column(inp.nullmask)
 
-                    # TODO: This is a hackish way to perform a bitwise and of
-                    # bitmasks. Once we expose cudf::detail::bitwise_and, then
-                    # we can use that instead.
-                    mask = new_mask if mask is None else (mask & new_mask)
+                        # TODO: This is a hackish way to perform a bitwise and
+                        # of bitmasks. Once we expose
+                        # cudf::detail::bitwise_and, then we can use that
+                        # instead.
+                        mask = new_mask if mask is None else (mask & new_mask)
 
-                    # Arbitrarily fill with zeros. For ufuncs, we assume that
-                    # the end result propagates nulls via a bitwise and, so
-                    # these elements are irrelevant.
-                    inp = inp.fillna(0)
-                cupy_inputs.append(cupy.asarray(inp))
+                        # Arbitrarily fill with zeros. For ufuncs, we assume
+                        # that the end result propagates nulls via a bitwise
+                        # and, so these elements are irrelevant.
+                        inp = inp.fillna(0)
+                    cupy_inputs.append(cupy.asarray(inp))
 
-            cp_output = cupy_func(*cupy_inputs, **kwargs)
+                cp_output = cupy_func(*cupy_inputs, **kwargs)
+                if ufunc.nout == 1:
+                    cp_output = (cp_output,)
+                for i, out in enumerate(cp_output):
+                    data[i][name] = as_column(out).set_mask(mask)
 
-            def make_frame(arr):
-                return self.__class__._from_data(
-                    {self.name: as_column(arr).set_mask(mask)}, index=index
-                )
-
-            if ufunc.nout > 1:
-                return tuple(make_frame(out) for out in cp_output)
-            return make_frame(cp_output)
+            out = tuple(
+                self.__class__._from_data(out, index=index) for out in data
+            )
+            return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented
 
@@ -1342,7 +1346,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _binaryop(
+    def _prep_for_binop(
         self,
         other: Frame,
         fn: str,
@@ -1376,9 +1380,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lhs = self
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
+        return operands, lhs._index
+
+    def _binaryop(
+        self,
+        other: Frame,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        operands, out_index = self._prep_for_binop(
+            other, fn, fill_value, reflect, can_reindex
+        )
         return (
-            lhs._from_data(
-                data=lhs._colwise_binop(operands, fn), index=lhs._index,
+            self._from_data(
+                data=self._colwise_binop(operands, fn), index=out_index,
             )
             if operands is not NotImplemented
             else NotImplemented
