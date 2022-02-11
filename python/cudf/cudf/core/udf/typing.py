@@ -25,7 +25,7 @@ from cudf.core.udf._ops import (
     unary_ops,
 )
 
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, StringViewBuffer
 
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
@@ -64,7 +64,7 @@ class stringview_model(models.StructModel):
         
 class StrViewArgHandler:
     def prepare_args(self, ty, val, **kwargs):
-        if isinstance(val, Buffer):
+        if isinstance(val, StringViewBuffer):
             return types.uint64, val.ptr
         else:
             return ty, val

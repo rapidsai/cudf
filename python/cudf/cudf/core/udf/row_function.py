@@ -23,7 +23,6 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-from cudf.core.udf import strings
 
 def _get_frame_row_type(dtype):
     """

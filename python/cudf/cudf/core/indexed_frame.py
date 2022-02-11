@@ -784,7 +784,7 @@ class IndexedFrame(Frame):
         # if _compile_or_get succeeds, it is safe to create a kernel that only
         # consumes the columns that are of supported dtype
         for col in _supported_cols_from_frame(self).values():
-            data = col.data if not is_string_dtype(col.dtype) else to_string_view_array(cudf.Series(col))
+            data = col.data if not is_string_dtype(col.dtype) else to_string_view_array(col)
             mask = col.mask
             if mask is None:
                 launch_args.append(data)

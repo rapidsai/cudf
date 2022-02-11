@@ -127,8 +127,10 @@ def _masked_array_type_from_col(col):
         return col_type
     else:
         return Tuple(
-            col_type,
-            libcudf_bitmask_type[::1]
+            (
+                col_type,
+                libcudf_bitmask_type[::1]
+            )
         )
 
 
