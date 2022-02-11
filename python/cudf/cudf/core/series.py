@@ -1059,7 +1059,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 other = inputs[self is inputs[0]]
                 inputs, index = self._prep_for_binop(other, fname)
             else:
-                inputs = {self.name: (self._column, None, False, None)}
+                inputs = {
+                    name: (col, None, False, None)
+                    for name, col in self._data.items()
+                }
                 index = self._index
 
             mask = None
