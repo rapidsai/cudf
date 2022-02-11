@@ -702,7 +702,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if inplace:
             out = self
         else:
-            # TODO: PREM
             out = self.copy()
 
         dropped = _drop_rows_by_labels(out, target, level, errors)

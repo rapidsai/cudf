@@ -842,7 +842,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @staticmethod
     def _align_input_series_indices(data, index):
-        # TODO: PREM
         data = data.copy()
 
         input_series = [

@@ -683,7 +683,6 @@ class BaseIndex(Serializable):
         other = cudf.Index(other)
 
         if is_mixed_with_object_dtype(self, other):
-            # TODO: PREM
             difference = self.copy()
         else:
             difference = self.join(other, how="leftanti")
