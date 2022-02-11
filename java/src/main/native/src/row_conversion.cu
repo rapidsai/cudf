@@ -250,7 +250,7 @@ build_string_row_offsets(table_view const &tbl, size_type fixed_width_and_validi
                                                    JCUDF_ROW_ALIGNMENT);
                     });
 
-  return {std::move(d_row_offsets), std::move(d_string_columns_offsets)};
+  return {std::move(d_row_sizes), std::move(d_offsets_iterators)};
 }
 
 /**
@@ -1744,7 +1744,8 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
  */
 template <typename offsetFunctor>
 std::vector<std::unique_ptr<column>> convert_to_rows(
-  table_view const &tbl, batch_data &batch_info, offsetFunctor offset_functor, column_info_s const &column_info,
+    table_view const &tbl, batch_data &batch_info, offsetFunctor offset_functor,
+    column_info_s const &column_info,
     std::optional<rmm::device_uvector<strings_column_view::offset_iterator>> variable_width_offsets,
     rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   int device_id;
@@ -1779,7 +1780,6 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   auto const num_fixed_width_columns = fixed_width_table.num_columns();
   auto dev_col_sizes = make_device_uvector_async(column_info.fixed_width_column_sizes, stream);
   auto dev_col_starts = make_device_uvector_async(column_info.fixed_width_column_starts, stream);
-  auto batch_info = detail::build_batches(num_rows, row_sizes, fixed_width_only, stream, mr);
 
   // Get the pointers to the input columnar data ready
   auto data_begin = thrust::make_transform_iterator(fixed_width_table.begin(), [](auto const &c) {
@@ -1851,14 +1851,15 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   auto const validity_offset = column_info.fixed_width_column_starts.back();
 
   detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
-      num_rows, num_fixed_width_columns, shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
-      dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
+      num_rows, num_fixed_width_columns, shmem_limit_per_tile, gpu_tile_infos,
+      dev_input_data.data(), dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
       batch_info.d_batch_row_boundaries.data(),
       reinterpret_cast<int8_t **>(dev_output_data.data()));
 
+  // note that validity gets the entire table and not the fixed-width portion
   detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
                                   stream.value()>>>(
-      num_rows, num_fixed_width_columns, shmem_limit_per_tile, offset_functor,
+      num_rows, tbl.num_columns(), shmem_limit_per_tile, offset_functor,
       batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), validity_offset,
       dev_validity_tile_infos, dev_input_nm.data());
 
@@ -1890,7 +1891,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
         make_device_uvector_async(column_info.variable_width_column_starts, stream);
 
     dim3 string_threads(256);
-    for (int i = 0; i < batch_info.row_batches.size(); i++) {
+    for (uint i = 0; i < batch_info.row_batches.size(); i++) {
       auto const batch_row_offset = batch_info.batch_row_boundaries[i];
       auto const batch_num_rows = batch_info.row_batches[i].row_count;
 
@@ -1982,8 +1983,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
     detail::fixed_width_row_offset_functor offset_functor(
         util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
 
-    return detail::convert_to_rows(tbl, batch_info, offset_functor, column_starts, column_sizes,
-                                   fixed_width_size_per_row, stream, mr);
+    return detail::convert_to_rows(tbl, batch_info, offset_functor, std::move(column_info),
+                                   std::nullopt, stream, mr);
   } else {
     auto offset_data = detail::build_string_row_offsets(tbl, fixed_width_size_per_row, stream);
     auto &row_sizes = std::get<0>(offset_data);
@@ -1995,7 +1996,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
 
     detail::string_row_offset_functor offset_functor(batch_info.batch_row_offsets);
 
-    return detail::convert_to_rows(tbl, batch_info, std::move(column_info),
+    return detail::convert_to_rows(tbl, batch_info, offset_functor, std::move(column_info),
                                    std::make_optional(std::move(std::get<1>(offset_data))), stream,
                                    mr);
   }
