@@ -6,6 +6,7 @@ import itertools
 import numbers
 import pickle
 from collections.abc import Sequence
+from functools import cached_property
 from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
@@ -22,11 +23,7 @@ from cudf.core import column
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
-from cudf.utils.utils import (
-    NotIterable,
-    _maybe_indices_to_slice,
-    cached_property,
-)
+from cudf.utils.utils import NotIterable, _maybe_indices_to_slice
 
 
 class MultiIndex(Frame, BaseIndex, NotIterable):

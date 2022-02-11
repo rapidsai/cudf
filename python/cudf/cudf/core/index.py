@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import pickle
 import warnings
+from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -54,7 +55,7 @@ from cudf.core.frame import Frame
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import cached_property, search_range
+from cudf.utils.utils import search_range
 
 T = TypeVar("T", bound="Frame")
 

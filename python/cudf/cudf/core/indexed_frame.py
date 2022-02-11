@@ -6,6 +6,7 @@ from __future__ import annotations
 import operator
 import warnings
 from collections import Counter, abc
+from functools import cached_property
 from typing import Callable, Type, TypeVar
 from uuid import uuid4
 
@@ -30,7 +31,6 @@ from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
-from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.

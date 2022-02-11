@@ -91,7 +91,7 @@ class Frame:
 
     @property
     def _column_names(self) -> List[Any]:  # TODO: List[str]?
-        return self._data.names
+        return list(self._data.names)
 
     @property
     def _index_names(self) -> List[Any]:  # TODO: List[str]?
@@ -105,7 +105,7 @@ class Frame:
 
     @property
     def _columns(self) -> List[Any]:  # TODO: List[Column]?
-        return self._data.columns
+        return list(self._data.columns)
 
     def serialize(self):
         header = {
