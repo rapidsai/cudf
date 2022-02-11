@@ -70,7 +70,6 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <nvtext/tokenize.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
