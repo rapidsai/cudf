@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <jni.h>
@@ -524,7 +525,7 @@ private:
   void init_cstr() const {
     if (orig != NULL && cstr == NULL) {
       cstr_length = env->GetStringUTFLength(orig);
-      cstr = env->GetStringUTFChars(orig, 0);
+      cstr = env->GetStringUTFChars(orig, 0); // not guarantee to have null terminated.
       check_java_exception(env);
     }
   }
@@ -555,6 +556,7 @@ public:
 
   bool is_null() const noexcept { return orig == NULL; }
 
+  // Note that the char* return by this function is not guaranteed to be null-terminated.
   const char *get() const {
     init_cstr();
     return cstr;
@@ -564,6 +566,12 @@ public:
     init_cstr();
     return cstr_length;
   }
+
+  // Note that the char* return by `get()` is not guaranteed to be null-terminated.
+  // Thus, constructing an std::string should be performed with a string size supplied.
+  std::string get_cpp_str() const { return std::string(get(), size_bytes()); }
+
+  jstring get_jstring() const { return orig; }
 
   bool is_empty() const {
     if (cstr != NULL) {
@@ -575,8 +583,6 @@ public:
     }
     return true;
   }
-
-  const jstring get_jstring() const { return orig; }
 
   ~native_jstring() {
     if (orig != NULL && cstr != NULL) {
