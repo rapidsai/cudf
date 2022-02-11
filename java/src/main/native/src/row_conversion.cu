@@ -205,6 +205,14 @@ struct batch_data {
   std::vector<row_batch> row_batches; // information about each batch such as byte count
 };
 
+/**
+ * @brief builds row size information for tables that contain strings
+ *
+ * @param tbl table from which to compute row size information
+ * @param fixed_width_and_validity_size size of fixed-width and validity data in this table
+ * @param stream cuda stream on which to operate
+ * @return pair of device vector of size_types of the row sizes of the table and a device vector of offsets into the string column
+ */
 std::tuple<rmm::device_uvector<size_type>,
            rmm::device_uvector<strings_column_view::offset_iterator>>
 build_string_row_offsets(table_view const &tbl, size_type fixed_width_and_validity_size,
