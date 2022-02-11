@@ -574,6 +574,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Regular expression pattern with capturing groups.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
         expand : bool, default True
             If True, return DataFrame with one column per capture group.
             If False, return a Series/Index if there is one capture group or
@@ -588,8 +590,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        The `flags` parameter is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is passed.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -618,10 +620,12 @@ class StringMethods(ColumnMethods):
         2    <NA>
         dtype: object
         """  # noqa W605
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
-        data, index = libstrings.extract(self._column, pat)
+        data, index = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
             data = next(iter(data.values()))
         else:
@@ -752,7 +756,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         if pat is None:
             result_col = column.column_empty(
@@ -3417,7 +3423,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         return self._return_or_inplace(
             libstrings.count_re(self._column, pat, flags)
@@ -3434,6 +3442,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Pattern or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3443,7 +3453,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        `flags` parameter is currently not supported.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -3486,10 +3497,15 @@ class StringMethods(ColumnMethods):
         1  <NA>  <NA>
         2     b     b
         """
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
-        data, index = libstrings.findall(self._column, pat)
+        data, index = libstrings.findall(self._column, pat, flags)
         return self._return_or_inplace(
             cudf.core.frame.Frame(data, index), expand=expand
         )
@@ -3985,7 +4001,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         return self._return_or_inplace(
             libstrings.match_re(self._column, pat, flags)
