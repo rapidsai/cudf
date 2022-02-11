@@ -2345,121 +2345,125 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a list of columns by splitting each string using the specified delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param limit the maximum size of the array resulting from splitting the input string,
+   * Returns a list of columns by splitting each string using the specified pattern. The number of
+   * rows in the output columns will be the same as the input column. Null entries are added for a
+   * row where split results have been exhausted. Null input entries result in all nulls in the
+   * corresponding rows of the output columns.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
-   * @return New table of strings columns.
+   * @return list of strings columns as a table.
    */
-  public final Table stringSplit(String delimiter, int limit, boolean splitByRegex) {
+  public final Table stringSplit(String pattern, int limit, boolean splitByRegex) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert delimiter != null : "delimiter is null";
-    assert delimiter.length() > 0 : "empty delimiter is not supported";
+    assert pattern != null : "pattern is null";
+    assert pattern.length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
-    return new Table(stringSplit(this.getNativeView(), delimiter, limit, splitByRegex));
+    return new Table(stringSplit(this.getNativeView(), pattern, limit, splitByRegex));
   }
 
   /**
-   * Returns a list of columns by splitting each string using the specified string literal delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param limit the maximum size of the array resulting from splitting the input string,
+   * Returns a list of columns by splitting each string using the specified pattern. The number of
+   * rows in the output columns will be the same as the input column. Null entries are added for a
+   * row where split results have been exhausted. Null input entries result in all nulls in the
+   * corresponding rows of the output columns.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return list of strings columns as a table.
+   */
+  public final Table stringSplit(String pattern, boolean splitByRegex) {
+    return stringSplit(pattern, -1, splitByRegex);
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @return New table of strings columns.
+   * @return list of strings columns as a table.
    */
   public final Table stringSplit(String delimiter, int limit) {
     return stringSplit(delimiter, limit, false);
   }
 
   /**
-   * Returns a list of columns by splitting each string using the specified delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
-   * @return New table of strings columns.
-   */
-  public final Table stringSplit(String delimiter, boolean splitByRegex) {
-    return stringSplit(delimiter, -1, splitByRegex);
-  }
-
-  /**
-   * Returns a list of columns by splitting each string using the specified string literal delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @return New table of strings columns.
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @return list of strings columns as a table.
    */
   public final Table stringSplit(String delimiter) {
     return stringSplit(delimiter, -1, false);
   }
 
   /**
-   * Returns a column that is a list of strings. Each string list is made by splitting each input
-   * string using the specified delimiter.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param limit the maximum size of the array resulting from splitting the input string,
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified pattern.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
-   * @return New table of strings columns.
+   * @return a LIST column of string elements.
    */
-  public final ColumnVector stringSplitRecord(String delimiter, int limit, boolean splitByRegex) {
+  public final ColumnVector stringSplitRecord(String pattern, int limit, boolean splitByRegex) {
     assert type.equals(DType.STRING) : "column type must be String";
-    assert delimiter != null : "delimiter is null";
-    assert delimiter.length() > 0 : "empty delimiter is not supported";
+    assert pattern != null : "pattern is null";
+    assert pattern.length() > 0 : "empty pattern is not supported";
     assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter, limit, splitByRegex));
+        stringSplitRecord(this.getNativeView(), pattern, limit, splitByRegex));
   }
 
   /**
-   * Returns a column that is a list of strings. Each string list is made by splitting each input
-   * string using the specified string literal delimiter.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param limit the maximum size of the array resulting from splitting the input string,
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified pattern.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(String pattern, boolean splitByRegex) {
+    return stringSplitRecord(pattern, -1, splitByRegex);
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified string literal delimiter.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @return New table of strings columns.
+   * @return a LIST column of string elements.
    */
   public final ColumnVector stringSplitRecord(String delimiter, int limit) {
     return stringSplitRecord(delimiter, limit, false);
   }
-  /**
-   * Returns a column of lists of strings by splitting each string using the specified delimiter.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
-   *                     regular expression pattern or just by a string literal delimiter.
-   */
-  public final ColumnVector stringSplitRecord(String delimiter, boolean splitByRegex) {
-    return stringSplitRecord(delimiter, -1, splitByRegex);
-  }
 
   /**
-   * Returns a column of lists of strings by splitting each string using the specified string
-   * literal delimiter.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   *                  An empty string indicates split on whitespace.
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified string literal delimiter.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @return a LIST column of string elements.
    */
   public final ColumnVector stringSplitRecord(String delimiter) {
     return stringSplitRecord(delimiter, -1, false);
