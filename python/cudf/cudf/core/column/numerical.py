@@ -382,15 +382,8 @@ class NumericalColumn(NumericalBaseColumn):
         if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        super_obj = cast(
-            "cudf.core.column.ColumnBase",
-            (
-                super(NumericalColumn, self.nans_to_nulls())
-                if skipna
-                else super()
-            ),
-        )
-        return super_obj._process_for_reduction(
+        col = self.nans_to_nulls() if skipna else self
+        return super(NumericalColumn, col)._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
 
