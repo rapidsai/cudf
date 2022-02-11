@@ -580,13 +580,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
     auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
     auto const strs_input = cudf::strings_column_view{*input};
 
-    auto const pattern = cudf::jni::native_jstring(env, pattern_obj).get_cpp_str();
-    if (pattern.empty()) {
+    auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
+    if (pattern_jstr.is_empty()) {
       // Java's split API produces different behaviors than cudf when splitting with empty
       // pattern.
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
     }
 
+    auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
     auto result = split_by_regex ?
                       cudf::strings::split_re(strs_input, pattern, max_split) :
@@ -614,13 +615,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
     auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
     auto const strs_input = cudf::strings_column_view{*input};
 
-    auto const pattern = cudf::jni::native_jstring(env, pattern_obj).get_cpp_str();
-    if (pattern.empty()) {
+    auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
+    if (pattern_jstr.is_empty()) {
       // Java's split API produces different behaviors than cudf when splitting with empty
       // pattern.
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
     }
 
+    auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
     auto const max_split = limit > 1 ? limit - 1 : limit;
     auto result =
         split_by_regex ?
