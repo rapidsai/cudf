@@ -1271,14 +1271,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             {str(k): v for k, v in super().memory_usage(index, deep).items()}
         )
 
-    @annotate("DATAFRAME_ARRAY_UFUNC", color="blue", domain="cudf_python")
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(self)
-        else:
-            return NotImplemented
-
     @annotate("DATAFRAME_ARRAY_FUNCTION", color="blue", domain="cudf_python")
     def __array_function__(self, func, types, args, kwargs):
 
