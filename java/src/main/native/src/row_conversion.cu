@@ -211,7 +211,8 @@ struct batch_data {
  * @param tbl table from which to compute row size information
  * @param fixed_width_and_validity_size size of fixed-width and validity data in this table
  * @param stream cuda stream on which to operate
- * @return pair of device vector of size_types of the row sizes of the table and a device vector of offsets into the string column
+ * @return pair of device vector of size_types of the row sizes of the table and a device vector of
+ * offsets into the string column
  */
 std::tuple<rmm::device_uvector<size_type>,
            rmm::device_uvector<strings_column_view::offset_iterator>>
