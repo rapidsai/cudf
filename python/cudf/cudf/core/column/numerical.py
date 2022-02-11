@@ -376,14 +376,23 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
-    ) -> Union[ColumnBase, ScalarLike]:
+    ) -> Union[NumericalColumn, ScalarLike]:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        super_obj = super(NumericalColumn, self.nans_to_nulls()) if skipna else super()
-        return super_obj._process_for_reduction(skipna=skipna, min_count=min_count)
+        super_obj = cast(
+            "cudf.core.column.ColumnBase",
+            (
+                super(NumericalColumn, self.nans_to_nulls())
+                if skipna
+                else super()
+            ),
+        )
+        return super_obj._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
 
     def find_and_replace(
         self,

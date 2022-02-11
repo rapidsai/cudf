@@ -1094,20 +1094,19 @@ class CategoricalColumn(column.ColumnBase):
         # map it to the new label it is to be replaced by
         dtype_replace = cudf.Series(replacement_col)
         dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
-        old_cats._data["new_cats"] = old_cats["cats"].replace(
-            to_replace_col, dtype_replace
-        )
+        new_cats_col = old_cats["cats"].replace(to_replace_col, dtype_replace)
 
         # anything we mapped to None, we want to now filter out since
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = old_cats._data["new_cats"].notnull()
+        bmask = new_cats_col._column.notnull()
+        new_cats_col = new_cats_col._column.apply_boolean_mask(bmask)
         new_cats = cudf.DataFrame._from_data(
-            {"cats": old_cats._data["new_cats"].apply_boolean_mask(bmask)}
-        )
-        new_cats._data["index"] = cudf.core.column.arange(
-            len(new_cats._data["cats"])
+            {
+                "index": cudf.core.column.arange(len(new_cats_col)),
+                "cats": new_cats_col,
+            }
         )
 
         # old_cats contains replaced categories and the ints that
