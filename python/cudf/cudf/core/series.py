@@ -1000,11 +1000,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if fname in binary_operations:
             not_reflect = self is inputs[0]
             other = inputs[not_reflect]
+
+            # These operators need to be mapped to their inverses when
+            # performing a reflected operation because no reflected version of
+            # the operators themselves exist.
+            ops_without_reflection = {
+                "gt": "lt",
+                "ge": "le",
+                "lt": "gt",
+                "le": "ge",
+                # ne and eq are symmetric
+                "ne": "ne",
+                "eq": "eq",
+            }
+
             op = binary_operations[fname]
-            ops_without_reflection = ("gt", "ge", "lt", "le", "ne", "eq")
             if op in ops_without_reflection and not not_reflect:
-                # This replacement will ignore eq and ne, which don't need it.
-                op = op.replace(*(("g", "l") if "g" in op else ("l", "g")))
+                op = ops_without_reflection[op]
                 not_reflect = True
             op = f"__{'' if not_reflect else 'r'}{op}__"
 
