@@ -829,7 +829,9 @@ def test_string_join(ps_gs, sep):
 
 @pytest.mark.parametrize("pat", [r"(a)", r"(f)", r"([a-z])", r"([A-Z])"])
 @pytest.mark.parametrize("expand", [True, False])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)]
+)
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
     expectation = raise_builder([flags_raise], NotImplementedError)
@@ -862,9 +864,7 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
     expectation = does_not_raise()
-    if flags_raise:
-        expectation = pytest.raises(ValueError)
-    if na_raise:
+    if flags_raise or na_raise:
         expectation = pytest.raises(NotImplementedError)
 
     with expectation:
