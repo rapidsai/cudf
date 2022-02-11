@@ -177,6 +177,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self.binary_operator("NULL_EQUALS", other).all()
 
     def all(self, skipna: bool = True) -> bool:
+        # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
 
@@ -196,6 +197,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
+        # The drop_nan argument is only used for numerical columns.
         return drop_nulls([self])[0]
 
     def to_arrow(self) -> pa.Array:

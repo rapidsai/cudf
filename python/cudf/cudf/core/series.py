@@ -1926,7 +1926,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._from_data({self.name: data}, index=self._index,)
+            return self._from_data({self.name: data}, index=self._index)
 
         except Exception as e:
             if errors == "raise":

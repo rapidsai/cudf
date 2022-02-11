@@ -4849,7 +4849,7 @@ class Frame:
                 result_data[name] = col.nans_to_nulls()
             except AttributeError:
                 result_data[name] = col.copy()
-        return self._from_data(result_data, self._index,)
+        return self._from_data(result_data, self._index)
 
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
