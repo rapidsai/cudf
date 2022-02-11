@@ -274,7 +274,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     def _make_operands_for_binop(
         self,
-        other: T,
+        other: Any,
         fill_value: Any = None,
         reflect: bool = False,
         *args,
@@ -310,7 +310,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             result_name = self.name
 
-        # This needs to be tested correctly
+        # TODO: This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
