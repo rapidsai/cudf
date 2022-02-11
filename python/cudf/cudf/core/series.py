@@ -1351,7 +1351,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def _prep_for_binop(
         self,
-        other: Frame,
+        other: Any,
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
