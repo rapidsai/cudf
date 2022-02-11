@@ -570,7 +570,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
-    // Java's split API produces different behaviors than cudf when limit == 0 and limit == 1.
+    // Cannot achieve the results of splitting with limit == 0 or limit == 1.
+    // This is because cudf operates on a different parameter (`max_split`) which is converted from
+    // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
+    // unlimited split.
     JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                   "limit == 0 and limit == 1 are not supported", 0);
   }
@@ -605,7 +608,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
   JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
 
   if (limit == 0 || limit == 1) {
-    // Java's split API produces different behaviors than cudf when limit == 0 and limit == 1.
+    // Cannot achieve the results of splitting with limit == 0 or limit == 1.
+    // This is because cudf operates on a different parameter (`max_split`) which is converted from
+    // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
+    // unlimited split.
     JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
                   "limit == 0 and limit == 1 are not supported", 0);
   }
