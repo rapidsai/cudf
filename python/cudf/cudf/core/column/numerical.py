@@ -382,14 +382,8 @@ class NumericalColumn(NumericalBaseColumn):
         if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        if skipna:
-            return super(
-                NumericalColumn, self.nans_to_nulls()
-            )._process_for_reduction(skipna=skipna, min_count=min_count)
-        else:
-            return super()._process_for_reduction(
-                skipna=skipna, min_count=min_count
-            )
+        super_obj = super(NumericalColumn, self.nans_to_nulls()) if skipna else super()
+        return super_obj._process_for_reduction(skipna=skipna, min_count=min_count)
 
     def find_and_replace(
         self,
