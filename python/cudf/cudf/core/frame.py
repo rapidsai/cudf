@@ -2164,7 +2164,7 @@ class Frame:
             )
 
         if not (to_replace is None and value is None):
-            copy_data = self._data.copy(deep=False)
+            copy_data = {}
             (
                 all_na_per_column,
                 to_replace_per_column,
@@ -2173,11 +2173,11 @@ class Frame:
                 to_replace=to_replace,
                 value=value,
                 columns_dtype_map={
-                    col: copy_data._data[col].dtype for col in copy_data._data
+                    col: self._data[col].dtype for col in self._data
                 },
             )
 
-            for name, col in copy_data.items():
+            for name, col in self._data.items():
                 try:
                     copy_data[name] = col.find_and_replace(
                         to_replace_per_column[name],

@@ -449,7 +449,9 @@ class NumericalColumn(NumericalBaseColumn):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, self
         )
-        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = cudf.DataFrame._from_data(
+            {"old": to_replace_col, "new": replacement_col}
+        )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             replaced = replaced.fillna(
@@ -458,7 +460,7 @@ class NumericalColumn(NumericalBaseColumn):
             df = df.dropna(subset=["old"])
 
         return libcudf.replace.replace(
-            replaced, df["old"]._column, df["new"]._column
+            replaced, df._data["old"], df._data["new"]
         )
 
     def fillna(
