@@ -162,14 +162,15 @@ void build_join_hash_table(cudf::table_view const& build,
                            null_equality const nulls_equal,
                            rmm::cuda_stream_view stream)
 {
-  auto build_table_ptr            = cudf::table_device_view::create(build, stream);
-  auto const build_table_num_rows = build.num_rows();
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+  auto const build_table_num_rows{build_table_ptr->num_rows()};
 
   CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build_table_num_rows, "Build side table has no rows");
 
   row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
-  make_pair_function pair_func{hash_build, hash_table.get_empty_key_sentinel()};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
@@ -196,7 +197,7 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
-  bool const _is_empty;
+  std::pair<rmm::device_buffer, cudf::size_type> const _valid_row_info;
   cudf::null_equality const _nulls_equal;
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
