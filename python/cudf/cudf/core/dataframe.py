@@ -831,8 +831,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._data.multiindex = self._data.multiindex and isinstance(
                     col_name, tuple
                 )
-                self.insert(
-                    i, col_name, data[col_name], nan_as_null=nan_as_null
+                self._insert(
+                    i,
+                    col_name,
+                    data[col_name],
+                    nan_as_null=nan_as_null,
+                    ignore_index_check=True,
                 )
 
         if columns is not None:
@@ -2545,6 +2549,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             name or label of column to be inserted
         value : Series or array-like
         """
+        return self._insert(
+            loc=loc,
+            name=name,
+            value=value,
+            nan_as_null=nan_as_null,
+            ignore_index_check=False,
+        )
+
+    @annotate("DATAFRAME__INSERT", color="green", domain="cudf_python")
+    def _insert(
+        self, loc, name, value, nan_as_null=None, ignore_index_check=False
+    ):
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
 
@@ -2563,7 +2579,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
-            if isinstance(value, (pd.Series, Series)):
+            if (
+                isinstance(value, (pd.Series, Series))
+                and not ignore_index_check
+            ):
                 self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
@@ -2577,9 +2596,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value, nan_as_null=nan_as_null)._align_to_index(
-                self._index, how="right", sort=False
-            )
+            value = Series(value, nan_as_null=nan_as_null)
+            if not ignore_index_check:
+                value = value._align_to_index(
+                    self._index, how="right", sort=False
+                )
 
         value = column.as_column(value, nan_as_null=nan_as_null)
 
