@@ -3571,31 +3571,35 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Native method which returns an array of columns by splitting each string using the specified
-   * delimiter.
-   * @param nativeHandle native handle of the cudf::column_view being operated on.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   * @param limit the maximum size of the array resulting from splitting the input string,
+   * Returns a list of columns by splitting each string using the specified pattern. The number of
+   * rows in the output columns will be the same as the input column. Null entries are added for a
+   * row where split results have been exhausted. Null input entries result in all nulls in the
+   * corresponding rows of the output columns.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long[] stringSplit(long nativeHandle, String delimiter, int limit,
+  private static native long[] stringSplit(long nativeHandle, String pattern, int limit,
                                            boolean splitByRegex);
 
   /**
-   * Native method which returns a LIST column by splitting each string into a list of strings
-   * using the specified delimiter.
-   * @param nativeHandle native handle of the cudf::column_view being operated on.
-   * @param delimiter UTF-8 string identifying the split points or split pattern in each string.
-   * @param limit the maximum size of the array resulting from splitting the input string,
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified string literal delimiter.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
    *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
    *              trailing empty strings) and limit = 1 (no split at all) are not supported.
-   * @param splitByRegex a boolean flag indicating whether the input string will be split by a
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
    *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long stringSplitRecord(long nativeHandle, String delimiter, int limit,
+  private static native long stringSplitRecord(long nativeHandle, String pattern, int limit,
                                                boolean splitByRegex);
 
   /**
