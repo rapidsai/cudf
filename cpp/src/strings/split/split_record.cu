@@ -328,7 +328,7 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record(strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::rsplit_record(strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
