@@ -109,7 +109,7 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
 @pytest.mark.parametrize("reflect", [True, False])
 def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
     fname = ufunc.__name__
-    if fname in ("greater", "greater_equal") and has_nulls:
+    if fname in ("greater", "greater_equal", "logical_and") and has_nulls:
         pytest.xfail(
             "The way cudf casts nans in arrays to nulls during binops with "
             "cudf objects is currently incompatible with pandas."
