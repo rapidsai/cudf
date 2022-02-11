@@ -998,9 +998,27 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         # First look for methods of the class.
         fname = ufunc.__name__
         if fname in binary_operations:
-            not_reflect = self is inputs[0]
-            other = inputs[not_reflect]
-            op = f"__{'' if not_reflect else 'r'}{binary_operations[fname]}__"
+            reflect = self is not inputs[0]
+            other = inputs[0] if reflect else inputs[1]
+
+            # These operators need to be mapped to their inverses when
+            # performing a reflected operation because no reflected version of
+            # the operators themselves exist.
+            ops_without_reflection = {
+                "gt": "lt",
+                "ge": "le",
+                "lt": "gt",
+                "le": "ge",
+                # ne and eq are symmetric, so they are their own inverse op
+                "ne": "ne",
+                "eq": "eq",
+            }
+
+            op = binary_operations[fname]
+            if reflect and op in ops_without_reflection:
+                op = ops_without_reflection[op]
+                reflect = False
+            op = f"__{'r' if reflect else ''}{op}__"
 
             # pandas bitwise operations return bools if indexes are misaligned.
             # TODO: Generalize for other types of Frames
