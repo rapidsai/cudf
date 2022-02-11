@@ -349,7 +349,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = DataFrame(self._frame._get_columns_by_index(arg[1]))
+        columns_df = self._frame._get_columns_by_index(arg[1])
 
         columns_df._index = self._frame._index
 
@@ -399,7 +399,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        columns = DataFrame(self._frame._get_columns_by_index(key[1]))
+        columns = self._frame._get_columns_by_index(key[1])
 
         for col in columns:
             self._frame[col].iloc[key[0]] = value
@@ -568,6 +568,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         for k in columns
                     }
                 )
+        elif isinstance(data, ColumnAccessor):
+            raise TypeError(
+                "Use cudf.Series._from_data for constructing a Series from "
+                "ColumnAccessor"
+            )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
 
@@ -4600,10 +4605,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a: int64
         b: int64
         index: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
+        index: [[1,2,3]]
         >>> df.to_arrow(preserve_index=False)
         pyarrow.Table
         a: int64
         b: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
         """
 
         data = self.copy(deep=False)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,8 +140,8 @@ probe_join_hash_table(cudf::table_device_view build_table,
 std::size_t get_full_join_size(cudf::table_device_view build_table,
                                cudf::table_device_view probe_table,
                                multimap_type const& hash_table,
-                               bool has_nulls,
-                               null_equality compare_nulls,
+                               bool const has_nulls,
+                               null_equality const compare_nulls,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -235,7 +235,8 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
                                           null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
   : _is_empty{build.num_rows() == 0},
-    _hash_table{0,
+    _nulls_equal{compare_nulls},
+    _hash_table{compute_hash_table_size(build.num_rows()),
                 std::numeric_limits<hash_value_type>::max(),
                 cudf::detail::JoinNoneValue,
                 stream.value(),
@@ -253,50 +254,43 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
 
   if (_is_empty) { return; }
 
-  _hash_table = std::move(build_join_hash_table(_build, compare_nulls, stream));
+  cudf::detail::build_join_hash_table(_build, _hash_table, _nulls_equal, stream);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::inner_join(cudf::table_view const& probe,
-                                      null_equality compare_nulls,
                                       std::optional<std::size_t> output_size,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
-    probe, compare_nulls, output_size, stream, mr);
+  return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(probe, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::left_join(cudf::table_view const& probe,
-                                     null_equality compare_nulls,
                                      std::optional<std::size_t> output_size,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(
-    probe, compare_nulls, output_size, stream, mr);
+  return compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(probe, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::full_join(cudf::table_view const& probe,
-                                     null_equality compare_nulls,
                                      std::optional<std::size_t> output_size,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
-  return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(
-    probe, compare_nulls, output_size, stream, mr);
+  return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(probe, output_size, stream, mr);
 }
 
 std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& probe,
-                                                       null_equality compare_nulls,
                                                        rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
@@ -316,12 +310,11 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
     *flattened_probe_table_ptr,
     _hash_table,
     cudf::has_nulls(flattened_probe_table) | cudf::has_nulls(_build),
-    compare_nulls,
+    _nulls_equal,
     stream);
 }
 
 std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& probe,
-                                                      null_equality compare_nulls,
                                                       rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
@@ -341,12 +334,11 @@ std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& pr
     *flattened_probe_table_ptr,
     _hash_table,
     cudf::has_nulls(flattened_probe_table) | cudf::has_nulls(_build),
-    compare_nulls,
+    _nulls_equal,
     stream);
 }
 
 std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const& probe,
-                                                      null_equality compare_nulls,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::mr::device_memory_resource* mr) const
 {
@@ -362,20 +354,20 @@ std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const& pr
   auto build_table_ptr           = cudf::table_device_view::create(_build, stream);
   auto flattened_probe_table_ptr = cudf::table_device_view::create(flattened_probe_table, stream);
 
-  return get_full_join_size(*build_table_ptr,
-                            *flattened_probe_table_ptr,
-                            _hash_table,
-                            cudf::has_nulls(flattened_probe_table) | cudf::has_nulls(_build),
-                            compare_nulls,
-                            stream,
-                            mr);
+  return cudf::detail::get_full_join_size(
+    *build_table_ptr,
+    *flattened_probe_table_ptr,
+    _hash_table,
+    cudf::has_nulls(flattened_probe_table) | cudf::has_nulls(_build),
+    _nulls_equal,
+    stream,
+    mr);
 }
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::hash_join_impl::compute_hash_join(cudf::table_view const& probe,
-                                             null_equality compare_nulls,
                                              std::optional<std::size_t> output_size,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr) const
@@ -403,42 +395,40 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const& probe,
                           [](const auto& b, const auto& p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
-  return probe_join_indices<JoinKind>(
-    flattened_probe_table, compare_nulls, output_size, stream, mr);
+  return probe_join_indices<JoinKind>(flattened_probe_table, output_size, stream, mr);
 }
 
 template <cudf::detail::join_kind JoinKind>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe,
-                                              null_equality compare_nulls,
+hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe_table,
                                               std::optional<std::size_t> output_size,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr) const
 {
   // Trivial left join case - exit early
   if (_is_empty and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
-    return get_trivial_left_join_indices(probe, stream, mr);
+    return get_trivial_left_join_indices(probe_table, stream, mr);
   }
 
   CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
   auto build_table_ptr = cudf::table_device_view::create(_build, stream);
-  auto probe_table_ptr = cudf::table_device_view::create(probe, stream);
+  auto probe_table_ptr = cudf::table_device_view::create(probe_table, stream);
 
-  auto join_indices =
-    cudf::detail::probe_join_hash_table<JoinKind>(*build_table_ptr,
-                                                  *probe_table_ptr,
-                                                  _hash_table,
-                                                  cudf::has_nulls(probe) | cudf::has_nulls(_build),
-                                                  compare_nulls,
-                                                  output_size,
-                                                  stream,
-                                                  mr);
+  auto join_indices = cudf::detail::probe_join_hash_table<JoinKind>(
+    *build_table_ptr,
+    *probe_table_ptr,
+    _hash_table,
+    cudf::has_nulls(probe_table) | cudf::has_nulls(_build),
+    _nulls_equal,
+    output_size,
+    stream,
+    mr);
 
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, probe.num_rows(), _build.num_rows(), stream, mr);
+      join_indices.second, probe_table.num_rows(), _build.num_rows(), stream, mr);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
   }
   return join_indices;

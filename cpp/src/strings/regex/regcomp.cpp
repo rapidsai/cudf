@@ -257,11 +257,13 @@ class regex_parser {
     if (quoted) {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
       if (yy >= '0' && yy <= '7') {
-        yy         = yy - '0';
-        char32_t c = *exprp;
-        while (c >= '0' && c <= '7') {
+        yy          = yy - '0';
+        auto c      = *exprp;
+        auto digits = 1;
+        while (c >= '0' && c <= '7' && digits < 3) {
           yy = (yy << 3) | (c - '0');
           c  = *(++exprp);
+          ++digits;
         }
         return CHAR;
       } else {
@@ -278,15 +280,15 @@ class regex_parser {
             yy         = 0;
             if (a >= '0' && a <= '9')
               yy += (a - '0') << 4;
-            else if (a > 'a' && a <= 'f')
+            else if (a >= 'a' && a <= 'f')
               yy += (a - 'a' + 10) << 4;
-            else if (a > 'A' && a <= 'F')
+            else if (a >= 'A' && a <= 'F')
               yy += (a - 'A' + 10) << 4;
             if (b >= '0' && b <= '9')
               yy += b - '0';
-            else if (b > 'a' && b <= 'f')
+            else if (b >= 'a' && b <= 'f')
               yy += b - 'a' + 10;
-            else if (b > 'A' && b <= 'F')
+            else if (b >= 'A' && b <= 'F')
               yy += b - 'A' + 10;
             break;
           }
