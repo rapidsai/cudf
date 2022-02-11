@@ -77,7 +77,7 @@ std::unique_ptr<table> split_re(
 
 /**
  * @brief Splits strings elements into a table of strings columns
- * using a regex pattern to delimit each string.
+ * using a regex pattern to delimit each string starting from the end of the string.
  *
  * Each element generates a vector of strings that are stored in corresponding
  * rows in the output table -- `table[col,row] = token[col] of string[row]`
@@ -146,13 +146,13 @@ std::unique_ptr<table> rsplit_re(
  *
  * @code{.pseudo}
  * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = split_record(s, "[_ ]")
+ * s1 = split_record_re(s, "[_ ]")
  * s1 is a lists column of strings:
  *     [ ["a", "bc", "def", "g"],
  *       ["a", "", "bc"],
  *       ["", "ab", "cd"],
  *       ["ab", "cd", ""] ]
- * s2 = split_record(s, "[ _]", 1)
+ * s2 = split_record_re(s, "[ _]", 1)
  * s2 is a lists column of strings:
  *     [ ["a", "bc def_g"],
  *       ["a", "_bc"],
@@ -177,7 +177,7 @@ std::unique_ptr<column> split_record_re(
 
 /**
  * @brief Splits strings elements into a list column of strings
- * using the given regex pattern to delimit each string.
+ * using the given regex pattern to delimit each string starting from the end of the string.
  *
  * Each element generates a vector of strings that are stored in an output
  * lists column -- `list[row] = [token1, token2, ...] found in input[row]`
@@ -198,13 +198,13 @@ std::unique_ptr<column> split_record_re(
  *
  * @code{.pseudo}
  * s = ["a_bc def_g", "a__bc", "_ab cd", "ab_cd "]
- * s1 = rsplit_record(s, "[_ ]")
+ * s1 = rsplit_record_re(s, "[_ ]")
  * s1 is a lists column of strings:
  *     [ ["a", "bc", "def", "g"],
  *       ["a", "", "bc"],
  *       ["", "ab", "cd"],
  *       ["ab", "cd", ""] ]
- * s2 = rsplit_record(s, "[ _]", 1)
+ * s2 = rsplit_record_re(s, "[ _]", 1)
  * s2 is a lists column of strings:
  *     [ ["a_bc def", "g"],
  *       ["a_", "bc"],
