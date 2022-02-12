@@ -836,7 +836,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_name,
                     data[col_name],
                     nan_as_null=nan_as_null,
-                    ignore_index_check=True,
+                    ignore_index=True,
                 )
 
         if columns is not None:
@@ -1097,7 +1097,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             else:
                 for col_name in self._data:
-                    scatter_map = arg[col_name]
+                    scatter_map = arg._data[col_name]
                     if is_scalar(value):
                         self._data[col_name][scatter_map] = value
                     else:
@@ -2554,13 +2554,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             name=name,
             value=value,
             nan_as_null=nan_as_null,
-            ignore_index_check=False,
+            ignore_index=False,
         )
 
     @annotate("DATAFRAME__INSERT", color="green", domain="cudf_python")
-    def _insert(
-        self, loc, name, value, nan_as_null=None, ignore_index_check=False
-    ):
+    def _insert(self, loc, name, value, nan_as_null=None, ignore_index=False):
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
 
@@ -2579,11 +2577,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
-            if (
-                isinstance(value, (pd.Series, Series))
-                and not ignore_index_check
-            ):
-                self._index = as_index(value.index)
+            if isinstance(value, (pd.Series, Series)):
+                if not ignore_index:
+                    self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
                 new_data = self._data.__class__()
@@ -2597,7 +2593,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
             value = Series(value, nan_as_null=nan_as_null)
-            if not ignore_index_check:
+            if not ignore_index:
                 value = value._align_to_index(
                     self._index, how="right", sort=False
                 )
@@ -4725,8 +4721,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 for gen_name, col_name in zip(
                     gen_names, self.index._data.names
                 ):
-                    data.insert(
-                        data.shape[1], gen_name, self.index._data[col_name]
+                    data._insert(
+                        data.shape[1],
+                        gen_name,
+                        self.index._data[col_name],
+                        ignore_index=True,
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5719,7 +5718,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for k, col in self._data.items():
             infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
             if infered_type in inclusion:
-                df.insert(len(df._data), k, col)
+                df._insert(len(df._data), k, col, ignore_index=True)
 
         return df
 
@@ -6526,7 +6525,12 @@ def _setitem_with_dataframe(
                 raise ValueError("Can not insert new column with a bool mask")
             else:
                 # handle append case
-                input_df.insert(len(input_df._data), col_1, replace_df[col_2])
+                input_df._insert(
+                    loc=len(input_df._data),
+                    name=col_1,
+                    value=replace_df[col_2],
+                    ignore_index=True,
+                )
 
 
 def extract_col(df, col):
