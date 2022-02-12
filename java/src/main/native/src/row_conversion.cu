@@ -67,10 +67,10 @@ constexpr auto NUM_TILES_PER_KERNEL_LOADED = 2;
 constexpr auto NUM_VALIDITY_TILES_PER_KERNEL = 8;
 constexpr auto NUM_VALIDITY_TILES_PER_KERNEL_LOADED = 2;
 
-constexpr auto NUM_STRING_ROWS_PER_BLOCK = 16;
-constexpr auto MAX_STRING_BLOCKS = 2147483647; // way to query CUDA?
-
 constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
+
+constexpr auto NUM_STRING_ROWS_PER_BLOCK = 16;
+constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
@@ -214,7 +214,7 @@ struct batch_data {
  * @return pair of device vector of size_types of the row sizes of the table and a device vector of
  * offsets into the string column
  */
-std::tuple<rmm::device_uvector<size_type>,
+std::pair<rmm::device_uvector<size_type>,
            rmm::device_uvector<strings_column_view::offset_iterator>>
 build_string_row_offsets(table_view const &tbl, size_type fixed_width_and_validity_size,
                          rmm::cuda_stream_view stream) {
@@ -1974,7 +1974,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
 
   auto schema_column_iter =
       thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                      [&tbl](auto i) -> std::tuple<data_type, column_view const> {
+                                      [&tbl](auto i) -> std::pair<data_type, column_view const> {
                                         return {tbl.column(i).type(), tbl.column(i)};
                                       });
 
