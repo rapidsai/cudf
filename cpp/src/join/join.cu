@@ -135,15 +135,15 @@ std::unique_ptr<table> left_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto const [left_join_indices, right_join_indices] = cudf::detail::left_join(
-    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
-
-  if ((left_on.empty() || right_on.empty()) ||
-      is_trivial_join(left, right, cudf::detail::join_kind::LEFT_JOIN)) {
+  if ((left_on.empty() or right_on.empty()) or
+      cudf::detail::is_trivial_join(left, right, cudf::detail::join_kind::LEFT_JOIN)) {
     auto [left_empty_table, right_empty_table] = get_empty_joined_table(left, right);
     return cudf::detail::combine_table_pair(std::move(left_empty_table),
                                             std::move(right_empty_table));
   }
+
+  auto const [left_join_indices, right_join_indices] = cudf::detail::left_join(
+    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
   std::unique_ptr<table> left_result  = detail::gather(left,
                                                       left_join_indices->begin(),
                                                       left_join_indices->end(),
@@ -199,15 +199,15 @@ std::unique_ptr<table> full_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto const [left_join_indices, right_join_indices] = cudf::detail::full_join(
-    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
-
-  if ((left_on.empty() || right_on.empty()) ||
-      is_trivial_join(left, right, cudf::detail::join_kind::FULL_JOIN)) {
+  if ((left_on.empty() or right_on.empty()) or
+      cudf::detail::is_trivial_join(left, right, cudf::detail::join_kind::FULL_JOIN)) {
     auto [left_empty_table, right_empty_table] = get_empty_joined_table(left, right);
     return cudf::detail::combine_table_pair(std::move(left_empty_table),
                                             std::move(right_empty_table));
   }
+
+  auto const [left_join_indices, right_join_indices] = cudf::detail::full_join(
+    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
   std::unique_ptr<table> left_result  = detail::gather(left,
                                                       left_join_indices->begin(),
                                                       left_join_indices->end(),
