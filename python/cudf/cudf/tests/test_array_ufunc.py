@@ -185,26 +185,37 @@ def test_ufunc_cudf_series_error_with_out_kwarg(func):
 
 # Skip matmul since it requires aligned shapes.
 @pytest.mark.parametrize("ufunc", (uf for uf in _UFUNCS if uf != np.matmul))
-@pytest.mark.parametrize("indexed", [False])
 @pytest.mark.parametrize("has_nulls", [True, False])
-# @pytest.mark.parametrize("indexed", [True, False])
+@pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_dataframe(ufunc, has_nulls, indexed):
     # Note: This test assumes that all ufuncs are unary or binary.
     fname = ufunc.__name__
-    if indexed and fname in (
-        "greater",
-        "greater_equal",
-        "less",
-        "less_equal",
-        "not_equal",
-        "equal",
-    ):
-        pytest.skip("Comparison operators do not support misaligned indexes.")
+    # TODO: When pandas starts supporting misaligned indexes properly, remove
+    # this check but enable the one below.
+    if indexed:
+        pytest.xfail(
+            "pandas does not currently support misaligned indexes in "
+            "DataFrames, but we do. Until this is fixed we will skip these "
+            "tests. See the error here: "
+            "https://github.com/pandas-dev/pandas/blob/main/pandas/core/arraylike.py#L212, "  # noqa: E501
+            "called from https://github.com/pandas-dev/pandas/blob/main/pandas/core/arraylike.py#L258"  # noqa: E501
+        )
+    # TODO: Enable the check below when we remove the check above.
+    # if indexed and fname in (
+    #     "greater",
+    #     "greater_equal",
+    #     "less",
+    #     "less_equal",
+    #     "not_equal",
+    #     "equal",
+    # ):
+    #     pytest.skip("Comparison operators do not support misaligned indexes.")  # noqa: E501
 
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
+    # TODO: Add tests of mismatched columns etc.
     pandas_args = args = [
         cudf.DataFrame(
             {"foo": cp.random.randint(low=1, high=10, size=N)},
@@ -227,7 +238,7 @@ def test_ufunc_dataframe(ufunc, has_nulls, indexed):
         # This requires using an internal function (_align_indices), and that
         # is unlikely to change for the foreseeable future.
         aligned = (
-            cudf.DataFrame._align_indices(args, allow_non_unique=True)
+            cudf.core.dataframe._align_indices(*args)
             if indexed and ufunc.nin == 2
             else args
         )
