@@ -1926,10 +1926,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._from_data(
-                {self.name: (data.copy(deep=True) if copy else data)},
-                index=self._index,
-            )
+            return self._from_data({self.name: data}, index=self._index)
 
         except Exception as e:
             if errors == "raise":
@@ -3430,14 +3427,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return result
 
     def add_prefix(self, prefix):
-        result = self.copy(deep=True)
-        result.index = prefix + self.index.astype(str)
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=prefix + self.index.astype(str),
+        )
 
     def add_suffix(self, suffix):
-        result = self.copy(deep=True)
-        result.index = self.index.astype(str) + suffix
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=self.index.astype(str) + suffix,
+        )
 
     def keys(self):
         """

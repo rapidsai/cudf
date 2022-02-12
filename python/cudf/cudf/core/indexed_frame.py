@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
-from cudf.core.column import arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
@@ -59,15 +58,14 @@ doc_reset_index_template = """
 
 
 def _indices_from_labels(obj, labels):
-    from cudf.core.column import column
 
     if not isinstance(labels, cudf.MultiIndex):
-        labels = column.as_column(labels)
+        labels = cudf.core.column.as_column(labels)
 
         if is_categorical_dtype(obj.index):
             labels = labels.astype("category")
             codes = labels.codes.astype(obj.index._values.codes.dtype)
-            labels = column.build_categorical_column(
+            labels = cudf.core.column.build_categorical_column(
                 categories=labels.dtype.categories,
                 codes=codes,
                 ordered=labels.dtype.ordered,
@@ -78,8 +76,12 @@ def _indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": arange(len(labels))}, index=labels)
-    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
+    lhs = cudf.DataFrame(
+        {"__": cudf.core.column.arange(len(labels))}, index=labels
+    )
+    rhs = cudf.DataFrame(
+        {"_": cudf.core.column.arange(len(obj))}, index=obj.index
+    )
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -334,7 +336,7 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+        axis : {0 or 'index', 1 or 'columns'}, default 0
             The axis along which to sort. The value 0 identifies the rows,
             and 1 identifies the columns.
         level : int or level name or list of ints or list of level names
@@ -346,7 +348,7 @@ class IndexedFrame(Frame):
             If True, perform operation in-place.
         kind : sorting method such as `quick sort` and others.
             Not yet supported.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             Puts NaNs at the beginning if first; last puts NaNs at the end.
         sort_remaining : bool, default True
             Not yet supported
@@ -858,7 +860,7 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = as_column(ans_col)
+        col = cudf.core.column.as_column(ans_col)
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
         result = cudf.Series._from_data({None: col}, self._index)
 
@@ -1000,9 +1002,9 @@ class IndexedFrame(Frame):
         # to recover ordering after index alignment.
         sort_col_id = str(uuid4())
         if how == "left":
-            lhs[sort_col_id] = arange(len(lhs))
+            lhs[sort_col_id] = cudf.core.column.arange(len(lhs))
         elif how == "right":
-            rhs[sort_col_id] = arange(len(rhs))
+            rhs[sort_col_id] = cudf.core.column.arange(len(rhs))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
