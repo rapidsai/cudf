@@ -39,11 +39,16 @@ _EQUALITY_OPS = {
 }
 
 
+# The test root is set by pytest to support situations where tests are run from
+# a source tree on a built version of cudf.
 NO_EXTERNAL_ONLY_APIS = os.getenv("NO_EXTERNAL_ONLY_APIS")
+_CUDF_TEST_ROOT = os.getenv("_CUDF_TEST_ROOT")
 
 if NO_EXTERNAL_ONLY_APIS in ("True", "1", "TRUE"):
-    _cudf_root = os.path.join("python", "cudf", "cudf")
-    _tests_root = os.path.join(_cudf_root, "tests")
+    _cudf_root = cudf.__file__.replace("/__init__.py", "")
+    # If the environment variable for the test root is not set, we default to
+    # using the path relative to the cudf root directory.
+    _tests_root = _CUDF_TEST_ROOT or os.path.join(_cudf_root, "tests")
 
     def _external_only_api(func, alternative=""):
         """Decorator to indicate that a function should not be used internally.

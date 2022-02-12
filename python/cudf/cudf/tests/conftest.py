@@ -5,6 +5,8 @@ import pytest
 
 import rmm  # noqa: F401
 
+_CURRENT_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+
 
 @pytest.fixture(scope="session")
 def datadir():
@@ -22,6 +24,7 @@ def pytest_sessionstart(session):
     before performing collection and entering the run test loop.
     """
     os.environ["NO_EXTERNAL_ONLY_APIS"] = "1"
+    os.environ["_CUDF_TEST_ROOT"] = _CURRENT_DIRECTORY
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -30,3 +33,4 @@ def pytest_sessionfinish(session, exitstatus):
     returning the exit status to the system.
     """
     del os.environ["NO_EXTERNAL_ONLY_APIS"]
+    del os.environ["_CUDF_TEST_ROOT"]
