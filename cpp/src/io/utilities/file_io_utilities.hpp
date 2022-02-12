@@ -291,6 +291,21 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
  */
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath);
 
+/**
+ * @brief Byte range to be read/written in a single operation.
+ */
+struct file_io_slice {
+  size_t offset;
+  size_t size;
+};
+
+/**
+ * @brief Split the total number of bytes to read/write into slices to enable parallel IO.
+ *
+ * If `max_slice_size` is below 1024, 1024 will be used instead to prevent potential misuse.
+ */
+std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size);
+
 }  // namespace detail
 }  // namespace io
 }  // namespace cudf
