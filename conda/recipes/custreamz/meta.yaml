@@ -19,15 +19,17 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
-    - CC
-    - CXX
-    - CUDAHOSTCXX
 
 requirements:
+  build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
+    - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
   host:
+    - cudf_kafka {{ version }}
     - python
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf_kafka {{ version }}
   run:
     - python
     - streamz

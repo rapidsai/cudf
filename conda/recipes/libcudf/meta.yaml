@@ -14,9 +14,6 @@ source:
 
 build:
   script_env:
-    - CC
-    - CXX
-    - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - CMAKE_GENERATOR
     - CMAKE_C_COMPILER_LAUNCHER
@@ -31,6 +28,11 @@ build:
 requirements:
   build:
     - cmake {{ cmake_version }}
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - {{ compiler('cuda') }} {{ cuda_version }}
+    - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
+    - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
@@ -48,6 +50,9 @@ outputs:
       string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
+      ignore_run_exports_from:
+        - nvcc_linux-64 # [linux64]
+        - nvcc_linux-aarch64 # [aarch64]
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -287,6 +292,9 @@ outputs:
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      ignore_run_exports_from:
+        - nvcc_linux-64 # [linux64]
+        - nvcc_linux-aarch64 # [aarch64]
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -308,9 +316,16 @@ outputs:
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      ignore_run_exports_from:
+        - nvcc_linux-64 # [linux64]
+        - nvcc_linux-aarch64 # [aarch64]
     requirements:
       build:
         - cmake {{ cmake_version }}
+        - {{ compiler('c') }}
+        - {{ compiler('cxx') }}
+        - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
+        - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
       run:
@@ -327,6 +342,9 @@ outputs:
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      ignore_run_exports_from:
+        - nvcc_linux-64 # [linux64]
+        - nvcc_linux-aarch64 # [aarch64]
     requirements:
       build:
         - cmake {{ cmake_version }}

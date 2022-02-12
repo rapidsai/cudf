@@ -19,44 +19,46 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
-    - CC
-    - CXX
-    - CUDAHOSTCXX
   # libcudf's run_exports pinning is looser than we would like
   ignore_run_exports:
     - libcudf
 
 requirements:
   build:
-    - protobuf
-    - python
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
+    - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
+  host:
+    - cudatoolkit {{ cuda_version }}.*
     - cython >=0.29,<0.30
-    - setuptools
-    - numba >=0.54
     - dlpack>=0.5,<0.6.0a0
-    - pyarrow 7.0.0 *cuda
     - libcudf {{ version }}
-    - rmm {{ minor_version }}
-    - cudatoolkit {{ cuda_version }}
-  run:
+    - numba >=0.54
     - protobuf
+    - pyarrow 7.0.0 *cuda
     - python
-    - typing_extensions
-    - pandas >=1.0,<1.5.0dev0
+    - rmm {{ minor_version }}
+    - setuptools
+  run:
+    - cachetools
+    - cuda-python >=11.5,<12.0
     - cupy >=9.5.0,<11.0.0a0
+    - fastavro >=0.22.0
+    - fsspec>=0.6.0
+    - libcudf {{ version }}
     - numba >=0.54
     - numpy
-    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }} *cuda
-    - libcudf {{ version }}
-    - fastavro >=0.22.0
-    - {{ pin_compatible('rmm', max_pin='x.x') }}
-    - fsspec>=0.6.0
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
     - packaging
-    - cachetools
+    - pandas >=1.0,<1.5.0dev0
+    - protobuf
     - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
-    - cuda-python >=11.5,<12.0
+    - python
+    - typing_extensions
+    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }} *cuda
+    - {{ pin_compatible('rmm', max_pin='x.x') }}
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
