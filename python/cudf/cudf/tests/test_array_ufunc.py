@@ -185,9 +185,8 @@ def test_ufunc_cudf_series_error_with_out_kwarg(func):
 
 # Skip matmul since it requires aligned shapes.
 @pytest.mark.parametrize("ufunc", (uf for uf in _UFUNCS if uf != np.matmul))
-@pytest.mark.parametrize("has_nulls", [False])
 @pytest.mark.parametrize("indexed", [False])
-# @pytest.mark.parametrize("has_nulls", [True, False])
+@pytest.mark.parametrize("has_nulls", [True, False])
 # @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_dataframe(ufunc, has_nulls, indexed):
     # Note: This test assumes that all ufuncs are unary or binary.
@@ -214,14 +213,15 @@ def test_ufunc_dataframe(ufunc, has_nulls, indexed):
         for _ in range(ufunc.nin)
     ]
 
-    cols = [arg["foo"] for arg in args]
     if has_nulls:
         # Converting nullable integer cudf.Series to pandas will produce a
         # float pd.Series, so instead we replace nulls with an arbitrary
         # integer value, precompute the mask, and then reapply it afterwards.
-        for col in cols:
-            set_random_null_mask_inplace(col)
-        pandas_args = [arg["foo"].fillna(0) for arg in args]
+        for arg in args:
+            set_random_null_mask_inplace(arg["foo"])
+        pandas_args = [arg.copy() for arg in args]
+        for arg in pandas_args:
+            arg["foo"] = arg["foo"].fillna(0)
 
         # Note: Different indexes must be aligned before the mask is computed.
         # This requires using an internal function (_align_indices), and that
