@@ -1348,10 +1348,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  1  4
         2  2  5
         """
-        new = self.copy()
+        new_df = cudf.DataFrame(index=self.index.copy())
+        for name, col in self._data.items():
+            if name in kwargs:
+                new_df[name] = kwargs.pop(name)
+            else:
+                new_df._data[name] = col.copy()
+
         for k, v in kwargs.items():
-            new[k] = v
-        return new
+            new_df[k] = v
+        return new_df
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
@@ -2319,7 +2325,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  4  d  4.0
         4  5  e  5.0
 
-        Set the index to become the ‘b’ column:
+        Set the index to become the 'b' column:
 
         >>> df.set_index('b')
            a    c
@@ -2330,7 +2336,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         d  4  4.0
         e  5  5.0
 
-        Create a MultiIndex using columns ‘a’ and ‘b’:
+        Create a MultiIndex using columns 'a' and 'b':
 
         >>> df.set_index(["a", "b"])
                c

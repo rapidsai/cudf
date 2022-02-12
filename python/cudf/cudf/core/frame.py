@@ -1313,13 +1313,17 @@ class Frame:
             else:
                 thresh = len(df)
 
-        for col in self._data.names:
+        for name, col in df._data.items():
+            try:
+                check_col = col.nans_to_nulls()
+            except AttributeError:
+                check_col = col
             no_threshold_valid_count = (
-                len(df[col]) - df[col].nans_to_nulls().null_count
+                len(col) - check_col.null_count
             ) < thresh
             if no_threshold_valid_count:
                 continue
-            out_cols.append(col)
+            out_cols.append(name)
 
         return self[out_cols]
 
@@ -2193,7 +2197,7 @@ class Frame:
             )
 
         if not (to_replace is None and value is None):
-            copy_data = self._data.copy(deep=False)
+            copy_data = {}
             (
                 all_na_per_column,
                 to_replace_per_column,
@@ -2202,11 +2206,11 @@ class Frame:
                 to_replace=to_replace,
                 value=value,
                 columns_dtype_map={
-                    col: copy_data._data[col].dtype for col in copy_data._data
+                    col: self._data[col].dtype for col in self._data
                 },
             )
 
-            for name, col in copy_data.items():
+            for name, col in self._data.items():
                 try:
                     copy_data[name] = col.find_and_replace(
                         to_replace_per_column[name],
@@ -4477,16 +4481,21 @@ class Frame:
         results = {}
         for name, col in self._data.items():
             if skipna:
-                result_col = self._data[name].nans_to_nulls()
+                try:
+                    result_col = col.nans_to_nulls()
+                except AttributeError:
+                    result_col = col
             else:
-                result_col = self._data[name].copy()
-                if result_col.has_nulls(include_nan=True):
+                if col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
                     # incase of bools.
                     first_index = int(
-                        result_col.isnull().astype("int8").find_first_value(1)
+                        col.isnull().astype("int8").find_first_value(1)
                     )
+                    result_col = col.copy()
                     result_col[first_index:] = None
+                else:
+                    result_col = col
 
             if (
                 cast_to_int
@@ -4920,13 +4929,13 @@ class Frame:
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        return self._from_data(
-            {
-                name: col.copy().nans_to_nulls()
-                for name, col in self._data.items()
-            },
-            self._index,
-        )
+        result_data = {}
+        for name, col in self._data.items():
+            try:
+                result_data[name] = col.nans_to_nulls()
+            except AttributeError:
+                result_data[name] = col.copy()
+        return self._from_data(result_data, self._index)
 
     @annotate("FRAME_INVERT", color="green", domain="cudf_python")
     def __invert__(self):
