@@ -56,7 +56,6 @@ from cudf.api.types import (
     is_integer_dtype,
     is_interval_dtype,
     is_list_dtype,
-    is_numeric_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
@@ -602,8 +601,8 @@ class ColumnBase(Column, Serializable, NotIterable):
     def _check_scatter_key_length(
         self, nelem: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
     ):
-        """:param nelem: the number of keys to scatter. Should equal to the
-        number of value.
+        """`nelem` is the number of keys to scatter. Should equal to the
+        number of values.
         """
         if isinstance(value, ColumnBase):
             if len(value) != nelem:
