@@ -88,6 +88,10 @@ repos:
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
                   - cmake-format==0.6.11
+              - id: copyright-check
+                name: copyright-check
+                entry: python ./ci/checks/copyright.py --git-modified-only
+                language: python
 
 default_language_version:
       python: python3
