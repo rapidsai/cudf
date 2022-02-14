@@ -56,7 +56,7 @@ struct url_string_generator {
         chars[i + 2] = '0';
         i += 2;
       } else {
-        chars[i] = 'a';  // + (i % 26);
+        chars[i] = 'a';
       }
     }
   }
