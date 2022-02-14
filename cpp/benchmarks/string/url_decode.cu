@@ -15,7 +15,6 @@
  */
 
 #include <benchmark/benchmark.h>
-#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
@@ -63,7 +62,6 @@ struct url_string_generator {
   }
 };
 
-// 120 seconds
 auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, double esc_seq_chance)
 {
   std::vector<std::string> strings{std::string(chars_per_row, 'a')};
