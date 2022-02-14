@@ -21,12 +21,20 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <io/utilities/config_utils.hpp>
+
 #include <cudf/io/orc.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size        = 512 << 20;
+constexpr size_t default_data_size = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
+
+size_t data_size()
+{
+  static size_t size = cudf::io::detail::getenv_or("BM_FILE_SIZE", default_data_size);
+  return size;
+}
 
 namespace cudf_io = cudf::io;
 
@@ -46,7 +54,7 @@ void BM_orc_read_varying_input(benchmark::State& state)
   table_data_profile.set_cardinality(cardinality);
   table_data_profile.set_avg_run_length(run_length);
   auto const tbl =
-    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+    create_random_table(data_types, num_cols, table_size_bytes{data_size()}, table_data_profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
@@ -64,7 +72,7 @@ void BM_orc_read_varying_input(benchmark::State& state)
     cudf_io::read_orc(read_opts);
   }
 
-  state.SetBytesProcessed(data_size * state.iterations());
+  state.SetBytesProcessed(data_size() * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
   state.counters["encoded_file_size"] = source_sink.size();
 }
@@ -96,7 +104,8 @@ void BM_orc_read_varying_options(benchmark::State& state)
                                                    int32_t(type_group_id::TIMESTAMP),
                                                    int32_t(cudf::type_id::STRING)}),
                                 col_sel);
-  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const tbl =
+    create_random_table(data_types, data_types.size(), table_size_bytes{data_size()});
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
@@ -113,7 +122,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
       .use_np_dtypes(use_np_dtypes)
       .timestamp_type(ts_type);
 
-  auto const num_stripes              = data_size / (64 << 20);
+  auto const num_stripes              = data_size() / (64 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
@@ -146,7 +155,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
     CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
   }
 
-  auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
+  auto const data_processed = data_size() * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
   state.counters["encoded_file_size"] = source_sink.size();
@@ -158,7 +167,8 @@ void BM_orc_read_varying_options(benchmark::State& state)
   BENCHMARK_REGISTER_F(OrcRead, name)                                                        \
     ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {src_type}}) \
     ->Unit(benchmark::kMillisecond)                                                          \
-    ->UseManualTime();
+    ->UseManualTime()                                                                        \
+    ->Iterations(1);
 
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL_SIGNED);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
@@ -166,40 +176,3 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, decimal, type_group_id:
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
-
-BENCHMARK_DEFINE_F(OrcRead, column_selection)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, column_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL),
-                  int32_t(column_selection::ALTERNATE),
-                  int32_t(column_selection::FIRST_HALF),
-                  int32_t(column_selection::SECOND_HALF)},
-                 {int32_t(row_selection::ALL)},
-                 {1},
-                 {0b11},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-// Need an API to get the number of stripes to enable row_selection::STRIPES here
-BENCHMARK_DEFINE_F(OrcRead, row_selection)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, row_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1, 8},
-                 {0b11},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_DEFINE_F(OrcRead, misc_options)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, misc_options)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1},
-                 {0b11, 0b10, 0b01},  // `true` is default for each boolean parameter here
-                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();

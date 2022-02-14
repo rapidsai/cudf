@@ -21,12 +21,20 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <io/utilities/config_utils.hpp>
+
 #include <cudf/io/parquet.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr size_t data_size         = 512 << 20;
+constexpr size_t default_data_size = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
+
+size_t data_size()
+{
+  static size_t size = cudf::io::detail::getenv_or("BM_FILE_SIZE", default_data_size);
+  return size;
+}
 
 namespace cudf_io = cudf::io;
 
@@ -46,7 +54,7 @@ void BM_parq_read_varying_input(benchmark::State& state)
   table_data_profile.set_cardinality(cardinality);
   table_data_profile.set_avg_run_length(run_length);
   auto const tbl =
-    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+    create_random_table(data_types, num_cols, table_size_bytes{data_size()}, table_data_profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
@@ -64,7 +72,7 @@ void BM_parq_read_varying_input(benchmark::State& state)
     cudf_io::read_parquet(read_opts);
   }
 
-  state.SetBytesProcessed(data_size * state.iterations());
+  state.SetBytesProcessed(data_size() * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
   state.counters["encoded_file_size"] = source_sink.size();
 }
@@ -96,7 +104,8 @@ void BM_parq_read_varying_options(benchmark::State& state)
                        static_cast<int32_t>(type_group_id::TIMESTAMP),
                        static_cast<int32_t>(cudf::type_id::STRING)}),
     col_sel);
-  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const tbl =
+    create_random_table(data_types, data_types.size(), table_size_bytes{data_size()});
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
@@ -113,7 +122,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
       .use_pandas_metadata(use_pandas_metadata)
       .timestamp_type(ts_type);
 
-  auto const num_row_groups           = data_size / (128 << 20);
+  auto const num_row_groups           = data_size() / (128 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
@@ -146,7 +155,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
     CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
   }
 
-  auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
+  auto const data_processed = data_size() * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
   state.counters["encoded_file_size"] = source_sink.size();
@@ -158,7 +167,8 @@ void BM_parq_read_varying_options(benchmark::State& state)
   BENCHMARK_REGISTER_F(ParquetRead, name)                                                    \
     ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {src_type}}) \
     ->Unit(benchmark::kMillisecond)                                                          \
-    ->UseManualTime();
+    ->UseManualTime()                                                                        \
+    ->Iterations(1);
 
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
@@ -166,41 +176,3 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, decimal, type_group_id
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
-
-BENCHMARK_DEFINE_F(ParquetRead, column_selection)
-(::benchmark::State& state) { BM_parq_read_varying_options(state); }
-BENCHMARK_REGISTER_F(ParquetRead, column_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL),
-                  int32_t(column_selection::ALTERNATE),
-                  int32_t(column_selection::FIRST_HALF),
-                  int32_t(column_selection::SECOND_HALF)},
-                 {int32_t(row_selection::ALL)},
-                 {1},
-                 {0b01},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-// row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file and
-// determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
-BENCHMARK_DEFINE_F(ParquetRead, row_selection)
-(::benchmark::State& state) { BM_parq_read_varying_options(state); }
-BENCHMARK_REGISTER_F(ParquetRead, row_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1, 4},
-                 {0b01},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_DEFINE_F(ParquetRead, misc_options)
-(::benchmark::State& state) { BM_parq_read_varying_options(state); }
-BENCHMARK_REGISTER_F(ParquetRead, misc_options)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1},
-                 {0b01, 0b00, 0b11, 0b010},
-                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
