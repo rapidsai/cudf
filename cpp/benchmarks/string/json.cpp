@@ -30,24 +30,40 @@ class JsonPath : public cudf::benchmark {
 
 float frand() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); }
 
-int rand_range(int min, int max) { return min + static_cast<int>(frand() * (max - min)); }
-
-std::vector<std::string> Books{
-  "{\n\"category\": \"reference\",\n\"author\": \"Nigel Rees\",\n\"title\": \"Sayings of the "
-  "Century\",\n\"price\": 8.95\n}",
-  "{\n\"category\": \"fiction\",\n\"author\": \"Evelyn Waugh\",\n\"title\": \"Sword of "
-  "Honour\",\n\"price\": 12.99\n}",
-  "{\n\"category\": \"fiction\",\n\"author\": \"Herman Melville\",\n\"title\": \"Moby "
-  "Dick\",\n\"isbn\": \"0-553-21311-3\",\n\"price\": 8.99\n}",
-  "{\n\"category\": \"fiction\",\n\"author\": \"J. R. R. Tolkien\",\n\"title\": \"The Lord of the "
-  "Rings\",\n\"isbn\": \"0-395-19395-8\",\n\"price\": 22.99\n}"};
+const std::vector<std::string> Books{
+  R"json({
+"category": "reference",
+"author": "Nigel Rees",
+"title": "Sayings of the Century",
+"price": 8.95
+})json",
+  R"json({
+"category": "fiction",
+"author": "Evelyn Waugh",
+"title": "Sword of Honour",
+"price": 12.99
+})json",
+  R"json({
+"category": "fiction",
+"author": "Herman Melville",
+"title": "Moby Dick",
+"isbn": "0-553-21311-3",
+"price": 8.99
+})json",
+  R"json({
+"category": "fiction",
+"author": "J. R. R. Tolkien",
+"title": "The Lord of the Rings",
+"isbn": "0-395-19395-8",
+"price": 22.99
+})json"};
 constexpr int Approx_book_size = 110;
-std::vector<std::string> Bicycles{
-  "{\"color\": \"red\", \"price\": 9.95}",
-  "{\"color\": \"green\", \"price\": 29.95}",
-  "{\"color\": \"blue\", \"price\": 399.95}",
-  "{\"color\": \"yellow\", \"price\": 99.95}",
-  "{\"color\": \"mauve\", \"price\": 199.95}",
+const std::vector<std::string> Bicycles{
+  R"json({"color": "red", "price": 9.95})json",
+  R"json({"color": "green", "price": 29.95})json",
+  R"json({"color": "blue", "price": 399.95})json",
+  R"json({"color": "yellow", "price": 99.95})json",
+  R"json({"color": "mauve", "price": 199.95})json",
 };
 constexpr int Approx_bicycle_size = 33;
 std::string Misc{"\n\"expensive\": 10\n"};
@@ -123,10 +139,11 @@ static void BM_case(benchmark::State& state, QueryArg&&... query_arg)
   state.SetBytesProcessed(state.iterations() * num_chars);
 }
 
-#define JSON_BENCHMARK_DEFINE(name, query)                         \
-  BENCHMARK_CAPTURE(BM_case, name, query)                          \
-    ->ArgsProduct({{100, 1000, 100000, 400000}, {300, 600, 4096}}) \
-    ->UseManualTime()                                              \
+#define JSON_BENCHMARK_DEFINE(name, query)                                                  \
+  BENCHMARK_DEFINE_F(JsonPath, name)(::benchmark::State & state) { BM_case(state, query); } \
+  BENCHMARK_REGISTER_F(JsonPath, name)                                                      \
+    ->ArgsProduct({{100, 1000, 100000, 400000}, {300, 600, 4096}})                          \
+    ->UseManualTime()                                                                       \
     ->Unit(benchmark::kMillisecond);
 
 JSON_BENCHMARK_DEFINE(query0, "$");
