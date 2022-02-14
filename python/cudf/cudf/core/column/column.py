@@ -496,22 +496,20 @@ class ColumnBase(Column, Serializable, NotIterable):
         """
 
         # Normalize value to scalar/column
-        value_normalized: Union[cudf.core.scalar.Scalar, ColumnBase]
-        if is_scalar(value):
-            value_normalized = cudf.Scalar(value, dtype=self.dtype)
-        else:
-            value_normalized = as_column(value).astype(self.dtype)
+        value_normalized = (
+            cudf.Scalar(value, dtype=self.dtype)
+            if is_scalar(value)
+            else as_column(value).astype(self.dtype)
+        )
 
         out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, value_normalized)
         else:
             key = as_column(key)
-            if not is_numeric_dtype(key.dtype):
+            if not isinstance(key, cudf.core.column.NumericalColumn):
                 raise ValueError("Unknown scatter map type.")
-            out = self._scatter_by_column(
-                cast("cudf.core.column.NumericalColumn", key), value_normalized
-            )
+            out = self._scatter_by_column(key, value_normalized)
 
         if out:
             self._mimic_inplace(out, inplace=True)
