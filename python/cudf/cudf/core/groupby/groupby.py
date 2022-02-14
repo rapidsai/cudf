@@ -286,10 +286,11 @@ class GroupBy(Serializable):
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
-                result.insert(
+                result._insert(
                     0,
                     col_name,
                     result.index.get_level_values(col_name)._values,
+                    ignore_index=True,
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
 
