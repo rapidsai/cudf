@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1201,9 +1201,9 @@ class BaseIndex(Serializable):
             self.name = name
             return None
         else:
-            out = self.copy(deep=False)
+            out = self.copy(deep=True)
             out.name = name
-            return out.copy(deep=True)
+            return out
 
     def astype(self, dtype, copy=False):
         """
