@@ -42,7 +42,7 @@ namespace detail {
  * @param[in] num_items the number of items
  * @param[in] op        the reduction operator
  * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr        Device memory resource used to allocate the returned column's device
+ * @param[in] mr        Device memory resource used to allocate the returned scalar's device
  * memory
  * @returns   Output scalar in device memory
  *
@@ -160,7 +160,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @param[in] valid_count   the intermediate operator argument 1
  * @param[in] ddof      the intermediate operator argument 2
  * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr        Device memory resource used to allocate the returned column's device
+ * @param[in] mr        Device memory resource used to allocate the returned scalar's device
  * memory
  * @returns   Output scalar in device memory
  *
