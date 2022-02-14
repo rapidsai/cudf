@@ -5385,7 +5385,9 @@ class StringColumn(column.ColumnBase):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = cudf.DataFrame._from_data(
+            {"old": to_replace_col, "new": replacement_col}
+        )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
@@ -5457,7 +5459,7 @@ class StringColumn(column.ColumnBase):
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
-                        cudf.DataFrame({0: lhs, 1: rhs}),
+                        cudf.DataFrame._from_data(data={0: lhs, 1: rhs}),
                         sep=cudf.Scalar(""),
                         na_rep=cudf.Scalar(None, "str"),
                     ),
