@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, List, cast
 
 import cudf
 from cudf import _lib as libcudf
@@ -320,7 +320,7 @@ class Merge:
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
-        by = []
+        by: List[Any] = []
         if self._using_left_index and self._using_right_index:
             if result._index is not None:
                 by.extend(result._index._data.columns)
