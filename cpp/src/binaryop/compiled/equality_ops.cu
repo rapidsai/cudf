@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ void dispatch_equality_op(mutable_column_view& out,
     auto d_rhs = table_device_view::create(rhs_flattened);
 
     if (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL)
-      detail::struct_compare(
+      detail::(
         out,
         row_equality_comparator{
           nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
