@@ -21,7 +21,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
