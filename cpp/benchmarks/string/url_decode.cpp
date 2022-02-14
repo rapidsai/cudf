@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,8 +70,7 @@ cudf::test::strings_column_wrapper generate_column(cudf::size_type num_rows,
 class UrlDecode : public cudf::benchmark {
 };
 
-template <int esc_seq_pct>
-void BM_url_decode(benchmark::State& state)
+void BM_url_decode(benchmark::State& state, int esc_seq_pct)
 {
   cudf::size_type const num_rows      = state.range(0);
   cudf::size_type const chars_per_row = state.range(1);
@@ -88,12 +87,14 @@ void BM_url_decode(benchmark::State& state)
                           (chars_per_row + sizeof(cudf::size_type)));
 }
 
-#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                     \
-  TEMPLATED_BENCHMARK_F(UrlDecode, BM_url_decode, esc_seq_pct) \
-    ->Args({100000000, 10})                                    \
-    ->Args({10000000, 100})                                    \
-    ->Args({1000000, 1000})                                    \
-    ->Unit(benchmark::kMillisecond)                            \
+#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                      \
+  BENCHMARK_DEFINE_F(UrlDecode, esc_seq_pct)                    \
+  (::benchmark::State & st) { BM_url_decode(st, esc_seq_pct); } \
+  BENCHMARK_REGISTER_F(UrlDecode, esc_seq_pct)                  \
+    ->Args({100000000, 10})                                     \
+    ->Args({10000000, 100})                                     \
+    ->Args({1000000, 1000})                                     \
+    ->Unit(benchmark::kMillisecond)                             \
     ->UseManualTime();
 
 URLD_BENCHMARK_DEFINE(10)
