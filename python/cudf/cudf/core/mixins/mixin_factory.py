@@ -4,6 +4,8 @@ import functools
 import inspect
 
 
+# A simple `partialmethod` that allows setting attributes such as
+# __doc__ on instances.
 def _partialmethod(method, *args1, **kwargs1):
     @functools.wraps(method)
     def wrapper(self, *args2, **kwargs2):
