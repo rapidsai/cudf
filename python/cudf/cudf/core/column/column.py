@@ -507,7 +507,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         else:
             key = as_column(key)
             if not isinstance(key, cudf.core.column.NumericalColumn):
-                raise ValueError("Unknown scatter map type.")
+                raise ValueError(f"Invalid scatter map type {key.dtype}.")
             out = self._scatter_by_column(key, value_normalized)
 
         if out:
