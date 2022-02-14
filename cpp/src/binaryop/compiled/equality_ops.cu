@@ -42,7 +42,7 @@ void dispatch_equality_op(mutable_column_view& out,
     auto d_rhs = table_device_view::create(rhs_flattened);
 
     if (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL)
-      detail::(
+      detail::struct_compare(
         out,
         row_equality_comparator{
           nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
