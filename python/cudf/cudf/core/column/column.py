@@ -522,14 +522,9 @@ class ColumnBase(Column, Serializable, NotIterable):
         nelem: int  # the number of elements to scatter
 
         key_start, key_stop, key_stride = key.indices(len(self))
-        if key_start < 0:
-            key_start = key_start + len(self)
-        if key_stop < 0:
-            key_stop = key_stop + len(self)
-        if key_start >= key_stop:
+        if start >= stop:
             return None
-        key_stride = 1 if key_stride is None else key_stride
-        nelem = int(np.ceil(key_stop - key_start) / key_stride)
+        nelem = (stop - start) // step
 
         self._check_scatter_key_length(nelem, value)
 
