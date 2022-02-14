@@ -1,28 +1,22 @@
-#include "nvbench/enum_type_list.cuh"
-#include "rmm/cuda_stream_view.hpp"
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
-#include <fixture/benchmark_fixture.hpp>
 #include <nvbench/nvbench.cuh>
-#include <synchronization/synchronization.hpp>
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/device_vector.h>
 
 #include <memory>
 #include <type_traits>
-#include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -81,8 +75,7 @@ BM_Simple_Segmented_Reduction(nvbench::state& state,
 
   auto const column_size{size_type(state.get_int64("column_size"))};
   auto [input, offsets] = make_test_data<InputType>(state);
-  // auto agg              = make_simple_aggregation<kind>();
-  auto agg = make_sum_aggregation();
+  auto agg              = make_simple_aggregation<kind>();
 
   state.add_element_count(column_size);
   state.add_global_memory_reads<InputType>(column_size);
