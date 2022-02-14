@@ -90,22 +90,22 @@ class Frame:
         return len(self._data.columns[0])
 
     @property
-    def _column_names(self) -> List[Any]:  # TODO: List[str]?
-        return list(self._data.names)
+    def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
+        return tuple(self._data.names)
 
     @property
-    def _index_names(self) -> List[Any]:  # TODO: List[str]?
+    def _index_names(self) -> Optional[Tuple[Any, ...]]:  # TODO: Tuple[str]?
         # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
         # by returning an empty list where one is not expected.
         return (
             None  # type: ignore
             if self._index is None
-            else self._index._data.names
+            else tuple(self._index._data.names)
         )
 
     @property
-    def _columns(self) -> List[Any]:  # TODO: List[Column]?
-        return list(self._data.columns)
+    def _columns(self) -> Tuple[Any, ...]:  # TODO: Tuple[Column]?
+        return tuple(self._data.columns)
 
     def serialize(self):
         header = {
