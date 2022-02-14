@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,7 @@ class row_equality_comparator {
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
-                          null_equality nulls_are_equal = true)
+                          null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
@@ -465,7 +465,7 @@ class element_hasher_with_seed {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return _null_hash; }
+    if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
@@ -492,8 +492,11 @@ template <template <typename> class hash_function, typename Nullate>
 class row_hasher {
  public:
   row_hasher() = delete;
-  row_hasher(Nullate has_nulls, table_device_view t) : _table{t}, _has_nulls{has_nulls} {}
-  row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
+  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t)
+    : _table{t}, _has_nulls{has_nulls}
+  {
+  }
+  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
     : _table{t}, _seed(seed), _has_nulls{has_nulls}
   {
   }
@@ -537,54 +540,6 @@ class row_hasher {
   table_device_view _table;
   Nullate _has_nulls;
   uint32_t _seed{DEFAULT_HASH_SEED};
-};
-
-/**
- * @brief Computes the hash value of a row in the given table, combined with an
- * initial hash value for each column.
- *
- * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
- */
-template <template <typename> class hash_function, typename Nullate>
-class row_hasher_initial_values {
- public:
-  row_hasher_initial_values() = delete;
-  row_hasher_initial_values(Nullate has_nulls, table_device_view t, hash_value_type* initial_hash)
-    : _table{t}, _initial_hash(initial_hash), _has_nulls{has_nulls}
-  {
-  }
-
-  __device__ auto operator()(size_type row_index) const
-  {
-    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
-    };
-
-    // Hashes an element in a column and combines with an initial value
-    auto hasher = [=](size_type column_index) {
-      auto hash_value = cudf::type_dispatcher<dispatch_storage_type>(
-        _table.column(column_index).type(),
-        element_hasher<hash_function, Nullate>{_has_nulls},
-        _table.column(column_index),
-        row_index);
-
-      return hash_combiner(_initial_hash[column_index], hash_value);
-    };
-
-    // Hash each element and combine all the hash values together
-    return thrust::transform_reduce(thrust::seq,
-                                    thrust::make_counting_iterator(0),
-                                    thrust::make_counting_iterator(_table.num_columns()),
-                                    hasher,
-                                    hash_value_type{0},
-                                    hash_combiner);
-  }
-
- private:
-  table_device_view _table;
-  hash_value_type* _initial_hash;
-  Nullate _has_nulls;
 };
 
 }  // namespace cudf

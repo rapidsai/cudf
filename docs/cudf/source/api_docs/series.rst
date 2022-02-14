@@ -174,7 +174,6 @@ Reindexing / selection / label manipulation
    Series.reset_index
    Series.reverse
    Series.sample
-   Series.set_index
    Series.set_mask
    Series.take
    Series.tail
@@ -409,19 +408,17 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
-   Series.to_array
    Series.to_arrow
+   Series.to_cupy
    Series.to_dlpack
    Series.to_frame
-   Series.to_gpu_array
    Series.to_hdf
    Series.to_json
+   Series.to_numpy
    Series.to_pandas
    Series.to_string
    Series.from_arrow
    Series.from_categorical
    Series.from_masked_array
    Series.from_pandas
-   Series.hash_encode
    Series.hash_values
-   

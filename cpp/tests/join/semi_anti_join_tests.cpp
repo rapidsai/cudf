@@ -39,6 +39,21 @@ using Table          = cudf::table;
 struct JoinTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(JoinTest, TestSimple)
+{
+  column_wrapper<int32_t> left_col0{0, 1, 2};
+  column_wrapper<int32_t> right_col0{0, 1, 3};
+
+  auto left  = cudf::table_view{{left_col0}};
+  auto right = cudf::table_view{{right_col0}};
+
+  auto result    = cudf::left_semi_join(left, right);
+  auto result_cv = cudf::column_view(
+    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, result->size(), result->data());
+  column_wrapper<cudf::size_type> expected{0, 1};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
+};
+
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_tables(
   std::vector<bool> const& left_is_human_nulls, std::vector<bool> const& right_is_human_nulls)
 {

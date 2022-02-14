@@ -239,7 +239,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame(
+                result = cudf.DataFrame._from_data(
                     data=obj._data.copy(deep=True),
                     index=obj.index.copy(deep=True),
                 )
@@ -249,13 +249,17 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
-                if isinstance(obj, (pd.Series, cudf.Series)):
-                    result = cudf.Series(
+                if isinstance(obj, cudf.Series):
+                    result = cudf.Series._from_data(
                         data=obj._data.copy(deep=True),
                         index=cudf.RangeIndex(len(obj)),
                     )
+                elif isinstance(obj, pd.Series):
+                    result = cudf.Series(
+                        data=obj, index=cudf.RangeIndex(len(obj)),
+                    )
                 else:
-                    result = cudf.DataFrame(
+                    result = cudf.DataFrame._from_data(
                         data=obj._data.copy(deep=True),
                         index=cudf.RangeIndex(len(obj)),
                     )
@@ -370,7 +374,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             obj = objs[0]
-            result = cudf.DataFrame(
+            result = cudf.DataFrame._from_data(
                 data=None if join == "inner" else obj._data.copy(deep=True),
                 index=cudf.RangeIndex(len(obj))
                 if ignore_index
@@ -600,18 +604,18 @@ def get_dummies(
     df : array-like, Series, or DataFrame
         Data of which to get dummy indicators.
     prefix : str, dict, or sequence, optional
-        prefix to append. Either a str (to apply a constant prefix), dict
+        Prefix to append. Either a str (to apply a constant prefix), dict
         mapping column names to prefixes, or sequence of prefixes to apply with
         the same length as the number of columns. If not supplied, defaults
         to the empty string
     prefix_sep : str, dict, or sequence, optional, default '_'
-        separator to use when appending prefixes
+        Separator to use when appending prefixes
     dummy_na : boolean, optional
         Add a column to indicate Nones, if False Nones are ignored.
     cats : dict, optional
-        dictionary mapping column names to sequences of integers representing
-        that column's category. See `cudf.DataFrame.one_hot_encoding` for more
-        information. if not supplied, it will be computed
+        Dictionary mapping column names to sequences of values representing
+        that column's category. If not supplied, it is computed as the unique
+        values of the column.
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
@@ -621,7 +625,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtype, default 'uint8'
+        Output dtype, default 'uint8'
 
     Examples
     --------
@@ -891,7 +895,7 @@ def pivot(data, index=None, columns=None, values=None):
     Examples
     --------
     >>> a = cudf.DataFrame()
-    >>> a['a'] = [1, 1, 2, 2],
+    >>> a['a'] = [1, 1, 2, 2]
     >>> a['b'] = ['a', 'b', 'a', 'b']
     >>> a['c'] = [1, 2, 3, 4]
     >>> a.pivot(index='a', columns='b')
@@ -973,6 +977,7 @@ def unstack(df, level, fill_value=None):
 
     Examples
     --------
+    >>> df = cudf.DataFrame()
     >>> df['a'] = [1, 1, 1, 2, 2]
     >>> df['b'] = [1, 2, 3, 1, 2]
     >>> df['c'] = [5, 6, 7, 8, 9]

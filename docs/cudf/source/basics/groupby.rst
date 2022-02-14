@@ -1,3 +1,5 @@
+.. _basics.groupby:
+
 GroupBy
 =======
 
@@ -219,6 +221,27 @@ Limitations
 
  .. |describe| replace:: ``describe``
  .. _describe: https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply
+
+
+Transform
+---------
+
+The ``.transform()`` method aggregates per group, and broadcasts the
+result to the group size, resulting in a Series/DataFrame that is of
+the same size as the input Series/DataFrame.
+
+.. code:: python
+
+     >>> import cudf
+     >>> df = cudf.DataFrame({'a': [2, 1, 1, 2, 2], 'b': [1, 2, 3, 4, 5]})
+     >>> df.groupby('a').transform('max')
+        b
+     0  5
+     1  3
+     2  3
+     3  5
+     4  5
+
 
 Rolling window calculations
 ---------------------------

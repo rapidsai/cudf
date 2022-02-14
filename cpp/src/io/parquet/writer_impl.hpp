@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ namespace detail {
 namespace parquet {
 // Forward internal classes
 struct parquet_column_view;
-struct aggregate_metadata;
+struct aggregate_writer_metadata;
 
 using namespace cudf::io::parquet;
 using namespace cudf::io;
@@ -206,7 +206,7 @@ class writer::impl {
   // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
   size_t max_row_group_size          = default_row_group_size_bytes;
   size_type max_row_group_rows       = default_row_group_size_rows;
@@ -214,7 +214,7 @@ class writer::impl {
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  std::unique_ptr<aggregate_metadata> md;
+  std::unique_ptr<aggregate_writer_metadata> md;
   // File footer key-value metadata. Written during write_chunked_end()
   std::vector<std::map<std::string, std::string>> kv_md;
   // optional user metadata

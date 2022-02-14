@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -20,11 +20,18 @@
 function(ConfigureTest CMAKE_TEST_NAME)
   add_executable(${CMAKE_TEST_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                  "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+    ${CMAKE_TEST_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+  install(
+    TARGETS ${CMAKE_TEST_NAME}
+    COMPONENT testing
+    DESTINATION bin/gtests/libcudf
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################
@@ -95,7 +102,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
 )
 
 # ##################################################################################################
@@ -292,6 +299,7 @@ ConfigureTest(
 ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
+  stream_compaction/distinct_count_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
   stream_compaction/drop_duplicates_tests.cpp
@@ -442,6 +450,7 @@ ConfigureTest(
   lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
+  lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
 )
 

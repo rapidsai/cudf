@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -338,7 +338,7 @@ public final class DType {
       return new DType(DTypeEnum.DECIMAL128, -dec.scale());
     }
     throw new IllegalArgumentException("Precision " + dec.precision() +
-        " exceeds max precision cuDF can support " + DECIMAL64_MAX_PRECISION);
+        " exceeds max precision cuDF can support " + DECIMAL128_MAX_PRECISION);
   }
 
   /**

@@ -561,7 +561,9 @@ def test_series_value_counts(dropna, normalize):
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+        sr = cudf.Series.from_masked_array(
+            arr, cudf.Series(mask)._column.as_mask()
+        )
         sr.name = "col"
 
         expect = (
@@ -1345,6 +1347,122 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
     assert_eq(psr, gsr.to_pandas(nullable=True))
 
 
+@pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("original_name", [None, "original_ser"])
+@pytest.mark.parametrize("name", [None, "ser"])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_reset_index(level, drop, inplace, original_name, name):
+    midx = pd.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["l0", None]
+    )
+    ps = pd.Series(range(4), index=midx, name=original_name)
+    gs = cudf.from_pandas(ps)
+
+    if not drop and inplace:
+        pytest.skip(
+            "For exception checks, see "
+            "test_reset_index_dup_level_name_exceptions"
+        )
+
+    expect = ps.reset_index(level=level, drop=drop, name=name, inplace=inplace)
+    got = gs.reset_index(level=level, drop=drop, name=name, inplace=inplace)
+    if inplace:
+        expect = ps
+        got = gs
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("level", [None, 0, 1, [None]])
+@pytest.mark.parametrize("drop", [False, True])
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("original_name", [None, "original_ser"])
+@pytest.mark.parametrize("name", [None, "ser"])
+def test_reset_index_dup_level_name(level, drop, inplace, original_name, name):
+    # midx levels are named [None, None]
+    midx = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1), ("b", 2)])
+    ps = pd.Series(range(4), index=midx, name=original_name)
+    gs = cudf.from_pandas(ps)
+    if level == [None] or not drop and inplace:
+        pytest.skip(
+            "For exception checks, see "
+            "test_reset_index_dup_level_name_exceptions"
+        )
+
+    expect = ps.reset_index(level=level, drop=drop, inplace=inplace, name=name)
+    got = gs.reset_index(level=level, drop=drop, inplace=inplace, name=name)
+    if inplace:
+        expect = ps
+        got = gs
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("original_name", [None, "original_ser"])
+@pytest.mark.parametrize("name", [None, "ser"])
+def test_reset_index_named(drop, inplace, original_name, name):
+    ps = pd.Series(range(4), index=["x", "y", "z", "w"], name=original_name)
+    gs = cudf.from_pandas(ps)
+
+    ps.index.name = "cudf"
+    gs.index.name = "cudf"
+
+    if not drop and inplace:
+        pytest.skip(
+            "For exception checks, see "
+            "test_reset_index_dup_level_name_exceptions"
+        )
+
+    expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
+    got = gs.reset_index(drop=drop, inplace=inplace, name=name)
+
+    if inplace:
+        expect = ps
+        got = gs
+
+    assert_eq(expect, got)
+
+
+def test_reset_index_dup_level_name_exceptions():
+    midx = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1), ("b", 2)])
+    ps = pd.Series(range(4), index=midx)
+    gs = cudf.from_pandas(ps)
+
+    # Should specify duplicate level names with level number.
+    assert_exceptions_equal(
+        lfunc=ps.reset_index,
+        rfunc=gs.reset_index,
+        lfunc_args_and_kwargs=([], {"level": [None]},),
+        rfunc_args_and_kwargs=([], {"level": [None]},),
+        expected_error_message="occurs multiple times, use a level number",
+    )
+
+    # Cannot use drop=False and inplace=True to turn a series into dataframe.
+    assert_exceptions_equal(
+        lfunc=ps.reset_index,
+        rfunc=gs.reset_index,
+        lfunc_args_and_kwargs=([], {"drop": False, "inplace": True},),
+        rfunc_args_and_kwargs=([], {"drop": False, "inplace": True},),
+    )
+
+    # Pandas raises the above exception should these two inputs crosses.
+    assert_exceptions_equal(
+        lfunc=ps.reset_index,
+        rfunc=gs.reset_index,
+        lfunc_args_and_kwargs=(
+            [],
+            {"level": [None], "drop": False, "inplace": True},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"level": [None], "drop": False, "inplace": True},
+        ),
+    )
+
+
 def test_series_add_prefix():
     cd_s = cudf.Series([1, 2, 3, 4])
     pd_s = cd_s.to_pandas()
@@ -1401,3 +1519,74 @@ def test_series_transpose(data):
     assert_eq(pd_transposed, cudf_transposed)
     assert_eq(pd_property, cudf_property)
     assert_eq(cudf_transposed, csr)
+
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.nunique()
+    expected = pd_s.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique_index(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.index.nunique()
+    expected = pd_s.index.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "fill_value,data",
+    [
+        (7, [6, 3, 4]),
+        ("x", ["a", "b", "c", "d", "e", "f"]),
+        (7, [6, 3, 4, 2, 1, 7, 8, 5]),
+        (0.8, [0.6, 0.3, 0.4, 0.2, 0.1, 0.7, 0.8, 0.5]),
+        ("b", pd.Categorical(["a", "b", "c"])),
+        (None, [0.0, 1.0, 2.0, 3.0]),
+    ],
+)
+@pytest.mark.parametrize(
+    "begin,end",
+    [
+        (0, -1),
+        (0, 4),
+        (1, -1),
+        (1, 4),
+        (-2, 1),
+        (-2, -1),
+        (10, 12),
+        (8, 10),
+        (10, 8),
+        (-10, -8),
+        (-2, 6),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fill(data, fill_value, begin, end, inplace):
+    gs = cudf.Series(data)
+    ps = gs.to_pandas()
+
+    actual = gs
+    gs[begin:end] = fill_value
+    ps[begin:end] = fill_value
+
+    assert_eq(ps, actual)
+
+
+@pytest.mark.xfail(raises=ValueError)
+def test_fill_new_category():
+    gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
+    gs[0:1] = "d"

@@ -780,22 +780,19 @@ __device__ void process_symbols(inflate_state_s* s, int t)
 
   do {
     volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
-    int batch_len, pos;
-    int32_t symt;
-    uint32_t lit_mask;
-
+    int batch_len        = 0;
     if (t == 0) {
       while ((batch_len = s->x.batch_len[batch]) == 0) {}
-    } else {
-      batch_len = 0;
     }
     batch_len = shuffle(batch_len);
     if (batch_len < 0) { break; }
 
-    symt     = (t < batch_len) ? b[t] : 256;
-    lit_mask = ballot(symt >= 256);
-    pos      = min((__ffs(lit_mask) - 1) & 0xff, 32);
+    auto const symt     = (t < batch_len) ? b[t] : 256;
+    auto const lit_mask = ballot(symt >= 256);
+    auto pos            = min((__ffs(lit_mask) - 1) & 0xff, 32);
+
     if (t == 0) { s->x.batch_len[batch] = 0; }
+
     if (t < pos && out + t < outend) { out[t] = symt; }
     out += pos;
     batch_len -= pos;
@@ -825,7 +822,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       }
     }
     batch = (batch + 1) & (batch_count - 1);
-  } while (1);
+  } while (true);
 
   if (t == 0) { s->out = out; }
 }
@@ -929,8 +926,8 @@ __device__ void copy_stored(inflate_state_s* s, int t)
   __syncthreads();
   if (t == 0) {
     // Reset bitstream to end of block
-    uint8_t* p            = cur + len;
-    uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
+    uint8_t* p        = cur + len;
+    auto prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     s->cur      = p;
     s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
@@ -955,7 +952,7 @@ __device__ void prefetch_warp(volatile inflate_state_s* s, int t)
   const uint8_t* cur_p = s->pref.cur_p;
   const uint8_t* end   = s->end;
   while (shuffle((t == 0) ? s->pref.run : 0)) {
-    int32_t cur_lo = (int32_t)(size_t)cur_p;
+    auto cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
       shuffle((t == 0) ? (cur_lo - *(volatile int32_t*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
@@ -1038,7 +1035,7 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    uint8_t* p      = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].srcDevice));
+    auto* p         = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].srcDevice));
     size_t src_size = inputs[z].srcSize;
     uint32_t prefix_bytes;
     // Parse header if needed
@@ -1184,8 +1181,8 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
   src_align_bits  = src_align_bytes << 3;
   while (len >= 32) {
-    const uint32_t* src32 = reinterpret_cast<const uint32_t*>(src - src_align_bytes);
-    uint32_t copy_cnt     = min(len >> 2, 1024);
+    const auto* src32 = reinterpret_cast<const uint32_t*>(src - src_align_bytes);
+    uint32_t copy_cnt = min(len >> 2, 1024);
     if (t < copy_cnt) {
       uint32_t v = src32[t];
       if (src_align_bits != 0) { v = __funnelshift_r(v, src32[t + 1], src_align_bits); }
