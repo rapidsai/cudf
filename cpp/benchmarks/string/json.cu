@@ -18,17 +18,21 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/strings/string_view.hpp>
+#include <cudf/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <thrust/random.h>
+
 class JsonPath : public cudf::benchmark {
 };
-
-float frand() { return static_cast<float>(rand()) / static_cast<float>(RAND_MAX); }
 
 const std::vector<std::string> Books{
   R"json({
@@ -67,66 +71,152 @@ const std::vector<std::string> Bicycles{
 };
 constexpr int Approx_bicycle_size = 33;
 std::string Misc{"\n\"expensive\": 10\n"};
-std::string generate_field(std::vector<std::string> const& values, int num_values)
-{
-  std::string res;
-  for (int idx = 0; idx < num_values; idx++) {
-    if (idx > 0) { res += std::string(",\n"); }
-    int vindex = std::min(static_cast<int>(floor(frand() * values.size())),
-                          static_cast<int>(values.size() - 1));
-    res += values[vindex];
+
+struct json_benchmark_row_builder {
+  int const desired_bytes;
+  cudf::size_type const num_rows;
+  cudf::column_device_view const d_books_bicycles[2];  // Books, Bicycles strings
+  cudf::column_device_view const d_book_pct;           // Book percentage
+  cudf::column_device_view const d_misc_order;         // Misc-Store order
+  cudf::column_device_view const d_store_order;        // Books-Bicycles order
+  int32_t* d_offsets{};
+  char* d_chars{};
+  thrust::minstd_rand rng{5236};
+  thrust::uniform_int_distribution<int> dist{};
+
+  // TODO internal data structure for {bytes, out_ptr} operator+=
+  struct bytes_and_ptr {
+    cudf::size_type bytes;
+    char* ptr;
+    __device__ bytes_and_ptr& operator+=(cudf::string_view const& str_append)
+    {
+      bytes += str_append.size_bytes();
+      if (ptr) { ptr = cudf::strings::detail::copy_string(ptr, str_append); }
+      return *this;
+    }
+  };
+
+  __device__ inline char* copy_items(char* out_ptr,
+                                     int this_idx,
+                                     cudf::size_type num_books,
+                                     int32_t& bytes)
+  {
+    using param_type = thrust::uniform_int_distribution<int>::param_type;
+    dist.param(param_type{0, d_books_bicycles[this_idx].size() - 1});
+    cudf::string_view comma(",\n", 2);
+    for (int i = 0; i < num_books; i++) {
+      if (i > 0) {
+        bytes += comma.size_bytes();
+        if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
+      }
+      int idx   = dist(rng);
+      auto book = d_books_bicycles[this_idx].element<cudf::string_view>(idx);
+      bytes += book.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, book); }
+    }
+    return out_ptr;
   }
-  return res;
+
+  __device__ void operator()(cudf::size_type idx)
+  {
+    int32_t bytes{0};
+    int num_books       = 2;
+    int num_bicycles    = 2;
+    int remaining_bytes = max(
+      0, desired_bytes - ((num_books * Approx_book_size) + (num_bicycles * Approx_bicycle_size)));
+
+    // divide up the remainder between books and bikes
+    auto book_pct = d_book_pct.element<float>(idx);
+    // {Misc, store} OR {store, Misc}
+    // store: {books, bicycles} OR store: {bicycles, books}
+    float bicycle_pct = 1.0f - book_pct;
+    num_books += (remaining_bytes * book_pct) / Approx_book_size;
+    num_bicycles += (remaining_bytes * bicycle_pct) / Approx_bicycle_size;
+
+    char* out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    //
+    cudf::string_view comma(",\n", 2);
+    cudf::string_view brace1("{\n", 2);
+    cudf::string_view store_member_start[2]{{"\"book\": [\n", 10}, {"\"bicycle\": [\n", 13}};
+    cudf::string_view store("\"store\": {\n", 11);
+    cudf::string_view Misc{"\"expensive\": 10", 15};
+    cudf::string_view brace2("\n}", 2);
+    cudf::string_view square2{"\n]", 2};
+
+    bytes += brace1.size_bytes();
+    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, brace1); }
+    if (d_misc_order.element<bool>(idx)) {  // Misc. first.
+      bytes += Misc.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, Misc); }
+      bytes += comma.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
+    }
+    bytes += store.size_bytes();
+    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, store); }
+    for (int store_order = 0; store_order < 2; store_order++) {
+      if (store_order > 0) {
+        bytes += comma.size_bytes();
+        if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
+      }
+      int this_idx    = (d_store_order.element<bool>(idx) == store_order);
+      auto& mem_start = store_member_start[this_idx];
+      bytes += mem_start.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, mem_start); }
+      out_ptr = copy_items(out_ptr, this_idx, this_idx == 0 ? num_books : num_bicycles, bytes);
+      bytes += square2.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, square2); }
+    }
+    bytes += brace2.size_bytes();
+    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, brace2); }
+    if (!d_misc_order.element<bool>(idx)) {  // Misc, if not first.
+      bytes += comma.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
+      bytes += Misc.size_bytes();
+      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, Misc); }
+    }
+    bytes += brace2.size_bytes();
+    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, brace2); }
+    if (!out_ptr) d_offsets[idx] = bytes;
+  }
+};
+
+auto build_json_string_column(int desired_bytes, int num_rows)
+{
+  data_profile profile;
+  profile.set_cardinality(0);
+  profile.set_null_frequency(-0.1);
+  profile.set_distribution_params<float>(
+    cudf::type_id::FLOAT32, distribution_id::UNIFORM, 0.0, 1.0);
+  auto float_2bool_columns =
+    create_random_table({cudf::type_id::FLOAT32, cudf::type_id::BOOL8, cudf::type_id::BOOL8},
+                        3,
+                        row_count{num_rows},
+                        profile);
+
+  cudf::test::strings_column_wrapper books(Books.begin(), Books.end());
+  cudf::test::strings_column_wrapper bicycles(Bicycles.begin(), Bicycles.end());
+  auto d_books       = cudf::column_device_view::create(books);
+  auto d_bicycles    = cudf::column_device_view::create(bicycles);
+  auto d_book_pct    = cudf::column_device_view::create(float_2bool_columns->get_column(0));
+  auto d_misc_order  = cudf::column_device_view::create(float_2bool_columns->get_column(1));
+  auto d_store_order = cudf::column_device_view::create(float_2bool_columns->get_column(2));
+  json_benchmark_row_builder jb{
+    desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
+  auto children = cudf::strings::detail::make_strings_children(jb, num_rows);
+  return cudf::make_strings_column(
+    num_rows, std::move(children.first), std::move(children.second), 0, {});
 }
 
-std::string build_row(int desired_bytes)
-{
-  // always have at least 2 books and 2 bikes
-  int num_books    = 2;
-  int num_bicycles = 2;
-  int remaining_bytes =
-    desired_bytes - ((num_books * Approx_book_size) + (num_bicycles * Approx_bicycle_size));
-
-  // divide up the remainder between books and bikes
-  float book_pct    = frand();
-  float bicycle_pct = 1.0f - book_pct;
-  num_books += (remaining_bytes * book_pct) / Approx_book_size;
-  num_bicycles += (remaining_bytes * bicycle_pct) / Approx_bicycle_size;
-
-  std::string books    = "\"book\": [\n" + generate_field(Books, num_books) + "]\n";
-  std::string bicycles = "\"bicycle\": [\n" + generate_field(Bicycles, num_bicycles) + "]\n";
-
-  std::string store = "\"store\": {\n";
-  if (frand() <= 0.5f) {
-    store += books + std::string(",\n") + bicycles;
-  } else {
-    store += bicycles + std::string(",\n") + books;
-  }
-  store += std::string("}\n");
-
-  std::string row = std::string("{\n");
-  if (frand() <= 0.5f) {
-    row += store + std::string(",\n") + Misc;
-  } else {
-    row += Misc + std::string(",\n") + store;
-  }
-  row += std::string("}\n");
-  return row;
-}
-
-template <class... QueryArg>
-static void BM_case(benchmark::State& state, QueryArg&&... query_arg)
+void BM_case(benchmark::State& state, std::string query_arg)
 {
   srand(5236);
-  auto iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    [desired_bytes = state.range(1)](int index) { return build_row(desired_bytes); });
-  int num_rows = state.range(0);
-  cudf::test::strings_column_wrapper input(iter, iter + num_rows);
-  cudf::strings_column_view scv(input);
+  int num_rows      = state.range(0);
+  int desired_bytes = state.range(1);
+  auto input        = build_json_string_column(desired_bytes, num_rows);
+  cudf::strings_column_view scv(input->view());
   size_t num_chars = scv.chars().size();
 
-  std::string json_path(query_arg...);
+  std::string json_path(query_arg);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);
