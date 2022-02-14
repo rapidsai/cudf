@@ -91,7 +91,7 @@ void cufile_shim::modify_cufile_json() const
   temp_directory tmp_config_dir{"cudf_cufile_config"};
 
   // Modify the config file based on the policy
-  auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
+  auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
   std::ifstream user_config_file(config_file_path);
   // Modified config file is stored in a temporary directory
   auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
@@ -170,7 +170,8 @@ cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_h
 cufile_input_impl::cufile_input_impl(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_RDONLY | O_DIRECT),
-    pool(16)  // The benefit from multithreaded read plateaus around 16 threads
+    // The benefit from multithreaded read plateaus around 16 threads
+    pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
   pool.sleep_duration = 10;
 }
@@ -194,9 +195,11 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
   F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
 {
   std::vector<std::future<ResultT>> slice_tasks;
-  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_offset              = 0;
+  constexpr size_t default_max_slice_bytes = 4 * 1024 * 1024;
+  static auto const max_slice_bytes =
+    getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_bytes);
+  size_t const n_slices = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_offset   = 0;
   for (size_t t = 0; t < n_slices; ++t) {
     DataT* ptr_slice = ptr + slice_offset;
 
@@ -250,7 +253,7 @@ size_t cufile_input_impl::read(size_t offset,
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664),
-    pool(16)
+    pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
 }
 

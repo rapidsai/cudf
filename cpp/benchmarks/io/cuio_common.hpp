@@ -39,6 +39,15 @@ std::string random_file_in_dir(std::string const& dir_path);
  * @brief Class to create a coupled `source_info` and `sink_info` of given type.
  */
 class cuio_source_sink_pair {
+  class bytes_written_only_sink : public cudf::io::data_sink {
+    size_t _bytes_written = 0;
+
+   public:
+    void host_write(void const* data, size_t size) override { _bytes_written += size; }
+    void flush() override {}
+    size_t bytes_written() override { return _bytes_written; }
+  };
+
  public:
   cuio_source_sink_pair(io_type type);
   ~cuio_source_sink_pair()
@@ -66,12 +75,15 @@ class cuio_source_sink_pair {
    */
   cudf::io::sink_info make_sink_info();
 
+  [[nodiscard]] size_t size();
+
  private:
   static temp_directory const tmpdir;
 
   io_type const type;
   std::vector<char> buffer;
   std::string const file_name;
+  bytes_written_only_sink void_sink;
 };
 
 /**
