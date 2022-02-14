@@ -214,8 +214,7 @@ struct batch_data {
  * @return pair of device vector of size_types of the row sizes of the table and a device vector of
  * offsets into the string column
  */
-std::pair<rmm::device_uvector<size_type>,
-           rmm::device_uvector<strings_column_view::offset_iterator>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<strings_column_view::offset_iterator>>
 build_string_row_offsets(table_view const &tbl, size_type fixed_width_and_validity_size,
                          rmm::cuda_stream_view stream) {
   auto const num_rows = tbl.num_rows();
@@ -1972,11 +1971,10 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
   // to that point. These are row batches and they are decided first before building the
   // tiles so the tiles can be properly cut around them.
 
-  auto schema_column_iter =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                      [&tbl](auto i) -> std::pair<data_type, column_view const> {
-                                        return {tbl.column(i).type(), tbl.column(i)};
-                                      });
+  auto schema_column_iter = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0), [&tbl](auto i) -> std::pair<data_type, column_view const> {
+        return {tbl.column(i).type(), tbl.column(i)};
+      });
 
   auto column_info =
       detail::compute_column_information(schema_column_iter, schema_column_iter + num_columns);
