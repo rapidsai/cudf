@@ -16,15 +16,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/quantiles.hpp>
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/detail/sorting.hpp>
-#include <cudf/detail/stream_compaction.hpp>
-#include <cudf/reduction.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -76,14 +69,13 @@ struct segmented_reduce_dispatch_functor {
   }
 };
 
-std::unique_ptr<column> segmented_reduce(
-  column_view const& col,
-  device_span<size_type const> offsets,
-  aggregation const& agg,
-  data_type output_dtype,
-  null_policy null_handling,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> segmented_reduce(column_view const& col,
+                                         device_span<size_type const> offsets,
+                                         aggregation const& agg,
+                                         data_type output_dtype,
+                                         null_policy null_handling,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(offsets.size() > 1, "Input should have at least 1 segment.");
 
