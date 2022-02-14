@@ -108,17 +108,11 @@ def _create_delegating_mixin(
     validity_attr = f"_VALID_{category_name}S"
 
     class Operation:
-        """
-        """
-
-        def __init__(self):
-            self._operation_name = operation_name
-
-        def __set_name__(self, owner, name):
+        def __init__(self, name):
             self._name = name
 
         def __get__(self, obj, owner=None):
-            base_operation = getattr(owner, self._operation_name)
+            base_operation = getattr(owner, operation_name)
             retfunc = _partialmethod(base_operation, op=self._name)
 
             retfunc.__doc__ = base_operation.__doc__.format(
@@ -158,9 +152,8 @@ def _create_delegating_mixin(
 
             for operation in valid_operations:
                 if operation not in dir(cls):
-                    op_attr = Operation()
+                    op_attr = Operation(operation)
                     setattr(cls, operation, op_attr)
-                    op_attr.__set_name__(cls, operation)
 
     def _operation(self, op: str, *args, **kwargs):
         raise NotImplementedError
