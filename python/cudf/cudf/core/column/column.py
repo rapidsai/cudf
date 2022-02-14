@@ -553,7 +553,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         key: "cudf.core.column.NumericalColumn",
         value: Union[cudf.core.scalar.Scalar, ColumnBase],
     ) -> ColumnBase:
-        nelem: int  # the number of elements to scatter
+        nelem = len(key)  # the number of elements to scatter
 
         if is_bool_dtype(key.dtype):
             if not len(key) == len(self):
