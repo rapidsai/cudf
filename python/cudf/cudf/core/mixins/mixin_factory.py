@@ -127,13 +127,13 @@ def _create_delegating_mixin(
                 **getattr(owner, docstring_attr, {}).get(self._name, {}),
             )
             retfunc.__name__ = self._name
-            retfunc_params = {
-                k: v
+            retfunc_params = [
+                v
                 for k, v in inspect.signature(
                     base_operation
                 ).parameters.items()
                 if k != "op"
-            }.values()
+            ]
             retfunc.__signature__ = inspect.Signature(retfunc_params)
 
             setattr(owner, self._name, retfunc)
