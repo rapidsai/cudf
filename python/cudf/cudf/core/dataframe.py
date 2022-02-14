@@ -2554,6 +2554,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         name : number or string
             name or label of column to be inserted
         value : Series or array-like
+        nan_as_null : bool, Default None
+            If ``None``/``True``, converts ``np.nan`` values to
+            ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
         """
         return self._insert(
             loc=loc,
@@ -2564,7 +2568,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @annotate("DATAFRAME__INSERT", color="green", domain="cudf_python")
-    def _insert(self, loc, name, value, nan_as_null=None, ignore_index=False):
+    def _insert(self, loc, name, value, nan_as_null=None, ignore_index=True):
+        """
+        Same as `insert`, with additional `ignore_index` param.
+
+        ignore_index : bool, default True
+            If True, there will be no index equality check & reindexing
+            happening.
+            If False, a reindexing operation is performed if
+            `value.index` is not equal to `self.index`.
+        """
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
 
