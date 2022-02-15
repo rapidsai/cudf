@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,9 +224,9 @@ class data_profile {
   cudf::size_type avg_run_length = 4;
 
  public:
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_same_v<T, bool> && std::is_integral<T>::value, T>* = nullptr>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same_v<T, bool> && cuda::std::is_integral_v<T>, T>* =
+              nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -307,7 +307,7 @@ class data_profile {
   // discrete distributions (integers, strings, lists). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+            typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
@@ -432,6 +432,6 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
  * @param seed optional, seed for the pseudo-random engine
  * @return null mask device buffer with random null mask data
  */
-rmm::device_buffer create_random_null_mask(cudf::size_type size,
-                                           float null_probability,
-                                           unsigned seed = 1);
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
+                                                                       float null_probability,
+                                                                       unsigned seed = 1);
