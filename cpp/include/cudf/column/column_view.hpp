@@ -383,6 +383,9 @@ class column_view : public detail::column_view_base {
    *
    * The column view must have no nulls, and its type must match the type of the span.
    *
+   * @throws cudf::logic_error if the column view has nulls.
+   * @throws cudf::logic_error if the column view type does not match the span type.
+   *
    * @return device_span<T> A typed device span of the column view.
    */
   template <typename T>
