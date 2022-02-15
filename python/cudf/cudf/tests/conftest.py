@@ -32,5 +32,8 @@ def pytest_sessionfinish(session, exitstatus):
     Called after whole test run finished, right before
     returning the exit status to the system.
     """
-    del os.environ["NO_EXTERNAL_ONLY_APIS"]
-    del os.environ["_CUDF_TEST_ROOT"]
+    try:
+        del os.environ["NO_EXTERNAL_ONLY_APIS"]
+        del os.environ["_CUDF_TEST_ROOT"]
+    except KeyError:
+        pass
