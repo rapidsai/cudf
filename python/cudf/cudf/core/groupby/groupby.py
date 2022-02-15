@@ -1065,8 +1065,8 @@ class GroupBy(Serializable):
             if not (isinstance(x, str) and isinstance(y, str)):
                 warnings.warn(
                     "DataFrame contains non-string column name(s). "
-                    "Struct column requires field name to be string."
-                    "Non-string column names will be casted to string"
+                    "Struct column requires field name to be string. "
+                    "Non-string column names will be casted to string "
                     "as the field name."
                 )
                 x, y = str(x), str(y)
