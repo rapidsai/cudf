@@ -1714,11 +1714,11 @@ class IndexedFrame(Frame):
         Notes
         -----
         When sampling from ``axis=0/'index'``, ``random_state`` can be either
-        a host random state (``numpy.random.RandomState``) or a device random
-        state (``cupy.random.RandomState``). If a host random state is used,
+        a numpy random state (``numpy.random.RandomState``) or a cupy random
+        state (``cupy.random.RandomState``). If a numpy random state is used,
         the rows sampled is guarenteed to match pandas result, but performance
         may be decreased if the item count is too high. Optionally, user may
-        specify a device random state to achieve better performance at high
+        specify a cupy random state to achieve better performance at high
         item counts.
 
         Parameters
@@ -1800,6 +1800,11 @@ class IndexedFrame(Frame):
         else:
             n = int(round(size * frac))
 
+        if n > 0 and size == 0:
+            raise ValueError(
+                "Cannot take a sample larger than 0 when axis is empty"
+            )
+
         weights = preprocess_weights(weights, size)
         random_state = preprocess_random_state(random_state, axis)
 
@@ -1810,7 +1815,7 @@ class IndexedFrame(Frame):
         else:
             if isinstance(random_state, cp.random.RandomState):
                 raise ValueError(
-                    "Use a host random state when sampling from "
+                    "Use a numpy random state when sampling from "
                     "axis=1/columns."
                 )
             return self._sample_axis_1(
@@ -1825,11 +1830,6 @@ class IndexedFrame(Frame):
         random_state: Union[np.random.RandomState, cp.random.RandomState],
         ignore_index: bool,
     ):
-        if n > 0 and self.shape[0] == 0:
-            raise ValueError(
-                "Cannot take a sample larger than 0 when axis is empty"
-            )
-
         if not replace and n > self.shape[0]:
             raise ValueError(
                 "Cannot take a larger sample than population "
@@ -1841,7 +1841,7 @@ class IndexedFrame(Frame):
                 "weights is not yet supported for axis=0/index"
             )
 
-        # Dynamic dispatch to host/device depending on state provided.
+        # Dynamic dispatch to numpy/cupy depending on state provided.
         gather_map = cudf.core.column.as_column(
             random_state.choice(len(self), size=n, replace=replace)
         )
