@@ -972,7 +972,7 @@ class GroupBy(Serializable):
         calculation. See the note below about bias from missing values.
 
         A threshold can be set for the minimum number of observations
-        for each value created.Comparisons with observations below this
+        for each value created. Comparisons with observations below this
         threshold will be returned as NaN.
 
         This method is generally used for the analysis of time series data to
