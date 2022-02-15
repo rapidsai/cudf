@@ -13,14 +13,18 @@ def _partialmethod(method, *args1, **kwargs1):
 
 
 def _create_delegating_mixin(
-    mixin_name, docstring, category_name, operation_name, supported_operations
+    mixin_name,
+    docstring,
+    category_name,
+    category_operation_name,
+    supported_operations,
 ):
     """Factory for mixins defining collections of delegated operations.
 
     This function generates mixins based on two common paradigms in cuDF:
 
     1. libcudf groups many operations into categories using a common API. These
-       APIs usually accept an enum to delinate the specific operation to
+       APIs usually accept an enum to delineate the specific operation to
        perform, e.g. binary operations use the `binary_operator` enum when
        calling the `binary_operation` function. cuDF Python mimics this
        structure by having operations within a category delegate to a common
@@ -53,7 +57,7 @@ def _create_delegating_mixin(
             - f'_{category_name}_DOCSTRINGS'
             - f'_VALID_{category_name}S'
             - f'_SUPPORTED_{category_name}S'
-    operation_name : str
+    category_operation_name : str
         The name given to the core function implementing this category of
         operations.  The corresponding function is the entrypoint for child
         classes.
@@ -110,7 +114,7 @@ def _create_delegating_mixin(
             self._name = name
 
         def __get__(self, obj, owner=None):
-            base_operation = getattr(owner, operation_name)
+            base_operation = getattr(owner, category_operation_name)
             retfunc = _partialmethod(base_operation, op=self._name)
 
             retfunc.__doc__ = base_operation.__doc__.format(
@@ -162,7 +166,7 @@ def _create_delegating_mixin(
 
     OperationMixin.__name__ = mixin_name
     OperationMixin.__doc__ = docstring
-    setattr(OperationMixin, operation_name, _operation)
+    setattr(OperationMixin, category_operation_name, _operation)
     # This attribute is set in case lookup is convenient at a later point, but
     # it is not strictly necessary since `supported_operations` is part of the
     # closure associated with the class's creation.
