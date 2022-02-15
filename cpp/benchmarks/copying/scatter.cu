@@ -41,9 +41,8 @@ void BM_scatter(benchmark::State& state)
   auto scatter_map = scatter_map_table->get_column(0).mutable_view();
 
   if (coalesce) {
-    thrust::reverse(thrust::device,
-                    scatter_map.begin<cudf::size_type>(),
-                    scatter_map.end<cudf::size_type>());
+    thrust::reverse(
+      thrust::device, scatter_map.begin<cudf::size_type>(), scatter_map.end<cudf::size_type>());
   } else {
     thrust::shuffle(thrust::device,
                     scatter_map.begin<cudf::size_type>(),
