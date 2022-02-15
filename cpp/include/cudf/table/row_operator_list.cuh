@@ -35,111 +35,10 @@
 namespace cudf {
 namespace experimental {
 
-#pragma nv_exec_check_disable
-template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
-          typename Functor,
-          typename... Ts>
-CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher2(cudf::data_type dtype,
-                                                                           Functor f,
-                                                                           Ts&&... args)
-{
-  switch (dtype.id()) {
-    case type_id::BOOL8:
-      return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT8:
-      return f.template operator()<typename IdTypeMap<type_id::INT8>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT16:
-      return f.template operator()<typename IdTypeMap<type_id::INT16>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT32:
-      return f.template operator()<typename IdTypeMap<type_id::INT32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT64:
-      return f.template operator()<typename IdTypeMap<type_id::INT64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT8:
-      return f.template operator()<typename IdTypeMap<type_id::UINT8>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT16:
-      return f.template operator()<typename IdTypeMap<type_id::UINT16>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT32:
-      return f.template operator()<typename IdTypeMap<type_id::UINT32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT64:
-      return f.template operator()<typename IdTypeMap<type_id::UINT64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::FLOAT32:
-      return f.template operator()<typename IdTypeMap<type_id::FLOAT32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::FLOAT64:
-      return f.template operator()<typename IdTypeMap<type_id::FLOAT64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::STRING:
-      return f.template operator()<typename IdTypeMap<type_id::STRING>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_DAYS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_DAYS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_SECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_SECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MILLISECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MICROSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_NANOSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_DAYS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_DAYS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_SECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_SECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_MILLISECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_MICROSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_NANOSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DICTIONARY32:
-      return f.template operator()<typename IdTypeMap<type_id::DICTIONARY32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL32:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL64:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL128:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL128>::type>(
-        std::forward<Ts>(args)...);
-    default: {
-#ifndef __CUDA_ARCH__
-      CUDF_FAIL("Unsupported type_id.");
-#else
-      cudf_assert(false && "Unsupported type_id.");
-
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
-      return return_type();
-#endif
-    }
-  }
-}
+template <cudf::type_id t>
+struct non_nested_id_to_type {
+  using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
+};
 
 /**
  * @brief Performs an equality comparison between two elements in two columns.
@@ -241,10 +140,11 @@ class element_equality_comparator {
     if (l_size != r_size) { return false; }
     bool equal = true;
     for (int i = 0; i < l_size; ++i) {
-      equal &= type_dispatcher2(lcol.type(),
-                                element_equality_comparator{nulls, lcol, rcol, nulls_are_equal},
-                                l_start_off + i,
-                                r_start_off + i);
+      equal &= type_dispatcher<non_nested_id_to_type>(
+        lcol.type(),
+        element_equality_comparator{nulls, lcol, rcol, nulls_are_equal},
+        l_start_off + i,
+        r_start_off + i);
     }
     return equal;
   }
