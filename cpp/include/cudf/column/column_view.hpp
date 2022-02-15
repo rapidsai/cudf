@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <vector>
 
@@ -374,6 +377,21 @@ class column_view : public detail::column_view_base {
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
    */
   auto child_end() const noexcept { return _children.cend(); }
+
+  /**
+   * @brief Converts a column view into a device span.
+   *
+   * The column view must have no nulls, and its type must match the type of the span.
+   *
+   * @return device_span<T> A typed device span of the column view.
+   */
+  template <typename T>
+  [[nodiscard]] operator device_span<const T>() const
+  {
+    CUDF_EXPECTS(type() == type_to_id<T>(), "Type of span must match column view type.");
+    CUDF_EXPECTS(!has_nulls(), "Column view with null values cannot be converted to device_span.");
+    return device_span<const T>(data<T>(), size());
+  }
 
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
