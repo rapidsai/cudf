@@ -19,6 +19,7 @@ import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
 from pandas._config import get_option
+from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
@@ -348,7 +349,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = DataFrame(self._frame._get_columns_by_index(arg[1]))
+        columns_df = self._frame._get_columns_by_index(arg[1])
 
         columns_df._index = self._frame._index
 
@@ -398,7 +399,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        columns = DataFrame(self._frame._get_columns_by_index(key[1]))
+        columns = self._frame._get_columns_by_index(key[1])
 
         for col in columns:
             self._frame[col].iloc[key[0]] = value
@@ -567,6 +568,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         for k in columns
                     }
                 )
+        elif isinstance(data, ColumnAccessor):
+            raise TypeError(
+                "Use cudf.Series._from_data for constructing a Series from "
+                "ColumnAccessor"
+            )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
 
@@ -2541,6 +2547,80 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         value = column.as_column(value, nan_as_null=nan_as_null)
 
         self._data.insert(name, value, loc=loc)
+
+    def diff(self, periods=1, axis=0):
+        """
+        First discrete difference of element.
+
+        Calculates the difference of a DataFrame element compared with another
+        element in the DataFrame (default is element in previous row).
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        DataFrame
+            First differences of the DataFrame.
+
+        Notes
+        -----
+        Diff currently only supports numeric dtype columns.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+        ...                       'b': [1, 1, 2, 3, 5, 8],
+        ...                       'c': [1, 4, 9, 16, 25, 36]})
+        >>> gdf
+           a  b   c
+        0  1  1   1
+        1  2  1   4
+        2  3  2   9
+        3  4  3  16
+        4  5  5  25
+        5  6  8  36
+        >>> gdf.diff(periods=2)
+              a     b     c
+        0  <NA>  <NA>  <NA>
+        1  <NA>  <NA>  <NA>
+        2     2     1     8
+        3     2     2    12
+        4     2     3    16
+        5     2     5    20
+
+        """
+        if not is_integer(periods):
+            if not (is_float(periods) and periods.is_integer()):
+                raise ValueError("periods must be an integer")
+            periods = int(periods)
+
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        if not all(is_numeric_dtype(i) for i in self.dtypes):
+            raise NotImplementedError(
+                "DataFrame.diff only supports numeric dtypes"
+            )
+
+        if abs(periods) > len(self):
+            df = cudf.DataFrame._from_data(
+                {
+                    name: column_empty(len(self), dtype=dtype, masked=True)
+                    for name, dtype in zip(self.columns, self.dtypes)
+                }
+            )
+            return df
+
+        return self - self.shift(periods=periods)
 
     def drop(
         self,
@@ -4525,10 +4605,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         a: int64
         b: int64
         index: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
+        index: [[1,2,3]]
         >>> df.to_arrow(preserve_index=False)
         pyarrow.Table
         a: int64
         b: int64
+        ----
+        a: [[1,2,3]]
+        b: [[4,5,6]]
         """
 
         data = self.copy(deep=False)

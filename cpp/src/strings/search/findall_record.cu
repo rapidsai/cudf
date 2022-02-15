@@ -79,17 +79,18 @@ struct findall_fn {
 
 //
 std::unique_ptr<column> findall_record(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::string const& pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const strings_count = strings.size();
-  auto const d_strings     = column_device_view::create(strings.parent(), stream);
+  auto const strings_count = input.size();
+  auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // compile regex into device object
   auto const d_prog =
-    reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
 
   // Create lists offsets column
   auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
@@ -159,12 +160,13 @@ std::unique_ptr<column> findall_record(
 
 // external API
 
-std::unique_ptr<column> findall_record(strings_column_view const& strings,
+std::unique_ptr<column> findall_record(strings_column_view const& input,
                                        std::string const& pattern,
+                                       regex_flags const flags,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall_record(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::findall_record(input, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

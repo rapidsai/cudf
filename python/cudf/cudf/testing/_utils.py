@@ -46,7 +46,7 @@ def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
     probs = [null_probability, 1 - null_probability]
     rng = np.random.default_rng(seed=seed)
     mask = rng.choice([False, True], size=len(series), p=probs)
-    series[mask] = None
+    series.iloc[mask] = None
 
 
 # TODO: This function should be removed. Anywhere that it is being used should

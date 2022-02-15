@@ -396,6 +396,7 @@ add_library(
   src/sort/segmented_sort.cu
   src/sort/sort_column.cu
   src/sort/sort.cu
+  src/sort/sort2.cu
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/stream_compaction/apply_boolean_mask.cu
@@ -458,6 +459,7 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/row_operators.cpp
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp

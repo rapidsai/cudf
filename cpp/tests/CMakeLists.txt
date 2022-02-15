@@ -20,11 +20,18 @@
 function(ConfigureTest CMAKE_TEST_NAME)
   add_executable(${CMAKE_TEST_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                  "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+    ${CMAKE_TEST_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil cudf_datagen GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+  install(
+    TARGETS ${CMAKE_TEST_NAME}
+    COMPONENT testing
+    DESTINATION bin/gtests/libcudf
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################
@@ -206,6 +213,8 @@ endif()
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
 ConfigureTest(SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/rank_test.cpp)
+
+ConfigureTest(SORT2_TEST sort/sort2_test.cu)
 
 # ##################################################################################################
 # * copying tests ---------------------------------------------------------------------------------
