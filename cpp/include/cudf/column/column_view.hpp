@@ -381,7 +381,7 @@ class column_view : public detail::column_view_base {
   /**
    * @brief Converts a column view into a device span.
    *
-   * The column view must have no nulls, and its type must match the type of the span.
+   * @tparam The device_span type. Must match the column view's type.
    *
    * @throws cudf::logic_error if the column view has nulls.
    * @throws cudf::logic_error if the column view type does not match the span type.
