@@ -13,18 +13,37 @@ def _partialmethod(method, *args1, **kwargs1):
 
 
 class Operation:
-    def __init__(self, name, category_name, base_operation):
+    """Descriptor used to define operations for delegating mixins.
+
+    This class is designed to be assigned to the attributes (the delegating
+    methods) defined by the OperationMixin. This class will create the method
+    and mimic all the expected attributes for that method to appear as though
+    it was originally designed on the class. The use of the descriptor pattern
+    ensures that the method is only created the first time it is invoked, after
+    which all further calls use the callable generated on the first invocation.
+
+    Parameters
+    ----------
+    name : str
+        The name of the operation.
+    docstring_format_args : str
+        The attribute of the owning class from which to pull format parameters
+        for this operation's docstring.
+    base_operation : str
+        The underlying operation function to be invoked when operation `name`
+        is called on the owning class.
+    """
+
+    def __init__(self, name, docstring_format_args, base_operation):
         self._name = name
-        self._docstring_attr = f"{category_name}_DOCSTRINGS"
+        self._docstring_format_args = docstring_format_args
         self._base_operation = base_operation
 
     def __get__(self, obj, owner=None):
         retfunc = _partialmethod(self._base_operation, op=self._name)
 
         retfunc.__doc__ = self._base_operation.__doc__.format(
-            cls=owner.__name__,
-            op=self._name,
-            **getattr(owner, self._docstring_attr, {}).get(self._name, {}),
+            cls=owner.__name__, op=self._name, **self._docstring_format_args,
         )
         retfunc.__name__ = self._name
         retfunc.__qualname__ = ".".join([owner.__name__, self._name])
@@ -88,8 +107,8 @@ def _create_delegating_mixin(
         The documentation string for the mixin class.
     category_name : str
         The category of operations for which a mixin is being created. This
-        name will be used to define the following attributes as shown in the
-        example below:
+        name will be used to define or access the following attributes as shown
+        in the example below:
             - f'_{category_name}_DOCSTRINGS'
             - f'_VALID_{category_name}S'
             - f'_SUPPORTED_{category_name}S'
@@ -142,7 +161,14 @@ def _create_delegating_mixin(
     >>> print(bar.foo1.__doc__)
     Perform the operation foo1, which returns 42.
     """
+    # The first two attributes may be defined on subclasses of the generated
+    # OperationMixin to indicate valid attributes and parameters to use when
+    # formatting docstrings. The supported_attr will be defined on the
+    # OperationMixin itself to indicate what operations its subclass may
+    # inherit from it.
     validity_attr = f"_VALID_{category_name}S"
+    docstring_attr = f"{category_name}_DOCSTRINGS"
+    supported_attr = f"_SUPPORTED_{category_name}S"
 
     class OperationMixin:
         @classmethod
@@ -160,22 +186,32 @@ def _create_delegating_mixin(
             base_operation = getattr(cls, category_operation_name)
             for operation in valid_operations:
                 if operation not in dir(cls):
+                    docstring_format_args = getattr(
+                        cls, docstring_attr, {}
+                    ).get(operation, {})
                     op_attr = Operation(
-                        operation, category_name, base_operation
+                        operation, docstring_format_args, base_operation
                     )
                     setattr(cls, operation, op_attr)
+
+    OperationMixin.__name__ = mixin_name
+    OperationMixin.__qualname__ = mixin_name
+    OperationMixin.__doc__ = docstring
 
     def _operation(self, op: str, *args, **kwargs):
         raise NotImplementedError
 
-    OperationMixin.__name__ = mixin_name
-    OperationMixin.__doc__ = docstring
+    _operation.__name__ = category_operation_name
+    _operation.__qualname__ = ".".join([mixin_name, category_operation_name])
+    _operation.__doc__ = (
+        f"The core {category_name.lower()} function. Must be overridden by "
+        "subclasses, the default implementation raises a NotImplementedError."
+    )
+
     setattr(OperationMixin, category_operation_name, _operation)
     # This attribute is set in case lookup is convenient at a later point, but
     # it is not strictly necessary since `supported_operations` is part of the
     # closure associated with the class's creation.
-    setattr(
-        OperationMixin, f"_SUPPORTED_{category_name}S", supported_operations
-    )
+    setattr(OperationMixin, supported_attr, supported_operations)
 
     return OperationMixin
