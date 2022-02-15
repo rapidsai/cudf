@@ -4,6 +4,7 @@ import collections
 import itertools
 import pickle
 import warnings
+from functools import cached_property
 
 import numpy as np
 import pandas as pd
@@ -17,7 +18,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import GetAttrGetItemMixin, cached_property
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]

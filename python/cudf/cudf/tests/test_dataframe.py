@@ -917,9 +917,7 @@ def test_dataframe_dtypes():
     dtypes = pd.Series(
         [np.int32, np.float32, np.float64], index=["c", "a", "b"]
     )
-    df = cudf.DataFrame(
-        {k: np.ones(10, dtype=v) for k, v in dtypes.iteritems()}
-    )
+    df = cudf.DataFrame({k: np.ones(10, dtype=v) for k, v in dtypes.items()})
     assert df.dtypes.equals(dtypes)
 
 
@@ -1956,7 +1954,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
         elif func not in cudf.core.dataframe._cupy_nan_methods_map:
             if skipna is False:
                 expected_exception = NotImplementedError
-            elif any(col.nullable for name, col in gdf.iteritems()):
+            elif any(col.nullable for name, col in gdf.items()):
                 expected_exception = ValueError
             elif func in ("cummin", "cummax"):
                 expected_exception = AttributeError
@@ -2134,7 +2132,7 @@ def test_iter(pdf, gdf):
 
 
 def test_iteritems(gdf):
-    for k, v in gdf.iteritems():
+    for k, v in gdf.items():
         assert k in gdf.columns
         assert isinstance(v, cudf.Series)
         assert_eq(v, gdf[k])

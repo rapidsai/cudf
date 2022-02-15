@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from itertools import combinations
 
@@ -1292,45 +1292,43 @@ def test_loc_datetime_index(sli, is_dataframe):
 
 
 @pytest.mark.parametrize(
-    "gdf",
+    "gdf_kwargs",
     [
-        cudf.DataFrame({"a": range(1000000)}),
-        cudf.DataFrame({"a": range(1000000), "b": range(1000000)}),
-        cudf.DataFrame({"a": range(20), "b": range(20)}),
-        cudf.DataFrame(
-            {
+        {"data": {"a": range(100000)}},
+        {"data": {"a": range(100000), "b": range(100000)}},
+        {
+            "data": {
                 "a": range(20),
                 "b": range(20),
                 "c": ["abc", "def", "xyz", "def", "pqr"] * 4,
             }
-        ),
-        cudf.DataFrame(index=[1, 2, 3]),
-        cudf.DataFrame(index=range(1000000)),
-        cudf.DataFrame(columns=["a", "b", "c", "d"]),
-        cudf.DataFrame(columns=["a"], index=range(1000000)),
-        cudf.DataFrame(
-            columns=["a", "col2", "...col n"], index=range(1000000)
-        ),
-        cudf.DataFrame(index=cudf.Series(range(1000000)).astype("str")),
-        cudf.DataFrame(
-            columns=["a", "b", "c", "d"],
-            index=cudf.Series(range(1000000)).astype("str"),
-        ),
+        },
+        {"index": [1, 2, 3]},
+        {"index": range(100000)},
+        {"columns": ["a", "b", "c", "d"]},
+        {"columns": ["a"], "index": range(100000)},
+        {"columns": ["a", "col2", "...col n"], "index": range(100000)},
+        {"index": cudf.Series(range(100000)).astype("str")},
+        {
+            "columns": ["a", "b", "c", "d"],
+            "index": cudf.Series(range(100000)).astype("str"),
+        },
     ],
 )
 @pytest.mark.parametrize(
     "slice",
     [
-        slice(250000, 500000),
-        slice(250000, 250001),
-        slice(500000),
+        slice(25000, 50000),
+        slice(25000, 25001),
+        slice(50000),
         slice(1, 10),
         slice(10, 20),
         slice(15, 24000),
         slice(6),
     ],
 )
-def test_dataframe_sliced(gdf, slice):
+def test_dataframe_sliced(gdf_kwargs, slice):
+    gdf = cudf.DataFrame(**gdf_kwargs)
     pdf = gdf.to_pandas()
 
     actual = gdf[slice]
