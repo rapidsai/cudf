@@ -1794,15 +1794,12 @@ class IndexedFrame(Frame):
 
         axis = self._get_axis_from_axis_arg(axis)
 
-        if frac is None and n is None:
-            n = 1
-        elif frac is not None:
-            if axis == 0:
-                n = int(round(self.shape[0] * frac))
-            else:
-                n = int(round(self.shape[1] * frac))
-
         size = self.shape[axis]
+        if frac is None:
+            n = 1 if n is None else n
+        else:
+            n = int(round(size * frac))
+
         weights = preprocess_weights(weights, size)
         random_state = preprocess_random_state(random_state, axis)
 
