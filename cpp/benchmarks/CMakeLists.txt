@@ -270,7 +270,7 @@ ConfigureBench(
   string/split.cpp
   string/substring.cpp
   string/translate.cpp
-  string/url_decode.cpp
+  string/url_decode.cu
 )
 
 # ##################################################################################################
