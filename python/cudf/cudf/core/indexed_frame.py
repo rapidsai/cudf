@@ -1709,9 +1709,9 @@ class IndexedFrame(Frame):
     ):
         """Return a random sample of items from an axis of object.
 
-        If reproducible results are required, a random number generator may be provided
-        via the `random_state` parameter. This function will always produce the same sample
-        given an identical `random_state`.
+        If reproducible results are required, a random number generator may be
+        provided via the `random_state` parameter. This function will always
+        produce the same sample given an identical `random_state`.
 
         Notes
         -----
@@ -1719,9 +1719,9 @@ class IndexedFrame(Frame):
         a numpy random state (``numpy.random.RandomState``) or a cupy random
         state (``cupy.random.RandomState``). When a numpy random state is
         used, the output is guaranteed to match the output of the corresponding
-        pandas method call, but generating the sample may be slow. If exact pandas
-        equivalence is not required, using a cupy random state will achieve better
-        performance, especially at high item counts.
+        pandas method call, but generating the sample may be slow. If exact
+        pandas equivalence is not required, using a cupy random state will
+        achieve better performance, especially at high item counts.
 
         Parameters
         ----------
@@ -1746,8 +1746,7 @@ class IndexedFrame(Frame):
         axis : {0 or `index`, 1 or `columns`, None}, default None
             Axis to sample. Accepts axis number or name.
             Default is stat axis for given data type
-            (0 for Series and DataFrames). Series and Index doesn't
-            support axis=1.
+            (0 for Series and DataFrames). Series doesn't support axis=1.
         ignore_index : bool, default False
             If True, the resulting index will be labeled 0, 1, …, n - 1.
 

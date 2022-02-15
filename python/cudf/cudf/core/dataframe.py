@@ -6096,11 +6096,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "when 'replace=True'"
             )
 
-        if n > 0 and self.shape[1] == 0:
-            raise ValueError(
-                "Cannot take a sample larger than 0 when axis is empty"
-            )
-
         columns = self._data.names
         if not replace and n > len(columns):
             raise ValueError(
