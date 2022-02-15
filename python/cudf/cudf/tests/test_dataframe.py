@@ -9204,7 +9204,7 @@ def test_groupby_cov_for_pandas_bug_case():
     expected = pdf.groupby("id").cov(min_periods=2, ddof=2)
 
     gdf = cudf.from_pandas(pdf)
-    actual = gdf.groupby("id").cov(min_periods=2, ddof=2)
+    actual = gdf.groupby("id").cov(ddof=2)
 
     assert_eq(expected, actual)
 
