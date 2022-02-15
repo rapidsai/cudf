@@ -9169,7 +9169,7 @@ def test_groupby_cov_invalid_column_types(data, gkey):
 def test_groupby_cov_positive_semidefinite_matrix():
     # Refer to discussions in PR #9889 re "pair-wise deletion" strategy
     # being used in pandas to compute the covariance of a dataframe with
-    # rows containing
+    # rows containing missing values.
     # Note: cuDF currently matches pandas behavior in that the covariance
     # matrices are not guaranteed PSD (positive semi definite).
     # https://github.com/rapidsai/cudf/pull/9889#discussion_r794158358
