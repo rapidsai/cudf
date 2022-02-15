@@ -1782,27 +1782,32 @@ class IndexedFrame(Frame):
         0  1  3
         1  2  4
         """
-        if frac is not None and frac > 1 and not replace:
-            raise ValueError(
-                "Replace has to be set to `True` "
-                "when upsampling the population `frac` > 1."
-            )
-        elif frac is not None and n is not None:
-            raise ValueError(
-                "Please enter a value for `frac` OR `n`, not both"
-            )
-
         axis = self._get_axis_from_axis_arg(axis)
-
         size = self.shape[axis]
+
         if frac is None:
             n = 1 if n is None else n
         else:
+            if frac > 1 and not replace:
+                raise ValueError(
+                    "Replace has to be set to `True` "
+                    "when upsampling the population `frac` > 1."
+                )
+            if n is not None:
+                raise ValueError(
+                    "Please enter a value for `frac` OR `n`, not both"
+                )
             n = int(round(size * frac))
 
         if n > 0 and size == 0:
             raise ValueError(
                 "Cannot take a sample larger than 0 when axis is empty"
+            )
+
+        if not replace and n > size:
+            raise ValueError(
+                "Cannot take a larger sample than population "
+                "when 'replace=False'"
             )
 
         weights = preprocess_weights(weights, size)
@@ -1825,25 +1830,14 @@ class IndexedFrame(Frame):
     def _sample_axis_0(
         self,
         n: int,
-        weights: None,
+        weights: Optional[ColumnLike],
         replace: bool,
         random_state: Union[np.random.RandomState, cp.random.RandomState],
         ignore_index: bool,
     ):
-        if not replace and n > self.shape[0]:
-            raise ValueError(
-                "Cannot take a larger sample than population "
-                "when 'replace=False'"
-            )
-
-        if weights is not None:
-            raise NotImplementedError(
-                "weights is not yet supported for axis=0/index"
-            )
-
         # Dynamic dispatch to numpy/cupy depending on state provided.
         gather_map = cudf.core.column.as_column(
-            random_state.choice(len(self), size=n, replace=replace)
+            random_state.choice(len(self), size=n, replace=replace, p=weights)
         )
 
         return self._gather(
@@ -1853,7 +1847,7 @@ class IndexedFrame(Frame):
     def _sample_axis_1(
         self,
         n: int,
-        weights: None,
+        weights: Optional[ColumnLike],
         replace: bool,
         random_state: np.random.RandomState,
         ignore_index: bool,

@@ -6085,7 +6085,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _sample_axis_1(
         self,
         n: int,
-        weights: ColumnLike,
+        weights: Optional[ColumnLike],
         replace: bool,
         random_state: np.random.RandomState,
         ignore_index: bool,
