@@ -322,22 +322,22 @@ class ColumnBase(Column, Serializable, NotIterable):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        device_value = as_device_scalar(fill_value, self.dtype)
+        slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
         if not inplace:
-            return libcudf.filling.fill(self, begin, end, device_value)
+            return libcudf.filling.fill(self, begin, end, slr.device_value)
 
         if is_string_dtype(self.dtype):
             return self._mimic_inplace(
-                libcudf.filling.fill(self, begin, end, device_value),
+                libcudf.filling.fill(self, begin, end, slr.device_value),
                 inplace=True,
             )
 
-        if not device_value.is_valid() and not self.nullable:
+        if not slr.device_value.is_valid() and not self.nullable:
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
-        libcudf.filling.fill_in_place(self, begin, end, device_value)
+        libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
 
         return self
 
