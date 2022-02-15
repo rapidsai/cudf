@@ -52,7 +52,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -1218,13 +1218,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return self
         start, stop, stride = arg.indices(num_rows)
 
+        # early stop for empty cases
+        if len(range(start, stop, stride)) == 0:
+            breakpoint()
+            return DataFrame._from_data(
+                ColumnAccessor(
+                    {
+                        colname: as_column([], dtype=col.dtype) 
+                        for colname, col in self._data.items()
+                    }
+                ),
+                index=self.index[:0]#RangeIndex(start=0, stop=0) if start < stop else Index([], dtype=self.index.dtype)
+            )
+
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
             if self._num_columns == 0:
                 result = self._empty_like(keep_index)
-                result._index = self.index[start:stop]
+                result._index = self.index[start:stop:stride]
                 return result
             keep_index = False
 

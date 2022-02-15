@@ -1294,8 +1294,8 @@ def test_loc_datetime_index(sli, is_dataframe):
 @pytest.mark.parametrize(
     "gdf",
     [
-        cudf.DataFrame({"a": range(1000000)}),
-        cudf.DataFrame({"a": range(1000000), "b": range(1000000)}),
+        cudf.DataFrame({"a": range(10000)}),
+        cudf.DataFrame({"a": range(10000), "b": range(10000)}),
         cudf.DataFrame({"a": range(20), "b": range(20)}),
         cudf.DataFrame(
             {
@@ -1305,29 +1305,36 @@ def test_loc_datetime_index(sli, is_dataframe):
             }
         ),
         cudf.DataFrame(index=[1, 2, 3]),
-        cudf.DataFrame(index=range(1000000)),
+        cudf.DataFrame(index=range(10000)),
         cudf.DataFrame(columns=["a", "b", "c", "d"]),
-        cudf.DataFrame(columns=["a"], index=range(1000000)),
+        cudf.DataFrame(columns=["a"], index=range(10000)),
         cudf.DataFrame(
-            columns=["a", "col2", "...col n"], index=range(1000000)
+            columns=["a", "col2", "...col n"], index=range(10000)
         ),
-        cudf.DataFrame(index=cudf.Series(range(1000000)).astype("str")),
+        cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
         cudf.DataFrame(
             columns=["a", "b", "c", "d"],
-            index=cudf.Series(range(1000000)).astype("str"),
+            index=cudf.Series(range(10000)).astype("str"),
         ),
     ],
 )
 @pytest.mark.parametrize(
     "slice",
     [
-        slice(250000, 500000),
-        slice(250000, 250001),
-        slice(500000),
-        slice(1, 10),
-        slice(10, 20),
-        slice(15, 24000),
-        slice(6),
+        slice(6, None),  # start but no stop, [6:]
+        slice(None, None, 3),  # only step, [::3]
+        slice(1, 10, 2),  # start, stop, step
+        slice(3, -5, 2),  # negative stop
+        slice(-2, -4),  # slice is empty
+        slice(-10, -20, -1),  # reversed slice
+        slice(None),  # slices everything, same as [:]
+        #slice(250000, 500000),
+        #slice(250000, 250001),
+        #slice(500000),
+        #slice(1, 10),
+        #slice(10, 20),
+        #slice(15, 24000),
+        #slice(6),
     ],
 )
 def test_dataframe_sliced(gdf, slice):
