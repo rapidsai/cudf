@@ -9190,7 +9190,7 @@ def test_groupby_cov_positive_semidefinite_matrix():
 
 @pytest.mark.xfail
 def test_groupby_cov_for_pandas_bug_case():
-    # Handles case: pandas bug when min_periods=2 and ddof=2
+    # Handles case: pandas bug using ddof with missing data.
     # Currently pandas recognizes the bug with no clear fix
     # Filed an issue in Pandas on GH, link below:
     # https://github.com/pandas-dev/pandas/issues/45814
