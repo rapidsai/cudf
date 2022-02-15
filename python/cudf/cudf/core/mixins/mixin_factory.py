@@ -1,13 +1,11 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-import functools
 import inspect
 
 
 # A simple `partialmethod` that allows setting attributes such as
 # __doc__ on instances.
 def _partialmethod(method, *args1, **kwargs1):
-    @functools.wraps(method)
     def wrapper(self, *args2, **kwargs2):
         return method(self, *args1, *args2, **kwargs1, **kwargs2)
 
@@ -121,6 +119,10 @@ def _create_delegating_mixin(
                 **getattr(owner, docstring_attr, {}).get(self._name, {}),
             )
             retfunc.__name__ = self._name
+            retfunc.__qualname__ = ".".join([owner.__name__, self._name])
+            retfunc.__module__ = base_operation.__module__
+            retfunc.__annotations__ = base_operation.__annotations__.copy()
+            retfunc.__annotations__.pop("op")
             retfunc_params = [
                 v
                 for k, v in inspect.signature(
