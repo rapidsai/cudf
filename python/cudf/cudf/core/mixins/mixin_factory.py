@@ -1,6 +1,17 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import functools
 import inspect
+
+
+# A simple `partialmethod` that allows setting attributes such as
+# __doc__ on instances.
+def _partialmethod(method, *args1, **kwargs1):
+    @functools.wraps(method)
+    def wrapper(self, *args2, **kwargs2):
+        return method(self, *args1, *args2, **kwargs1, **kwargs2)
+
+    return wrapper
 
 
 def _create_delegating_mixin(
@@ -93,49 +104,40 @@ def _create_delegating_mixin(
     >>> print(bar.foo1.__doc__)
     Perform the operation foo1, which returns 42.
     """
-
     docstring_attr = f"{category_name}_DOCSTRINGS"
     validity_attr = f"_VALID_{category_name}S"
 
+    class Operation:
+        def __init__(self, name):
+            self._name = name
+
+        def __get__(self, obj, owner=None):
+            base_operation = getattr(owner, operation_name)
+            retfunc = _partialmethod(base_operation, op=self._name)
+
+            retfunc.__doc__ = base_operation.__doc__.format(
+                cls=owner.__name__,
+                op=self._name,
+                **getattr(owner, docstring_attr, {}).get(self._name, {}),
+            )
+            retfunc.__name__ = self._name
+            retfunc_params = [
+                v
+                for k, v in inspect.signature(
+                    base_operation
+                ).parameters.items()
+                if k != "op"
+            ]
+            retfunc.__signature__ = inspect.Signature(retfunc_params)
+
+            setattr(owner, self._name, retfunc)
+
+            if obj is None:
+                return getattr(owner, self._name)
+            else:
+                return getattr(obj, self._name)
+
     class OperationMixin:
-        @classmethod
-        def _add_operation(cls, operation):
-            # This function creates operations on-the-fly.
-
-            # Generate a signature without the `op` parameter.
-            base_operation = getattr(cls, operation_name)
-            base_params = inspect.signature(base_operation).parameters.values()
-            params = [p for p in base_params if p.name != "op"]
-            signature = inspect.Signature(parameters=params)
-
-            # Generate the list of arguments forwarded to the base operation.
-            arglist = ", ".join(
-                [
-                    f"{key}={key}"
-                    for key in signature.parameters
-                    if key not in ("self", "args", "kwargs")
-                ]
-            )
-            arglist = arglist + (", " if arglist else "") + "*args, **kwargs"
-
-            # Apply the formatted docstring of the base operation to the
-            # operation being created here.
-            docstring = base_operation.__doc__.format(
-                cls=cls.__name__,
-                op=operation,
-                **getattr(cls, docstring_attr, {}).get(operation, {}),
-            )
-
-            namespace = {}
-            exec_str = f"""
-def {operation}{str(signature)}:
-    '''{docstring}
-    '''
-    return self.{operation_name}(op="{operation}", {arglist})
-"""
-            exec(exec_str, namespace)
-            setattr(cls, operation, namespace[operation])
-
         @classmethod
         def __init_subclass__(cls):
             # Only add the valid set of operations for a particular class.
@@ -147,11 +149,11 @@ def {operation}{str(signature)}:
             assert (
                 len(invalid_operations) == 0
             ), f"Invalid requested operations: {invalid_operations}"
+
             for operation in valid_operations:
-                # Check if the operation is already defined so that subclasses
-                # can override the method if desired.
-                if not hasattr(cls, operation):
-                    cls._add_operation(operation)
+                if operation not in dir(cls):
+                    op_attr = Operation(operation)
+                    setattr(cls, operation, op_attr)
 
     def _operation(self, op: str, *args, **kwargs):
         raise NotImplementedError
