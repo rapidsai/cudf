@@ -1731,7 +1731,7 @@ class IndexedFrame(Frame):
         replace : bool, default False
             Allow or disallow sampling of the same row more than once.
             replace == True is not yet supported for axis = 1/"columns"
-        weights : numpy or cupy ndarray-like, optional
+        weights : numpy ndarray-like, optional
             Default `None` for uniform probability distribution over rows to
             sample from. If `ndarray` is passed, the length of `weights` should
             equal to the number of rows to sample from, and will be normalized
@@ -1815,6 +1815,13 @@ class IndexedFrame(Frame):
                 "when 'replace=False'"
             )
 
+        # Construct random state if `random_state` parameter is a seed.
+        if not isinstance(
+            random_state, (np.random.RandomState, cp.random.RandomState)
+        ):
+            lib = cp if axis == 0 else np
+            random_state = lib.random.RandomState(seed=random_state)
+
         # Normalize `weights` array.
         if weights is not None:
             if is_column_like(weights):
@@ -1830,13 +1837,6 @@ class IndexedFrame(Frame):
                 )
 
             weights = weights / weights.sum()
-
-        # Construct random state if `random_state` parameter is a seed.
-        if not isinstance(
-            random_state, (np.random.RandomState, cp.random.RandomState)
-        ):
-            lib = cp if axis == 0 else np
-            random_state = lib.random.RandomState(seed=random_state)
 
         if axis == 0:
             return self._sample_axis_0(

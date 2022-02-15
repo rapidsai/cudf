@@ -1595,14 +1595,31 @@ def test_fill_new_category():
 @pytest.mark.parametrize("n", [0, 2, 10, None])
 @pytest.mark.parametrize("frac", [0.3, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
-def test_series_sample_basic(n, frac, replace, random_state_tuple):
+def test_series_sample_basic(
+    n, frac, replace, random_state_tuple, make_weights
+):
     pd_random_state, gd_random_state, checker = random_state_tuple
     psr = pd.Series([1, 2, 3, 4, 5])
     sr = cudf.Series.from_pandas(psr)
 
+    pd_weights, gd_weights = make_weights(len(psr))
+    if (
+        not replace
+        and not isinstance(gd_weights, np.random.RandomState)
+        and gd_weights is not None
+    ):
+        pytest.skip(
+            "`cupy.random.RandomState` doesn't support weighted sampling "
+            "without replacement."
+        )
+
     try:
         expected = psr.sample(
-            n=n, frac=frac, replace=replace, random_state=pd_random_state,
+            n=n,
+            frac=frac,
+            replace=replace,
+            weights=pd_weights,
+            random_state=pd_random_state,
         )
     except BaseException:
         assert_exceptions_equal(
@@ -1614,6 +1631,7 @@ def test_series_sample_basic(n, frac, replace, random_state_tuple):
                     "n": n,
                     "frac": frac,
                     "replace": replace,
+                    "weights": pd_weights,
                     "random_state": pd_random_state,
                 },
             ),
@@ -1623,12 +1641,17 @@ def test_series_sample_basic(n, frac, replace, random_state_tuple):
                     "n": n,
                     "frac": frac,
                     "replace": replace,
+                    "weights": gd_weights,
                     "random_state": gd_random_state,
                 },
             ),
         )
     else:
         got = sr.sample(
-            n=n, frac=frac, replace=replace, random_state=gd_random_state,
+            n=n,
+            frac=frac,
+            replace=replace,
+            weights=gd_weights,
+            random_state=gd_random_state,
         )
         checker(expected, got)

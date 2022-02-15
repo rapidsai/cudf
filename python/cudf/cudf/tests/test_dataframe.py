@@ -7405,7 +7405,9 @@ def test_cudf_arrow_array_error():
 @pytest.mark.parametrize("frac", [0.3, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
 @pytest.mark.parametrize("axis", [0, 1])
-def test_dataframe_sample_basic(n, frac, replace, axis, random_state_tuple):
+def test_dataframe_sample_basic(
+    n, frac, replace, axis, random_state_tuple, make_weights
+):
     # TODO: decouple valid parameter set from invalid parameter set and
     # write two separate tests to reduce function complexity.
     if axis == 1 and replace:
@@ -7427,12 +7429,24 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_tuple):
     )
     df = cudf.DataFrame.from_pandas(pdf)
 
+    pd_weights, gd_weights = make_weights(len(pdf))
+    if (
+        not replace
+        and not isinstance(gd_weights, np.random.RandomState)
+        and gd_weights is not None
+    ):
+        pytest.skip(
+            "`cupy.random.RandomState` doesn't support weighted sampling "
+            "without replacement."
+        )
+
     try:
         expected = pdf.sample(
             n=n,
             frac=frac,
             replace=replace,
             random_state=pd_random_state,
+            weights=pd_weights,
             axis=axis,
         )
     except BaseException:
@@ -7446,6 +7460,7 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_tuple):
                     "frac": frac,
                     "replace": replace,
                     "random_state": pd_random_state,
+                    "weights": pd_weights,
                     "axis": axis,
                 },
             ),
@@ -7456,6 +7471,7 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_tuple):
                     "frac": frac,
                     "replace": replace,
                     "random_state": gd_random_state,
+                    "weights": gd_weights,
                     "axis": axis,
                 },
             ),
@@ -7466,6 +7482,7 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_tuple):
             frac=frac,
             replace=replace,
             random_state=gd_random_state,
+            weights=gd_weights,
             axis=axis,
         )
         checker(expected, got)

@@ -47,3 +47,16 @@ def random_state_tuple(request):
         return np.random.RandomState(42), seed_or_state_ctor(42), shape_checker
     else:
         pytest.skip("Unsupported params.")
+
+
+@pytest.fixture(params=[None, np.ones])
+def make_weights(request):
+    if request.param is None:
+        return lambda _: (None, None)
+    else:
+
+        def wrapped(size):
+            # Uniform distribution, non-normalized
+            return request.param(size), request.param(size)
+
+        return wrapped
