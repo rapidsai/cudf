@@ -144,28 +144,6 @@ def set_allocator(
 IS_NEP18_ACTIVE = _is_nep18_active()
 
 
-class cached_property:
-    """
-    Like @property, but only evaluated upon first invocation.
-    To force re-evaluation of a cached_property, simply delete
-    it with `del`.
-    """
-
-    # TODO: Can be replaced with functools.cached_property when we drop support
-    # for Python 3.7.
-
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, cls):
-        if instance is None:
-            return self
-        else:
-            value = self.func(instance)
-            object.__setattr__(instance, self.func.__name__, value)
-            return value
-
-
 class GetAttrGetItemMixin:
     """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 
@@ -204,12 +182,13 @@ class GetAttrGetItemMixin:
             )
 
 
-def raise_iteration_error(obj):
-    raise TypeError(
-        f"{obj.__class__.__name__} object is not iterable. "
-        f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-        f"if you wish to iterate over the values."
-    )
+class NotIterable:
+    def __iter__(self):
+        raise TypeError(
+            f"{self.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        )
 
 
 def pa_mask_buffer_to_mask(mask_buf, size):
@@ -360,7 +339,10 @@ def get_appropriate_dispatched_func(
             cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
             if cupy_compatible_args:
                 cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                return _cast_to_appropriate_cudf_type(cupy_output, index)
+                if isinstance(cupy_output, cp.ndarray):
+                    return _cast_to_appropriate_cudf_type(cupy_output, index)
+                else:
+                    return cupy_output
 
     return NotImplemented
 

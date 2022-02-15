@@ -239,7 +239,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame(
+                result = cudf.DataFrame._from_data(
                     data=obj._data.copy(deep=True),
                     index=obj.index.copy(deep=True),
                 )
@@ -249,13 +249,17 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
-                if isinstance(obj, (pd.Series, cudf.Series)):
-                    result = cudf.Series(
+                if isinstance(obj, cudf.Series):
+                    result = cudf.Series._from_data(
                         data=obj._data.copy(deep=True),
                         index=cudf.RangeIndex(len(obj)),
                     )
+                elif isinstance(obj, pd.Series):
+                    result = cudf.Series(
+                        data=obj, index=cudf.RangeIndex(len(obj)),
+                    )
                 else:
-                    result = cudf.DataFrame(
+                    result = cudf.DataFrame._from_data(
                         data=obj._data.copy(deep=True),
                         index=cudf.RangeIndex(len(obj)),
                     )
@@ -370,7 +374,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             obj = objs[0]
-            result = cudf.DataFrame(
+            result = cudf.DataFrame._from_data(
                 data=None if join == "inner" else obj._data.copy(deep=True),
                 index=cudf.RangeIndex(len(obj))
                 if ignore_index

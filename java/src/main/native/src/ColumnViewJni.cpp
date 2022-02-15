@@ -61,6 +61,7 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
+#include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -408,7 +409,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
   JNI_NULL_CHECK(env, keys_vals_handle, "keys_vals_handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto const *input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
+    auto const input_cv = reinterpret_cast<cudf::column_view const *>(keys_vals_handle);
     CUDF_EXPECTS(input_cv->offset() == 0, "Input column has non-zero offset.");
     CUDF_EXPECTS(input_cv->type().id() == cudf::type_id::LIST,
                  "Input column is not a lists column.");
@@ -460,7 +461,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
     auto out_structs =
         cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0, {});
     return release_as_jlong(cudf::make_lists_column(input_cv->size(), std::move(out_offsets),
-                                                    std::move(out_structs), 0, {}));
+                                                    std::move(out_structs), input_cv->null_count(),
+                                                    cudf::copy_bitmask(*input_cv)));
   }
   CATCH_STD(env, 0);
 }
@@ -560,34 +562,78 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
-                                                                        jlong column_view,
-                                                                        jlong delimiter_ptr,
-                                                                        jint max_split) {
-  JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, delimiter_ptr, "string scalar delimiter is null", 0);
+                                                                        jlong input_handle,
+                                                                        jstring pattern_obj,
+                                                                        jint limit,
+                                                                        jboolean split_by_regex) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+
+  if (limit == 0 || limit == 1) {
+    // Cannot achieve the results of splitting with limit == 0 or limit == 1.
+    // This is because cudf operates on a different parameter (`max_split`) which is converted from
+    // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
+    // unlimited split.
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "limit == 0 and limit == 1 are not supported", 0);
+  }
+
   try {
     cudf::jni::auto_set_device(env);
-    cudf::strings_column_view const scv{*reinterpret_cast<cudf::column_view *>(column_view)};
-    auto delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_ptr);
+    auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
+    auto const strs_input = cudf::strings_column_view{*input};
 
-    return cudf::jni::convert_table_for_return(env,
-                                               cudf::strings::split(scv, *delimiter, max_split));
+    auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
+    if (pattern_jstr.is_empty()) {
+      // Java's split API produces different behaviors than cudf when splitting with empty
+      // pattern.
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
+    }
+
+    auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
+    auto const max_split = limit > 1 ? limit - 1 : limit;
+    auto result = split_by_regex ?
+                      cudf::strings::split_re(strs_input, pattern, max_split) :
+                      cudf::strings::split(strs_input, cudf::string_scalar{pattern}, max_split);
+    return cudf::jni::convert_table_for_return(env, std::move(result));
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
-                                                                         jlong column_view,
-                                                                         jlong delimiter,
-                                                                         jint max_split) {
-  JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
+                                                                         jlong input_handle,
+                                                                         jstring pattern_obj,
+                                                                         jint limit,
+                                                                         jboolean split_by_regex) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+
+  if (limit == 0 || limit == 1) {
+    // Cannot achieve the results of splitting with limit == 0 or limit == 1.
+    // This is because cudf operates on a different parameter (`max_split`) which is converted from
+    // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
+    // unlimited split.
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "limit == 0 and limit == 1 are not supported", 0);
+  }
+
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
-    cudf::strings_column_view scv(*cv);
-    cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);
-    return release_as_jlong(cudf::strings::split_record(scv, *ss_scalar, max_split));
+    auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
+    auto const strs_input = cudf::strings_column_view{*input};
+
+    auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
+    if (pattern_jstr.is_empty()) {
+      // Java's split API produces different behaviors than cudf when splitting with empty
+      // pattern.
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
+    }
+
+    auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
+    auto const max_split = limit > 1 ? limit - 1 : limit;
+    auto result =
+        split_by_regex ?
+            cudf::strings::split_record_re(strs_input, pattern, max_split) :
+            cudf::strings::split_record(strs_input, cudf::string_scalar{pattern}, max_split);
+    return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
 }
