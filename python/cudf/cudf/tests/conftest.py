@@ -7,7 +7,7 @@ import pytest
 
 import rmm  # noqa: F401
 
-_CURRENT_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+_CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
 
 
 @pytest.fixture(scope="session")
@@ -18,7 +18,7 @@ def datadir():
 # To set and remove the NO_EXTERNAL_ONLY_APIS environment variable we must use
 # the sessionstart and sessionfinish hooks rather than a simple autouse,
 # session-scope fixture because we need to set these variable before collection
-# occurs because the envrionment variable will be checked as soon as cudf is
+# occurs because the environment variable will be checked as soon as cudf is
 # imported anywhere.
 def pytest_sessionstart(session):
     """
