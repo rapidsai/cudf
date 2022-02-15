@@ -20,8 +20,8 @@ def _make_empty_df(filepath_or_buffer, columns):
     orc_file = orc.ORCFile(filepath_or_buffer)
     schema = orc_file.schema
     col_names = schema.names if columns is None else columns
-    return cudf.DataFrame(
-        {
+    return cudf.DataFrame._from_data(
+        data={
             col_name: cudf.core.column.column_empty(
                 row_count=0,
                 dtype=schema.field(col_name).type.to_pandas_dtype(),

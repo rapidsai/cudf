@@ -446,6 +446,7 @@ add_library(
   src/strings/search/find_multiple.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
+  src/strings/split/split_re.cu
   src/strings/split/split_record.cu
   src/strings/strings_column_factories.cu
   src/strings/strings_column_view.cpp
