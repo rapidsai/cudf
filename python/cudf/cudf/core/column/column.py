@@ -322,6 +322,8 @@ class ColumnBase(Column, Serializable, NotIterable):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
+        # Constructing a cuDF scalar can cut unnecessary DtoH copy if
+        # the scalar is None when calling `is_valid`.
         slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
         if not inplace:
