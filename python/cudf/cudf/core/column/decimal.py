@@ -371,7 +371,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
             return lhs_dtype.__class__(precision=precision, scale=scale)
         except ValueError:
             # Call to _validate fails, which means we need
-            # to SCENARIO 3.
+            # to goto SCENARIO 3.
             pass
     else:
         # SCENARIO 2: If `lhs_dtype` & `rhs_dtype` are of different dtypes,
@@ -384,7 +384,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
                 return rhs_dtype.__class__(precision=precision, scale=scale)
         except ValueError:
             # Call to _validate fails, which means we need
-            # to SCENARIO 3.
+            # to goto SCENARIO 3.
             pass
 
     # SCENARIO 3: If either of the above two scenarios fail, then get the
