@@ -1602,8 +1602,8 @@ def build_struct_column(
 
     Parameters
     ----------
-    names : list-like
-        Field names to map to children dtypes
+    names : sequence of strings
+        Field names to map to children dtypes, must be strings.
     children : tuple
 
     mask: Buffer

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+from functools import cached_property
 from typing import Any, Set
 
 import pandas as pd
@@ -31,7 +32,6 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
 
 
 class BaseIndex(Serializable):
