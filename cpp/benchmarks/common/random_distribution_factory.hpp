@@ -24,7 +24,7 @@
 /**
  * @brief Generates a normal(binomial) distribution between zero and upper_bound.
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 auto make_normal_dist(T upper_bound)
 {
   using uT = typename std::make_unsigned<T>::type;
@@ -42,7 +42,7 @@ auto make_normal_dist(T upper_bound)
   return std::normal_distribution<T>(mean, stddev);
 }
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 auto make_uniform_dist(T range_start, T range_end)
 {
   return std::uniform_int_distribution<T>(range_start, range_end);
@@ -62,7 +62,7 @@ double geometric_dist_p(T range_size)
   return p ? p : std::numeric_limits<double>::epsilon();
 }
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 auto make_geometric_dist(T range_start, T range_end)
 {
   using uT = typename std::make_unsigned<T>::type;
@@ -82,7 +82,7 @@ auto make_geometric_dist(T range_start, T range_end)
 template <typename T>
 using distribution_fn = std::function<T(std::mt19937&)>;
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper_bound)
 {
   switch (did) {
