@@ -41,6 +41,7 @@ enum class TreeType {
                    // child column reference
 };
 
+template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 class AST : public cudf::benchmark {
 };
 
@@ -138,10 +139,15 @@ static void CustomRanges(benchmark::internal::Benchmark* b)
   }
 }
 
-#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable)   \
-  TEMPLATED_BENCHMARK_F(AST, BM_ast_transform, key_type, tree_type, reuse_columns, nullable) \
-    ->Apply(CustomRanges)                                                                    \
-    ->Unit(benchmark::kMillisecond)                                                          \
+#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
+  BENCHMARK_TEMPLATE_DEFINE_F(AST, name, key_type, tree_type, reuse_columns, nullable)     \
+  (::benchmark::State & st)                                                                \
+  {                                                                                        \
+    BM_ast_transform<key_type, tree_type, reuse_columns, nullable>(st);                    \
+  }                                                                                        \
+  BENCHMARK_REGISTER_F(AST, name)                                                          \
+    ->Apply(CustomRanges)                                                                  \
+    ->Unit(benchmark::kMillisecond)                                                        \
     ->UseManualTime();
 
 AST_TRANSFORM_BENCHMARK_DEFINE(
