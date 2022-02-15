@@ -498,7 +498,8 @@ set_target_properties(
              # set target compile options
              CXX_STANDARD 17
              CXX_STANDARD_REQUIRED ON
-             CXX_EXTENSIONS ON # Needed for std:: support of int128_t
+             # For std:: support of __int128_t. Can be removed once using cuda::std 
+             CXX_EXTENSIONS ON 
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
