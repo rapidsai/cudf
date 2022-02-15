@@ -12,6 +12,42 @@ def _partialmethod(method, *args1, **kwargs1):
     return wrapper
 
 
+class Operation:
+    def __init__(self, name, category_name, base_operation):
+        self._name = name
+        self._docstring_attr = f"{category_name}_DOCSTRINGS"
+        self._base_operation = base_operation
+
+    def __get__(self, obj, owner=None):
+        retfunc = _partialmethod(self._base_operation, op=self._name)
+
+        retfunc.__doc__ = self._base_operation.__doc__.format(
+            cls=owner.__name__,
+            op=self._name,
+            **getattr(owner, self._docstring_attr, {}).get(self._name, {}),
+        )
+        retfunc.__name__ = self._name
+        retfunc.__qualname__ = ".".join([owner.__name__, self._name])
+        retfunc.__module__ = self._base_operation.__module__
+        retfunc.__annotations__ = self._base_operation.__annotations__.copy()
+        retfunc.__annotations__.pop("op")
+        retfunc_params = [
+            v
+            for k, v in inspect.signature(
+                self._base_operation
+            ).parameters.items()
+            if k != "op"
+        ]
+        retfunc.__signature__ = inspect.Signature(retfunc_params)
+
+        setattr(owner, self._name, retfunc)
+
+        if obj is None:
+            return getattr(owner, self._name)
+        else:
+            return getattr(obj, self._name)
+
+
 def _create_delegating_mixin(
     mixin_name,
     docstring,
@@ -106,42 +142,7 @@ def _create_delegating_mixin(
     >>> print(bar.foo1.__doc__)
     Perform the operation foo1, which returns 42.
     """
-    docstring_attr = f"{category_name}_DOCSTRINGS"
     validity_attr = f"_VALID_{category_name}S"
-
-    class Operation:
-        def __init__(self, name):
-            self._name = name
-
-        def __get__(self, obj, owner=None):
-            base_operation = getattr(owner, category_operation_name)
-            retfunc = _partialmethod(base_operation, op=self._name)
-
-            retfunc.__doc__ = base_operation.__doc__.format(
-                cls=owner.__name__,
-                op=self._name,
-                **getattr(owner, docstring_attr, {}).get(self._name, {}),
-            )
-            retfunc.__name__ = self._name
-            retfunc.__qualname__ = ".".join([owner.__name__, self._name])
-            retfunc.__module__ = base_operation.__module__
-            retfunc.__annotations__ = base_operation.__annotations__.copy()
-            retfunc.__annotations__.pop("op")
-            retfunc_params = [
-                v
-                for k, v in inspect.signature(
-                    base_operation
-                ).parameters.items()
-                if k != "op"
-            ]
-            retfunc.__signature__ = inspect.Signature(retfunc_params)
-
-            setattr(owner, self._name, retfunc)
-
-            if obj is None:
-                return getattr(owner, self._name)
-            else:
-                return getattr(obj, self._name)
 
     class OperationMixin:
         @classmethod
@@ -156,9 +157,12 @@ def _create_delegating_mixin(
                 len(invalid_operations) == 0
             ), f"Invalid requested operations: {invalid_operations}"
 
+            base_operation = getattr(cls, category_operation_name)
             for operation in valid_operations:
                 if operation not in dir(cls):
-                    op_attr = Operation(operation)
+                    op_attr = Operation(
+                        operation, category_name, base_operation
+                    )
                     setattr(cls, operation, op_attr)
 
     def _operation(self, op: str, *args, **kwargs):
