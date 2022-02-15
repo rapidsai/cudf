@@ -1010,9 +1010,6 @@ class GroupBy(Serializable):
         matrices <https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices>`
         for more details.
 
-        Support for alternative methods of nan handling could be added
-        in the future.
-
         Examples
         --------
         >>> import cudf
