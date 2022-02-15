@@ -25,7 +25,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
-               CXX_EXTENSIONS ON
+               CXX_EXTENSIONS ON # Needed for std:: support of int128_t
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
   )
