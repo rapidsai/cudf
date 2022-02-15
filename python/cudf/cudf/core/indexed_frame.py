@@ -1853,7 +1853,7 @@ class IndexedFrame(Frame):
         ignore_index: bool,
     ):
         raise NotImplementedError(
-            "Sampling from axis 1 is only implemented for Dataframe."
+            f"Sampling from axis 1 is not implemented for {self.__class__}."
         )
 
 
