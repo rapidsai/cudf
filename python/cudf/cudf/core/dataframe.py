@@ -2074,7 +2074,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return self.items()
 
-    @annotate("DATAFRAME_ITERITEMS", color="blue", domain="cudf_python")
+    @annotate("DATAFRAME_ITEMS", color="blue", domain="cudf_python")
     def items(self):
         """Iterate over column names and series pairs"""
         for k in self:
@@ -4580,7 +4580,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         df = cls()
         # Set columns
-        for col_name, col_value in dataframe.iteritems():
+        for col_name, col_value in dataframe.items():
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(col_value.shape) == 1:
