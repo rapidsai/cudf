@@ -9094,17 +9094,17 @@ def test_dataframe_add_suffix():
     ],
 )
 @pytest.mark.parametrize(
-    "min_per", [1, 3, 4, 5],
+    "min_periods", [1, 3, 4, 5],
 )
 @pytest.mark.parametrize(
-    "d_dof", [1, 3, 4, 5],
+    "ddof", [1, 3, 4, 5],
 )
-def test_groupby_covariance(data, gkey, min_per, d_dof):
+def test_groupby_covariance(data, gkey, min_periods, ddof):
     gdf = cudf.DataFrame(data, nan_as_null=False)
     pdf = gdf.to_pandas()
 
-    actual = gdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
-    expected = pdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
+    actual = gdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
+    expected = pdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
 
     actual_no_args = gdf.groupby(gkey).cov()
     expected_no_args = pdf.groupby(gkey).cov()
