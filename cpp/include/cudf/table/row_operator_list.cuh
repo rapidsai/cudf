@@ -138,15 +138,16 @@ class element_equality_comparator {
     auto l_size = l_end_off - l_start_off;
     auto r_size = r_end_off - r_start_off;
     if (l_size != r_size) { return false; }
-    bool equal = true;
+
     for (int i = 0; i < l_size; ++i) {
-      equal &= type_dispatcher<non_nested_id_to_type>(
+      bool equal = type_dispatcher<non_nested_id_to_type>(
         lcol.type(),
         element_equality_comparator{nulls, lcol, rcol, nulls_are_equal},
         l_start_off + i,
         r_start_off + i);
+      if (not equal) { return false; }
     }
-    return equal;
+    return true;
   }
 
  private:
