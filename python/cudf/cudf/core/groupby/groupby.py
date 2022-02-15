@@ -969,7 +969,7 @@ class GroupBy(Serializable):
         the DataFrame.
 
         Both NA and null values are automatically excluded from the
-        calculation.(See the note below about bias from missing values)
+        calculation. See the note below about bias from missing values.
 
         A threshold can be set for the minimum number of observations
         for each value created.Comparisons with observations below this
