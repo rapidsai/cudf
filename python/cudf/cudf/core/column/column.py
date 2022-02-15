@@ -322,22 +322,22 @@ class ColumnBase(Column, Serializable, NotIterable):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        slr = cudf.Scalar(fill_value, dtype=self.dtype)
+        device_value = as_device_scalar(fill_value, self.dtype)
 
         if not inplace:
-            return libcudf.filling.fill(self, begin, end, slr.device_value)
+            return libcudf.filling.fill(self, begin, end, device_value)
 
         if is_string_dtype(self.dtype):
             return self._mimic_inplace(
-                libcudf.filling.fill(self, begin, end, slr.device_value),
+                libcudf.filling.fill(self, begin, end, device_value),
                 inplace=True,
             )
 
-        if not slr.is_valid() and not self.nullable:
+        if not device_value.is_valid() and not self.nullable:
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
-        libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
+        libcudf.filling.fill_in_place(self, begin, end, device_value)
 
         return self
 
@@ -488,10 +488,10 @@ class ColumnBase(Column, Serializable, NotIterable):
 
     def __setitem__(self, key: Any, value: Any):
         """
-        Set the value of self[key] to value.
+        Set the value of ``self[key]`` to ``value``.
 
-        If value and self are of different types, value is coerced to
-        self.dtype. Assumes ``self`` and ``value`` are index-aligned.
+        If ``value`` and ``self`` are of different types, ``value`` is coerced
+        to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
 
         # Normalize value to scalar/column
@@ -521,27 +521,24 @@ class ColumnBase(Column, Serializable, NotIterable):
         """
         nelem: int  # the number of elements to scatter
 
-        key_start, key_stop, key_stride = key.indices(len(self))
+        start, stop, step = key.indices(len(self))
         if start >= stop:
             return None
         nelem = (stop - start) // step
 
         self._check_scatter_key_length(nelem, value)
 
-        if key_stride == 1:
+        if step == 1:
             if isinstance(value, cudf.core.scalar.Scalar):
-                return self._fill(value, key_start, key_stop, inplace=True)
+                return self._fill(value, start, stop, inplace=True)
             else:
                 return libcudf.copying.copy_range(
-                    value, self, 0, nelem, key_start, key_stop, False
+                    value, self, 0, nelem, start, stop, False
                 )
 
         # stride != 1, create a scatter map with arange
         scatter_map: ColumnBase = arange(
-            start=key_start,
-            stop=key_stop,
-            step=key_stride,
-            dtype=cudf.dtype(np.int32),
+            start=start, stop=stop, step=step, dtype=cudf.dtype(np.int32),
         )
 
         return self._scatter_by_column(
@@ -556,29 +553,29 @@ class ColumnBase(Column, Serializable, NotIterable):
         nelem = len(key)  # the number of elements to scatter
 
         if is_bool_dtype(key.dtype):
-            if not len(key) == len(self):
+            if len(key) != len(self):
                 raise ValueError(
                     "Boolean mask must be of same length as column"
                 )
-            nelem = -1
+            skip_reducing_key = False
             if isinstance(value, ColumnBase):
                 if len(self) == len(value):
                     # Both value and key is aligned to self. Thus, the values
                     # corresponding to the `F` masks in key should be ignored.
                     value = value.apply_boolean_mask(key)
+                    # After applying boolean mask, the length of value equals
+                    # the number of elements to scatter, we can skip computing
+                    # the sum of ``key`` below.
                     nelem = len(value)
-            # For boolean masks, the number of element to scatter is the number
-            # of `true` values in the mask.
-            nelem = key.sum() if nelem == -1 else nelem
-        else:
-            nelem = len(key)
+                    skip_reducing_key = True
+            # Compute the number of element to scatter by summing all `True`s
+            # in the boolean mask.
+            nelem = key.sum() if not skip_reducing_key else nelem
 
         self._check_scatter_key_length(nelem, value)
 
         try:
             if is_bool_dtype(key.dtype):
-                # boolean_mask_scatter assigns the ith row of value to the row
-                # where the ith `true` resides in mask.
                 return libcudf.copying.boolean_mask_scatter(
                     [value], [self], key
                 )[0]._with_type_metadata(self.dtype)
@@ -597,7 +594,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         self, nelem: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
     ):
         """`nelem` is the number of keys to scatter. Should equal to the
-        number of values.
+        number of rows in ``value`` if ``value`` is a column.
         """
         if isinstance(value, ColumnBase):
             if len(value) != nelem:
