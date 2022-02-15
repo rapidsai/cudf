@@ -1006,8 +1006,9 @@ class GroupBy(Serializable):
         because the estimate covariance matrix is not guaranteed to be
         positive semi-definite. This could lead to estimate correlations
         having absolute values which are greater than one, and/or a
-        non-invertible covariance matrix. See `Estimation of covariance
-        matrices <https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices>`
+        non-invertible covariance matrix. See
+        `Estimation of covariance matrices
+        <https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices>`
         for more details.
 
         Examples
