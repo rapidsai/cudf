@@ -536,14 +536,12 @@ class ColumnBase(Column, Serializable, NotIterable):
                     value, self, 0, nelem, start, stop, False
                 )
 
-        # stride != 1, create a scatter map with arange
-        scatter_map: ColumnBase = arange(
+        # step != 1, create a scatter map with arange
+        scatter_map = arange(
             start=start, stop=stop, step=step, dtype=cudf.dtype(np.int32),
         )
 
-        return self._scatter_by_column(
-            cast("cudf.core.column.NumericalColumn", scatter_map), value
-        )
+        return self._scatter_by_column(scatter_map, value)
 
     def _scatter_by_column(
         self,
@@ -2288,7 +2286,7 @@ def arange(
     stop: Union[int, float] = None,
     step: Union[int, float] = 1,
     dtype=None,
-) -> ColumnBase:
+) -> "cudf.core.column.NumericalColumn":
     """
     Returns a column with evenly spaced values within a given interval.
 
