@@ -1731,8 +1731,12 @@ class IndexedFrame(Frame):
         replace : bool, default False
             Allow or disallow sampling of the same row more than once.
             replace == True is not yet supported for axis = 1/"columns"
-        weights : str or ndarray-like, optional
-            Only supported for axis=1/"columns"
+        weights : numpy or cupy ndarray-like, optional
+            Default `None` for uniform probability distribution over rows to
+            sample from. If `ndarray` is passed, the length of `weights` should
+            equal to the number of rows to sample from, and will be normalized
+            to have sum of 1. Unlike pandas, index alignment is not currently
+            not performed.
         random_state : int, numpy/cupy RandomState, or None, default None
             If None, default cupy random state is chosen.
             If int, as seed for the default cupy random state.
@@ -1785,6 +1789,7 @@ class IndexedFrame(Frame):
         axis = self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
 
+        # Compute `n` from parameter `frac`.
         if frac is None:
             n = 1 if n is None else n
         else:
@@ -1810,8 +1815,28 @@ class IndexedFrame(Frame):
                 "when 'replace=False'"
             )
 
-        weights = preprocess_weights(weights, size)
-        random_state = preprocess_random_state(random_state, axis)
+        # Normalize `weights` array.
+        if weights is not None:
+            if is_column_like(weights):
+                weights = np.asarray(weights)
+            else:
+                raise NotImplementedError(
+                    "Weights specified by string is unsupported yet."
+                )
+
+            if size != len(weights):
+                raise ValueError(
+                    "Weights and axis to be sampled must be of same length"
+                )
+
+            weights = weights / weights.sum()
+
+        # Construct random state if `random_state` parameter is a seed.
+        if not isinstance(
+            random_state, (np.random.RandomState, cp.random.RandomState)
+        ):
+            lib = cp if axis == 0 else np
+            random_state = lib.random.RandomState(seed=random_state)
 
         if axis == 0:
             return self._sample_axis_0(
@@ -1872,45 +1897,3 @@ def _check_duplicate_level_names(specified, level_names):
             f"The names {duplicates_specified} occurs multiple times, use a"
             " level number"
         )
-
-
-def preprocess_weights(
-    weights: Optional[ColumnLike], size: int
-) -> Optional[ColumnLike]:
-    """If ``weights`` is not None, normalize weights."""
-    if weights is not None:
-        if is_column_like(weights):
-            weights = np.asarray(weights)
-        else:
-            raise NotImplementedError(
-                "Weights specified by string is unsupported yet."
-            )
-
-        if size != len(weights):
-            raise ValueError(
-                "Weights and axis to be sampled must be of same length"
-            )
-
-        total_weight = weights.sum()
-        if total_weight != 1:
-            if not isinstance(weights.dtype, float):
-                weights = weights.astype("float64")
-            weights = weights / total_weight
-    return weights
-
-
-def preprocess_random_state(
-    seed_or_random_state: Union[
-        None, np.number, np.random.RandomState, cp.random.RandomState
-    ],
-    axis: int,
-) -> Union[np.random.RandomState, cp.random.RandomState]:
-    """Construct random state from parameter ``seed_or_random_state``."""
-    if not isinstance(
-        seed_or_random_state, (np.random.RandomState, cp.random.RandomState)
-    ):
-        lib = cp if axis == 0 else np
-        seed_or_random_state = lib.random.RandomState(
-            seed=seed_or_random_state
-        )
-    return seed_or_random_state
