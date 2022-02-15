@@ -333,7 +333,7 @@ class ColumnBase(Column, Serializable, NotIterable):
                 inplace=True,
             )
 
-        if not slr.device_value.is_valid() and not self.nullable:
+        if not slr.is_valid() and not self.nullable:
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
