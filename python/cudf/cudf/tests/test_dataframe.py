@@ -3,7 +3,6 @@
 import array as arr
 import datetime
 import io
-import itertools
 import operator
 import random
 import re
@@ -6667,9 +6666,9 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
-def cudf_isclose_data():
-    # generate pairs of data for isclsoe
-    data_list = [
+@pytest.mark.parametrize(
+    "data1",
+    [
         [1, 2, 3, 4, 5, 6, 7],
         [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
         [
@@ -6708,11 +6707,51 @@ def cudf_isclose_data():
             -0.112121,
             21.1212,
         ],
-    ]
-    return list(itertools.combinations_with_replacement(data_list, 2))
-
-
-@pytest.mark.parametrize("data1,data2", cudf_isclose_data())
+    ],
+)
+@pytest.mark.parametrize(
+    "data2",
+    [
+        [1, 2, 3, 4, 5, 6, 7],
+        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+        [
+            1.9876543,
+            2.9876654,
+            3.9876543,
+            4.1234587,
+            5.23,
+            6.88918237,
+            7.00001,
+        ],
+        [
+            -1.9876543,
+            -2.9876654,
+            -3.9876543,
+            -4.1234587,
+            -5.23,
+            -6.88918237,
+            -7.00001,
+        ],
+        [
+            1.987654321,
+            2.987654321,
+            3.987654321,
+            0.1221,
+            2.1221,
+            0.112121,
+            -21.1212,
+        ],
+        [
+            -1.987654321,
+            -2.987654321,
+            -3.987654321,
+            -0.1221,
+            -2.1221,
+            -0.112121,
+            21.1212,
+        ],
+    ],
+)
 @pytest.mark.parametrize("rtol", [0, 0.01, 1e-05, 1e-08, 5e-1, 50.12])
 @pytest.mark.parametrize("atol", [0, 0.01, 1e-05, 1e-08, 50.12])
 def test_cudf_isclose(data1, data2, rtol, atol):
