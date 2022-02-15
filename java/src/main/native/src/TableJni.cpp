@@ -676,9 +676,10 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
   int write_index = 0;
   for (int i = 0; i < num_children; i++, write_index++) {
     cudf::io::column_in_metadata child;
-    child.set_name(col_names[read_index])
-        .set_decimal_precision(precisions[read_index])
-        .set_nullability(nullability[read_index]);
+    child.set_name(col_names[read_index]).set_nullability(nullability[read_index]);
+    if (precisions[read_index] > -1) {
+      child.set_decimal_precision(precisions[read_index]);
+    }
     if (!is_int96.is_null()) {
       child.set_int96_timestamps(is_int96[read_index]);
     }
@@ -717,8 +718,10 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
   for (int i = read_index, write_index = 0; i < top_level_children; i++, write_index++) {
     metadata.column_metadata[write_index]
         .set_name(cpp_names[read_index])
-        .set_nullability(col_nullability[read_index])
-        .set_decimal_precision(precisions[read_index]);
+        .set_nullability(col_nullability[read_index]);
+    if (precisions[read_index] > -1) {
+      metadata.column_metadata[write_index].set_decimal_precision(precisions[read_index]);
+    }
     if (!is_int96.is_null()) {
       metadata.column_metadata[write_index].set_int96_timestamps(is_int96[read_index]);
     }
@@ -812,15 +815,14 @@ jlongArray join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
 // a hash table built from the join's right table.
 template <typename T>
 jlongArray hash_join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_hash_join,
-                                 jboolean compare_nulls_equal, T join_func) {
+                                 T join_func) {
   JNI_NULL_CHECK(env, j_left_keys, "left table is null", NULL);
   JNI_NULL_CHECK(env, j_right_hash_join, "hash join is null", NULL);
   try {
     cudf::jni::auto_set_device(env);
     auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
     auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
-    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    return gather_maps_to_java(env, join_func(*left_keys, *hash_join, nulleq));
+    return gather_maps_to_java(env, join_func(*left_keys, *hash_join));
   }
   CATCH_STD(env, NULL);
 }
@@ -2172,41 +2174,36 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_leftJoinRowCount(JNIEnv *env, jclass,
                                                                    jlong j_left_table,
-                                                                   jlong j_right_hash_join,
-                                                                   jboolean compare_nulls_equal) {
+                                                                   jlong j_right_hash_join) {
   JNI_NULL_CHECK(env, j_left_table, "left table is null", 0);
   JNI_NULL_CHECK(env, j_right_hash_join, "right hash join is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
     auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
-    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto row_count = hash_join->left_join_size(*left_table, nulleq);
+    auto row_count = hash_join->left_join_size(*left_table);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftHashJoinGatherMaps(
-    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join,
-    jboolean compare_nulls_equal) {
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join) {
   return cudf::jni::hash_join_gather_maps(
-      env, j_left_table, j_right_hash_join, compare_nulls_equal,
-      [](cudf::table_view const &left, cudf::hash_join const &hash, cudf::null_equality nulleq) {
-        return hash.left_join(left, nulleq);
+      env, j_left_table, j_right_hash_join,
+      [](cudf::table_view const &left, cudf::hash_join const &hash) {
+        return hash.left_join(left);
       });
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftHashJoinGatherMapsWithCount(
-    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jboolean compare_nulls_equal,
-    jlong j_output_row_count) {
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jlong j_output_row_count) {
   auto output_row_count = static_cast<std::size_t>(j_output_row_count);
-  return cudf::jni::hash_join_gather_maps(env, j_left_table, j_right_hash_join, compare_nulls_equal,
-                                          [output_row_count](cudf::table_view const &left,
-                                                             cudf::hash_join const &hash,
-                                                             cudf::null_equality nulleq) {
-                                            return hash.left_join(left, nulleq, output_row_count);
-                                          });
+  return cudf::jni::hash_join_gather_maps(
+      env, j_left_table, j_right_hash_join,
+      [output_row_count](cudf::table_view const &left, cudf::hash_join const &hash) {
+        return hash.left_join(left, output_row_count);
+      });
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalLeftJoinRowCount(JNIEnv *env, jclass,
@@ -2305,41 +2302,36 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_innerJoinRowCount(JNIEnv *env, jclass,
                                                                     jlong j_left_table,
-                                                                    jlong j_right_hash_join,
-                                                                    jboolean compare_nulls_equal) {
+                                                                    jlong j_right_hash_join) {
   JNI_NULL_CHECK(env, j_left_table, "left table is null", 0);
   JNI_NULL_CHECK(env, j_right_hash_join, "right hash join is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
     auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
-    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto row_count = hash_join->inner_join_size(*left_table, nulleq);
+    auto row_count = hash_join->inner_join_size(*left_table);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerHashJoinGatherMaps(
-    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join,
-    jboolean compare_nulls_equal) {
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join) {
   return cudf::jni::hash_join_gather_maps(
-      env, j_left_table, j_right_hash_join, compare_nulls_equal,
-      [](cudf::table_view const &left, cudf::hash_join const &hash, cudf::null_equality nulleq) {
-        return hash.inner_join(left, nulleq);
+      env, j_left_table, j_right_hash_join,
+      [](cudf::table_view const &left, cudf::hash_join const &hash) {
+        return hash.inner_join(left);
       });
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerHashJoinGatherMapsWithCount(
-    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jboolean compare_nulls_equal,
-    jlong j_output_row_count) {
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jlong j_output_row_count) {
   auto output_row_count = static_cast<std::size_t>(j_output_row_count);
-  return cudf::jni::hash_join_gather_maps(env, j_left_table, j_right_hash_join, compare_nulls_equal,
-                                          [output_row_count](cudf::table_view const &left,
-                                                             cudf::hash_join const &hash,
-                                                             cudf::null_equality nulleq) {
-                                            return hash.inner_join(left, nulleq, output_row_count);
-                                          });
+  return cudf::jni::hash_join_gather_maps(
+      env, j_left_table, j_right_hash_join,
+      [output_row_count](cudf::table_view const &left, cudf::hash_join const &hash) {
+        return hash.inner_join(left, output_row_count);
+      });
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_conditionalInnerJoinRowCount(JNIEnv *env, jclass,
@@ -2438,41 +2430,36 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoinGatherMaps(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_fullJoinRowCount(JNIEnv *env, jclass,
                                                                    jlong j_left_table,
-                                                                   jlong j_right_hash_join,
-                                                                   jboolean compare_nulls_equal) {
+                                                                   jlong j_right_hash_join) {
   JNI_NULL_CHECK(env, j_left_table, "left table is null", 0);
   JNI_NULL_CHECK(env, j_right_hash_join, "right hash join is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto left_table = reinterpret_cast<cudf::table_view const *>(j_left_table);
     auto hash_join = reinterpret_cast<cudf::hash_join const *>(j_right_hash_join);
-    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
-    auto row_count = hash_join->full_join_size(*left_table, nulleq);
+    auto row_count = hash_join->full_join_size(*left_table);
     return static_cast<jlong>(row_count);
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullHashJoinGatherMaps(
-    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join,
-    jboolean compare_nulls_equal) {
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join) {
   return cudf::jni::hash_join_gather_maps(
-      env, j_left_table, j_right_hash_join, compare_nulls_equal,
-      [](cudf::table_view const &left, cudf::hash_join const &hash, cudf::null_equality nulleq) {
-        return hash.full_join(left, nulleq);
+      env, j_left_table, j_right_hash_join,
+      [](cudf::table_view const &left, cudf::hash_join const &hash) {
+        return hash.full_join(left);
       });
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullHashJoinGatherMapsWithCount(
-    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jboolean compare_nulls_equal,
-    jlong j_output_row_count) {
+    JNIEnv *env, jclass, jlong j_left_table, jlong j_right_hash_join, jlong j_output_row_count) {
   auto output_row_count = static_cast<std::size_t>(j_output_row_count);
-  return cudf::jni::hash_join_gather_maps(env, j_left_table, j_right_hash_join, compare_nulls_equal,
-                                          [output_row_count](cudf::table_view const &left,
-                                                             cudf::hash_join const &hash,
-                                                             cudf::null_equality nulleq) {
-                                            return hash.full_join(left, nulleq, output_row_count);
-                                          });
+  return cudf::jni::hash_join_gather_maps(
+      env, j_left_table, j_right_hash_join,
+      [output_row_count](cudf::table_view const &left, cudf::hash_join const &hash) {
+        return hash.full_join(left, output_row_count);
+      });
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalFullJoinGatherMaps(
