@@ -1545,7 +1545,13 @@ def test_string_rsplit_re(data, n, expand):
     gs = cudf.Series(data, dtype="str")
 
     # Pandas does not support the regex parameter until 1.4.0
-    expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
+    from cudf.core._compat import PANDAS_LT_140
+
+    if PANDAS_LT_140:
+        expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
+    else:
+        expect = ps.str.rsplit(pat="\\s", n=n, regex=True)
+
     got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
     assert_eq(expect, got)
 
