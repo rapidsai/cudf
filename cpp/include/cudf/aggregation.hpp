@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ class aggregation {
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     RANK,            ///< get rank       of current index
     DENSE_RANK,      ///< get dense rank of current index
+    PERCENT_RANK,    ///< get percent (i.e. fractional) rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -305,34 +306,34 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *  3. `RANK` aggregations are not compatible with exclusive scans.
  *
  * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
- *   1. driver_name:   (STRING) Name of the car driver
- *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
- *   3. lap_number:    (INT32)  The number of the lap
+ * Example: Consider a motor-racing statistics dataset, containing the following columns:
+ *   1. venue:  (STRING) Location of the race event
+ *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
+ *   3. time:   (INT32)  Time taken to complete the circuit
  *
  * For the following presorted data:
  *
- *  [ // driver_name,  num_overtakes,  lap_number
- *    {   "bottas",        2,            3        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        1,            1        },
- *    {   "bottas",        1,            2        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      3,            4        },
- *    {   "hamilton",      2,            4        }
+ *  [ //      venue,           driver,           time
+ *    {   "silverstone",  "HAM" ("hamilton"),   15823},
+ *    {   "silverstone",  "LEC" ("leclerc"),    15827},
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
+ *    {      "monza",     "RIC" ("ricciardo"),  12154},
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "LEC" ("leclerc"),    12201},
+ *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
  *
  * A grouped rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: struct_column{num_overtakes, lap_number}
- *  result: column<size_type>{1, 2, 2, 4, 5, 1, 1, 3, 4}
- *
- * A grouped rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: num_overtakes
- *  result: column<size_type>{1, 1, 1, 4, 4, 1, 1, 3, 4}
+ *   groupby column      : venue
+ *   input orderby column: time
+ * Produces the following rank column:
+ * {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
  * @endcode
  */
 template <typename Base = aggregation>
@@ -357,38 +358,94 @@ std::unique_ptr<Base> make_rank_aggregation();
  *  3. `DENSE_RANK` aggregations are not compatible with exclusive scans.
  *
  * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
- *   1. driver_name:   (STRING) Name of the car driver
- *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
- *   3. lap_number:    (INT32)  The number of the lap
+ * Example: Consider a motor-racing statistics dataset, containing the following columns:
+ *   1. venue:  (STRING) Location of the race event
+ *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
+ *   3. time:   (INT32)  Time taken to complete the circuit
  *
  * For the following presorted data:
  *
- *  [ // driver_name,  num_overtakes,  lap_number
- *    {   "bottas",        2,            3        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        1,            1        },
- *    {   "bottas",        1,            2        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      3,            4        },
- *    {   "hamilton",      2,            4        }
+ *  [ //      venue,           driver,           time
+ *    {   "silverstone",  "HAM" ("hamilton"),   15823},
+ *    {   "silverstone",  "LEC" ("leclerc"),    15827},
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
+ *    {      "monza",     "RIC" ("ricciardo"),  12154},
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "LEC" ("leclerc"),    12201},
+ *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
  *
  * A grouped dense rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: struct_column{num_overtakes, lap_number}
- *  result: column<size_type>{1, 2, 2, 3, 4, 1, 1, 2, 3}
- *
- * A grouped dense rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: num_overtakes
- *  result: column<size_type>{1, 1, 1, 2, 2, 1, 1, 2, 3}
+ *   groupby column      : venue
+ *   input orderby column: time
+ * Produces the following dense rank column:
+ * {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
  * @endcode
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_dense_rank_aggregation();
+
+/**
+ * @brief Factory to create a PERCENT_RANK aggregation
+ *
+ * `PERCENT_RANK` returns a non-nullable column of double precision "fractional" ranks.
+ * For row index `i`, the percent rank of row `i` is defined as:
+ *   percent_rank = (rank - 1) / (group_row_count - 1)
+ * where,
+ *   1. rank is the `RANK` of the row within the group
+ *   2. group_row_count is the number of rows in the group
+ *
+ * This aggregation only works with "scan" algorithms. The input to the grouped or
+ * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
+ * If rows are ordered by more than one column, the orderby input column should be a struct
+ * column containing the ordering columns.
+ *
+ * Note:
+ *  1. This method requires that the rows are presorted by the group keys and order_by columns.
+ *  2. `PERCENT_RANK` aggregations will return a fully valid column regardless of null_handling
+ *     policy specified in the scan.
+ *  3. `PERCENT_RANK` aggregations are not compatible with exclusive scans.
+ *
+ * @code{.pseudo}
+ * Example: Consider a motor-racing statistics dataset, containing the following columns:
+ *   1. venue:  (STRING) Location of the race event
+ *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
+ *   3. time:   (INT32)  Time taken to complete the circuit
+ *
+ * For the following presorted data:
+ *
+ *  [ //      venue,           driver,           time
+ *    {   "silverstone",  "HAM" ("hamilton"),   15823},
+ *    {   "silverstone",  "LEC" ("leclerc"),    15827},
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
+ *    {      "monza",     "RIC" ("ricciardo"),  12154},
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "LEC" ("leclerc"),    12201},
+ *    {      "monza",     "PER" ("perez"),      12203}
+ *  ]
+ *
+ * A grouped percent rank aggregation scan with:
+ *   groupby column      : venue
+ *   input orderby column: time
+ * Produces the following percent rank column:
+ * { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
+ *
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
+ * @endcode
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_percent_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

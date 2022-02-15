@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
@@ -277,7 +277,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     def _make_operands_for_binop(
         self,
-        other: T,
+        other: Any,
         fill_value: Any = None,
         reflect: bool = False,
         *args,
@@ -313,7 +313,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             result_name = self.name
 
-        # This needs to be tested correctly
+        # TODO: This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):

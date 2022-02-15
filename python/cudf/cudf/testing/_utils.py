@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import itertools
 import re
 import warnings
 from collections.abc import Mapping, Sequence
@@ -46,7 +47,7 @@ def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
     probs = [null_probability, 1 - null_probability]
     rng = np.random.default_rng(seed=seed)
     mask = rng.choice([False, True], size=len(series), p=probs)
-    series[mask] = None
+    series.iloc[mask] = None
 
 
 # TODO: This function should be removed. Anywhere that it is being used should
@@ -330,3 +331,9 @@ def does_not_raise():
 
 def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
+
+
+parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
+)
