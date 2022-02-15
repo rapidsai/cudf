@@ -7401,30 +7401,18 @@ def test_cudf_arrow_array_error():
         sr.__arrow_array__()
 
 
-def make_random_state(seed, random_state_lib, force_host=False):
-    if random_state_lib:
-        return (
-            np.random.RandomState(seed)
-            if force_host
-            else random_state_lib(seed)
-        )
-    else:
-        return seed
-
-
 @pytest.mark.parametrize("n", [0, 2, 10, None])
 @pytest.mark.parametrize("frac", [0.3, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
 @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize(
-    "random_state_lib", [None, np.random.RandomState, cp.random.RandomState],
-)
-def test_dataframe_sample_basic(n, frac, replace, axis, random_state_lib):
+def test_dataframe_sample_basic(n, frac, replace, axis, random_state_tuple):
     # TODO: decouple valid parameter set from invalid parameter set and
     # write two separate tests to reduce function complexity.
     if axis == 1 and replace:
         pytest.skip(reason="we currently don't support column with same name.")
-    if axis == 1 and random_state_lib == cp.random.RandomState:
+
+    pd_random_state, gd_random_state, checker = random_state_tuple
+    if axis == 1 and isinstance(gd_random_state, cp.random.RandomState):
         pytest.skip(
             reason="cannot sample column axis with device random state."
         )
@@ -7438,16 +7426,13 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_lib):
         index=[1, 2, 3, 4, 5],
     )
     df = cudf.DataFrame.from_pandas(pdf)
-    seed = 1
 
     try:
-        pout = pdf.sample(
+        expected = pdf.sample(
             n=n,
             frac=frac,
             replace=replace,
-            random_state=make_random_state(
-                seed, random_state_lib, force_host=True
-            ),
+            random_state=pd_random_state,
             axis=axis,
         )
     except BaseException:
@@ -7460,9 +7445,7 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_lib):
                     "n": n,
                     "frac": frac,
                     "replace": replace,
-                    "random_state": make_random_state(
-                        seed, random_state_lib, force_host=True
-                    ),
+                    "random_state": pd_random_state,
                     "axis": axis,
                 },
             ),
@@ -7472,23 +7455,20 @@ def test_dataframe_sample_basic(n, frac, replace, axis, random_state_lib):
                     "n": n,
                     "frac": frac,
                     "replace": replace,
-                    "random_state": make_random_state(seed, random_state_lib),
+                    "random_state": gd_random_state,
                     "axis": axis,
                 },
             ),
         )
     else:
-        gout = df.sample(
+        got = df.sample(
             n=n,
             frac=frac,
             replace=replace,
-            random_state=make_random_state(seed, random_state_lib),
+            random_state=gd_random_state,
             axis=axis,
         )
-        if random_state_lib == np.random.RandomState:
-            assert_eq(pout, gout)
-        else:
-            assert pout.shape == gout.shape
+        checker(expected, got)
 
 
 @pytest.mark.parametrize("replace", [True, False])
@@ -7516,64 +7496,6 @@ def test_dataframe_reproducibility_rstate(replace, lib):
     )
 
     assert_eq(expected, out)
-
-
-@pytest.mark.parametrize("n", [0, 2, 10, None])
-@pytest.mark.parametrize("frac", [0.3, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-@pytest.mark.parametrize(
-    "random_state_lib", [None, np.random.RandomState, cp.random.RandomState],
-)
-def test_series_sample_basic(n, frac, replace, random_state_lib):
-    psr = pd.Series([1, 2, 3, 4, 5])
-    sr = cudf.Series.from_pandas(psr)
-    seed = 1
-
-    try:
-        pout = psr.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=make_random_state(
-                seed, random_state_lib, force_host=True
-            ),
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=psr.sample,
-            rfunc=sr.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": make_random_state(
-                        seed, random_state_lib, force_host=True
-                    ),
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": make_random_state(seed, random_state_lib),
-                },
-            ),
-        )
-    else:
-        gout = sr.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=make_random_state(seed, random_state_lib),
-        )
-        if random_state_lib == np.random.RandomState:
-            assert_eq(pout, gout)
-        else:
-            assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize(
