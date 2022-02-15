@@ -1709,17 +1709,19 @@ class IndexedFrame(Frame):
     ):
         """Return a random sample of items from an axis of object.
 
-        You can use random_state for reproducibility.
+        If reproducible results are required, a random number generator may be provided
+        via the `random_state` parameter. This function will always produce the same sample
+        given an identical `random_state`.
 
         Notes
         -----
         When sampling from ``axis=0/'index'``, ``random_state`` can be either
         a numpy random state (``numpy.random.RandomState``) or a cupy random
-        state (``cupy.random.RandomState``). If a numpy random state is used,
-        the rows sampled is guarenteed to match pandas result, but performance
-        may be decreased if the item count is too high. Optionally, user may
-        specify a cupy random state to achieve better performance at high
-        item counts.
+        state (``cupy.random.RandomState``). When a numpy random state is
+        used, the output is guaranteed to match the output of the corresponding
+        pandas method call, but generating the sample may be slow. If exact pandas
+        equivalence is not required, using a cupy random state will achieve better
+        performance, especially at high item counts.
 
         Parameters
         ----------
@@ -1735,11 +1737,11 @@ class IndexedFrame(Frame):
             Default `None` for uniform probability distribution over rows to
             sample from. If `ndarray` is passed, the length of `weights` should
             equal to the number of rows to sample from, and will be normalized
-            to have sum of 1. Unlike pandas, index alignment is not currently
+            to have a sum of 1. Unlike pandas, index alignment is not currently
             not performed.
         random_state : int, numpy/cupy RandomState, or None, default None
             If None, default cupy random state is chosen.
-            If int, as seed for the default cupy random state.
+            If int, the seed for the default cupy random state.
             If RandomState, rows-to-sample are generated from the RandomState.
         axis : {0 or `index`, 1 or `columns`, None}, default None
             Axis to sample. Accepts axis number or name.
@@ -1780,7 +1782,8 @@ class IndexedFrame(Frame):
         dtype: int64
 
         >>> df = cudf.DataFrame(
-        ... {"a":[1, 2], "b":[2, 3], "c":[3, 4], "d":[4, 5]})
+        ...     {"a": [1, 2], "b": [2, 3], "c": [3, 4], "d": [4, 5]}
+        ... )
         >>> df.sample(2, axis=1)
            a  c
         0  1  3
@@ -1836,7 +1839,7 @@ class IndexedFrame(Frame):
                     "Weights and axis to be sampled must be of same length"
                 )
 
-            weights = weights / weights.sum()
+            weights /= weights.sum()
 
         if axis == 0:
             return self._sample_axis_0(

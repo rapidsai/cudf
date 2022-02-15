@@ -6101,8 +6101,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Cannot take a sample larger than 0 when axis is empty"
             )
 
-        columns = np.asarray(self._data.names)
-        if not replace and n > columns.size:
+        columns = self._data.names
+        if not replace and n > len(columns):
             raise ValueError(
                 "Cannot take a larger sample "
                 "than population when 'replace=False'"
