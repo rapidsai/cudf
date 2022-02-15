@@ -2067,6 +2067,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @annotate("DATAFRAME_ITERITEMS", color="blue", domain="cudf_python")
     def iteritems(self):
         """Iterate over column names and series pairs"""
+        warnings.warn(
+            "iteritems is deprecated and will be removed in a future version. "
+            "Use .items instead.",
+            FutureWarning,
+        )
+        return self.items()
+
+    @annotate("DATAFRAME_ITERITEMS", color="blue", domain="cudf_python")
+    def items(self):
+        """Iterate over column names and series pairs"""
         for k in self:
             yield (k, self[k])
 
