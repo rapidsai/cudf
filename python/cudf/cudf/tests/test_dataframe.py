@@ -9201,7 +9201,7 @@ def test_groupby_cov_for_pandas_bug_case():
             "val2": [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
         }
     )
-    expected = pdf.groupby("id").cov(min_periods=2, ddof=2)
+    expected = pdf.groupby("id").cov(ddof=2)
 
     gdf = cudf.from_pandas(pdf)
     actual = gdf.groupby("id").cov(ddof=2)
