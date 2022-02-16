@@ -80,7 +80,9 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import NotIterable, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
-Slice = TypeVar("Slice", bound=slice)  # WAR for "slice" is taken in ColumnBase
+# TODO: This workaround allows type hints for `slice`, since `slice` is a
+# method in ColumnBase.
+Slice = TypeVar("Slice", bound=slice)
 
 
 class ColumnBase(Column, Serializable, NotIterable):
