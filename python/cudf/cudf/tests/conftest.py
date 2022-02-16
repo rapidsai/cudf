@@ -18,7 +18,9 @@ def datadir():
     params=[None, 42, np.random.RandomState, cp.random.RandomState]
 )
 def random_state_tuple(request):
-    """A pytest fixture of valid `random_state` parameter pairs for pandas
+    """
+    Specific to `test_dataframe_sample*` and `test_series_sample*` tests.
+    A pytest fixture of valid `random_state` parameter pairs for pandas
     and cudf. Valid parameter combinations, and what to check for each pair
     are listed below:
 
@@ -51,12 +53,14 @@ def random_state_tuple(request):
 
 @pytest.fixture(params=[None, np.ones])
 def make_weights(request):
+    """Specific to `test_dataframe_sample*` and `test_series_sample*` tests.
+    """
     if request.param is None:
-        return lambda _: (None, None)
+        return lambda _: None
     else:
 
         def wrapped(size):
             # Uniform distribution, non-normalized
-            return request.param(size), request.param(size)
+            return request.param(size)
 
         return wrapped

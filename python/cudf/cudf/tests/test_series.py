@@ -1602,11 +1602,11 @@ def test_series_sample_basic(
     psr = pd.Series([1, 2, 3, 4, 5])
     sr = cudf.Series.from_pandas(psr)
 
-    pd_weights, gd_weights = make_weights(len(psr))
+    weights = make_weights(len(psr))
     if (
         not replace
-        and not isinstance(gd_weights, np.random.RandomState)
-        and gd_weights is not None
+        and not isinstance(weights, np.random.RandomState)
+        and weights is not None
     ):
         pytest.skip(
             "`cupy.random.RandomState` doesn't support weighted sampling "
@@ -1618,7 +1618,7 @@ def test_series_sample_basic(
             n=n,
             frac=frac,
             replace=replace,
-            weights=pd_weights,
+            weights=weights,
             random_state=pd_random_state,
         )
     except BaseException:
@@ -1631,7 +1631,7 @@ def test_series_sample_basic(
                     "n": n,
                     "frac": frac,
                     "replace": replace,
-                    "weights": pd_weights,
+                    "weights": weights,
                     "random_state": pd_random_state,
                 },
             ),
@@ -1641,17 +1641,18 @@ def test_series_sample_basic(
                     "n": n,
                     "frac": frac,
                     "replace": replace,
-                    "weights": gd_weights,
+                    "weights": weights,
                     "random_state": gd_random_state,
                 },
             ),
+            compare_error_message=False,
         )
     else:
         got = sr.sample(
             n=n,
             frac=frac,
             replace=replace,
-            weights=gd_weights,
+            weights=weights,
             random_state=gd_random_state,
         )
         checker(expected, got)

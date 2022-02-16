@@ -7429,11 +7429,11 @@ def test_dataframe_sample_basic(
     )
     df = cudf.DataFrame.from_pandas(pdf)
 
-    pd_weights, gd_weights = make_weights(len(pdf))
+    weights = make_weights(len(pdf))
     if (
         not replace
-        and not isinstance(gd_weights, np.random.RandomState)
-        and gd_weights is not None
+        and not isinstance(weights, np.random.RandomState)
+        and weights is not None
     ):
         pytest.skip(
             "`cupy.random.RandomState` doesn't support weighted sampling "
@@ -7446,7 +7446,7 @@ def test_dataframe_sample_basic(
             frac=frac,
             replace=replace,
             random_state=pd_random_state,
-            weights=pd_weights,
+            weights=weights,
             axis=axis,
         )
     except BaseException:
@@ -7460,7 +7460,7 @@ def test_dataframe_sample_basic(
                     "frac": frac,
                     "replace": replace,
                     "random_state": pd_random_state,
-                    "weights": pd_weights,
+                    "weights": weights,
                     "axis": axis,
                 },
             ),
@@ -7471,10 +7471,11 @@ def test_dataframe_sample_basic(
                     "frac": frac,
                     "replace": replace,
                     "random_state": gd_random_state,
-                    "weights": gd_weights,
+                    "weights": weights,
                     "axis": axis,
                 },
             ),
+            compare_error_message=False,
         )
     else:
         got = df.sample(
@@ -7482,7 +7483,7 @@ def test_dataframe_sample_basic(
             frac=frac,
             replace=replace,
             random_state=gd_random_state,
-            weights=gd_weights,
+            weights=weights,
             axis=axis,
         )
         checker(expected, got)
