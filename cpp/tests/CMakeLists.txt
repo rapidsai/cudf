@@ -25,7 +25,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
-               # For std:: support of __int128_t. Can be removed once using cuda::std 
+               # For std:: support of __int128_t. Can be removed once using cuda::std
                CXX_EXTENSIONS ON
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
