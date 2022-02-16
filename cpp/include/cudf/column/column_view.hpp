@@ -399,7 +399,7 @@ class column_view : public detail::column_view_base {
                   {})
   {
     CUDF_EXPECTS(data.size() < std::numeric_limits<cudf::size_type>::max(),
-                 "Device span exceeds maximum size of a column view.");
+                 "Data exceeds the maximum size of a column view.");
   }
 
   /**
@@ -407,7 +407,7 @@ class column_view : public detail::column_view_base {
    *
    * Only numeric and chrono types are supported.
    *
-   * @tparam The device_span type. Must be const and match the column view's type.
+   * @tparam The device span type. Must be const and match the column view's type.
    *
    * @throws cudf::logic_error if the column view has nulls.
    * @throws cudf::logic_error if the column view type does not match the span type.
@@ -420,8 +420,8 @@ class column_view : public detail::column_view_base {
   [[nodiscard]] operator device_span<T>() const
   {
     CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<std::remove_const_t<T>>()},
-                 "Type of span must match column view type.");
-    CUDF_EXPECTS(!has_nulls(), "Column view with null values cannot be converted to device_span.");
+                 "Device span type must match column view type.");
+    CUDF_EXPECTS(!has_nulls(), "Column view with null values cannot be converted to device span.");
     return device_span<T>(data<T>(), size());
   }
 
