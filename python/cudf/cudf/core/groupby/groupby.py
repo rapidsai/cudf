@@ -1043,7 +1043,7 @@ class GroupBy(Serializable):
         c  val1  2.333333   3.833333   3.833333
            val2  3.833333  12.333333  12.333333
            val3  3.833333  12.333333  12.333333
-        """  # noqa: E501
+        """
 
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs used in the covariance calculation
