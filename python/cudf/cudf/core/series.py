@@ -3857,8 +3857,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates belong to a leap year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-02-01', end='2013-02-01', freq='1Y'))
@@ -3915,7 +3915,7 @@ class DatetimeProperties:
         Integer indicating which quarter the date belongs to.
 
         Examples
-        -------
+        --------
         >>> import cudf
         >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
         ...     dtype="datetime64[ms]")
@@ -3991,8 +3991,8 @@ class DatetimeProperties:
         Series
         Integers representing the number of days in month
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-01', end='2001-08-01', freq='1M'))
@@ -4042,8 +4042,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the last day of the month.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-26', end='2000-09-03', freq='1D'))
@@ -4088,8 +4088,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the begining of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4134,8 +4134,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the end of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4182,8 +4182,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the first day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
@@ -4216,8 +4216,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the last day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> dates = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
