@@ -8,7 +8,7 @@
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Root of examples
-EXAMPLES_DIR=${WORKSPACE}/cpp/examples
+EXAMPLES_DIR=$(dirname "$(realpath "$0")")
 
 ################################################################################
 # Add individual libcudf examples build scripts down below

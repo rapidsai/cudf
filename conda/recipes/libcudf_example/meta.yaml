@@ -19,7 +19,6 @@ build:
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - PROJECT_FLASH
-    - WORKSPACE
 
 requirements:
   build:
