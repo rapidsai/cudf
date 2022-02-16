@@ -1220,16 +1220,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # early stop for empty cases
         if len(range(start, stop, stride)) == 0:
-            breakpoint()
-            return DataFrame._from_data(
-                ColumnAccessor(
-                    {
-                        colname: as_column([], dtype=col.dtype) 
-                        for colname, col in self._data.items()
-                    }
-                ),
-                index=self.index[:0]#RangeIndex(start=0, stop=0) if start < stop else Index([], dtype=self.index.dtype)
+            # breakpoint()
+            columns = ColumnAccessor(
+                {
+                    colname: column.column_empty_like(col, newsize=0)
+                    for colname, col in self._data.items()
+                },
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
             )
+
+            if isinstance(self.index, MultiIndex):
+                mi_columns = ColumnAccessor(
+                    {
+                        colname: column.column_empty_like(col, newsize=0)
+                        for colname, col in self.index._data.items()
+                    }
+                )
+                index = MultiIndex._from_data(mi_columns)
+            else:
+                index = (
+                    RangeIndex(start=0, stop=0)
+                    if start < stop
+                    else Index([], dtype=self.index.dtype)
+                )
+            # breakpoint()
+
+            return DataFrame._from_data(columns, index=index)
 
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
