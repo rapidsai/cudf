@@ -586,8 +586,14 @@ def _boolean_mask_scatter_scalar(list input_scalars, list target_columns,
 
 def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
-    """Assign the `ith` row in input column to the row correspond to the `ith`
-    `True` value in the target column.
+    """Copy the target columns, replacing masked rows with input data.
+
+    The ``input_`` data can be a list of columns or as a list of scalars.
+    A list of input columns will be used to replace corresponding rows in the
+    target columns for which the boolean mask is ``True``. For the nth ``True``
+    in the boolean mask, the nth row in ``input_`` is used to replace. A list
+    of input scalars will replace all rows in the target columns for which the
+    boolean mask is ``True``.
     """
     if len(input_) != len(target_columns):
         raise ValueError("Mismatched number of input and target columns.")
