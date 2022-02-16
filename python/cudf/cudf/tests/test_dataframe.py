@@ -9089,9 +9089,9 @@ def test_dataframe_add_suffix():
     "min_periods", [0, 3],
 )
 @pytest.mark.parametrize(
-    "ddof", [1, 3],
+    "ddof", [1, 2],
 )
-def test_groupby_covariance(data, gkey, min_periods, ddof):
+def test_groupby_covariance_all(data, gkey, min_periods, ddof):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
