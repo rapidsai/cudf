@@ -557,7 +557,8 @@ class ColumnBase(Column, Serializable, NotIterable):
             if isinstance(value, ColumnBase):
                 if len(self) == len(value):
                     # Both value and key are aligned to self. Thus, the values
-                    # corresponding to the false values in key should be ignored.
+                    # corresponding to the false values in key should be
+                    # ignored.
                     value = value.apply_boolean_mask(key)
                     # After applying boolean mask, the length of value equals
                     # the number of elements to scatter, we can skip computing
