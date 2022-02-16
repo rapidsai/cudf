@@ -379,7 +379,24 @@ class column_view : public detail::column_view_base {
   auto child_end() const noexcept { return _children.cend(); }
 
   /**
+   * @brief Construct a column view from a device_span<T>.
+   *
+   * Only numeric and chrono types are supported.
+   *
+   * @tparam T The device_span data type.
+   * @param data The device_span containing the column elements.
+   */
+  template <typename T, std::enable_if_t<cudf::is_numeric<T>() or cudf::is_chrono<T>()>* = nullptr>
+  [[nodiscard]] column_view(device_span<T> data)
+    : column_view(
+        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
+  {
+  }
+
+  /**
    * @brief Converts a column view into a device span.
+   *
+   * Only numeric and chrono types are supported.
    *
    * @tparam The device_span type. Must match the column view's type.
    *
@@ -388,7 +405,7 @@ class column_view : public detail::column_view_base {
    *
    * @return device_span<T> A typed device span of the column view.
    */
-  template <typename T>
+  template <typename T, std::enable_if_t<cudf::is_numeric<T>() || cudf::is_chrono<T>()>* = nullptr>
   [[nodiscard]] operator device_span<const T>() const
   {
     CUDF_EXPECTS(type() == type_to_id<T>(), "Type of span must match column view type.");
