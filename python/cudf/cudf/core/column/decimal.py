@@ -401,9 +401,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     ):
         if decimal_type.MAX_PRECISION >= lhs_rhs_max_precision:
             try:
-                min_decimal_type = decimal_type(
-                    precision=precision, scale=scale
-                )
+                return decimal_type(precision=precision, scale=scale)
             except ValueError:
                 # Call to _validate fails, which means we need
                 # to try the next dtype
