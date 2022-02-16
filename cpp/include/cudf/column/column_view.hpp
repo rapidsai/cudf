@@ -388,15 +388,10 @@ class column_view : public detail::column_view_base {
    * @tparam T The device_span data type.
    * @param data The device_span containing the column elements.
    */
-  template <typename T, std::enable_if_t<cudf::is_numeric<T>() or cudf::is_chrono<T>()>* = nullptr>
-  [[nodiscard]] column_view(device_span<T> data)
-    : column_view(cudf::data_type{cudf::type_to_id<std::remove_const<T>>()},
-                  data.size(),
-                  data.data(),
-                  nullptr,
-                  0,
-                  0,
-                  {})
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  [[nodiscard]] column_view(device_span<T const> data)
+    : column_view(
+        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
   {
     CUDF_EXPECTS(data.size() < std::numeric_limits<cudf::size_type>::max(),
                  "Data exceeds the maximum size of a column view.");
@@ -414,15 +409,13 @@ class column_view : public detail::column_view_base {
    *
    * @return device_span<T> A typed device span of the column view.
    */
-  template <typename T,
-            typename std::enable_if_t<std::is_const_v<T> &&
-                                      (cudf::is_numeric<T>() || cudf::is_chrono<T>())>* = nullptr>
-  [[nodiscard]] operator device_span<T>() const
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  [[nodiscard]] operator device_span<T const>() const
   {
-    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<std::remove_const_t<T>>()},
+    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<T>()},
                  "Device span type must match column view type.");
     CUDF_EXPECTS(!has_nulls(), "Column view with null values cannot be converted to device span.");
-    return device_span<T>(data<T>(), size());
+    return device_span<T const>(data<T>(), size());
   }
 
  private:

@@ -50,9 +50,11 @@ TYPED_TEST_SUITE(ColumnViewDeviceSpanTests, DeviceSpanTypes);
 
 TYPED_TEST(ColumnViewDeviceSpanTests, conversion_round_trip)
 {
-  auto col                   = example_column<TypeParam>();
-  auto col_view              = cudf::column_view{*col};
-  auto device_span_from_view = static_cast<cudf::device_span<const TypeParam>>(col_view);
-  auto col_view_from_span    = cudf::column_view(device_span_from_view);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, col_view_from_span);
+  auto col      = example_column<TypeParam>();
+  auto col_view = cudf::column_view{*col};
+
+  // Test implicit conversion, round trip
+  cudf::device_span<const TypeParam> device_span_from_col_view = col_view;
+  cudf::column_view col_view_from_device_span                  = device_span_from_col_view;
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col_view, col_view_from_device_span);
 }
