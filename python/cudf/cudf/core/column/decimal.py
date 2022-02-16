@@ -391,7 +391,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     # MAX_PRECISION of `lhs_dtype` & `rhs_dtype` so that we can only check
     # and return a dtype that is greater than or equal to input dtype that
     # can fit `precision` & `scale`.
-    lhs_rhs_max_precision = max(
+    max_precision = max(
         lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION
     )
     for decimal_type in (
