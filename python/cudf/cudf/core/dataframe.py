@@ -6092,15 +6092,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         if replace:
             raise NotImplementedError(
-                "Sample is not supported for axis 1/'columns' "
-                "when 'replace=True'"
+                "Sample is not supported for axis 1/`columns` when"
+                "`replace=True`."
             )
 
         columns = self._data.names
         if not replace and n > len(columns):
             raise ValueError(
-                "Cannot take a larger sample "
-                "than population when 'replace=False'"
+                "Cannot take a larger sample than population when"
+                "`replace=False`."
             )
 
         sampled_column_labels = random_state.choice(

@@ -1797,24 +1797,24 @@ class IndexedFrame(Frame):
         else:
             if frac > 1 and not replace:
                 raise ValueError(
-                    "Replace has to be set to `True` "
-                    "when upsampling the population `frac` > 1."
+                    "Replace has to be set to `True` when upsampling the "
+                    "population `frac` > 1."
                 )
             if n is not None:
                 raise ValueError(
-                    "Please enter a value for `frac` OR `n`, not both"
+                    "Please enter a value for `frac` OR `n`, not both."
                 )
             n = int(round(size * frac))
 
         if n > 0 and size == 0:
             raise ValueError(
-                "Cannot take a sample larger than 0 when axis is empty"
+                "Cannot take a sample larger than 0 when axis is empty."
             )
 
         if not replace and n > size:
             raise ValueError(
-                "Cannot take a larger sample than population "
-                "when 'replace=False'"
+                "Cannot take a larger sample than population when "
+                "`replace=False`."
             )
 
         # Construct random state if `random_state` parameter is a seed.
@@ -1835,7 +1835,7 @@ class IndexedFrame(Frame):
 
             if size != len(weights):
                 raise ValueError(
-                    "Weights and axis to be sampled must be of same length"
+                    "Weights and axis to be sampled must be of same length."
                 )
 
             weights /= weights.sum()
@@ -1848,7 +1848,7 @@ class IndexedFrame(Frame):
             if isinstance(random_state, cp.random.RandomState):
                 raise ValueError(
                     "Use a numpy random state when sampling from "
-                    "axis=1/columns."
+                    "`axis=1`/`columns`."
                 )
             return self._sample_axis_1(
                 n, weights, replace, random_state, ignore_index
