@@ -307,7 +307,7 @@ void apply_binary_op(mutable_column_view& out,
     auto compare_orders =
       cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
 
-    detail::(out,
+    detail::struct_compare(out,
              row_lexicographic_comparator<nullate::DYNAMIC, true>{
                nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
                *d_lhs,
