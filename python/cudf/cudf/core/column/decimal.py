@@ -391,22 +391,18 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     # MAX_PRECISION of `lhs_dtype` & `rhs_dtype` so that we can only check
     # and return a dtype that is greater than or equal to input dtype that
     # can fit `precision` & `scale`.
-    max_precision = max(
-        lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION
-    )
+    max_precision = max(lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION)
     for decimal_type in (
         cudf.Decimal32Dtype,
         cudf.Decimal64Dtype,
         cudf.Decimal128Dtype,
     ):
-        if decimal_type.MAX_PRECISION >= lhs_rhs_max_precision:
+        if decimal_type.MAX_PRECISION >= max_precision:
             try:
                 return decimal_type(precision=precision, scale=scale)
             except ValueError:
                 # Call to _validate fails, which means we need
                 # to try the next dtype
                 pass
-            else:
-                return min_decimal_type
 
     raise OverflowError("Maximum supported decimal type is Decimal128")
