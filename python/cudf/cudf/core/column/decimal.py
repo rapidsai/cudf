@@ -378,7 +378,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
         # then try to see if `precision` & `scale` can be fit into the type
         # with greater MAX_PRECISION (i.e., the bigger dtype).
         try:
-            if lhs_dtype.MAX_PRECISION > rhs_dtype.MAX_PRECISION:
+            if lhs_dtype.MAX_PRECISION >= rhs_dtype.MAX_PRECISION:
                 return lhs_dtype.__class__(precision=precision, scale=scale)
             else:
                 return rhs_dtype.__class__(precision=precision, scale=scale)
