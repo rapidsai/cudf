@@ -9111,10 +9111,8 @@ def test_groupby_covariance_multiindex_dataframe():
         }
     ).set_index(["a", "b"])
 
-    actual = gdf.groupby(level=["a", "b"]).cov(min_periods=0, ddof=1)
-    expected = (
-        gdf.to_pandas().groupby(level=["a", "b"]).cov(min_periods=0, ddof=1)
-    )
+    actual = gdf.groupby(level=["a", "b"]).cov()
+    expected = gdf.to_pandas().groupby(level=["a", "b"]).cov()
 
     assert_eq(expected, actual)
 
@@ -9123,8 +9121,8 @@ def test_groupby_covariance_empty_columns():
     gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
     pdf = gdf.to_pandas()
 
-    actual = gdf.groupby("id").cov(min_periods=0, ddof=1)
-    expected = pdf.groupby("id").cov(min_periods=0, ddof=1)
+    actual = gdf.groupby("id").cov()
+    expected = pdf.groupby("id").cov()
 
     assert_eq(
         expected, actual, check_dtype=False, check_index_type=False,
@@ -9142,7 +9140,7 @@ def test_groupby_cov_invalid_column_types():
     with pytest.raises(
         TypeError, match="Covariance accepts only numerical column-pairs",
     ):
-        gdf.groupby("id").cov(min_periods=0, ddof=1)
+        gdf.groupby("id").cov()
 
 
 def test_groupby_cov_positive_semidefinite_matrix():
