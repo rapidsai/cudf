@@ -9086,7 +9086,7 @@ def test_dataframe_add_suffix():
     ],
 )
 @pytest.mark.parametrize(
-    "min_periods", [4, 5],
+    "min_periods", [0, 3],
 )
 @pytest.mark.parametrize(
     "ddof", [1, 3],
