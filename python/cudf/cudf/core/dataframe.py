@@ -1220,7 +1220,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # early stop for empty cases
         if len(range(start, stop, stride)) == 0:
-            # breakpoint()
             columns = ColumnAccessor(
                 {
                     colname: column.column_empty_like(col, newsize=0)
@@ -1244,7 +1243,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if start < stop
                     else Index([], dtype=self.index.dtype)
                 )
-            # breakpoint()
 
             return DataFrame._from_data(columns, index=index)
 

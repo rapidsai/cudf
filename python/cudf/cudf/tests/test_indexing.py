@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from itertools import combinations
 
@@ -1308,9 +1308,7 @@ def test_loc_datetime_index(sli, is_dataframe):
         cudf.DataFrame(index=range(10000)),
         cudf.DataFrame(columns=["a", "b", "c", "d"]),
         cudf.DataFrame(columns=["a"], index=range(10000)),
-        cudf.DataFrame(
-            columns=["a", "col2", "...col n"], index=range(10000)
-        ),
+        cudf.DataFrame(columns=["a", "col2", "...col n"], index=range(10000)),
         cudf.DataFrame(index=cudf.Series(range(10000)).astype("str")),
         cudf.DataFrame(
             columns=["a", "b", "c", "d"],
@@ -1328,13 +1326,13 @@ def test_loc_datetime_index(sli, is_dataframe):
         slice(-2, -4),  # slice is empty
         slice(-10, -20, -1),  # reversed slice
         slice(None),  # slices everything, same as [:]
-        #slice(250000, 500000),
-        #slice(250000, 250001),
-        #slice(500000),
-        #slice(1, 10),
-        #slice(10, 20),
-        #slice(15, 24000),
-        #slice(6),
+        # slice(250000, 500000),
+        # slice(250000, 250001),
+        # slice(500000),
+        # slice(1, 10),
+        # slice(10, 20),
+        # slice(15, 24000),
+        # slice(6),
     ],
 )
 def test_dataframe_sliced(gdf, slice):
