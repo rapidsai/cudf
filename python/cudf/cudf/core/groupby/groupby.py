@@ -965,7 +965,7 @@ class GroupBy(Serializable):
         Compute the pairwise covariance among the columns of a DataFrame,
         excluding NA/null values.
 
-        The returned data frame is the covariance matrix of the columns of
+        The returned DataFrame is the covariance matrix of the columns of
         the DataFrame.
 
         Both NA and null values are automatically excluded from the
@@ -973,7 +973,7 @@ class GroupBy(Serializable):
 
         A threshold can be set for the minimum number of observations
         for each value created. Comparisons with observations below this
-        threshold will be returned as NaN.
+        threshold will be returned as `NA`.
 
         This method is generally used for the analysis of time series data to
         understand the relationship between different measures across time.
