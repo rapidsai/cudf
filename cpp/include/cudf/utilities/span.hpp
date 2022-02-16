@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,11 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
   using base::base;
 
   constexpr device_span() noexcept : base() {}  // required to compile on centos
+
+  constexpr device_span(typename base::pointer data, typename base::size_type size) noexcept
+    : base(data, size)
+  {
+  }
 
   template <
     typename C,
