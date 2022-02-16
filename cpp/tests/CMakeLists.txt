@@ -23,7 +23,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               # For std:: support of __int128_t. Can be removed once using cuda::std
+               CXX_EXTENSIONS ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
   )
+
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
   install(
@@ -199,6 +206,7 @@ ConfigureTest(
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
+ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)

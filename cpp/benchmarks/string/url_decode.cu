@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ struct url_string_generator {
         chars[i + 2] = '0';
         i += 2;
       } else {
-        chars[i] = 'a';  // + (i % 26);
+        chars[i] = 'a';
       }
     }
   }
@@ -100,14 +100,14 @@ void BM_url_decode(benchmark::State& state, int esc_seq_pct)
                           (chars_per_row + sizeof(cudf::size_type)));
 }
 
-#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                           \
-  BENCHMARK_DEFINE_F(UrlDecode, BM_url_decode_##esc_seq_pct##_pct)   \
-  (::benchmark::State & st) { BM_url_decode(st, esc_seq_pct); }      \
-  BENCHMARK_REGISTER_F(UrlDecode, BM_url_decode_##esc_seq_pct##_pct) \
-    ->Args({100000000, 10})                                          \
-    ->Args({10000000, 100})                                          \
-    ->Args({1000000, 1000})                                          \
-    ->Unit(benchmark::kMillisecond)                                  \
+#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                      \
+  BENCHMARK_DEFINE_F(UrlDecode, esc_seq_pct)                    \
+  (::benchmark::State & st) { BM_url_decode(st, esc_seq_pct); } \
+  BENCHMARK_REGISTER_F(UrlDecode, esc_seq_pct)                  \
+    ->Args({100000000, 10})                                     \
+    ->Args({10000000, 100})                                     \
+    ->Args({1000000, 1000})                                     \
+    ->Unit(benchmark::kMillisecond)                             \
     ->UseManualTime();
 
 URLD_BENCHMARK_DEFINE(10)

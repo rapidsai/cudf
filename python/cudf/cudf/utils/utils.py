@@ -67,15 +67,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
 
-    if cudf.dtype(dtype).kind in ("O", "U"):
-        gather_map = column.full(size, 0, dtype="int32")
-        scalar_str_col = column.as_column([scalar], dtype="str")
-        return scalar_str_col[gather_map]
-    else:
-        out_col = column.column_empty(size, dtype=dtype)
-        if out_col.size != 0:
-            out_col.data_array_view[:] = scalar
-        return out_col
+    return cudf.core.column.full(size=size, fill_value=scalar, dtype=dtype)
 
 
 def initfunc(f):
@@ -142,28 +134,6 @@ def set_allocator(
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
-
-
-class cached_property:
-    """
-    Like @property, but only evaluated upon first invocation.
-    To force re-evaluation of a cached_property, simply delete
-    it with `del`.
-    """
-
-    # TODO: Can be replaced with functools.cached_property when we drop support
-    # for Python 3.7.
-
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, cls):
-        if instance is None:
-            return self
-        else:
-            value = self.func(instance)
-            object.__setattr__(instance, self.func.__name__, value)
-            return value
 
 
 class GetAttrGetItemMixin:
@@ -361,7 +331,10 @@ def get_appropriate_dispatched_func(
             cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
             if cupy_compatible_args:
                 cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                return _cast_to_appropriate_cudf_type(cupy_output, index)
+                if isinstance(cupy_output, cp.ndarray):
+                    return _cast_to_appropriate_cudf_type(cupy_output, index)
+                else:
+                    return cupy_output
 
     return NotImplemented
 

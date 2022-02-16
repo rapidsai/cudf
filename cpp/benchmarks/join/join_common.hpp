@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 #pragma once
 
-#include <benchmark/benchmark.h>
-#include <nvbench/nvbench.cuh>
+#include "generate_input_tables.cuh"
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/random/linear_congruential_engine.h>
-#include <thrust/random/uniform_int_distribution.h>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -30,15 +31,26 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+#include <nvbench/nvbench.cuh>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/random/linear_congruential_engine.h>
+#include <thrust/random/uniform_int_distribution.h>
 
 #include <vector>
 
-#include "generate_input_tables.cuh"
+struct null75_generator {
+  thrust::minstd_rand engine;
+  thrust::uniform_int_distribution<unsigned> rand_gen;
+  null75_generator() : engine(), rand_gen() {}
+  __device__ bool operator()(size_t i)
+  {
+    engine.discard(i);
+    // roughly 75% nulls
+    return (rand_gen(engine) & 3) == 0;
+  }
+};
 
 struct null75_generator {
   thrust::minstd_rand engine;

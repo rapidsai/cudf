@@ -958,14 +958,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def memory_usage(self, index=True, deep=False):
         return sum(super().memory_usage(index, deep).values())
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__":
-            return get_appropriate_dispatched_func(
-                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
-            )
-        else:
-            return NotImplemented
-
     def __array_function__(self, func, types, args, kwargs):
         handled_types = [cudf.Series]
         for t in types:
@@ -1214,9 +1206,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _binaryop(
+    def _prep_for_binop(
         self,
-        other: Frame,
+        other: Any,
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
@@ -1248,24 +1240,55 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lhs = self
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
+        return operands, lhs._index
+
+    def _binaryop(
+        self,
+        other: Frame,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        operands, out_index = self._prep_for_binop(
+            other, fn, fill_value, reflect, can_reindex
+        )
         return (
-            lhs._from_data(
-                data=lhs._colwise_binop(operands, fn), index=lhs._index,
+            self._from_data(
+                data=self._colwise_binop(operands, fn), index=out_index,
             )
             if operands is not NotImplemented
             else NotImplemented
         )
 
     def logical_and(self, other):
+        warnings.warn(
+            "Series.logical_and is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_and").astype(np.bool_)
 
     def remainder(self, other):
+        warnings.warn(
+            "Series.remainder is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "mod")
 
     def logical_or(self, other):
+        warnings.warn(
+            "Series.logical_or is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_or").astype(np.bool_)
 
     def logical_not(self):
+        warnings.warn(
+            "Series.logical_not is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
@@ -1782,10 +1805,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._from_data(
-                {self.name: (data.copy(deep=True) if copy else data)},
-                index=self._index,
-            )
+            return self._from_data({self.name: data}, index=self._index)
 
         except Exception as e:
             if errors == "raise":
@@ -3286,14 +3306,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return result
 
     def add_prefix(self, prefix):
-        result = self.copy(deep=True)
-        result.index = prefix + self.index.astype(str)
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=prefix + self.index.astype(str),
+        )
 
     def add_suffix(self, suffix):
-        result = self.copy(deep=True)
-        result.index = self.index.astype(str) + suffix
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=self.index.astype(str) + suffix,
+        )
 
     def keys(self):
         """

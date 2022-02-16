@@ -3930,8 +3930,8 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByScan() {
     try (Table t1 = new Table.TestBuilder()
-        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
-        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2") // GBY Key#0
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)  // GBY Key#1
         .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
         .column(  -9, null,   -5,   0,     4,    4,    8,    2,    2,    2, null)
         .build()) {
@@ -3945,16 +3945,18 @@ public class TableTest extends CudfTestBase {
               GroupByScanAggregation.min().onColumn(2),
               GroupByScanAggregation.max().onColumn(2),
               GroupByScanAggregation.rank().onColumn(3),
-              GroupByScanAggregation.denseRank().onColumn(3));
+              GroupByScanAggregation.denseRank().onColumn(3),
+              GroupByScanAggregation.percentRank().onColumn(3));
            Table expected = new Table.TestBuilder()
-               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
                .column(12.0, 14.0, 13.0, 30.0, 17.0, 34.0, null, null, 11.0, null, 21.0)
                .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
                .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
                .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
-               .column(1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 4)
-               .column(1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2)
+               .column(   1,    1,    1,    2,    1,    1,    3,    1,    1,    1,    4)
+               .column(   1,    1,    1,    2,    1,    1,    2,    1,    1,    1,    2)
+               .column( 0.0,  0.0,  0.0,  1.0,  0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  1.0)
                .build()) {
         assertTablesAreEqual(expected, result);
       }
