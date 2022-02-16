@@ -965,7 +965,7 @@ class GroupBy(Serializable):
         Compute the pairwise covariance among the columns of a DataFrame,
         excluding NA/null values.
 
-        The returned data frame is the covariance matrix of the columns of
+        The returned DataFrame is the covariance matrix of the columns of
         the DataFrame.
 
         Both NA and null values are automatically excluded from the
