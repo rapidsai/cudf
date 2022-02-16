@@ -136,28 +136,6 @@ def set_allocator(
 IS_NEP18_ACTIVE = _is_nep18_active()
 
 
-class cached_property:
-    """
-    Like @property, but only evaluated upon first invocation.
-    To force re-evaluation of a cached_property, simply delete
-    it with `del`.
-    """
-
-    # TODO: Can be replaced with functools.cached_property when we drop support
-    # for Python 3.7.
-
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, cls):
-        if instance is None:
-            return self
-        else:
-            value = self.func(instance)
-            object.__setattr__(instance, self.func.__name__, value)
-            return value
-
-
 class GetAttrGetItemMixin:
     """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 

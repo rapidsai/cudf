@@ -1275,14 +1275,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             {str(k): v for k, v in super().memory_usage(index, deep).items()}
         )
 
-    @annotate("DATAFRAME_ARRAY_UFUNC", color="blue", domain="cudf_python")
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(self)
-        else:
-            return NotImplemented
-
     @annotate("DATAFRAME_ARRAY_FUNCTION", color="blue", domain="cudf_python")
     def __array_function__(self, func, types, args, kwargs):
 
@@ -1868,8 +1860,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return out
 
-    @annotate("DATAFRAME_BINARYOP", color="blue", domain="cudf_python")
-    def _binaryop(
+    def _prep_for_binop(
         self,
         other: Any,
         fn: str,
@@ -1889,6 +1880,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # implementation assumes that binary operations between a column and
         # NULL are always commutative, even for binops (like subtraction) that
         # are normally anticommutative.
+        # TODO: We probably should support pandas DataFrame/Series objects.
         if isinstance(rhs, Sequence):
             # TODO: Consider validating sequence length (pandas does).
             operands = {
@@ -1952,11 +1944,30 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     right = right_dict[col]
                 operands[col] = (left, right, reflect, fill_value)
         else:
+            return NotImplemented, None
+
+        return operands, lhs._index
+
+    @annotate("DATAFRAME_BINARYOP", color="blue", domain="cudf_python")
+    def _binaryop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        operands, out_index = self._prep_for_binop(
+            other, fn, fill_value, reflect, can_reindex
+        )
+        if operands is NotImplemented:
             return NotImplemented
 
         return self._from_data(
             ColumnAccessor(type(self)._colwise_binop(operands, fn)),
-            index=lhs._index,
+            index=out_index,
         )
 
     @annotate("DATAFRAME_UPDATE", color="blue", domain="cudf_python")
@@ -2059,6 +2070,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("DATAFRAME_ITERITEMS", color="blue", domain="cudf_python")
     def iteritems(self):
+        """Iterate over column names and series pairs"""
+        warnings.warn(
+            "iteritems is deprecated and will be removed in a future version. "
+            "Use .items instead.",
+            FutureWarning,
+        )
+        return self.items()
+
+    @annotate("DATAFRAME_ITEMS", color="blue", domain="cudf_python")
+    def items(self):
         """Iterate over column names and series pairs"""
         for k in self:
             yield (k, self[k])
@@ -4589,7 +4610,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         df = cls()
         # Set columns
-        for col_name, col_value in dataframe.iteritems():
+        for col_name, col_value in dataframe.items():
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(col_value.shape) == 1:
@@ -5897,8 +5918,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -----
         Note that a copy of the columns is made.
         """
+        if not all(isinstance(name, str) for name in self._data.names):
+            warnings.warn(
+                "DataFrame contains non-string column name(s). Struct column "
+                "requires field name to be string. Non-string column names "
+                "will be casted to string as the field name."
+            )
+        field_names = [str(name) for name in self._data.names]
+
         col = cudf.core.column.build_struct_column(
-            names=self._data.names, children=self._data.columns, size=len(self)
+            names=field_names, children=self._data.columns, size=len(self)
         )
         return cudf.Series._from_data(
             cudf.core.column_accessor.ColumnAccessor(
