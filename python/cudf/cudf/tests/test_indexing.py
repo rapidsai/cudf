@@ -1326,13 +1326,13 @@ def test_loc_datetime_index(sli, is_dataframe):
         slice(-2, -4),  # slice is empty
         slice(-10, -20, -1),  # reversed slice
         slice(None),  # slices everything, same as [:]
-        # slice(250000, 500000),
-        # slice(250000, 250001),
-        # slice(500000),
-        # slice(1, 10),
-        # slice(10, 20),
-        # slice(15, 24000),
-        # slice(6),
+        slice(25000, 50000),
+        slice(25000, 25001),
+        slice(50000),
+        slice(1, 10),
+        slice(10, 20),
+        slice(15, 2400),
+        slice(6),
     ],
 )
 def test_dataframe_sliced(gdf, slice):
