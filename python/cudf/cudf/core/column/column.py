@@ -80,7 +80,9 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import NotIterable, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
-Slice = TypeVar("Slice", bound=slice)  # WAR for "slice" is taken in ColumnBase
+# TODO: This workaround allows type hints for `slice`, since `slice` is a
+# method in ColumnBase.
+Slice = TypeVar("Slice", bound=slice)
 
 
 class ColumnBase(Column, Serializable, NotIterable):
@@ -494,7 +496,7 @@ class ColumnBase(Column, Serializable, NotIterable):
         value_normalized = (
             cudf.Scalar(value, dtype=self.dtype)
             if is_scalar(value)
-            else as_column(value).astype(self.dtype)
+            else as_column(value, dtype=self.dtype)
         )
 
         out: Optional[ColumnBase]  # If None, no need to perform mimic inplace.
@@ -554,8 +556,8 @@ class ColumnBase(Column, Serializable, NotIterable):
             skip_reducing_key = False
             if isinstance(value, ColumnBase):
                 if len(self) == len(value):
-                    # Both value and key is aligned to self. Thus, the values
-                    # corresponding to the `F` masks in key should be ignored.
+                    # Both value and key are aligned to self. Thus, the values
+                    # corresponding to the false values in key should be ignored.
                     value = value.apply_boolean_mask(key)
                     # After applying boolean mask, the length of value equals
                     # the number of elements to scatter, we can skip computing
