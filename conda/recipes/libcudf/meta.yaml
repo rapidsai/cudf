@@ -286,3 +286,23 @@ outputs:
       license_family: Apache
       license_file: LICENSE
       summary: libcudf_kafka library
+  - name: libcudf_example
+    version: {{ version }}
+    script: install_libcudf_example.sh
+    build:
+      number: {{ GIT_DESCRIBE_NUMBER }}
+      string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      script_env: *script_env
+    requirements:
+      build:
+        - cmake {{ cmake_version }}
+      run:
+        - {{ pin_subpackage('libcudf', exact=True) }}
+      run:
+        - {{ pin_subpackage('libcudf', exact=True) }}
+    about:
+      home: http://rapids.ai/
+      license: Apache-2.0
+      license_family: Apache
+      license_file: LICENSE
+      summary: libcudf_example library
