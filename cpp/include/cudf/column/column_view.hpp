@@ -21,6 +21,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -389,9 +390,16 @@ class column_view : public detail::column_view_base {
    */
   template <typename T, std::enable_if_t<cudf::is_numeric<T>() or cudf::is_chrono<T>()>* = nullptr>
   [[nodiscard]] column_view(device_span<T> data)
-    : column_view(
-        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
+    : column_view(cudf::data_type{cudf::type_to_id<std::remove_const<T>>()},
+                  data.size(),
+                  data.data(),
+                  nullptr,
+                  0,
+                  0,
+                  {})
   {
+    CUDF_EXPECTS(data.size() < std::numeric_limits<cudf::size_type>::max(),
+                 "Device span exceeds maximum size of a column view.");
   }
 
   /**
