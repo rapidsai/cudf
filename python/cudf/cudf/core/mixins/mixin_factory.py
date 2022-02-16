@@ -3,8 +3,9 @@
 import inspect
 
 
-# A simple `partialmethod` that allows setting attributes such as
-# __doc__ on instances.
+# `functools.partialmethod` does not allow setting attributes such as
+# __doc__ on the resulting method. So we use a simple alternative to
+# it here:
 def _partialmethod(method, *args1, **kwargs1):
     def wrapper(self, *args2, **kwargs2):
         return method(self, *args1, *args2, **kwargs1, **kwargs2)
