@@ -831,8 +831,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._data.multiindex = self._data.multiindex and isinstance(
                     col_name, tuple
                 )
-                self.insert(
-                    i, col_name, data[col_name], nan_as_null=nan_as_null
+                self._insert(
+                    i, col_name, data[col_name], nan_as_null=nan_as_null,
                 )
 
         if columns is not None:
@@ -1093,7 +1093,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             else:
                 for col_name in self._data:
-                    scatter_map = arg[col_name]
+                    scatter_map = arg._data[col_name]
                     if is_scalar(value):
                         self._data[col_name][scatter_map] = value
                     else:
@@ -2571,6 +2571,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         name : number or string
             name or label of column to be inserted
         value : Series or array-like
+        nan_as_null : bool, Default None
+            If ``None``/``True``, converts ``np.nan`` values to
+            ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
+        """
+        return self._insert(
+            loc=loc,
+            name=name,
+            value=value,
+            nan_as_null=nan_as_null,
+            ignore_index=False,
+        )
+
+    @annotate("DATAFRAME__INSERT", color="green", domain="cudf_python")
+    def _insert(self, loc, name, value, nan_as_null=None, ignore_index=True):
+        """
+        Same as `insert`, with additional `ignore_index` param.
+
+        ignore_index : bool, default True
+            If True, there will be no index equality check & reindexing
+            happening.
+            If False, a reindexing operation is performed if
+            `value.index` is not equal to `self.index`.
         """
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
@@ -2591,7 +2614,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if len(self) == 0:
             if isinstance(value, (pd.Series, Series)):
-                self._index = as_index(value.index)
+                if not ignore_index:
+                    self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
                 new_data = self._data.__class__()
@@ -2604,9 +2628,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value, nan_as_null=nan_as_null)._align_to_index(
-                self._index, how="right", sort=False
-            )
+            value = Series(value, nan_as_null=nan_as_null)
+            if not ignore_index:
+                value = value._align_to_index(
+                    self._index, how="right", sort=False
+                )
 
         value = column.as_column(value, nan_as_null=nan_as_null)
 
@@ -4731,8 +4757,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 for gen_name, col_name in zip(
                     gen_names, self.index._data.names
                 ):
-                    data.insert(
-                        data.shape[1], gen_name, self.index._data[col_name]
+                    data._insert(
+                        data.shape[1], gen_name, self.index._data[col_name],
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5725,7 +5751,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for k, col in self._data.items():
             infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
             if infered_type in inclusion:
-                df.insert(len(df._data), k, col)
+                df._insert(len(df._data), k, col)
 
         return df
 
@@ -6580,7 +6606,11 @@ def _setitem_with_dataframe(
                 raise ValueError("Can not insert new column with a bool mask")
             else:
                 # handle append case
-                input_df.insert(len(input_df._data), col_1, replace_df[col_2])
+                input_df._insert(
+                    loc=len(input_df._data),
+                    name=col_1,
+                    value=replace_df[col_2],
+                )
 
 
 def extract_col(df, col):
