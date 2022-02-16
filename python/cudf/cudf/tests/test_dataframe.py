@@ -9111,9 +9111,9 @@ def test_groupby_covariance_multiindex_dataframe():
         }
     ).set_index(["a", "b"])
 
-    actual = gdf.groupby(level=["a", "b"]).cov(min_periods=0, ddof=1)
+    actual = gdf.groupby(level=["a", "b"]).cov()
     expected = (
-        gdf.to_pandas().groupby(level=["a", "b"]).cov(min_periods=0, ddof=1)
+        gdf.to_pandas().groupby(level=["a", "b"]).cov()
     )
 
     assert_eq(expected, actual)
