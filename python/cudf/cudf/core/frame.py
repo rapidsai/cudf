@@ -6807,10 +6807,7 @@ def _drop_rows_by_labels(
 
         # 4. Reconstruct original layout, and rename
         join_res._insert(
-            ilevel,
-            name=join_res._index.name,
-            value=join_res._index,
-            ignore_index=True,
+            ilevel, name=join_res._index.name, value=join_res._index
         )
 
         midx = cudf.MultiIndex.from_frame(

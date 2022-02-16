@@ -291,7 +291,6 @@ class GroupBy(Serializable):
                     0,
                     col_name,
                     result.index.get_level_values(col_name)._values,
-                    ignore_index=True,
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
 

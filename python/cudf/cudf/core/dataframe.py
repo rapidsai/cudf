@@ -832,11 +832,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_name, tuple
                 )
                 self._insert(
-                    i,
-                    col_name,
-                    data[col_name],
-                    nan_as_null=nan_as_null,
-                    ignore_index=True,
+                    i, col_name, data[col_name], nan_as_null=nan_as_null,
                 )
 
         if columns is not None:
@@ -4762,10 +4758,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     gen_names, self.index._data.names
                 ):
                     data._insert(
-                        data.shape[1],
-                        gen_name,
-                        self.index._data[col_name],
-                        ignore_index=True,
+                        data.shape[1], gen_name, self.index._data[col_name],
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5758,7 +5751,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for k, col in self._data.items():
             infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
             if infered_type in inclusion:
-                df._insert(len(df._data), k, col, ignore_index=True)
+                df._insert(len(df._data), k, col)
 
         return df
 
@@ -6577,7 +6570,6 @@ def _setitem_with_dataframe(
                     loc=len(input_df._data),
                     name=col_1,
                     value=replace_df[col_2],
-                    ignore_index=True,
                 )
 
 
