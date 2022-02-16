@@ -9078,39 +9078,27 @@ def test_dataframe_add_suffix():
         (
             {
                 "id": [0, 0, 0, 0, 1, 1, 1],
-                "a": [10, 3, 4, 2, -3, 9, 10],
-                "b": [10, 23, -4, 2, -3, 9, 19],
+                "a": [10.0, 3, 4, 2.0, -3.0, 9.0, 10.0],
+                "b": [10.0, 23, -4.0, 2, -3.0, 9, 19.0],
             },
             ["id", "a"],
         ),
-        (
-            {
-                "id": ["a", "a", "b", "b", "c", "c"],
-                "val": [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
-            },
-            ["id"],
-        ),
-        ({"id": [1.0], "val1": [2.0], "val2": [3.0]}, ["id"]),
     ],
 )
 @pytest.mark.parametrize(
-    "min_periods", [1, 3, 4, 5],
+    "min_periods", [4, 5],
 )
 @pytest.mark.parametrize(
-    "ddof", [1, 3, 4, 5],
+    "ddof", [1, 3],
 )
-def test_groupby_covariance(data, gkey, min_periods, ddof):
+def test_groupby_covariance_all(data, gkey, min_periods, ddof):
     gdf = cudf.DataFrame(data, nan_as_null=False)
     pdf = gdf.to_pandas()
 
     actual = gdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
     expected = pdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
 
-    actual_no_args = gdf.groupby(gkey).cov()
-    expected_no_args = pdf.groupby(gkey).cov()
-
     assert_eq(expected, actual)
-    assert_eq(expected_no_args, actual_no_args)
 
 
 def test_groupby_covariance_multiindex_dataframe():
@@ -9143,27 +9131,18 @@ def test_groupby_covariance_empty_columns():
     )
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
+def test_groupby_cov_invalid_column_types():
+    gdf = cudf.DataFrame(
         {
             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
             "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
             "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
         },
-        {
-            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
-            "val1": [1, 1, 1, 2, 2, 2, 3, 3, 3],
-            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
-        },
-    ],
-)
-@pytest.mark.parametrize("gkey", ["id", "val1", "val2"])
-def test_groupby_cov_invalid_column_types(data, gkey):
+    )
     with pytest.raises(
         TypeError, match="Covariance accepts only numerical column-pairs",
     ):
-        cudf.DataFrame(data).groupby(gkey).cov(min_periods=0, ddof=1)
+        gdf.groupby("id").cov(min_periods=0, ddof=1)
 
 
 def test_groupby_cov_positive_semidefinite_matrix():
@@ -9191,15 +9170,10 @@ def test_groupby_cov_positive_semidefinite_matrix():
 @pytest.mark.xfail
 def test_groupby_cov_for_pandas_bug_case():
     # Handles case: pandas bug using ddof with missing data.
-    # Currently pandas recognizes the bug with no clear fix
     # Filed an issue in Pandas on GH, link below:
     # https://github.com/pandas-dev/pandas/issues/45814
     pdf = pd.DataFrame(
-        {
-            "id": ["a", "a", "b", "b", "c", "c"],
-            "val1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            "val2": [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan],
-        }
+        {"id": ["a", "a"], "val1": [1.0, 2.0], "val2": [np.nan, np.nan]}
     )
     expected = pdf.groupby("id").cov(ddof=2)
 
