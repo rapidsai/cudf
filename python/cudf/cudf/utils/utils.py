@@ -67,15 +67,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
 
-    if cudf.dtype(dtype).kind in ("O", "U"):
-        gather_map = column.full(size, 0, dtype="int32")
-        scalar_str_col = column.as_column([scalar], dtype="str")
-        return scalar_str_col[gather_map]
-    else:
-        out_col = column.column_empty(size, dtype=dtype)
-        if out_col.size != 0:
-            out_col.data_array_view[:] = scalar
-        return out_col
+    return cudf.core.column.full(size=size, fill_value=scalar, dtype=dtype)
 
 
 def initfunc(f):
