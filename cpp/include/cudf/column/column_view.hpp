@@ -21,6 +21,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <type_traits>
 #include <vector>
 
 /**
@@ -398,19 +399,22 @@ class column_view : public detail::column_view_base {
    *
    * Only numeric and chrono types are supported.
    *
-   * @tparam The device_span type. Must match the column view's type.
+   * @tparam The device_span type. Must be const and match the column view's type.
    *
    * @throws cudf::logic_error if the column view has nulls.
    * @throws cudf::logic_error if the column view type does not match the span type.
    *
    * @return device_span<T> A typed device span of the column view.
    */
-  template <typename T, std::enable_if_t<cudf::is_numeric<T>() || cudf::is_chrono<T>()>* = nullptr>
-  [[nodiscard]] operator device_span<const T>() const
+  template <typename T,
+            typename std::enable_if_t<std::is_const_v<T> &&
+                                      (cudf::is_numeric<T>() || cudf::is_chrono<T>())>* = nullptr>
+  [[nodiscard]] operator device_span<T>() const
   {
-    CUDF_EXPECTS(type() == type_to_id<T>(), "Type of span must match column view type.");
+    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<std::remove_const_t<T>>()},
+                 "Type of span must match column view type.");
     CUDF_EXPECTS(!has_nulls(), "Column view with null values cannot be converted to device_span.");
-    return device_span<const T>(data<T>(), size());
+    return device_span<T>(data<T>(), size());
   }
 
  private:
