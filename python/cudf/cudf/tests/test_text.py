@@ -778,3 +778,54 @@ def test_read_text(datadir):
     actual = cudf.read_text(chess_file, delimiter=delimiter)
 
     assert_eq(expected, actual)
+
+
+def test_read_text_byte_range(datadir):
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file, "r") as f:
+        data = f.read()
+        content = data.split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    byte_range_size = len(data) / 3
+
+    actual_0 = cudf.read_text(
+        chess_file,
+        delimiter=delimiter,
+        byte_range=[byte_range_size * 0, byte_range_size],
+    )
+    actual_1 = cudf.read_text(
+        chess_file,
+        delimiter=delimiter,
+        byte_range=[byte_range_size * 1, byte_range_size],
+    )
+    actual_2 = cudf.read_text(
+        chess_file,
+        delimiter=delimiter,
+        byte_range=[byte_range_size * 2, byte_range_size],
+    )
+
+    actual = cudf.concat([actual_0, actual_1, actual_2], ignore_index=True)
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_byte_range_large(datadir):
+    content = str([("\n" if x % 5 == 0 else "x") for x in range(0, 300000000)])
+    delimiter = "1."
+    temp_file = str(datadir) + "/temp.txt"
+
+    with open(temp_file, "w") as f:
+        f.write(content)
+
+    cudf.read_text(temp_file, delimiter=delimiter)

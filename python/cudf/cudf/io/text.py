@@ -12,7 +12,7 @@ from cudf.utils import ioutils
 @annotate("READ_TEXT", color="purple", domain="cudf_python")
 @ioutils.doc_read_text()
 def read_text(
-    filepath_or_buffer, delimiter=None, **kwargs,
+    filepath_or_buffer, delimiter=None, byte_range=None, **kwargs,
 ):
     """{docstring}"""
 
@@ -24,5 +24,7 @@ def read_text(
     )
 
     return cudf.Series._from_data(
-        libtext.read_text(filepath_or_buffer, delimiter=delimiter,)
+        libtext.read_text(
+            filepath_or_buffer, delimiter=delimiter, byte_range=byte_range
+        )
     )
