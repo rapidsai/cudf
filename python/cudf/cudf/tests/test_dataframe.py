@@ -9188,7 +9188,7 @@ def test_dataframe_rename_duplicate_column():
         {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
     ],
 )
-@pytest.mark.parametrize("periods", (-2, -1, 0, 1, 2))
+@pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
 @pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
 def test_dataframe_pct_change(data, periods, fill_method):
     gdf = cudf.DataFrame(data)
