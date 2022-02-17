@@ -29,7 +29,7 @@ struct TextBPETokenize : public cudf::test::BaseFixture {
 
 TEST_F(TextBPETokenize, BytePairEncoding)
 {
-  // fake table based on values from https://huggingface.co/gpt2/raw/main/merges.txt
+  // partial table based on values from https://huggingface.co/gpt2/raw/main/merges.txt
   auto mpt = cudf::test::strings_column_wrapper({
     "e n",    // 12
     "i t",    // 14
@@ -44,7 +44,8 @@ TEST_F(TextBPETokenize, BytePairEncoding)
     "t est",  // 9032
     "s ent",  // 33830
   });
-  nvtext::bpe_merge_pairs merge_pairs{mpt.release()};
+
+  nvtext::bpe_merge_pairs merge_pairs{cudf::strings_column_view(mpt)};
 
   auto validity = cudf::test::iterators::null_at(4);
   cudf::test::strings_column_wrapper input({"This is it",
@@ -58,10 +59,10 @@ TEST_F(TextBPETokenize, BytePairEncoding)
 
   auto results = nvtext::byte_pair_encoding(sv, merge_pairs);
 
-  auto expected = cudf::test::strings_column_wrapper({"This Ġis Ġit",
-                                                      "This Ġis Ġtest - sent ence - 1",
-                                                      "This Ġis Ġtest Ġsent ence - 2",
-                                                      "This - is Ġtest Ġsent ence Ġ3",
+  auto expected = cudf::test::strings_column_wrapper({"This is it",
+                                                      "This is test - sent ence - 1",
+                                                      "This is test sent ence - 2",
+                                                      "This - is test sent ence 3",
                                                       "",
                                                       ""},
                                                      validity);

@@ -34,7 +34,21 @@ namespace nvtext {
  * To create an instance, call nvtext::load_merges_table
  */
 struct bpe_merge_pairs {
-  std::unique_ptr<cudf::column> merge_pairs;  // strings
+  struct bpe_merge_pairs_impl;
+  std::unique_ptr<bpe_merge_pairs_impl> impl{};
+
+  bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  bpe_merge_pairs(cudf::strings_column_view const& input,
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  ~bpe_merge_pairs();
+
+  cudf::size_type get_size();
+  std::size_t get_map_size();
 };
 
 /**
@@ -75,9 +89,9 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  *
  * @code{.pseudo}
  * mps = load_merges_file("merges.txt")
- * input = ["test sentence", "this is test"]
+ * input = ["test sentence", "thisis test"]
  * result = byte_pair_encoding(input, mps)
- * result is now ["test Ġsent tence", "this Ġis Ġtest"]
+ * result is now ["test sent tence", "this is test"]
  * @endcode
  *
  * @throw cudf::logic_error if `merge_pairs` is empty
@@ -86,13 +100,13 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  * @param input Strings to encode.
  * @param merge_pairs Created by a call to nvtext::load_merges_file.
  * @param separator String used to build the output after encoding.
- *                  Default is a space followed by `Ġ`.
+ *                  Default is a space.
  * @param mr Memory resource to allocate any returned objects.
  */
 std::unique_ptr<cudf::column> byte_pair_encoding(
   cudf::strings_column_view const& input,
   bpe_merge_pairs const& merges_pairs,
-  cudf::string_scalar const& separator = cudf::string_scalar(" Ġ"),
+  cudf::string_scalar const& separator = cudf::string_scalar(" "),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
