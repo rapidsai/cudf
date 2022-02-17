@@ -7,7 +7,6 @@ set -e
 export UPLOAD_CUDF=1
 export UPLOAD_LIBCUDF=1
 export UPLOAD_CUDF_KAFKA=1
-export UPLOAD_LIBCUDF_KAFKA=1
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     #If project flash is not activate, always build both
