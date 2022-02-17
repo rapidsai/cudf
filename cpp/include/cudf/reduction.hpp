@@ -84,6 +84,9 @@ std::unique_ptr<scalar> reduce(
  * If the segment is empty, the row corresponding to the result of the
  * segment is null.
  *
+ * If any index in @p offsets is out of bound of @p segmented_values , the behavior
+ * is undefined.
+ *
  * @note If the input column has arithmetic type, output_dtype can be any arithmetic
  * type. If the input column has non-arithmetic type, e.g. timestamp, the same
  * output type must be specified.
