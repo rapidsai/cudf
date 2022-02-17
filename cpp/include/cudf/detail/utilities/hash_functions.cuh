@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,7 +146,7 @@ struct MurmurHash3_32 {
   }
 
   // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
@@ -303,7 +303,7 @@ struct SparkMurmurHash3_32 {
   result_type __device__ inline operator()(Key const& key) const { return compute(key); }
 
   // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
     if (std::isnan(key)) {
@@ -540,7 +540,7 @@ struct IdentityHash {
   }
 
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<!std::is_arithmetic<Key>::value, return_type> operator()(
+  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
     cudf_assert(false && "IdentityHash does not support this data type");
@@ -548,7 +548,7 @@ struct IdentityHash {
   }
 
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<std::is_arithmetic<Key>::value, return_type> operator()(
+  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
     return static_cast<result_type>(key);
