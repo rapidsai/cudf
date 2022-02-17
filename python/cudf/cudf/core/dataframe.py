@@ -1618,7 +1618,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
-            out.columns = objs[0].columns
+            out._set_column_names_like(objs[0])
         else:
             out.columns = names
         if not ignore_index:
@@ -6606,10 +6606,10 @@ def _align_indices(lhs, rhs):
         df = df.sort_index()
         lhs_out = DataFrame(index=df.index)
         rhs_out = DataFrame(index=df.index)
-        common = set(lhs.columns) & set(rhs.columns)
+        common = set(lhs._column_names) & set(rhs._column_names)
         common_x = {f"{x}_x" for x in common}
         common_y = {f"{x}_y" for x in common}
-        for col in df.columns:
+        for col in df._column_names:
             if col in common_x:
                 lhs_out[col[:-2]] = df[col]
             elif col in common_y:
@@ -6639,7 +6639,7 @@ def _setitem_with_dataframe(
     """
 
     if input_cols is None:
-        input_cols = input_df.columns
+        input_cols = input_df._column_names
 
     if len(input_cols) != len(replace_df._column_names):
         raise ValueError(

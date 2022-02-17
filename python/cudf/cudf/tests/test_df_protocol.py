@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from typing import Any, Tuple
 
 import cupy as cp
@@ -74,7 +76,7 @@ def assert_dataframe_equal(dfo: DataFrameObject, df: cudf.DataFrame):
     assert dfo.num_columns() == len(df.columns)
     assert dfo.num_rows() == len(df)
     assert dfo.num_chunks() == 1
-    assert dfo.column_names() == list(df.columns)
+    assert dfo.column_names() == tuple(df.columns)
     for col in df.columns:
         assert_column_equal(dfo.get_column_by_name(col), df[col]._column)
 
