@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,13 +36,11 @@ namespace text {
  */
 class device_data_chunk {
  public:
-  virtual ~device_data_chunk()                     = 0;
+  virtual ~device_data_chunk()                     = default;
   [[nodiscard]] virtual char const* data() const   = 0;
   [[nodiscard]] virtual std::size_t size() const   = 0;
   virtual operator device_span<char const>() const = 0;
 };
-
-device_data_chunk::~device_data_chunk() {}
 
 /**
  * @brief a reader capable of producing views over device memory.
@@ -55,7 +53,7 @@ device_data_chunk::~device_data_chunk() {}
  */
 class data_chunk_reader {
  public:
-  virtual ~data_chunk_reader()              = 0;
+  virtual ~data_chunk_reader()              = default;
   virtual void skip_bytes(std::size_t size) = 0;
 
   /**
@@ -76,19 +74,15 @@ class data_chunk_reader {
                                                             rmm::cuda_stream_view stream) = 0;
 };
 
-data_chunk_reader::~data_chunk_reader() {}
-
 /**
  * @brief a data source capable of creating a reader which can produce views of the data source in
  * device memory.
  */
 class data_chunk_source {
  public:
-  virtual ~data_chunk_source()                                                   = 0;
+  virtual ~data_chunk_source()                                                   = default;
   [[nodiscard]] virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
 };
-
-data_chunk_source::~data_chunk_source() {}
 
 }  // namespace text
 }  // namespace io

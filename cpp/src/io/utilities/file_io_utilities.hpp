@@ -107,7 +107,7 @@ class cufile_input : public cufile_io_base {
    *
    * @return The number of bytes read
    */
-  virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
+  virtual size_t read(size_t offset, size_t size, void* dst, rmm::cuda_stream_view stream) = 0;
 
   /**
    * @brief Asynchronously reads into existing device memory.
@@ -123,7 +123,7 @@ class cufile_input : public cufile_io_base {
    */
   virtual std::future<size_t> read_async(size_t offset,
                                          size_t size,
-                                         uint8_t* dst,
+                                         void* dst,
                                          rmm::cuda_stream_view stream) = 0;
 };
 
@@ -207,11 +207,11 @@ class cufile_input_impl final : public cufile_input {
                                            size_t size,
                                            rmm::cuda_stream_view stream) override;
 
-  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override;
+  size_t read(size_t offset, size_t size, void* dst, rmm::cuda_stream_view stream) override;
 
   std::future<size_t> read_async(size_t offset,
                                  size_t size,
-                                 uint8_t* dst,
+                                 void* dst,
                                  rmm::cuda_stream_view stream) override;
 
  private:
@@ -248,14 +248,14 @@ class cufile_input_impl final : public cufile_input {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }
 
-  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
+  size_t read(size_t offset, size_t size, void* dst, rmm::cuda_stream_view stream) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }
 
   std::future<size_t> read_async(size_t offset,
                                  size_t size,
-                                 uint8_t* dst,
+                                 void* dst,
                                  rmm::cuda_stream_view stream) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");

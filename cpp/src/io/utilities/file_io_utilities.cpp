@@ -208,7 +208,7 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
 
 std::future<size_t> cufile_input_impl::read_async(size_t offset,
                                                   size_t size,
-                                                  uint8_t* dst,
+                                                  void* dst,
                                                   rmm::cuda_stream_view stream)
 {
   int device;
@@ -222,7 +222,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
     return read_size;
   };
 
-  auto slice_tasks = make_sliced_tasks(read_slice, dst, offset, size, pool);
+  auto slice_tasks = make_sliced_tasks(read_slice, static_cast<char*>(dst), offset, size, pool);
 
   auto waiter = [](auto slice_tasks) -> size_t {
     return std::accumulate(slice_tasks.begin(), slice_tasks.end(), 0, [](auto sum, auto& task) {
@@ -234,10 +234,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
-size_t cufile_input_impl::read(size_t offset,
-                               size_t size,
-                               uint8_t* dst,
-                               rmm::cuda_stream_view stream)
+size_t cufile_input_impl::read(size_t offset, size_t size, void* dst, rmm::cuda_stream_view stream)
 {
   auto result = read_async(offset, size, dst, stream);
   return result.get();
