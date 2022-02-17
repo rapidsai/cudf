@@ -26,7 +26,7 @@ class COMPILED_BINARYOP : public cudf::benchmark {
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const auto column_size{static_cast<cudf::size_type>(state.range(0))};
 
   auto source_table = create_sequence_table(
     {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, 2, row_count{column_size});

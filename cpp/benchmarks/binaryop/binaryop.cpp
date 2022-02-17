@@ -39,11 +39,11 @@ class BINARYOP : public cudf::benchmark {
 template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)
 {
-  const cudf::size_type table_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
+  const cudf::size_type table_size{static_cast<cudf::size_type>(state.range(0))};
+  const cudf::size_type tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
-  auto n_cols = reuse_columns ? 1 : tree_levels + 1;
+  auto const n_cols = reuse_columns ? 1 : tree_levels + 1;
   auto source_table =
     create_sequence_table({cudf::type_to_id<key_type>()}, n_cols, row_count{table_size});
   cudf::table_view table{*source_table};
@@ -52,8 +52,8 @@ static void BM_binaryop_transform(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     // Execute tree that chains additions like (((a + b) + c) + d)
-    auto const op         = cudf::binary_operator::ADD;
-    auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
+    auto const op               = cudf::binary_operator::ADD;
+    auto const result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
     if (reuse_columns) {
       auto result = cudf::binary_operation(table.column(0), table.column(0), op, result_data_type);
       for (cudf::size_type i = 0; i < tree_levels - 1; i++) {

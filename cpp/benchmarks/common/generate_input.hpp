@@ -408,13 +408,14 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
  * subsequent rows.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
+ * If the number of passed types is smaller than the number of requested columns, the types
+ * will be repeated cyclically to fill the number of requested columns.
  *
  * @param dtype_ids Vector of requested column types
  * @param num_cols Number of columns in the output table
  * @param num_rows Number of rows in the output table
- * @param null_probability optional, probability of a null value, <0 implies no null mask.
+ * @param null_probability optional, probability of a null value
+   <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
  * @param seed optional, seed for the pseudo-random engine
  * @return A table with the sequence columns.
  */
@@ -429,8 +430,9 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
  *
  * @param size number of rows
  * @param null_probability probability of a null value
+   <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
  * @param seed optional, seed for the pseudo-random engine
- * @return null mask device buffer with random null mask data
+ * @return null mask device buffer with random null mask data and null count
  */
 std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
                                                                        float null_probability,

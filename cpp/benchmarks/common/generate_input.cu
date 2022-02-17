@@ -573,9 +573,17 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::siz
                                                                        float null_probability,
                                                                        unsigned seed)
 {
-  return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
-                                thrust::make_counting_iterator<cudf::size_type>(size),
-                                valid_generator{seed, 1.0f - null_probability});
+  if (null_probability < 0.0f) {
+    return {rmm::device_buffer{}, 0};
+  } else if (null_probability >= 1.0f or null_probability == 0.0f) {
+    rmm::device_uvector<cudf::bitmask_type> mask(null_mask_size(size), rmm::cuda_stream_default);
+    thrust::fill(thrust::device, mask.begin(), mask.end(), null_probability >= 1.0f ? 0 : ~0);
+    return {mask.release(), size};
+  } else {
+    return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                  thrust::make_counting_iterator<cudf::size_type>(size),
+                                  valid_generator{seed, 1.0f - null_probability});
+  }
 };
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
@@ -687,11 +695,9 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
   auto init                = cudf::make_default_constructed_scalar(cudf::data_type{dtype_ids[0]});
   if (dtype_ids.size() == 1) {
     std::generate_n(columns.begin(), num_cols, [&]() mutable {
-      auto col = cudf::sequence(num_rows.count, *init);
-      if (null_probability >= 0.0) {
-        auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
-        col->set_null_mask(std::move(mask), count);
-      }
+      auto col           = cudf::sequence(num_rows.count, *init);
+      auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
+      col->set_null_mask(std::move(mask), count);
       return col;
     });
   } else {
@@ -701,11 +707,9 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
                    [num_rows, &seed, null_probability](auto dtype) mutable {
                      auto init = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
                      auto col  = cudf::sequence(num_rows.count, *init);
-                     if (null_probability >= 0.0) {
-                       auto [mask, count] =
-                         create_random_null_mask(num_rows.count, null_probability, seed++);
-                       col->set_null_mask(std::move(mask), count);
-                     }
+                     auto [mask, count] =
+                       create_random_null_mask(num_rows.count, null_probability, seed++);
+                     col->set_null_mask(std::move(mask), count);
                      return col;
                    });
   }
