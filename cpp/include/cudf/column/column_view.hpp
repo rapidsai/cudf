@@ -414,7 +414,7 @@ class column_view : public detail::column_view_base {
   {
     CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<T>()},
                  "Device span type must match column view type.");
-    CUDF_EXPECTS(!has_nulls(), "Column view with null values cannot be converted to device span.");
+    CUDF_EXPECTS(!nullable(), "A nullable column view cannot be converted to a device span.");
     return device_span<T const>(data<T>(), size());
   }
 
