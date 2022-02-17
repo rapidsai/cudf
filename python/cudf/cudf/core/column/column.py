@@ -335,6 +335,12 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
+        # link to the libcudf ticket you will create
+        if abs(offset) > len(self):
+            if fill_value is None:
+                return column_empty_like(self, masked=True)
+            else:
+                return full(len(self), fill_value, dtype=self.dtype)
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
