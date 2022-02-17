@@ -26,8 +26,6 @@
 
 #include <thrust/shuffle.h>
 
-#include <algorithm>
-
 class StringCopy : public cudf::benchmark {
 };
 
