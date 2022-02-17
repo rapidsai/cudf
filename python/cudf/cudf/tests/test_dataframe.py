@@ -3442,29 +3442,37 @@ def test_get_numeric_data():
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+@pytest.mark.parametrize("period", [-15, -1, 0, 1, 15])
 @pytest.mark.parametrize("data_empty", [False, True])
 def test_shift(dtype, period, data_empty):
-
+    # TODO : this function currently tests for series.shift()
+    # but should instead test for dataframe.shift()
     if data_empty:
         data = None
     else:
         if dtype == np.int8:
             # to keep data in range
-            data = gen_rand(dtype, 100000, low=-2, high=2)
+            data = gen_rand(dtype, 10, low=-2, high=2)
         else:
-            data = gen_rand(dtype, 100000)
+            data = gen_rand(dtype, 10)
 
-    gdf = cudf.DataFrame({"a": cudf.Series(data, dtype=dtype)})
-    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
+    gs = cudf.DataFrame({"a": cudf.Series(data, dtype=dtype)})
+    ps = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    shifted_outcome = gdf.a.shift(period).fillna(0)
-    expected_outcome = pdf.a.shift(period).fillna(0).astype(dtype)
+    shifted_outcome = gs.a.shift(period)
+    expected_outcome = ps.a.shift(period)
 
+    # pandas uses NaNs to signal missing value and force converts the
+    # results columns to float types
     if data_empty:
-        assert_eq(shifted_outcome, expected_outcome, check_index_type=False)
+        assert_eq(
+            shifted_outcome,
+            expected_outcome,
+            check_index_type=False,
+            check_dtype=False,
+        )
     else:
-        assert_eq(shifted_outcome, expected_outcome)
+        assert_eq(shifted_outcome, expected_outcome, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
@@ -9295,3 +9303,24 @@ def test_dataframe_rename_duplicate_column():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gdf.rename(columns={"a": "b"}, inplace=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.random.RandomState(seed=10).randint(-50, 50, (10, 10)),
+        np.random.RandomState(seed=10).random_sample((4, 4)),
+        np.array([1.123, 2.343, 5.890, 0.0]),
+        {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
+    ],
+)
+@pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+def test_dataframe_pct_change(data, periods, fill_method):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.pct_change(periods=periods, fill_method=fill_method)
+    expected = pdf.pct_change(periods=periods, fill_method=fill_method)
+
+    assert_eq(expected, actual)
