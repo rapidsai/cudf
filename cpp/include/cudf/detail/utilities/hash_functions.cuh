@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ struct MurmurHash3_32 {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  [[nodiscard]] __device__ inline result_type hash_combine(result_type lhs, result_type rhs)
+  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
   {
     result_type combined{lhs};
 
