@@ -1763,8 +1763,8 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     else:
         val = cudf.dtype(dtype).type(4)
 
-    expected = val == data.to_pandas()
-    got = val == data
+    expected = data.to_pandas() == val
+    got = data == val
 
     # In case of index, expected would be a numpy array
     if isinstance(data, cudf.BaseIndex):
