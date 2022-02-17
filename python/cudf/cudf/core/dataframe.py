@@ -1239,8 +1239,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 index = MultiIndex._from_data(mi_columns)
             else:
                 index = (
-                    RangeIndex(start=0, stop=0)
-                    if start < stop
+                    RangeIndex(start=start, stop=stop, step=stride)
+                    if isinstance(self.index, RangeIndex)
                     else Index([], dtype=self.index.dtype)
                 )
 
