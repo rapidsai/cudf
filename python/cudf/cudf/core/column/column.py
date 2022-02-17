@@ -517,21 +517,19 @@ class ColumnBase(Column, Serializable, NotIterable):
         """If this function returns None, it's either a no-op (slice is empty),
         or the inplace replacement is already performed (fill-in-place).
         """
-        nelem: int  # the number of elements to scatter
-
         start, stop, step = key.indices(len(self))
         if start >= stop:
             return None
-        nelem = (stop - start) // step
+        num_keys = (stop - start) // step
 
-        self._check_scatter_key_length(nelem, value)
+        self._check_scatter_key_length(num_keys, value)
 
         if step == 1:
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
                 return libcudf.copying.copy_range(
-                    value, self, 0, nelem, start, stop, False
+                    value, self, 0, num_keys, start, stop, False
                 )
 
         # step != 1, create a scatter map with arange
@@ -543,33 +541,33 @@ class ColumnBase(Column, Serializable, NotIterable):
 
     def _scatter_by_column(
         self,
-        key: "cudf.core.column.NumericalColumn",
+        key: cudf.core.column.NumericalColumn,
         value: Union[cudf.core.scalar.Scalar, ColumnBase],
     ) -> ColumnBase:
-        nelem = len(key)  # the number of elements to scatter
-
         if is_bool_dtype(key.dtype):
+            # `key` is boolean mask
             if len(key) != len(self):
                 raise ValueError(
                     "Boolean mask must be of same length as column"
                 )
-            skip_reducing_key = False
-            if isinstance(value, ColumnBase):
-                if len(self) == len(value):
-                    # Both value and key are aligned to self. Thus, the values
-                    # corresponding to the false values in key should be
-                    # ignored.
-                    value = value.apply_boolean_mask(key)
-                    # After applying boolean mask, the length of value equals
-                    # the number of elements to scatter, we can skip computing
-                    # the sum of ``key`` below.
-                    nelem = len(value)
-                    skip_reducing_key = True
-            # Compute the number of element to scatter by summing all `True`s
-            # in the boolean mask.
-            nelem = key.sum() if not skip_reducing_key else nelem
+            if isinstance(value, ColumnBase) and len(self) == len(value):
+                # Both value and key are aligned to self. Thus, the values
+                # corresponding to the false values in key should be
+                # ignored.
+                value = value.apply_boolean_mask(key)
+                # After applying boolean mask, the length of value equals
+                # the number of elements to scatter, we can skip computing
+                # the sum of ``key`` below.
+                num_keys = len(value)
+            else:
+                # Compute the number of element to scatter by summing all
+                # `True`s in the boolean mask.
+                num_keys = key.sum()
+        else:
+            # `key` is integer scatter map
+            num_keys = len(key)
 
-        self._check_scatter_key_length(nelem, value)
+        self._check_scatter_key_length(num_keys, value)
 
         try:
             if is_bool_dtype(key.dtype):
@@ -588,17 +586,17 @@ class ColumnBase(Column, Serializable, NotIterable):
             raise
 
     def _check_scatter_key_length(
-        self, nelem: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
+        self, num_keys: int, value: Union[cudf.core.scalar.Scalar, ColumnBase]
     ):
-        """`nelem` is the number of keys to scatter. Should equal to the
+        """`num_keys` is the number of keys to scatter. Should equal to the
         number of rows in ``value`` if ``value`` is a column.
         """
         if isinstance(value, ColumnBase):
-            if len(value) != nelem:
+            if len(value) != num_keys:
                 msg = (
                     f"Size mismatch: cannot set value "
                     f"of size {len(value)} to indexing result of size "
-                    f"{nelem}"
+                    f"{num_keys}"
                 )
                 raise ValueError(msg)
 
@@ -2281,7 +2279,7 @@ def arange(
     stop: Union[int, float] = None,
     step: Union[int, float] = 1,
     dtype=None,
-) -> "cudf.core.column.NumericalColumn":
+) -> cudf.core.column.NumericalColumn:
     """
     Returns a column with evenly spaced values within a given interval.
 
