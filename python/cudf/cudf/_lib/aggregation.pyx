@@ -744,6 +744,21 @@ cdef class GroupbyAggregation:
             ))
         return agg
 
+    @classmethod
+    def cov(
+        cls,
+        libcudf_types.size_type min_periods,
+        libcudf_types.size_type ddof=1
+    ):
+        cdef GroupbyAggregation agg = cls()
+
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_covariance_aggregation[groupby_aggregation](
+                min_periods, ddof
+            ))
+        return agg
+
 
 cdef class GroupbyScanAggregation:
     """A Cython wrapper for groupby scan aggregations.
