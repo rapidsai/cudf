@@ -17,6 +17,19 @@
 #include "generate_input.hpp"
 #include "random_distribution_factory.hpp"
 
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/gather.hpp>
+#include <cudf/detail/valid_if.cuh>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -24,7 +37,6 @@
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
-#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -32,41 +44,14 @@
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
-#include <thrust/transform_scan.h>
-
-#include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/valid_if.cuh>
-#include <cudf/filling.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
-
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
 
 #include <algorithm>
 #include <cstdint>
-#include <future>
 #include <memory>
 #include <optional>
 #include <random>
-#include <thread>
 #include <utility>
 #include <vector>
-
-#define LINE_PRINT() ;
-// std::cout << "line " << __LINE__ << "\n";
 
 /**
  * @brief Mersenne Twister pseudo-random engine.
@@ -326,25 +311,6 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   auto operator()(thrust::minstd_rand& engine, unsigned size) { return dist(engine, size); }
 };
 
-size_t null_mask_size(cudf::size_type num_rows)
-{
-  constexpr size_t bitmask_bits = cudf::detail::size_in_bits<cudf::bitmask_type>();
-  return (num_rows + bitmask_bits - 1) / bitmask_bits;
-}
-template <typename T>
-void set_element_at(T value,
-                    bool valid,
-                    std::vector<T>& values,
-                    std::vector<cudf::bitmask_type>& null_mask,
-                    cudf::size_type idx)
-{
-  if (valid) {
-    values[idx] = value;
-  } else {
-    cudf::clear_bit_unsafe(null_mask.data(), idx);
-  }
-}
-
 auto create_run_length_dist(cudf::size_type avg_run_len)
 {
   // Distribution with low probability of generating 0-1 even with a low `avg_run_len` value
@@ -357,26 +323,6 @@ template <typename T, typename Enable = void>
 struct stored_as {
   using type = T;
 };
-
-// Use `int8_t` for bools because that's how they're stored in columns
-// TODO Get rid of stored_as
-template <typename T>
-struct stored_as<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
-  using type = bool;
-};
-
-template <typename T>
-void printd(rmm::device_uvector<T>& dv)
-{
-  if constexpr (cudf::is_numeric<T>()) {
-    thrust::host_vector<T> vec(thrust::device_pointer_cast(dv.begin()),
-                               thrust::device_pointer_cast(dv.end()));
-    std::cout << "[" << dv.size() << "] ";
-    // for(auto& n : vec) { std::cout << n << " "; }
-    thrust::copy(vec.begin(), vec.end(), std::ostream_iterator<T>(std::cout, " "));
-    std::cout << std::endl;
-  }
-}
 
 /**
  * @brief Creates a column with random content of type @ref T.
@@ -393,123 +339,84 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    thrust::minstd_rand& engine,
                                                    cudf::size_type num_rows)
 {
-  if constexpr (cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_fixed_point<T>()) {
-    // Working around vector<bool> and storing bools as int8_t
-    using stored_Type = typename stored_as<T>::type;
-    // bernoulli_distribution
-    // get_null_frequency < 0 no null mask, ==0 all valids. //TODO remove unused computations
-    auto valid_dist =
-      random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
-    auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
+  // bernoulli_distribution
+  // get_null_frequency < 0 no null mask, ==0 all valids. //TODO remove unused computations
+  auto valid_dist =
+    random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
+  auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
 
-    auto const cardinality                      = std::min(num_rows, profile.get_cardinality());
-    rmm::device_uvector<bool> samples_null_mask = valid_dist(engine, cardinality);
-    rmm::device_uvector<stored_Type> samples    = value_dist(engine, cardinality);
-    // std::cout << "cardinality: " << cardinality << std::endl;
-    // std::cout << "num_rows: " << num_rows << std::endl;
-    // std::cout << "samples: ";
-    // printd(samples);
+  auto const cardinality                      = std::min(num_rows, profile.get_cardinality());
+  rmm::device_uvector<bool> samples_null_mask = valid_dist(engine, cardinality);
+  rmm::device_uvector<T> samples              = value_dist(engine, cardinality);
 
-    // Distribution for picking elements from the array of samples
-    std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
-    auto const avg_run_len = profile.get_avg_run_length();
-    // std::cout << "avg_run_len: " << avg_run_len << std::endl;
-    // auto run_len_dist      = create_run_length_dist(avg_run_len);
-    rmm::device_uvector<stored_Type> data(0, rmm::cuda_stream_default);
-    rmm::device_uvector<bool> null_mask(0, rmm::cuda_stream_default);
-    LINE_PRINT();
+  // Distribution for picking elements from the array of samples
+  std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
+  auto const avg_run_len = profile.get_avg_run_length();
+  rmm::device_uvector<T> data(0, rmm::cuda_stream_default);
+  rmm::device_uvector<bool> null_mask(0, rmm::cuda_stream_default);
 
-    // Create a run-length values. (sum upto  num_rows) size~=num_rows/avg_run_len. could be more.
-    // exclusive scan it. 1+run_len (account for data to be copied.)
-    // generate indices(uniform), gather from cardinality vector.
-    // transform_if lower_bound on run_len and copy that data, except for first.
-    // TODO: Alternate ways/algo to generate this data???
-
-    // generate size~=num_rows/run_len numbers gamma(). exclusive scan it. = ex_runlen.
-    // generate uniform(0, cardinality-1) indices of size~=num_rows/run_len. - samples.
-    // transform_if lower_bound on exrun_len, find index, collect from
-    // cardinality_array[samples[index]];
-    LINE_PRINT();
-    if (cardinality == 0) {
-      data      = value_dist(engine, num_rows);
-      null_mask = valid_dist(engine, num_rows);
-    } else {
-      auto sample_dist = random_value_fn<cudf::size_type>{
-        distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
-      auto avglen_dist = random_value_fn<int>{
-        distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
-      LINE_PRINT();
-      if (avg_run_len > 1) {
-        auto approx_run_len = num_rows / avg_run_len + 1;
-        // std::cout << "approx_run_len: " << approx_run_len << std::endl;
-        auto run_lens = avglen_dist(engine, approx_run_len);
-        // std::cout << "run_lens: ";
-        // printd(run_lens);
-        thrust::inclusive_scan(
-          thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
-        auto samples_indices = sample_dist(engine, approx_run_len + 1);
-        // printd(run_lens);
-        // std::cout << "samples_indices: ";
-        // printd(samples_indices);
-
-        data      = rmm::device_uvector<stored_Type>(num_rows, rmm::cuda_stream_default);
-        null_mask = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
-        // This is gather.
-        auto avg_repeated_sample_indices = thrust::make_transform_iterator(
-          thrust::make_counting_iterator(0),
-          [rb              = run_lens.begin(),
-           re              = run_lens.end(),
-           samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
-            auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
-            return samples_indices[sample_idx];
-          });
-        LINE_PRINT();
-        thrust::gather(thrust::device,
-                       avg_repeated_sample_indices,
-                       avg_repeated_sample_indices + num_rows,
-                       samples.begin(),
-                       data.begin());
-        LINE_PRINT();
-        thrust::gather(thrust::device,
-                       avg_repeated_sample_indices,
-                       avg_repeated_sample_indices + num_rows,
-                       samples_null_mask.begin(),
-                       null_mask.begin());
-        LINE_PRINT();
-      } else {
-        LINE_PRINT();
-        // generate n samples. and gather.
-        auto samples_indices = sample_dist(engine, num_rows);
-        data                 = rmm::device_uvector<stored_Type>(num_rows, rmm::cuda_stream_default);
-        null_mask            = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
-        LINE_PRINT();
-        thrust::gather(thrust::device,
-                       samples_indices.begin(),
-                       samples_indices.end(),
-                       samples.begin(),
-                       data.begin());
-        LINE_PRINT();
-        thrust::gather(thrust::device,
-                       samples_indices.begin(),
-                       samples_indices.end(),
-                       samples_null_mask.begin(),
-                       null_mask.begin());
-      }
-    }
-    LINE_PRINT();
-
-    auto [result_bitmask, null_count] =
-      cudf::detail::valid_if(null_mask.begin(), null_mask.end(), thrust::identity<bool>{});
-
-    return std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_to_id<T>()},
-      num_rows,
-      data.release(),
-      profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(result_bitmask));
+  if (cardinality == 0) {
+    data      = value_dist(engine, num_rows);
+    null_mask = valid_dist(engine, num_rows);
   } else {
-    std::cout << static_cast<int>(cudf::type_to_id<T>()) << std::endl;
-    CUDF_FAIL("unsupported column type da");
+    auto sample_dist = random_value_fn<cudf::size_type>{
+      distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
+    auto avglen_dist =
+      random_value_fn<int>{distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
+    if (avg_run_len > 1) {
+      auto approx_run_len = num_rows / avg_run_len + 1;
+      auto run_lens       = avglen_dist(engine, approx_run_len);
+      thrust::inclusive_scan(
+        thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
+      auto samples_indices = sample_dist(engine, approx_run_len + 1);
+
+      data      = rmm::device_uvector<T>(num_rows, rmm::cuda_stream_default);
+      null_mask = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
+      // This is gather.
+      auto avg_repeated_sample_indices = thrust::make_transform_iterator(
+        thrust::make_counting_iterator(0),
+        [rb              = run_lens.begin(),
+         re              = run_lens.end(),
+         samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
+          auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
+          return samples_indices[sample_idx];
+        });
+      thrust::gather(thrust::device,
+                     avg_repeated_sample_indices,
+                     avg_repeated_sample_indices + num_rows,
+                     samples.begin(),
+                     data.begin());
+      thrust::gather(thrust::device,
+                     avg_repeated_sample_indices,
+                     avg_repeated_sample_indices + num_rows,
+                     samples_null_mask.begin(),
+                     null_mask.begin());
+    } else {
+      // generate n samples. and gather.
+      auto samples_indices = sample_dist(engine, num_rows);
+      data                 = rmm::device_uvector<T>(num_rows, rmm::cuda_stream_default);
+      null_mask            = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
+      thrust::gather(thrust::device,
+                     samples_indices.begin(),
+                     samples_indices.end(),
+                     samples.begin(),
+                     data.begin());
+      thrust::gather(thrust::device,
+                     samples_indices.begin(),
+                     samples_indices.end(),
+                     samples_null_mask.begin(),
+                     null_mask.begin());
+    }
   }
+
+  auto [result_bitmask, null_count] =
+    cudf::detail::valid_if(null_mask.begin(), null_mask.end(), thrust::identity<bool>{});
+
+  return std::make_unique<cudf::column>(
+    cudf::data_type{cudf::type_to_id<T>()},
+    num_rows,
+    data.release(),
+    profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(result_bitmask));
 }
 
 struct valid_or_zero {
@@ -543,9 +450,13 @@ struct string_generator {
   }
 };
 
-std::unique_ptr<cudf::column> create_random_utf8_string_column2(data_profile const& profile,
-                                                                thrust::minstd_rand& engine,
-                                                                cudf::size_type num_rows)
+/**
+ * @brief Create a UTF-8 string column with the average length.
+ *
+ */
+std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile const& profile,
+                                                               thrust::minstd_rand& engine,
+                                                               cudf::size_type num_rows)
 {
   auto len_dist =
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::string_view>().length_params};
@@ -553,7 +464,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column2(data_profile con
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
   auto lengths   = len_dist(engine, num_rows + 1);
-  auto null_mask = valid_dist(engine, num_rows + 1);  // or cudf::bitmask_type
+  auto null_mask = valid_dist(engine, num_rows + 1);
   thrust::transform_if(
     thrust::device,
     lengths.begin(),
@@ -585,73 +496,6 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column2(data_profile con
 }
 
 /**
- * @brief Create a UTF-8 string column with the average length.
- *
- */
-/*
-std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile const& profile,
- thrust::minstd_rand& engine,
- cudf::size_type num_rows)
-{
- LINE_PRINT();
- auto len_dist   =
-random_value_fn<uint32_t>{profile.get_distribution_params<cudf::string_view>().length_params};
- LINE_PRINT();
- auto valid_dist = random_value_fn<bool>(distribution_params<bool>{1. -
-profile.get_null_frequency()}); LINE_PRINT();
-
- auto lengths       = len_dist(engine, num_rows + 1);
- auto null_mask     = valid_dist(engine, num_rows + 1);  // or cudf::bitmask_type
- thrust::transform_if(thrust::device,
-                     lengths.begin(),
-                     lengths.end(),
-                     null_mask.begin(),
-                     lengths.begin(),
-                     []__device__(auto) { return 0; },
-                     thrust::logical_not<bool>{});
- auto valid_lengths = thrust::make_transform_iterator(
-   thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
-   valid_or_zero{});
- rmm::device_uvector<cudf::size_type> offsets(num_rows+1, rmm::cuda_stream_default);
- LINE_PRINT();
- thrust::exclusive_scan(thrust::device, valid_lengths, valid_lengths+lengths.size(),
-offsets.begin()); LINE_PRINT(); auto chars_length =
-*thrust::device_pointer_cast(offsets.end() - 1); auto char_dist    = random_value_fn<unsigned
-char>{distribution_params<unsigned char>{distribution_id::UNIFORM, 32, 137}};
-auto chars = char_dist(engine, chars_length);  // simply generate 32-137.
-// update prev char of any >=7F
- // fix UTF-8 codes.
- thrust::for_each_n(thrust::device, thrust::make_counting_iterator(0), chars.size()/2+1,
-   [chars = chars.begin()] __device__ (int i) {
-     if(chars[2*i] >= 0x7F) { // first byte is >= 0x7F
-       chars[2*i+1] = chars[2*i]+1;
-       chars[2*i]   = 0xC4;
-     } else if(chars[2*i+1] >= 0x7F) { // second byte is >= 0x7F
-       chars[2*i]   = 0xC4;
-       chars[2*i+1] +=1;
-     }
-   });
- // offset boundary fix.
- LINE_PRINT();
- thrust::for_each(thrust::device, offsets.begin(), offsets.end()-1,
-  [chars = chars.begin()] __device__ (cudf::size_type offset) {
-   if(offset>0) {
-     if(chars[offset-1]==0xC4) {
-       chars[offset-1] =  ' ';
-       chars[offset  ] =  ' ';
-     }
-   }
- });
- LINE_PRINT();
- auto [result_bitmask, null_count] = cudf::detail::valid_if(null_mask.begin(), null_mask.end()-1,
-thrust::identity<bool>{}); rmm::device_uvector<char> uchars(chars_length, rmm::cuda_stream_default);
- thrust::copy(thrust::device, chars.begin(), chars.end(), uchars.begin());
- return cudf::make_strings_column(num_rows, std::move(offsets), std::move(uchars),
-std::move(result_bitmask));
-}
-*/
-
-/**
  * @brief Creates a string column with random content.
  *
  * @param profile Parameters for the random generator
@@ -673,26 +517,21 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
 
   // TODO check if null is working fine.
   auto sample_strings =
-    create_random_utf8_string_column2(profile, engine, cardinality == 0 ? num_rows : cardinality);
+    create_random_utf8_string_column(profile, engine, cardinality == 0 ? num_rows : cardinality);
   if (cardinality == 0) {
     return sample_strings;
   } else {
     auto sample_dist = random_value_fn<cudf::size_type>{
       distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
-    LINE_PRINT();
     auto sample_indices = [&]() {
       if (avg_run_len > 1) {
-        LINE_PRINT();
         auto avglen_dist = random_value_fn<int>{
           distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
         auto approx_run_len = num_rows / avg_run_len + 1;
         auto run_lens       = avglen_dist(engine, approx_run_len);
-        LINE_PRINT();
         thrust::inclusive_scan(
           thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
-        LINE_PRINT();
-        auto samples_indices = sample_dist(engine, approx_run_len + 1);
-        LINE_PRINT();
+        auto samples_indices             = sample_dist(engine, approx_run_len + 1);
         auto avg_repeated_sample_indices = thrust::make_transform_iterator(
           thrust::make_counting_iterator(0),
           [rb              = run_lens.begin(),
@@ -703,44 +542,24 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
           });
         rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
                                                                      rmm::cuda_stream_default);
-        LINE_PRINT();
         thrust::copy(thrust::device,
                      avg_repeated_sample_indices,
                      avg_repeated_sample_indices + num_rows,
                      repeated_sample_indices.begin());
-        LINE_PRINT();
         return repeated_sample_indices;
       } else {
-        LINE_PRINT();
         auto samples_indices = sample_dist(engine, num_rows);
-        LINE_PRINT();
         return samples_indices;
       }
     }();
-    LINE_PRINT();
-    auto [free_b, total_b] =
-      rmm::mr::get_current_device_resource()->get_mem_info(rmm::cuda_stream_default);
-    std::cout << "free= " << free_b << " used= " << total_b - free_b << " total= " << total_b
-              << "\n";
-    std::cout << "sample_indices.size():" << sample_indices.size() << "\n";
-    std::cout << "cardinality: " << cardinality << "\n";
-    // thrust::host_vector<cudf::size_type> h(thrust::device_pointer_cast(sample_indices.begin()),
-    // thrust::device_pointer_cast(sample_indices.end())); thrust::copy(h.begin(), h.end(),
-    // std::ostream_iterator<cudf::size_type>(std::cout, "\t"));
-    std::cout << "sample_strings->size(): " << sample_strings->size() << "\n";
-    auto scv = cudf::strings_column_view{sample_strings->view()};
-    std::cout << "scv: " << scv.chars().size() << " " << scv.offsets().size() << "\n";
-    // cudf::test::print(sample_strings->view());
-    // cudf::test::print(cudf::bit_cast(scv.chars(), cudf::data_type{cudf::type_id::UINT8}));
-    // cudf::test::print(scv.chars());
-    // cudf::test::print(scv.offsets());
-    // gather
+    // auto [free_b, total_b] =
+    // rmm::mr::get_current_device_resource()->get_mem_info(rmm::cuda_stream_default); std::cout <<
+    // "free= " << free_b << " used= " << total_b - free_b << " total= " << total_b << "\n"; gather
     auto str_table =
       cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
                            sample_indices,
                            cudf::out_of_bounds_policy::DONT_CHECK,  // TODO ensure no memory errors.
                            cudf::detail::negative_index_policy::NOT_ALLOWED);
-    LINE_PRINT();
     return std::move(str_table->release()[0]);
   }
 }
@@ -808,7 +627,6 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
-  LINE_PRINT();
 
   // Generate the list column bottom-up
   auto list_column = std::move(leaf_column);
@@ -816,13 +634,9 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     // Generating the next level - offsets point into the current list column
     auto current_child_column      = std::move(list_column);
     cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
-    std::cout << "num_rows: " << num_rows << "\n";
 
-    LINE_PRINT();
     auto offsets = len_dist(engine, num_rows + 1);
     auto valids  = valid_dist(engine, num_rows);
-    LINE_PRINT();
-    std::cout << "offsets.size(): " << offsets.size() << "\n";
     // to ensure these values <= current_child_column->size()
     auto output_offsets = thrust::make_transform_output_iterator(
       offsets.begin(), clamp_down{current_child_column->size()});
@@ -831,13 +645,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     thrust::device_pointer_cast(offsets.end())[-1] =
       current_child_column->size();  // Always include all elements
 
-    LINE_PRINT();
     auto offsets_column = std::make_unique<cudf::column>(
       cudf::data_type{cudf::type_id::INT32}, num_rows + 1, offsets.release());
-    LINE_PRINT();
-    std::cout << "offsets_column: " << offsets_column->size() << "\n";
-    // cudf::test::print(*offsets_column);
-    LINE_PRINT();
 
     auto [null_mask, null_count] =
       cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
@@ -847,9 +656,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       std::move(current_child_column),
       profile.get_null_frequency() < 0 ? 0 : null_count,  // cudf::UNKNOWN_NULL_COUNT,
       profile.get_null_frequency() < 0 ? rmm::device_buffer{} : std::move(null_mask));
-    LINE_PRINT();
   }
-  LINE_PRINT();
   return list_column;  // return the top-level column
 }
 
@@ -919,36 +726,8 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 {
   auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   auto seed_engine         = deterministic_engine(seed);
-
-  // auto const processor_count            = std::thread::hardware_concurrency();
-  // cudf::size_type const cols_per_thread = (num_cols + processor_count - 1) / processor_count;
-  // cudf::size_type next_col              = 0;
-  // std::vector<std::future<columns_vector>> col_futures;
-  // random_value_fn<unsigned> seed_dist(
-  //   {distribution_id::UNIFORM, 0, std::numeric_limits<unsigned>::max()});
   thrust::uniform_int_distribution<unsigned> seed_dist;
-  // for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
-  //   auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
-  //   auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
-  //   std::vector<cudf::type_id> thread_types(out_dtype_ids.begin() + next_col,
-  //                                           out_dtype_ids.begin() + next_col + thread_num_cols);
-  //   col_futures.emplace_back(std::async(std::launch::async,
-  //                                       create_random_columns,
-  //                                       std::cref(profile),
-  //                                       std::move(thread_types),
-  //                                       std::move(thread_engine),
-  //                                       num_rows.count));
-  //   next_col += thread_num_cols;
-  // }
 
-  // columns_vector output_columns;
-  // for (auto& cf : col_futures) {
-  //   auto partial_table = cf.get();
-  //   output_columns.reserve(output_columns.size() + partial_table.size());
-  //   std::move(
-  //     std::begin(partial_table), std::end(partial_table), std::back_inserter(output_columns));
-  //   partial_table.clear();
-  // }
   columns_vector output_columns;
   std::transform(out_dtype_ids.begin(),
                  out_dtype_ids.end(),
