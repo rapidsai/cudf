@@ -51,13 +51,18 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
-  auto const d_flat_order = table_device_view::create(flattened, stream);
+  // auto const flattened = cudf::structs::detail::flatten_nested_columns(
+  //   table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+  // auto const d_flat_order = table_device_view::create(flattened, stream);
+
+  auto [verticalized, depths] =
+    cudf::structs::detail::experimental::verticalize_nested_columns(table_view{{order_by}}, {}, {});
+  auto device_table = table_device_view::create(verticalized.flattened_columns(), stream);
+
   cudf::experimental::row_equality_comparator comparator(
-    nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order, null_equality::EQUAL);
+    nullate::DYNAMIC{has_nulls}, *device_table, *device_table, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
-                                       flattened.flattened_columns().num_rows(),
+                                       verticalized.flattened_columns().num_rows(),
                                        mask_state::UNALLOCATED,
                                        stream,
                                        mr);

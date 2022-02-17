@@ -96,7 +96,7 @@ class element_equality_comparator {
 
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::list_view>>* = nullptr>
+                             not cudf::is_nested<Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
@@ -105,7 +105,7 @@ class element_equality_comparator {
 
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>() and
-                             std::is_same_v<Element, cudf::list_view>>* = nullptr>
+                             cudf::is_nested<Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     column_device_view lcol = lhs;
@@ -114,26 +114,45 @@ class element_equality_comparator {
     int r_start_off         = rhs_element_index;
     int l_end_off           = lhs_element_index + 1;
     int r_end_off           = rhs_element_index + 1;
-    while (lcol.type().id() == type_id::LIST) {
+    while (is_nested(lcol.type())) {
       auto l_size = l_end_off - l_start_off;
       auto r_size = r_end_off - r_start_off;
       if (l_size != r_size) { return false; }
 
-      auto l_off = lcol.child(lists_column_view::offsets_column_index);
-      auto r_off = rcol.child(lists_column_view::offsets_column_index);
-      for (int i = 0; i < l_size; ++i) {
-        if (l_off.element<size_type>(l_start_off + i + 1) -
-              l_off.element<size_type>(l_start_off + i) !=
-            r_off.element<size_type>(r_start_off + i + 1) -
-              r_off.element<size_type>(r_start_off + i))
-          return false;
+      if (lcol.type().id() == type_id::STRUCT) {
+        for (int i = 0; i < l_size; ++i) {
+          bool const lhs_is_null{lcol.is_null(l_start_off + i)};
+          bool const rhs_is_null{rcol.is_null(r_start_off + i)};
+
+          if (lhs_is_null and rhs_is_null) {
+            if (nulls_are_equal == null_equality::EQUAL) {
+              continue;
+            } else {
+              return false;
+            }
+          } else if (lhs_is_null != rhs_is_null) {
+            return false;
+          }
+        }
+        lcol = lcol.child(0);
+        rcol = rcol.child(0);
+      } else if (lcol.type().id() == type_id::LIST) {
+        auto l_off = lcol.child(lists_column_view::offsets_column_index);
+        auto r_off = rcol.child(lists_column_view::offsets_column_index);
+        for (int i = 0; i < l_size; ++i) {
+          if (l_off.element<size_type>(l_start_off + i + 1) -
+                l_off.element<size_type>(l_start_off + i) !=
+              r_off.element<size_type>(r_start_off + i + 1) -
+                r_off.element<size_type>(r_start_off + i))
+            return false;
+        }
+        lcol        = lcol.child(lists_column_view::child_column_index);
+        rcol        = rcol.child(lists_column_view::child_column_index);
+        l_start_off = l_off.element<size_type>(l_start_off);
+        r_start_off = r_off.element<size_type>(r_start_off);
+        l_end_off   = l_off.element<size_type>(l_end_off);
+        r_end_off   = r_off.element<size_type>(r_end_off);
       }
-      lcol        = lcol.child(lists_column_view::child_column_index);
-      rcol        = rcol.child(lists_column_view::child_column_index);
-      l_start_off = l_off.element<size_type>(l_start_off);
-      r_start_off = r_off.element<size_type>(r_start_off);
-      l_end_off   = l_off.element<size_type>(l_end_off);
-      r_end_off   = r_off.element<size_type>(r_end_off);
     }
     auto l_size = l_end_off - l_start_off;
     auto r_size = r_end_off - r_start_off;

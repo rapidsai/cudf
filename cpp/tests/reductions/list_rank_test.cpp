@@ -74,7 +74,7 @@ TEST_F(ListRankScanTest, DeepList)
     col, expected_dense_vals, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);
 }
 
-TEST_F(ListRankScanTest, test)
+TEST_F(ListRankScanTest, Datagen)
 {
   data_profile table_data_profile;
   table_data_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
@@ -89,6 +89,52 @@ TEST_F(ListRankScanTest, test)
                                  expected_dense_vals,
                                  cudf::make_dense_rank_aggregation(),
                                  cudf::null_policy::INCLUDE);
+}
+
+TEST_F(ListRankScanTest, ListStruct)
+{
+  // Constructing a list of struct of two elements
+  // []                  ==
+  // []                  !=
+  // [Null, Null]        !=
+  // [Null]              ==
+  // [Null]              ==
+  // [Null]              !=
+  // [{Null, Null}]      !=
+  // [{1,'a'}, {2,'b'}]  !=
+  // [{0,'a'}, {2,'b'}]  !=
+  // [{0,'a'}, {2,'c'}]  ==
+  // [{0,'a'}, {2,'c'}]  !=
+  // [{0,Null}]          ==
+  // [{0,Null}]          !=
+  // [{Null, 0}]         ==
+  // [{Null, 0}]
+
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  auto col2 = cudf::test::strings_column_wrapper{
+    {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
+  auto struc = cudf::test::structs_column_wrapper{
+    {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+
+  auto list_column = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                                       15,
+                                       nullptr,
+                                       nullptr,
+                                       cudf::UNKNOWN_NULL_COUNT,
+                                       0,
+                                       {offsets, struc});
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    1, 1, 2, 3, 3, 3, 4, 5, 6, 7, 7, 8, 8, 9, 9};
+
+  this->test_ungrouped_rank_scan(
+    list_column, expect, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
