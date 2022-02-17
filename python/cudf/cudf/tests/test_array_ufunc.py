@@ -22,7 +22,8 @@ _UFUNCS = [
 @contextmanager
 def _hide_ufunc_warnings(ufunc):
     # pandas raises warnings for some inputs to the following ufuncs:
-    if ufunc.__name__ in {
+    name = ufunc.__name__
+    if name in {
         "arccos",
         "arccosh",
         "arcsin",
@@ -34,7 +35,16 @@ def _hide_ufunc_warnings(ufunc):
         "reciprocal",
     }:
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            warnings.filterwarnings(
+                "ignore",
+                f"invalid value encountered in {name}",
+                category=RuntimeWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                f"divide by zero encountered in {name}",
+                category=RuntimeWarning,
+            )
             yield
     else:
         yield
