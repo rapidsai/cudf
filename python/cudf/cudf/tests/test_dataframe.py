@@ -9064,6 +9064,124 @@ def test_dataframe_add_suffix():
 
 
 @pytest.mark.parametrize(
+    "data, gkey",
+    [
+        (
+            {
+                "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+                "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+                "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+                "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            },
+            ["id"],
+        ),
+        (
+            {
+                "id": [0, 0, 0, 0, 1, 1, 1],
+                "a": [10.0, 3, 4, 2.0, -3.0, 9.0, 10.0],
+                "b": [10.0, 23, -4.0, 2, -3.0, 9, 19.0],
+            },
+            ["id", "a"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "min_periods", [0, 3],
+)
+@pytest.mark.parametrize(
+    "ddof", [1, 2],
+)
+def test_groupby_covariance(data, gkey, min_periods, ddof):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
+    expected = pdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_covariance_multiindex_dataframe():
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 1, 2, 3],
+            "c": [2, 3, 4, 5],
+            "d": [6, 8, 9, 1],
+        }
+    ).set_index(["a", "b"])
+
+    actual = gdf.groupby(level=["a", "b"]).cov()
+    expected = gdf.to_pandas().groupby(level=["a", "b"]).cov()
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_covariance_empty_columns():
+    gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby("id").cov()
+    expected = pdf.groupby("id").cov()
+
+    assert_eq(
+        expected, actual, check_dtype=False, check_index_type=False,
+    )
+
+
+def test_groupby_cov_invalid_column_types():
+    gdf = cudf.DataFrame(
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        },
+    )
+    with pytest.raises(
+        TypeError, match="Covariance accepts only numerical column-pairs",
+    ):
+        gdf.groupby("id").cov()
+
+
+def test_groupby_cov_positive_semidefinite_matrix():
+    # Refer to discussions in PR #9889 re "pair-wise deletion" strategy
+    # being used in pandas to compute the covariance of a dataframe with
+    # rows containing missing values.
+    # Note: cuDF currently matches pandas behavior in that the covariance
+    # matrices are not guaranteed PSD (positive semi definite).
+    # https://github.com/rapidsai/cudf/pull/9889#discussion_r794158358
+    gdf = cudf.DataFrame(
+        [[1, 2], [None, 4], [5, None], [7, 8]], columns=["v0", "v1"]
+    )
+    actual = gdf.groupby(by=cudf.Series([1, 1, 1, 1])).cov()
+    actual.reset_index(drop=True, inplace=True)
+
+    pdf = gdf.to_pandas()
+    expected = pdf.groupby(by=pd.Series([1, 1, 1, 1])).cov()
+    expected.reset_index(drop=True, inplace=True)
+
+    assert_eq(
+        expected, actual, check_dtype=False,
+    )
+
+
+@pytest.mark.xfail
+def test_groupby_cov_for_pandas_bug_case():
+    # Handles case: pandas bug using ddof with missing data.
+    # Filed an issue in Pandas on GH, link below:
+    # https://github.com/pandas-dev/pandas/issues/45814
+    pdf = pd.DataFrame(
+        {"id": ["a", "a"], "val1": [1.0, 2.0], "val2": [np.nan, np.nan]}
+    )
+    expected = pdf.groupby("id").cov(ddof=2)
+
+    gdf = cudf.from_pandas(pdf)
+    actual = gdf.groupby("id").cov(ddof=2)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         np.random.RandomState(seed=10).randint(-50, 50, (25, 30)),
