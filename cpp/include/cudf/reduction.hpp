@@ -79,7 +79,7 @@ std::unique_ptr<scalar> reduce(
  * floating point inputs, their values are promoted to `int64_t` and `double`
  * respectively to compute, and casted to @p output_dtype before returning.
  *
- * Null values are treated as idendities during reduction.
+ * Null values are treated as identities during reduction.
  *
  * If the segment is empty, the row corresponding to the result of the
  * segment is null.
@@ -104,7 +104,7 @@ std::unique_ptr<scalar> reduce(
  *
  * @param segmented_values Column view of segmented inputs.
  * @param offsets Each segment's offset of @p segmented_values. A list of offsets
- *  with size `num_segments + 1`. The size of `i`th segment is `offsets[i+1] -
+ * with size `num_segments + 1`. The size of `i`th segment is `offsets[i+1] -
  * offsets[i]`.
  * @param agg Aggregation operator applied by the reduction.
  * @param output_dtype  The output precision.

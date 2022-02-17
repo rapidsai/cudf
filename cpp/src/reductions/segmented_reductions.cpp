@@ -66,6 +66,7 @@ struct segmented_reduce_dispatch_functor {
       case aggregation::ALL:
         return reduction::segmented_all(col, offsets, output_dtype, null_handling, stream, mr);
       default: CUDF_FAIL("Unsupported aggregation type.");
+      // TODO: Add support for compound_ops
     }
   }
 };
@@ -78,7 +79,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(offsets.size() > 0, "`offsets` vector should have at least 1 element.");
+  CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
   if (segmented_values.is_empty()) { return empty_like(segmented_values); }
 
   return aggregation_dispatcher(
