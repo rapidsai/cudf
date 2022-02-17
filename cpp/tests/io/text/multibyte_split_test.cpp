@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,20 +64,23 @@ TEST_F(MultibyteSplitTest, DelimiterAtEnd)
 
 TEST_F(MultibyteSplitTest, LargeInput)
 {
-  auto host_input    = std::string();
+  auto fname = "filename.ext";
+  std::ofstream file;
+  file.open(fname);
   auto host_expected = std::vector<std::string>();
 
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
-    host_input += "...:|";
+    file << "...:|";
     host_expected.emplace_back(std::string("...:|"));
   }
+  file.close();
 
   host_expected.emplace_back(std::string(""));
 
   auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
 
   auto delimiter = std::string("...:|");
-  auto source    = cudf::io::text::make_source(host_input);
+  auto source    = cudf::io::text::make_source_from_file(fname);
   auto out       = cudf::io::text::multibyte_split(*source, delimiter);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out);
@@ -172,32 +175,4 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
 }
 
-#include <rmm/mr/device/logging_resource_adaptor.hpp>
-
-TEST_F(MultibyteSplitTest, LargeInputMultipleRangeNoCheck)
-{
-  auto host_input    = std::string();
-  auto host_expected = std::vector<std::string>();
-
-  // 1245074572
-  // 622537286
-  // for (auto i = 0; i < 622537286; i++) {
-  for (auto i = 0; i < 1245074572 / 4; i++) {
-    // for (auto i = 0; i < 1045074572; i++) {
-    host_input += "..................:|";
-  }
-
-  // make the last value non-empty, otherwise string concat (used in this test) will omit it.
-  host_input += ".";
-
-  auto delimiter = std::string("...:|");
-  auto source    = cudf::io::text::make_source(host_input);
-
-  rmm::mr::logging_resource_adaptor logger{mr(), std::cout};
-  rmm::mr::set_current_device_resource(&logger);
-
-  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 4);
-  for (auto byte_range : byte_ranges) {
-    auto out0 = cudf::io::text::multibyte_split(*source, delimiter, byte_range);
-  }
-}
+CUDF_TEST_PROGRAM_MAIN()
