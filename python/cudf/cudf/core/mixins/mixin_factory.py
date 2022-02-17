@@ -43,14 +43,20 @@ class Operation:
     def __get__(self, obj, owner=None):
         retfunc = _partialmethod(self._base_operation, op=self._name)
 
-        retfunc.__doc__ = self._base_operation.__doc__.format(
-            cls=owner.__name__, op=self._name, **self._docstring_format_args,
-        )
+        # Required attributes that will exist.
         retfunc.__name__ = self._name
         retfunc.__qualname__ = ".".join([owner.__name__, self._name])
         retfunc.__module__ = self._base_operation.__module__
+
+        if self._base_operation.__doc__ is not None:
+            retfunc.__doc__ = self._base_operation.__doc__.format(
+                cls=owner.__name__,
+                op=self._name,
+                **self._docstring_format_args,
+            )
+
         retfunc.__annotations__ = self._base_operation.__annotations__.copy()
-        retfunc.__annotations__.pop("op")
+        retfunc.__annotations__.pop("op", None)
         retfunc_params = [
             v
             for k, v in inspect.signature(
@@ -72,7 +78,7 @@ def _create_delegating_mixin(
     mixin_name,
     docstring,
     category_name,
-    category_operation_name,
+    base_operation_name,
     supported_operations,
 ):
     """Factory for mixins defining collections of delegated operations.
@@ -111,9 +117,9 @@ def _create_delegating_mixin(
         name will be used to define or access the following attributes as shown
         in the example below:
             - f'_{category_name}_DOCSTRINGS'
-            - f'_VALID_{category_name}S'
-            - f'_SUPPORTED_{category_name}S'
-    category_operation_name : str
+            - f'_VALID_{category_name}S'  # The subset of ops a subclass allows
+            - f'_SUPPORTED_{category_name}S'  # The ops supported by the mixin
+    base_operation_name : str
         The name given to the core function implementing this category of
         operations.  The corresponding function is the entrypoint for child
         classes.
@@ -130,7 +136,7 @@ def _create_delegating_mixin(
     >>> # The above is equivalent to defining a class like so:
     ... class MyFoo:
     ...     # The set of valid foo operations.
-    ...     _VALID_FOOS = {"foo1", "foo2"}
+    ...     _SUPPORTED_FOOS = {"foo1", "foo2"}
     ...
     ...     # This is the method for child classes to override. Note that the
     ...     # first parameter is always called "op".
@@ -139,7 +145,7 @@ def _create_delegating_mixin(
 
     >>> # MyFoo can be used as follows.
     >>> class BarImplementsFoo(MyFoo):
-    ...     _SUPPORTED_FOOS = ("foo1",)
+    ...     _VALID_FOOS = ("foo1",)
     ...     _FOO_DOCSTRINGS = {"ret": "42"}
     ...
     ...     # This method's docstring will be formatted and used for all valid
@@ -168,7 +174,7 @@ def _create_delegating_mixin(
     # OperationMixin itself to indicate what operations its subclass may
     # inherit from it.
     validity_attr = f"_VALID_{category_name}S"
-    docstring_attr = f"{category_name}_DOCSTRINGS"
+    docstring_attr = f"_{category_name}_DOCSTRINGS"
     supported_attr = f"_SUPPORTED_{category_name}S"
 
     class OperationMixin:
@@ -184,7 +190,7 @@ def _create_delegating_mixin(
                 len(invalid_operations) == 0
             ), f"Invalid requested operations: {invalid_operations}"
 
-            base_operation = getattr(cls, category_operation_name)
+            base_operation = getattr(cls, base_operation_name)
             for operation in valid_operations:
                 if operation not in dir(cls):
                     docstring_format_args = getattr(
@@ -202,14 +208,14 @@ def _create_delegating_mixin(
     def _operation(self, op: str, *args, **kwargs):
         raise NotImplementedError
 
-    _operation.__name__ = category_operation_name
-    _operation.__qualname__ = ".".join([mixin_name, category_operation_name])
+    _operation.__name__ = base_operation_name
+    _operation.__qualname__ = ".".join([mixin_name, base_operation_name])
     _operation.__doc__ = (
         f"The core {category_name.lower()} function. Must be overridden by "
         "subclasses, the default implementation raises a NotImplementedError."
     )
 
-    setattr(OperationMixin, category_operation_name, _operation)
+    setattr(OperationMixin, base_operation_name, _operation)
     # This attribute is set in case lookup is convenient at a later point, but
     # it is not strictly necessary since `supported_operations` is part of the
     # closure associated with the class's creation.
