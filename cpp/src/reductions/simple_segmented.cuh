@@ -63,6 +63,8 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
+  // TODO: Rewrites this function to accept a pair of iterators for start/end indices
+  // to enable `2N` type offset input.
   // reduction by iterator
   auto dcol              = cudf::column_device_view::create(col, stream);
   auto simple_op         = Op{};

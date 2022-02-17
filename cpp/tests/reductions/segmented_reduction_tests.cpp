@@ -172,8 +172,6 @@ TYPED_TEST(SegmentedReductionTest, AllExcludeNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-// TODO: Add tests for null_policy::INCLUDE
-
 TYPED_TEST(SegmentedReductionTest, SumIncludeNulls)
 {
   // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
