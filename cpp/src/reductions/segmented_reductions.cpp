@@ -27,7 +27,7 @@
 namespace cudf {
 namespace detail {
 struct segmented_reduce_dispatch_functor {
-  column_view const col;
+  column_view const& col;
   device_span<size_type const> offsets;
   data_type output_dtype;
   null_policy null_handling;
