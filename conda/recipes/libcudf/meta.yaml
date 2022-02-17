@@ -5,6 +5,7 @@
 {% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
 {% set cuda_major=cuda_version.split('.')[0] %}
 {% set cmake_version=">=3.20.1" %}
+{% set gtest_version="=1.10.0" %}
 
 package:
   name: libcudf-split
@@ -306,3 +307,30 @@ outputs:
       license_family: Apache
       license_file: LICENSE
       summary: libcudf_example library
+  - name: libcudf_tests
+    version: {{ version }}
+    script: install_libcudf_tests.sh
+    build:
+      number: {{ GIT_DESCRIBE_NUMBER }}
+      string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      script_env: *script_env
+    requirements:
+      build:
+        - cmake {{ cmake_version }}
+      host:
+        - cudatoolkit {{ cuda_version }}.*
+        - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_subpackage('libcudf_kafka', exact=True) }}
+      run:
+        - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_subpackage('libcudf_kafka', exact=True) }}
+        - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+        - gtest {{ gtest_version }}
+        - gmock {{ gtest_version }}
+    about:
+      home: http://rapids.ai/
+      license: Apache-2.0
+      license_family: Apache
+      license_file: LICENSE
+      summary: libcudf test & benchmark executables
+
