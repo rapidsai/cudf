@@ -385,8 +385,8 @@ class column_view : public detail::column_view_base {
    *
    * Only numeric and chrono types are supported.
    *
-   * @tparam T The device_span data type.
-   * @param data The device_span containing the column elements.
+   * @tparam The device span type. Must be const and match the column view's type.
+   * @param data A typed device span containing the column view's data.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
   [[nodiscard]] column_view(device_span<T const> data)
@@ -404,11 +404,9 @@ class column_view : public detail::column_view_base {
    * be nullable.
    *
    * @tparam The device span type. Must be const and match the column view's type.
-   *
    * @throws cudf::logic_error if the column view type does not match the span type.
    * @throws cudf::logic_error if the column view is nullable.
-   *
-   * @return device_span<T const> A typed device span of the column view.
+   * @return device_span<T const> A typed device span of the column view's data.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
   [[nodiscard]] operator device_span<T const>() const
