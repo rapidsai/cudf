@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import operator
+import warnings
+from contextlib import contextmanager
 from functools import reduce
 
 import cupy as cp
@@ -15,6 +17,27 @@ _UFUNCS = [
     for obj in (getattr(np, name) for name in dir(np))
     if isinstance(obj, np.ufunc)
 ]
+
+
+@contextmanager
+def _hide_ufunc_warnings(ufunc):
+    # pandas raises warnings for some inputs to the following ufuncs:
+    if ufunc.__name__ in {
+        "arccos",
+        "arccosh",
+        "arcsin",
+        "arctanh",
+        "fmod",
+        "log",
+        "log10",
+        "log2",
+        "reciprocal",
+    }:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            yield
+    else:
+        yield
 
 
 @pytest.mark.parametrize("ufunc", _UFUNCS)
@@ -76,7 +99,8 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
             pytest.xfail(reason="Operation not supported by cupy")
         raise
 
-    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     try:
         if ufunc.nout > 1:
@@ -256,7 +280,8 @@ def test_ufunc_dataframe(ufunc, has_nulls, indexed):
             pytest.xfail(reason="Operation not supported by cupy")
         raise
 
-    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+    with _hide_ufunc_warnings(ufunc):
+        expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
 
     try:
         if ufunc.nout > 1:
