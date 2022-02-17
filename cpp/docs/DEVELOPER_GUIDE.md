@@ -747,18 +747,25 @@ void isolated_helper_function(...);
 
 # Deprecating and Removing Code
 
-To minimize disruption for users, any breaking changes must be signaled by deprecation warnings for one release prior to the change.
-This includes wholesale removals of functions/methods/classes *and* changes to existing function signatures.
-Deprecations should be indicated using the [deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute.
-Deprecated APIs should be documented using Doxygen's [deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) command.
+libcudf is constantly growing and improving to improve performance and better meet our users' needs.
+As a result, we occasionally need to break or entirely remove APIs to respond to new and improved
+understanding of the functionality we provide. Remaining free to do this is essential to making
+libcudf an agile library that can rapidly accommodate our users needs. We encourage users to
+[Live At Head](https://www.youtube.com/watch?v=tISy7EJQPzI). On a best effort basis, the libcudf
+team will notify users of changes that we expect to have significant or widespread effects.
 
-When an API is deprecated, if a replacement exists the replacement should be mentioned in both the deprecation message and the deprecation documentation.
-Changes to function parameters should be accompanied by the introduction of suitable overloads to avoid API breaks for one release cycle.
-Where possible, deprecated APIs should call new APIs, but duplication in deprecated code is acceptable at the discretion of PR reviewers if avoiding it imposes an undue burden on developers.
+Where possible, pending API removals will be indicated using the
+[deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute and
+documented using Doxygen's [deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated)
+command prior to removal. When an API is deprecated, if a replacement exists the replacement should
+be mentioned in both the deprecation message and the deprecation documentation. The PRs introducing
+deprecations should also be labeled "deprecation" to facilitate discovery and removal in the
+subsequent release.
 
-PRs containing deprecations should be labeled as "non-breaking".
-The subsequent pull request in which deprecated code is moved should be labeled as "breaking".
-The PRs introducing deprecations should also be labeled "deprecation" to facilitate discovery and removal in the subsequent release.
+In order to advertise breaking changes, any PR that breaks or removes an existing API should be
+tagged as "breaking". This will ensure that the "Breaking" section of the release notes will include
+a description of what has broken from the past release. Note that PRs containing deprecations should
+be labeled as "non-breaking".
 
 
 # Error Handling
