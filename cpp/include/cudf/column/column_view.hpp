@@ -389,7 +389,7 @@ class column_view : public detail::column_view_base {
    * @param data A typed device span containing the column view's data.
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
-  [[nodiscard]] column_view(device_span<T const> data)
+  column_view(device_span<T const> data)
     : column_view(
         cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
   {
