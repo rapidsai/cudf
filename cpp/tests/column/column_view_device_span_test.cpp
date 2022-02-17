@@ -15,24 +15,19 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
-#include <type_traits>
 
-// fixed_width, dict, string, list, struct
-template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
 std::unique_ptr<cudf::column> example_column()
 {
   auto begin = thrust::make_counting_iterator(1);
