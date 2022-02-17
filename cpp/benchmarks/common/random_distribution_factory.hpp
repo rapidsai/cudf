@@ -21,7 +21,6 @@
 #include <cmath>
 #include <cstddef>
 #include <memory>
-#include <random>
 #include <rmm/device_uvector.hpp>
 #include <type_traits>
 
@@ -41,8 +40,6 @@ auto make_normal_dist(T upper_bound)
   using realT        = std::conditional_t<sizeof(T) * 8 <= 23, float, double>;
   realT const mean   = static_cast<realT>(upper_bound) / 2;             // μ = np, p=0.5
   realT const stddev = std::sqrt(static_cast<realT>(upper_bound) / 4);  // sqrt(np (1 - p))
-  // std::cout << "mean: " << mean << " stddev: " << stddev << " upper_bound: " << upper_bound <<
-  // std::endl;
   return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
@@ -77,23 +74,6 @@ double geometric_dist_p(T range_size)
   return p ? p : std::numeric_limits<double>::epsilon();
 }
 
-template <typename T, typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
-auto make_geometric_dist(T range_start, T range_end)
-{
-  using uT = typename std::make_unsigned<T>::type;
-  if (range_start > range_end) std::swap(range_start, range_end);
-
-  uT const range_size = (uT)range_end - (uT)range_start;
-  return std::geometric_distribution<T>(geometric_dist_p(range_size));
-}
-
-template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
-auto make_geometric_dist(T range_start, T range_end)
-{
-  long double const range_size = range_end - range_start;
-  return std::exponential_distribution<T>(geometric_dist_p(range_size));
-}
-
 template <typename T, typename Generator>
 struct value_generator {
   using result_type = T;
@@ -117,16 +97,16 @@ struct value_generator {
 
 template <typename T, typename Generator>
 struct abs_value_generator : value_generator<T, Generator> {
+  using super_t = value_generator<T, Generator>;
   abs_value_generator(T lower_bound, T upper_bound, thrust::minstd_rand& engine, Generator gen)
-    : value_generator<T, Generator>::value_generator{lower_bound, upper_bound, engine, gen}
+    : super_t{lower_bound, upper_bound, engine, gen}
   {
   }
 
   __device__ T operator()(size_t n)
   {
-    value_generator<T, Generator>::engine.discard(n);
-    return abs(value_generator<T, Generator>::dist(value_generator<T, Generator>::engine)) +
-           value_generator<T, Generator>::lower_bound;
+    super_t::engine.discard(n);
+    return abs(super_t::dist(super_t::engine)) + super_t::lower_bound;
   }
 };
 
@@ -141,34 +121,28 @@ distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        // std::cout << "Normal here" << std::endl;
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
                          value_generator{lower_bound, upper_bound, engine, dist});
-        // std::cout << "Tabulate done" << std::endl;
         return result;
       };
     case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        // std::cout << "Uniform here" << std::endl;
         thrust::tabulate(
           thrust::device, result.begin(), result.end(), value_generator{T{0}, T{0}, engine, dist});
-        // std::cout << "Tabulate done" << std::endl;
         return result;
       };
     case distribution_id::GEOMETRIC:
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        // std::cout << "Geometric here" << std::endl;
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
                          abs_value_generator{lower_bound, upper_bound, engine, dist});
-        // std::cout << "Tabulate done" << std::endl;
         return result;
       };
     default: CUDF_FAIL("Unsupported probability distribution");
@@ -183,22 +157,18 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        // std::cout << "Normal float" << std::endl;
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
                          value_generator{upper_bound, lower_bound, engine, dist});
-        // std::cout << "Tabulate float" << std::endl;
         return result;
       };
     case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        // std::cout << "Uniform float" << std::endl;
         thrust::tabulate(
           thrust::device, result.begin(), result.end(), value_generator{T{0}, T{0}, engine, dist});
-        // std::cout << "Tabulate float" << std::endl;
         return result;
       };
     case distribution_id::GEOMETRIC:
@@ -206,12 +176,10 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
                thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        // std::cout << "Geometric float" << std::endl;
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
                          abs_value_generator{lower_bound, upper_bound, engine, dist});
-        // std::cout << "Tabulate float" << std::endl;
         return result;
       };
     default: CUDF_FAIL("Unsupported probability distribution");

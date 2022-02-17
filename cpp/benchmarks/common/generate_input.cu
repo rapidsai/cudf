@@ -318,12 +318,6 @@ auto create_run_length_dist(cudf::size_type avg_run_len)
   return std::gamma_distribution<float>{alpha, avg_run_len / alpha};
 }
 
-// identity mapping, except for bools
-template <typename T, typename Enable = void>
-struct stored_as {
-  using type = T;
-};
-
 /**
  * @brief Creates a column with random content of type @ref T.
  *
