@@ -75,11 +75,20 @@ std::unique_ptr<scalar> reduce(
 /**
  * @brief  Compute reduction of each segment in the input column
  *
- * This function does not detect overflows in reductions.
- * Using a higher precision `data_type` may prevent overflow.
- * The null values are skipped for the operation.
+ * This function does not detect overflows in reductions. When given integral and
+ * floating point inputs, their values are promoted to `int64_t` and `double`
+ * respectively to compute, and casted to @p output_dtype before returning.
+ *
+ * Null values are treated as idendities during reduction.
+ *
  * If the segment is empty, the row corresponding to the result of the
  * segment is null.
+ *
+ * @note If the input column has arithmetic type, output_dtype can be any arithmetic
+ * type. If the input column has non-arithmetic type, e.g. timestamp, the same
+ * output type must be specified.
+ *
+ * @note If input is not empty, the result is always nullable.
  *
  * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
@@ -90,14 +99,12 @@ std::unique_ptr<scalar> reduce(
  * @throw cudf::logic_error if `any` or `all` reduction is called and the
  * output type is not bool8.
  *
- * If the input column has arithmetic type, output_dtype can be any arithmetic
- * type. If the input column has non-arithmetic type, e.g. timestamp or string,
- * the same output type must be specified.
- *
- * @param col Input column view
- * @param offsets Indices to segment boundaries
- * @param agg Aggregation operator applied by the reduction
- * @param output_dtype  The computation and output precision.
+ * @param segmented_values Column view of segmented inputs.
+ * @param offsets Each segment's offset of @p segmented_values. A list of offsets
+ *  with size `num_segments + 1`. The size of `i`th segment is `offsets[i+1] -
+ * offsets[i]`.
+ * @param agg Aggregation operator applied by the reduction.
+ * @param output_dtype  The output precision.
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
@@ -105,7 +112,7 @@ std::unique_ptr<scalar> reduce(
  * @returns Output column with results of segmented reduction.
  */
 std::unique_ptr<column> segmented_reduce(
-  column_view const& col,
+  column_view const& segmented_values,
   device_span<size_type const> offsets,
   aggregation const& agg,
   data_type output_dtype,

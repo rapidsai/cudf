@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reduction_functions.hpp>
@@ -33,13 +34,13 @@ struct segmented_reduce_dispatch_functor {
   rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
 
-  segmented_reduce_dispatch_functor(column_view const& col,
+  segmented_reduce_dispatch_functor(column_view const& segmented_values,
                                     device_span<size_type const> offsets,
                                     data_type output_dtype,
                                     null_policy null_handling,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
-    : col(col),
+    : col(segmented_values),
       offsets(offsets),
       output_dtype(output_dtype),
       null_handling(null_handling),
@@ -69,7 +70,7 @@ struct segmented_reduce_dispatch_functor {
   }
 };
 
-std::unique_ptr<column> segmented_reduce(column_view const& col,
+std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          device_span<size_type const> offsets,
                                          aggregation const& agg,
                                          data_type output_dtype,
@@ -77,15 +78,17 @@ std::unique_ptr<column> segmented_reduce(column_view const& col,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(offsets.size() > 1, "Input should have at least 1 segment.");
+  CUDF_EXPECTS(offsets.size() > 0, "`offsets` vector should have at least 1 element.");
+  if (segmented_values.is_empty()) { return empty_like(segmented_values); }
 
   return aggregation_dispatcher(
     agg.kind,
-    segmented_reduce_dispatch_functor{col, offsets, output_dtype, null_handling, stream, mr});
+    segmented_reduce_dispatch_functor{
+      segmented_values, offsets, output_dtype, null_handling, stream, mr});
 }
 }  // namespace detail
 
-std::unique_ptr<column> segmented_reduce(column_view const& col,
+std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          device_span<size_type const> offsets,
                                          aggregation const& agg,
                                          data_type output_dtype,
@@ -94,7 +97,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& col,
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_reduce(
-    col, offsets, agg, output_dtype, null_handling, rmm::cuda_stream_default, mr);
+    segmented_values, offsets, agg, output_dtype, null_handling, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

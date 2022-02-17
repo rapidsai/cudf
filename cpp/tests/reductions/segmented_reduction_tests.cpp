@@ -33,6 +33,9 @@ template <typename T>
 struct SegmentedReductionTest : public cudf::test::BaseFixture {
 };
 
+struct SegmentedReductionTestUntyped : public cudf::test::BaseFixture {
+};
+
 TYPED_TEST_CASE(SegmentedReductionTest, NumericTypes);
 
 TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
@@ -48,21 +51,6 @@ TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect = fixed_width_column_wrapper<TypeParam>{{6, 4, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
-
-  auto res = segmented_reduce(input,
-                              d_offsets,
-                              *make_sum_aggregation(),
-                              data_type{type_to_id<TypeParam>()},
-                              null_policy::EXCLUDE);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
-}
-
-TYPED_TEST(SegmentedReductionTest, EmptySum)
-{
-  auto input     = fixed_width_column_wrapper<TypeParam>{};
-  auto offsets   = std::vector<size_type>{0};
-  auto d_offsets = thrust::device_vector<size_type>(offsets);
-  auto expect    = fixed_width_column_wrapper<TypeParam>{};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -320,6 +308,42 @@ TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
   auto res = segmented_reduce(
     input, d_offsets, *make_all_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionTestUntyped, PartialSegmentReudction)
+{
+  // Segmented reduction allows offsets only specify part of the input columns.
+  // [1], [2, 3], [4]
+  // values: {1, 2, 3, 4, 5, 6, 7}
+  // offsets: {0, 1, 3, 4}
+  // nullmask: {1, 1, 1, 1, 1, 1, 1}
+  // outputs: {1, 5, 4}
+  // output nullmask: {1, 1, 1}
+
+  auto input     = fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7};
+  auto offsets   = std::vector<size_type>{0, 1, 3, 4};
+  auto d_offsets = thrust::device_vector<size_type>(offsets);
+  auto expect    = fixed_width_column_wrapper<int32_t>{{1, 5, 4}, {true, true, true}};
+
+  auto res = segmented_reduce(
+    input, d_offsets, *make_sum_aggregation(), data_type{type_id::INT32}, null_policy::INCLUDE);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
+{
+  auto input     = fixed_width_column_wrapper<int32_t>{};
+  auto offsets   = std::vector<size_type>{0};
+  auto d_offsets = thrust::device_vector<size_type>(offsets);
+  auto expect    = fixed_width_column_wrapper<int32_t>{};
+
+  auto res = segmented_reduce(input,
+                              d_offsets,
+                              *make_sum_aggregation(),
+                              data_type{type_to_id<int32_t>()},
+                              null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
