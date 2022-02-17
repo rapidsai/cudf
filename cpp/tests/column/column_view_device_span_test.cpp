@@ -44,8 +44,7 @@ template <typename T>
 struct ColumnViewDeviceSpanTests : public cudf::test::BaseFixture {
 };
 
-using DeviceSpanTypes =
-  cudf::test::Types<int32_t>;  // cudf::test::FixedWidthTypesWithoutFixedPoint;
+using DeviceSpanTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
 TYPED_TEST_SUITE(ColumnViewDeviceSpanTests, DeviceSpanTypes);
 
 TYPED_TEST(ColumnViewDeviceSpanTests, conversion_round_trip)
