@@ -311,36 +311,41 @@ TYPED_TEST(RoundTestsFixedPointTypes, TestForBlog)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, TestScaleMovementExceedingMaxPrecision)
+TYPED_TEST(RoundTestsFixedPointTypes, TestScaleMovementExceedingMaxPrecision)
 {
   using namespace numeric;
-  using dec32_wrapper  = cudf::test::fixed_point_column_wrapper<int32_t>;
-  using dec64_wrapper  = cudf::test::fixed_point_column_wrapper<int64_t>;
-  using dec128_wrapper = cudf::test::fixed_point_column_wrapper<__int128_t>;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   // max precision of int32 = 9
   // scale movement = -(-11) -1 = 10 > 9
-  auto const input_32 =
-    dec32_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
-  auto const expected_32 = dec32_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{11}};
-  auto const result_32   = cudf::round(input_32, -11, cudf::rounding_method::HALF_UP);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_32, result_32->view());
-
   // max precision of int64 = 18
   // scale movement = -(-20) -1 = 19 > 18
-  auto const input_64 =
-    dec64_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
-  auto const expected_64 = dec64_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{20}};
-  auto const result_64   = cudf::round(input_64, -20, cudf::rounding_method::HALF_EVEN);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_64, result_64->view());
-
   // max precision of int128 = 38
-  // scale movement = -(-40) -1 = 39 > 18
-  auto const input_128 =
-    dec128_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
-  auto const expected_128 = dec128_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{40}};
-  auto const result_128   = cudf::round(input_128, -40, cudf::rounding_method::HALF_UP);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_128, result_128->view());
+  // scale movement = -(-40) -1 = 39 > 38
+  auto const target_scale = cuda::std::numeric_limits<RepType>::digits10 + 1 + 1;
+
+  auto const input =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
+  auto const expected = fp_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{target_scale}};
+  auto const result   = cudf::round(input, -target_scale, cudf::rounding_method::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto const input_even =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, scale_type{1}};
+  auto const expected_even =
+    fp_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, scale_type{target_scale}};
+  auto const result_even = cudf::round(input, -target_scale, cudf::rounding_method::HALF_EVEN);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_even, result_even->view());
+
+  const std::initializer_list<bool> validity = {1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0};
+  auto const input_null =
+    fp_wrapper{{14, 15, 16, 24, 25, 26, -14, -15, -16, -24, -25, -26}, validity, scale_type{1}};
+  auto const expected_null =
+    fp_wrapper{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, validity, scale_type{target_scale}};
+  auto const result_null = cudf::round(input_null, -target_scale, cudf::rounding_method::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_null, result_null->view());
 }
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp0)

@@ -16,6 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy_range.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
@@ -259,8 +261,22 @@ std::unique_ptr<column> round_with(column_view const& input,
   // overflow. Under this circumstance, we can simply output a zero column because no digits can
   // survive such a large scale movement.
   if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
-    auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
-    detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
+    if (input.nullable()) {
+      auto device_view = column_device_view::create(out_view, stream);
+      detail::copy_range(thrust::make_constant_iterator(static_cast<Type>(0)),
+                         detail::make_validity_iterator(*device_view),
+                         out_view,
+                         out_view.offset(),
+                         out_view.offset() + out_view.size(),
+                         stream);
+    } else {
+      detail::copy_range(thrust::make_constant_iterator(static_cast<Type>(0)),
+                         thrust::make_constant_iterator(false),
+                         out_view,
+                         out_view.offset(),
+                         out_view.offset() + out_view.size(),
+                         stream);
+    }
   } else {
     Type const n = std::pow(10, scale_movement);
     thrust::transform(rmm::exec_policy(stream),
