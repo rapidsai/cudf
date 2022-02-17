@@ -1535,23 +1535,22 @@ def test_strings_rsplit(data, n, expand):
     )
 
 
-@pytest.mark.parametrize(
-    "data", [["a b", " c ", "   d", "e   ", "f"]],
-)
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
 @pytest.mark.parametrize("expand", [True, False, None])
-def test_string_rsplit_re(data, n, expand):
+def test_string_rsplit_re(n, expand):
+    data = ["a b", " c ", "   d", "e   ", "f"]
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
 
-    # Pandas does not support the regex parameter until 1.4.0
-    from cudf.core._compat import PANDAS_LT_140
+    # Pandas does not yet support the regex parameter for rsplit
+    import inspect
 
-    if PANDAS_LT_140:
-        expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
-    else:
-        expect = ps.str.rsplit(pat="\\s", n=n, regex=True)
+    assert (
+        "regex"
+        not in inspect.signature(pd.Series.str.rsplit).parameters.keys()
+    )
 
+    expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
     got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
     assert_eq(expect, got)
 
