@@ -104,13 +104,10 @@ std::string get_program_cache_dir()
 #endif
 }
 
-void try_parse_numeric_env_var(std::size_t& result, char const* const env_name)
+std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
 {
-  auto value = std::getenv(env_name);
-
-  if (value != nullptr) {
-    result = std::stoull(value);  // fails if env var contains invalid value.
-  }
+  auto const value = std::getenv(env_name);
+  return value != nullptr ? std::stoull(value) : default_val;
 }
 
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
@@ -123,27 +120,22 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    auto kernel_limit_proc = std::size_t{1024};
-    auto kernel_limit_disk = std::size_t{1024};
-    try_parse_numeric_env_var(kernel_limit_proc, "LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS");
-    try_parse_numeric_env_var(kernel_limit_disk, "LIBCUDF_KERNEL_CACHE_LIMIT_DISK");
+    auto const kernel_limit_proc =
+      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 1024);
+    auto const kernel_limit_disk =
+      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 1024);
 
-    auto cache_dir = get_program_cache_dir();
+    // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
+    // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
+    auto const cache_dir = kernel_limit_disk == 0 ? std::string{} : get_program_cache_dir();
 
-    if (kernel_limit_disk == 0) {
-      // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
-      // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
-      cache_dir = {};
-    }
-
-    auto res = caches.insert({preprog.name(),
-                              std::make_unique<jitify2::ProgramCache<>>(  //
-                                kernel_limit_proc,
-                                preprog,
-                                nullptr,
-                                cache_dir,
-                                kernel_limit_disk)});
-
+    auto const res = caches.insert({preprog.name(),
+                                    std::make_unique<jitify2::ProgramCache<>>(  //
+                                      kernel_limit_proc,
+                                      preprog,
+                                      nullptr,
+                                      cache_dir,
+                                      kernel_limit_disk)});
     existing_cache = res.first;
   }
 
