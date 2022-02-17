@@ -750,9 +750,9 @@ void isolated_helper_function(...);
 libcudf is constantly evolving to improve performance and better meet our users' needs. As a
 result, we occasionally need to break or entirely remove APIs to respond to new and improved
 understanding of the functionality we provide. Remaining free to do this is essential to making
-libcudf an agile library that can rapidly accommodate our users needs. We encourage users to [Live
-At Head](https://www.youtube.com/watch?v=tISy7EJQPzI). On a best effort basis, the libcudf team will
-notify users of changes that we expect to have significant or widespread effects.
+libcudf an agile library that can rapidly accommodate our users needs. We encourage users to
+[Live At Head](https://www.youtube.com/watch?v=tISy7EJQPzI). On a best effort basis, the libcudf
+team will notify users of changes that we expect to have significant or widespread effects.
 
 Where possible, indicate pending API removals using the
 [deprecated](https://en.cppreference.com/w/cpp/language/attributes/deprecated) attribute and
