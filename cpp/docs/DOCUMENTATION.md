@@ -371,8 +371,10 @@ The source file is then published under a separate _Examples_ page in the output
 
 ### Deprecations
 
-Add a single [@deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) comment line
-to comment blocks for APIs that will be removed in future releases. Mention alternative / replacement APIs in the deprecation comment.
+Add a single
+[@deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated)
+comment line to comment blocks for APIs that will be removed in future
+releases. Mention alternative / replacement APIs in the deprecation comment.
 
 ```c++
 /**
