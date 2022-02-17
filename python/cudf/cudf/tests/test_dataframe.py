@@ -9190,7 +9190,7 @@ def test_dataframe_rename_duplicate_column():
 @pytest.mark.parametrize(
     "data",
     [
-        np.random.RandomState(seed=10).randint(-50, 50, (25, 30)),
+        np.random.RandomState(seed=10).randint(-50, 50, (10, 10)),
         np.random.RandomState(seed=10).random_sample((4, 4)),
         np.array([1.123, 2.343, 5.890, 0.0]),
         {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},

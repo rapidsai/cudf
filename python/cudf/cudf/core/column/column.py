@@ -335,7 +335,9 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
-        # link to the libcudf ticket you will create
+        # libcudf currently doesn't handle case when offset > len(df)
+        # ticket to fix the bug in link below:
+        # https://github.com/rapidsai/cudf/issues/10314
         if abs(offset) > len(self):
             if fill_value is None:
                 return column_empty_like(self, masked=True)
