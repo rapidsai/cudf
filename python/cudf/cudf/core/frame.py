@@ -6806,10 +6806,9 @@ def _drop_rows_by_labels(
         join_res = working_df.join(to_join, how="leftanti")
 
         # 4. Reconstruct original layout, and rename
-        join_res.insert(
+        join_res._insert(
             ilevel, name=join_res._index.name, value=join_res._index
         )
-        join_res = join_res.reset_index(drop=True)
 
         midx = cudf.MultiIndex.from_frame(
             join_res.iloc[:, 0:idx_nlv], names=obj._index.names
