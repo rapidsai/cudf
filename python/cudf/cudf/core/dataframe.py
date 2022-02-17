@@ -1236,15 +1236,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         for colname, col in self.index._data.items()
                     }
                 )
-                index = MultiIndex._from_data(mi_columns)
-            else:
-                index = (
-                    RangeIndex(start=start, stop=stop, step=stride)
-                    if isinstance(self.index, RangeIndex)
-                    else Index([], dtype=self.index.dtype)
+                return DataFrame._from_data(
+                    columns, index=MultiIndex._from_data(mi_columns)
                 )
-
-            return DataFrame._from_data(columns, index=index)
+            else:
+                return DataFrame._from_data(
+                    columns,
+                    index=(
+                        RangeIndex(start=start, stop=stop, step=stride)
+                        if isinstance(self.index, RangeIndex)
+                        else Index([], dtype=self.index.dtype)
+                    ),
+                )
 
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
