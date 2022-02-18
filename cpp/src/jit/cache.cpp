@@ -119,12 +119,11 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
 
   auto existing_cache = caches.find(preprog.name());
 
-  auto constexpr DEFAULT_LIMIT = std::size_t{1024};
   if (existing_cache == caches.end()) {
     auto const kernel_limit_proc =
-      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", DEFAULT_LIMIT);
+      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 10'000);
     auto const kernel_limit_disk =
-      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", DEFAULT_LIMIT);
+      try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 100'000);
 
     // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
     // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
