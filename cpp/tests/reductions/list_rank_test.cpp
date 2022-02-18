@@ -96,6 +96,8 @@ TEST_F(ListRankScanTest, ListStruct)
   // Constructing a list of struct of two elements
   // []                  ==
   // []                  !=
+  // Null                ==
+  // Null                !=
   // [Null, Null]        !=
   // [Null]              ==
   // [Null]              ==
@@ -120,18 +122,21 @@ TEST_F(ListRankScanTest, ListStruct)
     {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-    0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+    0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
 
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto nullmask_buf =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
-                                       15,
+                                       17,
                                        nullptr,
-                                       nullptr,
+                                       static_cast<cudf::bitmask_type*>(nullmask_buf.data()),
                                        cudf::UNKNOWN_NULL_COUNT,
                                        0,
                                        {offsets, struc});
 
   auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-    1, 1, 2, 3, 3, 3, 4, 5, 6, 7, 7, 8, 8, 9, 9};
+    1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
 
   this->test_ungrouped_rank_scan(
     list_column, expect, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);

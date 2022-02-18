@@ -119,21 +119,21 @@ class element_equality_comparator {
       auto r_size = r_end_off - r_start_off;
       if (l_size != r_size) { return false; }
 
-      if (lcol.type().id() == type_id::STRUCT) {
-        for (int i = 0; i < l_size; ++i) {
-          bool const lhs_is_null{lcol.is_null(l_start_off + i)};
-          bool const rhs_is_null{rcol.is_null(r_start_off + i)};
+      for (int i = 0; i < l_size; ++i) {
+        bool const lhs_is_null{lcol.is_null(l_start_off + i)};
+        bool const rhs_is_null{rcol.is_null(r_start_off + i)};
 
-          if (lhs_is_null and rhs_is_null) {
-            if (nulls_are_equal == null_equality::EQUAL) {
-              continue;
-            } else {
-              return false;
-            }
-          } else if (lhs_is_null != rhs_is_null) {
+        if (lhs_is_null and rhs_is_null) {
+          if (nulls_are_equal == null_equality::EQUAL) {
+            continue;
+          } else {
             return false;
           }
+        } else if (lhs_is_null != rhs_is_null) {
+          return false;
         }
+      }
+      if (lcol.type().id() == type_id::STRUCT) {
         lcol = lcol.child(0);
         rcol = rcol.child(0);
       } else if (lcol.type().id() == type_id::LIST) {
