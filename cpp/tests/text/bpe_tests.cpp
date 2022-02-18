@@ -48,7 +48,7 @@ TEST_F(TextBPETokenize, BytePairEncoding)
   nvtext::bpe_merge_pairs merge_pairs{cudf::strings_column_view(mpt)};
 
   auto validity = cudf::test::iterators::null_at(4);
-  cudf::test::strings_column_wrapper input({"This is it",
+  cudf::test::strings_column_wrapper input({"This\tis  it\n",
                                             "This is test-sentence-1",
                                             "This is test sentence-2",
                                             "This-is test sentence 3",
@@ -67,6 +67,12 @@ TEST_F(TextBPETokenize, BytePairEncoding)
                                                       ""},
                                                      validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  auto sliced          = cudf::slice(input, {1, 4}).front();
+  auto sliced_expected = cudf::slice(expected, {1, 4}).front();
+
+  results = nvtext::byte_pair_encoding(cudf::strings_column_view(sliced), merge_pairs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_expected);
 }
 
 TEST_F(TextBPETokenize, BPE_Empty)
