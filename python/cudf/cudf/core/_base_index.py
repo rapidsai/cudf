@@ -1347,6 +1347,16 @@ class BaseIndex(Serializable):
         array([ True, False, False])
         """
 
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
         return self._values.isin(values).values
 
     @classmethod

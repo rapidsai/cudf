@@ -93,6 +93,8 @@ def _external_only_api(func, alternative=""):
     return wrapper
 
 
+# TODO: We should evaluate whether calls to this could be more easily replaced
+# with column.full, which appears to be significantly faster in simple cases.
 def scalar_broadcast_to(scalar, size, dtype=None):
 
     if isinstance(size, (tuple, list)):
