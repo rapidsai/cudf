@@ -4,6 +4,7 @@ import collections
 import itertools
 import pickle
 import warnings
+from functools import cached_property
 
 import numpy as np
 import pandas as pd
@@ -11,12 +12,13 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.reshape import interleave_columns
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import GetAttrGetItemMixin, cached_property
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -286,7 +288,7 @@ class GroupBy(Serializable):
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
-                result.insert(
+                result._insert(
                     0,
                     col_name,
                     result.index.get_level_values(col_name)._values,
@@ -953,6 +955,177 @@ class GroupBy(Serializable):
             # TO-DO: Should the operation below be done on the CPU instead?
             sorted_idx._data[None] = as_column(
                 cudf.Series(_cols).tile(len(gb_corr.index))
+            )
+        res.index = MultiIndex._from_data(sorted_idx._data)
+
+        return res
+
+    def cov(self, min_periods=0, ddof=1):
+        """
+        Compute the pairwise covariance among the columns of a DataFrame,
+        excluding NA/null values.
+
+        The returned DataFrame is the covariance matrix of the columns of
+        the DataFrame.
+
+        Both NA and null values are automatically excluded from the
+        calculation. See the note below about bias from missing values.
+
+        A threshold can be set for the minimum number of observations
+        for each value created. Comparisons with observations below this
+        threshold will be returned as `NA`.
+
+        This method is generally used for the analysis of time series data to
+        understand the relationship between different measures across time.
+
+        Parameters
+        ----------
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        ddof: int, optional
+            Delta degrees of freedom, default is 1.
+
+        Returns
+        -------
+        DataFrame
+            Covariance matrix.
+
+        Notes
+        -----
+        Returns the covariance matrix of the DataFrame's time series.
+        The covariance is normalized by N-ddof.
+
+        For DataFrames that have Series that are missing data
+        (assuming that data is missing at random) the returned covariance
+        matrix will be an unbiased estimate of the variance and covariance
+        between the member Series.
+
+        However, for many applications this estimate may not be acceptable
+        because the estimate covariance matrix is not guaranteed to be
+        positive semi-definite. This could lead to estimate correlations
+        having absolute values which are greater than one, and/or a
+        non-invertible covariance matrix. See
+        `Estimation of covariance matrices
+        <https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices>`
+        for more details.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...     "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...     "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...     "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...     "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ... })
+        >>> gdf
+          id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").cov()
+                    val1       val2       val3
+        id
+        a  val1  1.000000   0.500000   0.500000
+           val2  0.500000   1.000000   1.000000
+           val3  0.500000   1.000000   1.000000
+        b  val1  4.333333   3.500000   3.500000
+           val2  3.500000  19.000000  19.000000
+           val3  3.500000  19.000000  19.000000
+        c  val1  2.333333   3.833333   3.833333
+           val2  3.833333  12.333333  12.333333
+           val3  3.833333  12.333333  12.333333
+        """
+
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs used in the covariance calculation
+        # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        column_names = self.grouping.values.columns.tolist()
+        num_cols = len(column_names)
+
+        column_pair_structs = {}
+        for x, y in itertools.combinations_with_replacement(column_names, 2):
+            # The number of output columns is the number of input columns
+            # squared. We directly call the struct column factory here to
+            # reduce overhead and avoid copying data. Since libcudf groupby
+            # maintains a cache of aggregation requests, reusing the same
+            # column also makes use of previously cached column means and
+            # reduces kernel costs.
+
+            # checks if input column names are string, raise a warning if
+            # not so and cast them to strings
+            if not (isinstance(x, str) and isinstance(y, str)):
+                warnings.warn(
+                    "DataFrame contains non-string column name(s). "
+                    "Struct columns require field names to be strings. "
+                    "Non-string column names will be cast to strings "
+                    "in the result's field names."
+                )
+                x, y = str(x), str(y)
+
+            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
+                names=(x, y),
+                children=(self.obj._data[x], self.obj._data[y]),
+                size=len(self.obj),
+            )
+
+        column_pair_groupby = cudf.DataFrame._from_data(
+            column_pair_structs
+        ).groupby(by=self.grouping.keys)
+
+        try:
+            gb_cov = column_pair_groupby.agg(
+                lambda x: x.cov(min_periods, ddof)
+            )
+        except RuntimeError as e:
+            if "Unsupported groupby reduction type-agg combination" in str(e):
+                raise TypeError(
+                    "Covariance accepts only numerical column-pairs"
+                )
+            raise
+
+        # ensure that column-pair labels are arranged in ascending order
+        cols_list = [
+            (y, x) if i > j else (x, y)
+            for j, y in enumerate(column_names)
+            for i, x in enumerate(column_names)
+        ]
+        cols_split = [
+            cols_list[i : i + num_cols]
+            for i in range(0, len(cols_list), num_cols)
+        ]
+
+        def combine_columns(gb_cov, ys):
+            list_of_columns = [gb_cov._data[y] for y in ys]
+            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
+            return interleave_columns(frame)
+
+        # interleave: combine the correlation results for each column-pair
+        # into a single column
+        res = cudf.DataFrame._from_data(
+            {
+                x: combine_columns(gb_cov, ys)
+                for ys, x in zip(cols_split, column_names)
+            }
+        )
+
+        # create a multiindex for the groupby correlated dataframe,
+        # to match pandas behavior
+        unsorted_idx = gb_cov.index.repeat(num_cols)
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
+        if len(gb_cov):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            sorted_idx._data[None] = as_column(
+                np.tile(column_names, len(gb_cov.index))
             )
         res.index = MultiIndex._from_data(sorted_idx._data)
 

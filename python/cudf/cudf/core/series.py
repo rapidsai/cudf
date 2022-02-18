@@ -958,14 +958,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def memory_usage(self, index=True, deep=False):
         return sum(super().memory_usage(index, deep).values())
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__":
-            return get_appropriate_dispatched_func(
-                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
-            )
-        else:
-            return NotImplemented
-
     def __array_function__(self, func, types, args, kwargs):
         handled_types = [cudf.Series]
         for t in types:
@@ -1214,9 +1206,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _binaryop(
+    def _prep_for_binop(
         self,
-        other: Frame,
+        other: Any,
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
@@ -1248,24 +1240,55 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lhs = self
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
+        return operands, lhs._index
+
+    def _binaryop(
+        self,
+        other: Frame,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        operands, out_index = self._prep_for_binop(
+            other, fn, fill_value, reflect, can_reindex
+        )
         return (
-            lhs._from_data(
-                data=lhs._colwise_binop(operands, fn), index=lhs._index,
+            self._from_data(
+                data=self._colwise_binop(operands, fn), index=out_index,
             )
             if operands is not NotImplemented
             else NotImplemented
         )
 
     def logical_and(self, other):
+        warnings.warn(
+            "Series.logical_and is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_and").astype(np.bool_)
 
     def remainder(self, other):
+        warnings.warn(
+            "Series.remainder is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "mod")
 
     def logical_or(self, other):
+        warnings.warn(
+            "Series.logical_or is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._binaryop(other, "l_or").astype(np.bool_)
 
     def logical_not(self):
+        warnings.warn(
+            "Series.logical_not is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
@@ -1782,10 +1805,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._from_data(
-                {self.name: (data.copy(deep=True) if copy else data)},
-                index=self._index,
-            )
+            return self._from_data({self.name: data}, index=self._index)
 
         except Exception as e:
             if errors == "raise":
@@ -3289,14 +3309,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return result
 
     def add_prefix(self, prefix):
-        result = self.copy(deep=True)
-        result.index = prefix + self.index.astype(str)
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=prefix + self.index.astype(str),
+        )
 
     def add_suffix(self, suffix):
-        result = self.copy(deep=True)
-        result.index = self.index.astype(str) + suffix
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=self.index.astype(str) + suffix,
+        )
 
     def keys(self):
         """
@@ -3838,8 +3860,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates belong to a leap year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-02-01', end='2013-02-01', freq='1Y'))
@@ -3896,7 +3918,7 @@ class DatetimeProperties:
         Integer indicating which quarter the date belongs to.
 
         Examples
-        -------
+        --------
         >>> import cudf
         >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
         ...     dtype="datetime64[ms]")
@@ -3972,8 +3994,8 @@ class DatetimeProperties:
         Series
         Integers representing the number of days in month
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-01', end='2001-08-01', freq='1M'))
@@ -4023,8 +4045,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the last day of the month.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-26', end='2000-09-03', freq='1D'))
@@ -4069,8 +4091,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the begining of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4115,8 +4137,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the end of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4163,8 +4185,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the first day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
@@ -4197,8 +4219,8 @@ class DatetimeProperties:
         Series
         Booleans indicating if dates are the last day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> dates = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates

@@ -539,14 +539,11 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
-  private static native long leftJoinRowCount(long leftTable, long rightHashJoin,
-                                              boolean nullsEqual) throws CudfException;
+  private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
-  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin,
-                                                      boolean nullsEqual) throws CudfException;
+  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
-                                                               boolean nullsEqual,
                                                                long outputRowCount) throws CudfException;
 
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
@@ -555,14 +552,11 @@ public final class Table implements AutoCloseable {
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
-  private static native long innerJoinRowCount(long table, long hashJoin,
-                                               boolean nullsEqual) throws CudfException;
+  private static native long innerJoinRowCount(long table, long hashJoin) throws CudfException;
 
-  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin,
-                                                       boolean nullsEqual) throws CudfException;
+  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin) throws CudfException;
 
   private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
-                                                                boolean nullsEqual,
                                                                 long outputRowCount) throws CudfException;
 
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
@@ -571,14 +565,11 @@ public final class Table implements AutoCloseable {
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
-  private static native long fullJoinRowCount(long leftTable, long rightHashJoin,
-                                              boolean nullsEqual) throws CudfException;
+  private static native long fullJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
-  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin,
-                                                      boolean nullsEqual) throws CudfException;
+  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
-                                                               boolean nullsEqual,
                                                                long outputRowCount) throws CudfException;
 
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
@@ -2318,8 +2309,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    return leftJoinRowCount(getNativeView(), rightHash.getNativeView(),
-        rightHash.getCompareNulls());
+    return leftJoinRowCount(getNativeView(), rightHash.getNativeView());
   }
 
   /**
@@ -2337,9 +2327,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls());
+    long[] gatherMapData = leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2363,9 +2351,8 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        leftHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls(), outputRowCount);
+    long[] gatherMapData = leftHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2545,8 +2532,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "otherKeys: " + otherHash.getNumberOfColumns());
     }
-    return innerJoinRowCount(getNativeView(), otherHash.getNativeView(),
-        otherHash.getCompareNulls());
+    return innerJoinRowCount(getNativeView(), otherHash.getNativeView());
   }
 
   /**
@@ -2564,9 +2550,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls());
+    long[] gatherMapData = innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2590,9 +2574,8 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        innerHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls(), outputRowCount);
+    long[] gatherMapData = innerHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2778,8 +2761,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    return fullJoinRowCount(getNativeView(), rightHash.getNativeView(),
-        rightHash.getCompareNulls());
+    return fullJoinRowCount(getNativeView(), rightHash.getNativeView());
   }
 
   /**
@@ -2797,9 +2779,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls());
+    long[] gatherMapData = fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2823,9 +2803,8 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        fullHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls(), outputRowCount);
+    long[] gatherMapData = fullHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
