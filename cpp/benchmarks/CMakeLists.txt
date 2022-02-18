@@ -260,7 +260,7 @@ ConfigureBench(
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
   string/convert_numerics.cpp
-  string/copy.cpp
+  string/copy.cu
   string/extract.cpp
   string/factory.cu
   string/filter.cpp
