@@ -68,6 +68,9 @@ constexpr auto NUM_VALIDITY_TILES_PER_KERNEL_LOADED = 2;
 
 constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
 
+// needed to suppress warning about cuda::barrier
+#pragma nv_diag_suppress static_var_with_dynamic_init
+
 using namespace cudf;
 using detail::make_device_uvector_async;
 using rmm::device_uvector;
