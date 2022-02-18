@@ -74,6 +74,30 @@ class Operation:
             return getattr(obj, self._name)
 
 
+def _should_define_operation(cls, operation, base_operation_name):
+    if operation not in dir(cls):
+        return True
+
+    # If the class doesn't override the base operation we stick to whatever
+    # parent implementation exists.
+    if base_operation_name not in cls.__dict__:
+        return False
+
+    # There are two possibilities here:
+    # 1. A parent class manually overrode the operation. That override takes
+    #    precedence even if the current class overrode the base_operation.
+    # 2. A parent class has an auto-generated operation. The current class must
+    #    override it so that its base operation is used rather than the parent.
+    for base_cls in cls.__mro__:
+        # The first attribute in the MRO is the one that will be used.
+        if operation in base_cls.__dict__:
+            return isinstance(base_cls.__dict__[operation], Operation)
+
+    # This line should be unreachable since we know the attribute exists
+    # somewhere in the MRO if the for loop was entered.
+    assert False, "Operation attribute not found in hierarchy."
+
+
 def _create_delegating_mixin(
     mixin_name,
     docstring,
@@ -192,7 +216,9 @@ def _create_delegating_mixin(
 
             base_operation = getattr(cls, base_operation_name)
             for operation in valid_operations:
-                if operation not in dir(cls):
+                if _should_define_operation(
+                    cls, operation, base_operation_name
+                ):
                     docstring_format_args = getattr(
                         cls, docstring_attr, {}
                     ).get(operation, {})
