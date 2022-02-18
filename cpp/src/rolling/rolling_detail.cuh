@@ -1108,11 +1108,19 @@ __launch_bounds__(block_size) __global__
  */
 template <typename InputType>
 struct rolling_window_launcher {
+  // ARG_MIN/ARG_MAX for structs need to be handled separately.
+  template <aggregation::Kind op>
+  static constexpr bool is_struct_arg_minmax()
+  {
+    return std::is_same_v<InputType, cudf::struct_view> &&
+           (op == aggregation::Kind::ARGMIN || op == aggregation::Kind::ARGMAX);
+  }
+
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported() &&
-                     !std::is_same_v<InputType, cudf::struct_view>,
+                     !is_struct_arg_minmax<op>(),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -1176,12 +1184,13 @@ struct rolling_window_launcher {
     return output;
   }
 
-  // Operations on structs needs to be handled separately.
+  // This function is designed specifically for finding ARG_MIN/ARG_MIN of structs.
+  // Other supported aggregations for structs (if any) should nott be handled here.
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported() &&
-                     std::is_same_v<InputType, cudf::struct_view>,
+                     is_struct_arg_minmax<op>(),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& /*default_outputs*/,
@@ -1192,11 +1201,6 @@ struct rolling_window_launcher {
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
-    // This function is designed specifically for finding structs ARG_MIN/ARG_MIN and should not be
-    // reached by any other supported aggregations for structs (if any).
-    static_assert(op == aggregation::Kind::ARGMIN || op == aggregation::Kind::ARGMAX,
-                  "Only aggregation ARG_MIN and ARG_MAX are supported for structs");
-
     auto output = make_fixed_width_column(
       target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
     auto const device_operator = create_rolling_operator<InputType, op>{}(min_periods, agg);
@@ -1214,7 +1218,7 @@ struct rolling_window_launcher {
       // Using comp_generator to create a LESS comparator for finding ARG_MIN/ARG_MAX.
       auto const comp_generator =
         cudf::reduction::detail::comparison_binop_generator::create<op>(input, stream);
-      auto const d_valid_count = rmm::device_scalar<size_type>{0, stream};
+      auto d_valid_count = rmm::device_scalar<size_type>{0, stream};
 
       if (input.has_nulls()) {
         gpu_rolling_arg_minmax<OutType, block_size, true>
