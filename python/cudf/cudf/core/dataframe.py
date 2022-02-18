@@ -1237,15 +1237,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     }
                 )
                 return DataFrame._from_data(
-                    columns, index=MultiIndex._from_data(mi_columns)
+                    columns,
+                    index=MultiIndex._from_data(
+                        mi_columns, name=self.index.name
+                    ),
                 )
             else:
                 return DataFrame._from_data(
                     columns,
                     index=(
-                        RangeIndex(start=start, stop=stop, step=stride)
+                        RangeIndex(
+                            start=start,
+                            stop=stop,
+                            step=stride,
+                            name=self.index.name,
+                        )
                         if isinstance(self.index, RangeIndex)
-                        else Index([], dtype=self.index.dtype)
+                        else Index(
+                            [], dtype=self.index.dtype, name=self.index.name
+                        )
                     ),
                 )
 
