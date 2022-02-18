@@ -119,7 +119,7 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
 
   auto existing_cache = caches.find(preprog.name());
 
-  auto constexpr DEFAULT_LIMIT = std::size_t{1024 * 1024};
+  auto constexpr DEFAULT_LIMIT = std::size_t{1024};
   if (existing_cache == caches.end()) {
     auto const kernel_limit_proc =
       try_parse_numeric_env_var("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", DEFAULT_LIMIT);
