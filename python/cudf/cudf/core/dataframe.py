@@ -5173,15 +5173,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: propagate nulls through isin
         # https://github.com/rapidsai/cudf/issues/7556
 
+        fill_value = cudf.Scalar(False)
+
         def make_false_column_like_self():
-            return column.full(size=len(self), fill_value=False, dtype="bool")
+            return column.full(len(self), fill_value, "bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
         result = {}
-        if isinstance(values, (Series, DataFrame)):
-            obj_dtype = cudf.dtype("object")
-
+        if isinstance(values, IndexedFrame):
             # Note: In the case where values is a Series, computing some
             # information about the values column outside the loop may result
             # in performance gains.  However, since categorical conversion
@@ -5213,16 +5213,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     # because if only one was categorical then it's already
                     # been converted and we have to check if they're strings.
                     if self_is_cat and other_is_cat:
-                        self_is_obj = other_is_obj = False
+                        self_is_str = other_is_str = False
                     else:
                         # These checks must happen after the conversions above
                         # since numpy can't handle categorical dtypes.
-                        self_is_obj = np.issubdtype(self_col.dtype, obj_dtype)
-                        other_is_obj = np.issubdtype(
-                            other_col.dtype, obj_dtype
-                        )
+                        self_is_str = is_string_dtype(self_col.dtype)
+                        other_is_str = is_string_dtype(other_col.dtype)
 
-                    if self_is_obj != other_is_obj:
+                    if self_is_str != other_is_str:
                         # Strings can't compare to anything else.
                         result[col] = make_false_column_like_self()
                     else:
