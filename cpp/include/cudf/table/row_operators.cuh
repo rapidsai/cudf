@@ -148,7 +148,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs,
                                             Element rhs,
-                                            weak_ordering nan_result = weak_ordering::GREATER)
+                                            weak_ordering const nan_result = weak_ordering::GREATER)
 {
   return detail::compare_elements(lhs, rhs);
 }
@@ -162,9 +162,11 @@ __device__ weak_ordering relational_compare(Element lhs,
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare(Element lhs, Element rhs)
+__device__ bool equality_compare(Element lhs,
+                                 Element rhs,
+                                 nan_equality const nan_result = nan_equality::ALL_EQUAL)
 {
-  if (isnan(lhs) and isnan(rhs)) { return true; }
+  if (isnan(lhs) and isnan(rhs)) { return nan_result == nan_equality::ALL_EQUAL; }
   return lhs == rhs;
 }
 
@@ -177,7 +179,9 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare(Element const lhs, Element const rhs)
+__device__ bool equality_compare(Element const lhs,
+                                 Element const rhs,
+                                 nan_equality const nan_result = nan_equality::ALL_EQUAL)
 {
   return lhs == rhs;
 }
@@ -205,8 +209,13 @@ class element_equality_comparator {
   element_equality_comparator(Nullate has_nulls,
                               column_device_view lhs,
                               column_device_view rhs,
-                              null_equality nulls_are_equal = null_equality::EQUAL)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+                              null_equality nulls_are_equal = null_equality::EQUAL,
+                              nan_equality nans_are_equal   = nan_equality::ALL_EQUAL)
+    : lhs{lhs},
+      rhs{rhs},
+      nulls{has_nulls},
+      nulls_are_equal{nulls_are_equal},
+      nans_are_equal{nans_are_equal}
   {
   }
 
@@ -233,7 +242,8 @@ class element_equality_comparator {
     }
 
     return equality_compare(lhs.element<Element>(lhs_element_index),
-                            rhs.element<Element>(rhs_element_index));
+                            rhs.element<Element>(rhs_element_index),
+                            nans_are_equal);
   }
 
   template <typename Element,
@@ -249,6 +259,7 @@ class element_equality_comparator {
   column_device_view rhs;
   Nullate nulls;
   null_equality nulls_are_equal;
+  nan_equality nans_are_equal;
 };
 
 template <typename Nullate>
@@ -257,8 +268,13 @@ class row_equality_comparator {
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
-                          null_equality nulls_are_equal = null_equality::EQUAL)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+                          null_equality nulls_are_equal = null_equality::EQUAL,
+                          nan_equality nans_are_equal   = nan_equality::ALL_EQUAL)
+    : lhs{lhs},
+      rhs{rhs},
+      nulls{has_nulls},
+      nulls_are_equal{nulls_are_equal},
+      nans_are_equal{nans_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
@@ -266,10 +282,11 @@ class row_equality_comparator {
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher(l.type(),
-                                   element_equality_comparator{nulls, l, r, nulls_are_equal},
-                                   lhs_row_index,
-                                   rhs_row_index);
+      return cudf::type_dispatcher(
+        l.type(),
+        element_equality_comparator{nulls, l, r, nulls_are_equal, nans_are_equal},
+        lhs_row_index,
+        rhs_row_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
@@ -280,6 +297,7 @@ class row_equality_comparator {
   table_device_view rhs;
   Nullate nulls;
   null_equality nulls_are_equal;
+  nan_equality nans_are_equal;
 };
 
 /**
@@ -427,12 +445,14 @@ class row_lexicographic_comparator {
                                table_device_view lhs,
                                table_device_view rhs,
                                order const* column_order         = nullptr,
-                               null_order const* null_precedence = nullptr)
+                               null_order const* null_precedence = nullptr,
+                               bool const accept_equality        = false)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
       _column_order{column_order},
-      _null_precedence{null_precedence}
+      _null_precedence{null_precedence},
+      _accept_equality{accept_equality}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
     CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
@@ -471,7 +491,7 @@ class row_lexicographic_comparator {
 
       return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
-    return false;
+    return _accept_equality;
   }
 
  private:
@@ -480,6 +500,7 @@ class row_lexicographic_comparator {
   Nullate _nulls{};
   null_order const* _null_precedence{};
   order const* _column_order{};
+  bool const _accept_equality;
 };  // class row_lexicographic_comparator
 
 /**

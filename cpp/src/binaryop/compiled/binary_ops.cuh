@@ -289,10 +289,10 @@ void apply_binary_op(mutable_column_view& out,
                      rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    auto op_order    = detail::is_any_v<BinaryOperator, ops::Greater, ops::LessEqual>
-                         ? order::DESCENDING
-                         : order::ASCENDING;
-    auto flip_output = detail::is_any_v<BinaryOperator, ops::GreaterEqual, ops::LessEqual>;
+    auto op_order        = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
+                             ? order::DESCENDING
+                             : order::ASCENDING;
+    auto accept_equality = detail::is_any_v<BinaryOperator, ops::GreaterEqual, ops::LessEqual>;
     auto const nullability =
       structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
         ? structs::detail::column_nullability::FORCE
@@ -313,10 +313,12 @@ void apply_binary_op(mutable_column_view& out,
         nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
         *d_lhs,
         *d_rhs,
-        compare_orders.data()},
+        compare_orders.data(),
+        nullptr,
+        accept_equality},
       is_lhs_scalar,
       is_rhs_scalar,
-      flip_output,
+      false,
       stream);
   } else {
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());

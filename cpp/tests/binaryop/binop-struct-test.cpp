@@ -300,28 +300,30 @@ TEST_F(BinopStructCompareNAN, float_nans)
     -NAN, -NAN, -NAN, NAN, NAN, NAN, 1.0f, 0.0f, -54.3f};
   cudf::test::fixed_width_column_wrapper<float> rhs{
     -32.5f, -NAN, NAN, -0.0f, -NAN, NAN, 111.0f, -NAN, NAN};
+  data_type dt = cudf::data_type(cudf::type_id::BOOL8);
 
-  auto expected_eq   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
-  auto expected_neq  = fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1, 1, 1, 1};
-  auto expected_lt   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0, 0};
-  auto expected_lteq = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0, 0};
-  auto expected_gt   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
-  auto expected_gteq = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto expected_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
+  auto expected_neq  = binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
+  auto expected_lt   = binary_operation(lhs, rhs, binary_operator::LESS, dt);
+  auto expected_gt   = binary_operation(lhs, rhs, binary_operator::GREATER, dt);
+  auto expected_gteq = binary_operation(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
+  auto expected_lteq = binary_operation(lhs, rhs, binary_operator::LESS_EQUAL, dt);
 
-  data_type dt  = cudf::data_type(cudf::type_id::BOOL8);
-  auto res_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
-  auto res_neq  = binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
-  auto res_lt   = binary_operation(lhs, rhs, binary_operator::LESS, dt);
-  auto res_gt   = binary_operation(lhs, rhs, binary_operator::GREATER, dt);
-  auto res_gteq = binary_operation(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
-  auto res_lteq = binary_operation(lhs, rhs, binary_operator::LESS_EQUAL, dt);
+  auto struct_lhs = structs_column_wrapper{lhs};
+  auto struct_rhs = structs_column_wrapper{rhs};
+  auto res_eq     = binary_operation(struct_lhs, struct_rhs, binary_operator::EQUAL, dt);
+  auto res_neq    = binary_operation(struct_lhs, struct_rhs, binary_operator::NOT_EQUAL, dt);
+  auto res_lt     = binary_operation(struct_lhs, struct_rhs, binary_operator::LESS, dt);
+  auto res_gt     = binary_operation(struct_lhs, struct_rhs, binary_operator::GREATER, dt);
+  auto res_gteq   = binary_operation(struct_lhs, struct_rhs, binary_operator::GREATER_EQUAL, dt);
+  auto res_lteq   = binary_operation(struct_lhs, struct_rhs, binary_operator::LESS_EQUAL, dt);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, expected_lt);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, expected_lteq);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, expected_gt);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gteq, expected_gteq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, *expected_eq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, *expected_neq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, *expected_lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, *expected_lteq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, *expected_gt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gteq, *expected_gteq);
 };
 
 TEST_F(BinopStructCompareNAN, double_nans)
@@ -330,28 +332,30 @@ TEST_F(BinopStructCompareNAN, double_nans)
     -NAN, -NAN, -NAN, NAN, NAN, NAN, 1.0f, 0.0f, -54.3f};
   cudf::test::fixed_width_column_wrapper<double> rhs{
     -32.5f, -NAN, NAN, -0.0f, -NAN, NAN, 111.0f, -NAN, NAN};
+  data_type dt = cudf::data_type(cudf::type_id::BOOL8);
 
-  auto expected_eq   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
-  auto expected_neq  = fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1, 1, 1, 1};
-  auto expected_lt   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0, 0};
-  auto expected_lteq = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 1, 0, 0};
-  auto expected_gt   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
-  auto expected_gteq = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto expected_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
+  auto expected_neq  = binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
+  auto expected_lt   = binary_operation(lhs, rhs, binary_operator::LESS, dt);
+  auto expected_gt   = binary_operation(lhs, rhs, binary_operator::GREATER, dt);
+  auto expected_gteq = binary_operation(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
+  auto expected_lteq = binary_operation(lhs, rhs, binary_operator::LESS_EQUAL, dt);
 
-  data_type dt  = cudf::data_type(cudf::type_id::BOOL8);
-  auto res_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
-  auto res_neq  = binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
-  auto res_lt   = binary_operation(lhs, rhs, binary_operator::LESS, dt);
-  auto res_gt   = binary_operation(lhs, rhs, binary_operator::GREATER, dt);
-  auto res_gteq = binary_operation(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
-  auto res_lteq = binary_operation(lhs, rhs, binary_operator::LESS_EQUAL, dt);
+  auto struct_lhs = structs_column_wrapper{lhs};
+  auto struct_rhs = structs_column_wrapper{rhs};
+  auto res_eq     = binary_operation(struct_lhs, struct_rhs, binary_operator::EQUAL, dt);
+  auto res_neq    = binary_operation(struct_lhs, struct_rhs, binary_operator::NOT_EQUAL, dt);
+  auto res_lt     = binary_operation(struct_lhs, struct_rhs, binary_operator::LESS, dt);
+  auto res_gt     = binary_operation(struct_lhs, struct_rhs, binary_operator::GREATER, dt);
+  auto res_gteq   = binary_operation(struct_lhs, struct_rhs, binary_operator::GREATER_EQUAL, dt);
+  auto res_lteq   = binary_operation(struct_lhs, struct_rhs, binary_operator::LESS_EQUAL, dt);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, expected_lt);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, expected_lteq);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, expected_gt);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gteq, expected_gteq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, *expected_eq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, *expected_neq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, *expected_lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, *expected_lteq);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, *expected_gt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gteq, *expected_gteq);
 };
 
 struct BinopStructCompareFailures : public cudf::test::BaseFixture {
