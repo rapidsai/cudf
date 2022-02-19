@@ -34,8 +34,8 @@ class Search : public cudf::benchmark {
 
 void BM_column(benchmark::State& state, bool nulls)
 {
-  const auto column_size{static_cast<cudf::size_type>(state.range(0))};
-  const auto values_size = column_size;
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const values_size = column_size;
 
   auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
   auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
@@ -75,9 +75,9 @@ void BM_table(benchmark::State& state)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<float>;
 
-  const auto num_columns{static_cast<cudf::size_type>(state.range(0))};
-  const auto column_size{static_cast<cudf::size_type>(state.range(1))};
-  const auto values_size = column_size;
+  auto const num_columns{static_cast<cudf::size_type>(state.range(0))};
+  auto const column_size{static_cast<cudf::size_type>(state.range(1))};
+  auto const values_size = column_size;
 
   auto make_table = [&](cudf::size_type col_size) {
     cudf::test::UniformRandomGenerator<int> random_gen(0, 100);

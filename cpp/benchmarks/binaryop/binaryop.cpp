@@ -39,12 +39,12 @@ class BINARYOP : public cudf::benchmark {
 template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)
 {
-  const cudf::size_type table_size{static_cast<cudf::size_type>(state.range(0))};
-  const cudf::size_type tree_levels{static_cast<cudf::size_type>(state.range(1))};
+  auto const table_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
   auto const n_cols = reuse_columns ? 1 : tree_levels + 1;
-  auto source_table =
+  auto const source_table =
     create_sequence_table({cudf::type_to_id<key_type>()}, n_cols, row_count{table_size});
   cudf::table_view table{*source_table};
 
