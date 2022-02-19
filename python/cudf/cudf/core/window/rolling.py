@@ -302,8 +302,8 @@ class Rolling(GetAttrGetItemMixin):
         -----
         See notes of the :meth:`cudf.Series.applymap`
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> import cudf
         >>> def count_if_gt_3(window):
