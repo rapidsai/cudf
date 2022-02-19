@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -576,9 +577,10 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::siz
   if (null_probability < 0.0f) {
     return {rmm::device_buffer{}, 0};
   } else if (null_probability >= 1.0f or null_probability == 0.0f) {
-    rmm::device_uvector<cudf::bitmask_type> mask(null_mask_size(size), rmm::cuda_stream_default);
-    thrust::fill(thrust::device, mask.begin(), mask.end(), null_probability >= 1.0f ? 0 : ~0);
-    return {mask.release(), size};
+    return {
+      cudf::create_null_mask(
+        size, null_probability >= 1.0f ? cudf::mask_state::ALL_VALID : cudf::mask_state::ALL_NULL),
+      null_probability >= 1.0f ? size : 0};
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),
