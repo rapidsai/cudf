@@ -420,7 +420,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
  * @param seed optional, seed for the pseudo-random engine
  * @return A table with the sequence columns.
  */
-std::unique_ptr<cudf::table> create_sequence_table(cudf::host_span<cudf::type_id> const& dtype_ids,
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
                                                    cudf::size_type num_cols,
                                                    row_count num_rows,
                                                    float null_probability = -1.0,
