@@ -261,22 +261,10 @@ std::unique_ptr<column> round_with(column_view const& input,
   // overflow. Under this circumstance, we can simply output a zero column because no digits can
   // survive such a large scale movement.
   if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
-    if (input.nullable()) {
-      auto device_view = column_device_view::create(out_view, stream);
-      detail::copy_range(thrust::make_constant_iterator(static_cast<Type>(0)),
-                         detail::make_validity_iterator(*device_view),
-                         out_view,
-                         out_view.offset(),
-                         out_view.offset() + out_view.size(),
-                         stream);
-    } else {
-      detail::copy_range(thrust::make_constant_iterator(static_cast<Type>(0)),
-                         thrust::make_constant_iterator(false),
-                         out_view,
-                         out_view.offset(),
-                         out_view.offset() + out_view.size(),
-                         stream);
-    }
+    thrust::fill(rmm::exec_policy(stream),
+                 out_view.template begin<Type>(),
+                 out_view.template end<Type>(),
+                 static_cast<Type>(0));
   } else {
     Type const n = std::pow(10, scale_movement);
     thrust::transform(rmm::exec_policy(stream),
