@@ -17,15 +17,16 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/row_operator3.cuh>
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
-namespace structs::detail::experimental {
+namespace experimental {
 
-std::tuple<structs::detail::flattened_table, std::vector<int>> verticalize_nested_columns(
-  table_view input,
-  std::vector<order> const& column_order,
-  std::vector<null_order> const& null_precedence)
+auto struct_lex_verticalize(table_view input,
+                            std::vector<order> const& column_order         = {},
+                            std::vector<null_order> const& null_precedence = {})
 {
   // auto [table, null_masks] = superimpose_parent_nulls(input);
 
@@ -91,11 +92,36 @@ std::tuple<structs::detail::flattened_table, std::vector<int>> verticalize_neste
       verticalized_columns.push_back(col);
     }
   }
-  return std::make_tuple(
-    structs::detail::flattened_table(
-      table_view(verticalized_columns), new_column_order, new_null_precedence, {}, {}),
-    std::move(verticalized_col_depths));
+  return std::make_tuple(table_view(verticalized_columns),
+                         std::move(new_column_order),
+                         std::move(new_null_precedence),
+                         std::move(verticalized_col_depths));
 }
 
-}  // namespace structs::detail::experimental
+row_lex_operator::row_lex_operator(table_view const& lhs,
+                                   table_view const& rhs,
+                                   std::vector<order> const& column_order,
+                                   std::vector<null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream)
+  : d_column_order(0, stream),
+    d_null_precedence(0, stream),
+    d_depths(0, stream),
+    any_nulls(has_nested_nulls(lhs) or has_nested_nulls(rhs))
+{
+  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
+    struct_lex_verticalize(lhs, column_order, null_precedence);
+  table_view verticalized_rhs;
+  std::tie(verticalized_rhs, std::ignore, std::ignore, std::ignore) = struct_lex_verticalize(rhs);
+
+  d_lhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+  d_rhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_rhs, stream));
+
+  d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
+  d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
+  d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+}
+
+}  // namespace experimental
 }  // namespace cudf

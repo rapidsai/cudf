@@ -62,26 +62,13 @@ std::unique_ptr<column> sorted_order2(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto [verticalized, depths] = cudf::structs::detail::experimental::verticalize_nested_columns(
-    input, column_order, null_precedence);
-  auto device_table         = table_device_view::create(verticalized.flattened_columns(), stream);
-  auto const d_column_order = make_device_uvector_async(verticalized.orders(), stream);
-  auto const d_null_precedence = make_device_uvector_async(verticalized.null_orders(), stream);
-  auto const d_depths          = make_device_uvector_async(depths, stream);
-
-  // auto const comparator = row_lexicographic_comparator2<true>(*device_table, *device_table);
-  auto const comparator =
-    cudf::experimental::row_lexicographic_comparator(nullate::DYNAMIC{true},
-                                                     *device_table,
-                                                     *device_table,
-                                                     d_depths.data(),
-                                                     d_column_order.data(),
-                                                     d_null_precedence.data());
+  auto comp =
+    cudf::experimental::row_lex_operator(input, input, column_order, null_precedence, stream);
 
   thrust::sort(rmm::exec_policy(stream),
                mutable_indices_view.begin<size_type>(),
                mutable_indices_view.end<size_type>(),
-               comparator);
+               comp.device_comparator<nullate::DYNAMIC>());
   // protection for temporary d_column_order and d_null_precedence
   stream.synchronize();
 

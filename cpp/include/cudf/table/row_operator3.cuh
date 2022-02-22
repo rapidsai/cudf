@@ -156,5 +156,48 @@ class row_lexicographic_comparator {
   int const* _depth;
 };  // class row_lexicographic_comparator
 
+struct row_lex_operator {
+  // Problems I see here:
+  // 1. What if lhs == rhs. We're doing duplicate work then. We didn't need to before.
+  //    Possible to have a table_view::operator==() so we can figure out internally
+  row_lex_operator(table_view const& lhs,
+                   table_view const& rhs,
+                   std::vector<order> const& column_order,
+                   std::vector<null_order> const& null_precedence,
+                   rmm::cuda_stream_view stream);
+
+  template <typename Nullate>
+  row_lexicographic_comparator<Nullate> device_comparator()
+  {
+    // TODO: checks, if constexpr dynamic then based on
+    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
+      return row_lexicographic_comparator(Nullate{any_nulls},
+                                          **d_lhs,
+                                          **d_rhs,
+                                          d_depths.data(),
+                                          d_column_order.data(),
+                                          d_null_precedence.data());
+    } else {
+      return row_lexicographic_comparator<Nullate>(Nullate{},
+                                                   **d_lhs,
+                                                   **d_rhs,
+                                                   d_depths.data(),
+                                                   d_column_order.data(),
+                                                   d_null_precedence.data());
+    }
+  }
+
+ private:
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  std::unique_ptr<table_device_view_owner> d_lhs;
+  std::unique_ptr<table_device_view_owner> d_rhs;
+  rmm::device_uvector<order> d_column_order;
+  rmm::device_uvector<null_order> d_null_precedence;
+  rmm::device_uvector<size_type> d_depths;
+  bool any_nulls;
+};
+
 }  // namespace experimental
 }  // namespace cudf
