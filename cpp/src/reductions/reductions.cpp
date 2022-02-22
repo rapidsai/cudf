@@ -45,7 +45,7 @@ struct reduce_dispatch_functor {
   }
 
   template <aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const& agg)
+  std::unique_ptr<scalar> operator()(std::unique_ptr<reduce_aggregation> const& agg)
   {
     switch (k) {
       case aggregation::SUM: return reduction::sum(col, output_dtype, stream, mr); break;
@@ -109,7 +109,7 @@ struct reduce_dispatch_functor {
 
 std::unique_ptr<scalar> reduce(
   column_view const& col,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -129,7 +129,7 @@ std::unique_ptr<scalar> reduce(
 }  // namespace detail
 
 std::unique_ptr<scalar> reduce(column_view const& col,
-                               std::unique_ptr<aggregation> const& agg,
+                               std::unique_ptr<reduce_aggregation> const& agg,
                                data_type output_dtype,
                                rmm::mr::device_memory_resource* mr)
 {

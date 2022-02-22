@@ -147,7 +147,9 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  */
 class sum_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public reduce_aggregation,
+                              public scan_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -166,7 +168,9 @@ class sum_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public groupby_aggregation {
+class product_aggregation final : public groupby_aggregation,
+                                  public reduce_aggregation,
+                                  public scan_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -187,7 +191,9 @@ class product_aggregation final : public groupby_aggregation {
  */
 class min_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public reduce_aggregation,
+                              public scan_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -208,7 +214,9 @@ class min_aggregation final : public rolling_aggregation,
  */
 class max_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public reduce_aggregation,
+                              public scan_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -248,7 +256,7 @@ class count_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying an any aggregation
  */
-class any_aggregation final : public aggregation {
+class any_aggregation final : public reduce_aggregation {
  public:
   any_aggregation() : aggregation(ANY) {}
 
@@ -267,7 +275,7 @@ class any_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying an all aggregation
  */
-class all_aggregation final : public aggregation {
+class all_aggregation final : public reduce_aggregation {
  public:
   all_aggregation() : aggregation(ALL) {}
 
@@ -286,7 +294,7 @@ class all_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public groupby_aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -305,7 +313,9 @@ class sum_of_squares_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-class mean_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class mean_aggregation final : public rolling_aggregation,
+                               public groupby_aggregation,
+                               public reduce_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -343,7 +353,9 @@ class m2_aggregation : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-class std_var_aggregation : public rolling_aggregation, public groupby_aggregation {
+class std_var_aggregation : public rolling_aggregation,
+                            public groupby_aggregation,
+                            public reduce_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -415,7 +427,7 @@ class std_aggregation final : public std_var_aggregation {
 /**
  * @brief Derived class for specifying a median aggregation
  */
-class median_aggregation final : public groupby_aggregation {
+class median_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   median_aggregation() : aggregation(MEDIAN) {}
 
@@ -434,7 +446,7 @@ class median_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
-class quantile_aggregation final : public groupby_aggregation {
+class quantile_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   quantile_aggregation(std::vector<double> const& q, interpolation i)
     : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
@@ -521,7 +533,7 @@ class argmin_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public groupby_aggregation {
+class nunique_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -560,7 +572,7 @@ class nunique_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public groupby_aggregation {
+class nth_element_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
@@ -622,7 +634,9 @@ class row_number_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a rank aggregation
  */
-class rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
+class rank_aggregation final : public rolling_aggregation,
+                               public groupby_scan_aggregation,
+                               public scan_aggregation {
  public:
   rank_aggregation() : aggregation{RANK} {}
 
@@ -641,7 +655,9 @@ class rank_aggregation final : public rolling_aggregation, public groupby_scan_a
 /**
  * @brief Derived class for specifying a dense rank aggregation
  */
-class dense_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
+class dense_rank_aggregation final : public rolling_aggregation,
+                                     public groupby_scan_aggregation,
+                                     public scan_aggregation {
  public:
   dense_rank_aggregation() : aggregation{DENSE_RANK} {}
 
@@ -657,7 +673,9 @@ class dense_rank_aggregation final : public rolling_aggregation, public groupby_
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
-class percent_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
+class percent_rank_aggregation final : public rolling_aggregation,
+                                       public groupby_scan_aggregation,
+                                       public scan_aggregation {
  public:
   percent_rank_aggregation() : aggregation{PERCENT_RANK} {}
 

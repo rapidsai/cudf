@@ -65,7 +65,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  */
 std::unique_ptr<scalar> reduce(
   column_view const& col,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -89,7 +89,7 @@ std::unique_ptr<scalar> reduce(
  */
 std::unique_ptr<column> scan(
   const column_view& input,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<scan_aggregation> const& agg,
   scan_type inclusive,
   null_policy null_handling           = null_policy::EXCLUDE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

@@ -148,6 +148,28 @@ class groupby_scan_aggregation : public virtual aggregation {
   groupby_scan_aggregation() {}
 };
 
+/**
+ * @brief Derived class intended for reduction usage.
+ */
+class reduce_aggregation : public virtual aggregation {
+ public:
+  ~reduce_aggregation() override = default;
+
+ protected:
+  reduce_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for scan usage.
+ */
+class scan_aggregation : public virtual aggregation {
+ public:
+  ~scan_aggregation() override = default;
+
+ protected:
+  scan_aggregation() {}
+};
+
 enum class udf_type : bool { CUDA, PTX };
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 
