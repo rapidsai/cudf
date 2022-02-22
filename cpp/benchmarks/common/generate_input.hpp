@@ -70,15 +70,14 @@ distribution_id default_distribution_id()
   return distribution_id::GEOMETRIC;
 }
 
-template <typename T,
-          std::enable_if_t<!std::is_unsigned<T>::value && cudf::is_numeric<T>()>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_unsigned_v<T> && cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
 {
   return distribution_id::NORMAL;
 }
 
 template <typename T,
-          std::enable_if_t<!std::is_same_v<T, bool> && std::is_unsigned<T>::value &&
+          std::enable_if_t<!std::is_same_v<T, bool> && std::is_unsigned_v<T> &&
                            cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
 {
@@ -240,7 +239,7 @@ class data_profile {
     }
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = float_params.find(cudf::type_to_id<T>());
@@ -332,7 +331,7 @@ class data_profile {
   // have continuous distributions (floating point types). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+            typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,

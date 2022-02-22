@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ using void_t = void;
  * Example:
  * \code{cpp}
  * // This function will participate in overload resolution only if T is an integral type
- * template <typename T, CUDF_ENABLE_IF(std::is_integral<T>::value)>
+ * template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> )>
  * void foo();
  * \endcode
  *
@@ -218,7 +218,7 @@ constexpr inline bool is_numeric(data_type type)
 template <typename T>
 constexpr inline bool is_index_type()
 {
-  return std::is_integral<T>::value and not std::is_same_v<T, bool>;
+  return std::is_integral_v<T> and not std::is_same_v<T, bool>;
 }
 
 struct is_index_type_impl {
@@ -255,7 +255,7 @@ constexpr inline bool is_index_type(data_type type)
 template <typename T>
 constexpr inline bool is_unsigned()
 {
-  return std::is_unsigned<T>::value;
+  return std::is_unsigned_v<T>;
 }
 
 struct is_unsigned_impl {
@@ -288,7 +288,7 @@ constexpr inline bool is_unsigned(data_type type)
 template <typename Iterator>
 constexpr inline bool is_signed_iterator()
 {
-  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
+  return std::is_signed_v<typename std::iterator_traits<Iterator>::value_type>;
 }
 
 /**
@@ -301,7 +301,7 @@ constexpr inline bool is_signed_iterator()
 template <typename T>
 constexpr inline bool is_floating_point()
 {
-  return std::is_floating_point<T>::value;
+  return std::is_floating_point_v<T>;
 }
 
 struct is_floating_point_impl {

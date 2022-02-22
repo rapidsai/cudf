@@ -43,6 +43,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    CategoricalColumn,
     as_column,
     build_categorical_column,
     build_column,
@@ -52,7 +53,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -1218,13 +1219,54 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return self
         start, stop, stride = arg.indices(num_rows)
 
+        # early stop for empty cases
+        if len(range(start, stop, stride)) == 0:
+            columns = ColumnAccessor(
+                {
+                    colname: column.column_empty_like(col, newsize=0)
+                    for colname, col in self._data.items()
+                },
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
+            )
+
+            if isinstance(self.index, MultiIndex):
+                mi_columns = ColumnAccessor(
+                    {
+                        colname: column.column_empty_like(col, newsize=0)
+                        for colname, col in self.index._data.items()
+                    }
+                )
+                return DataFrame._from_data(
+                    columns,
+                    index=MultiIndex._from_data(
+                        mi_columns, name=self.index.name
+                    ),
+                )
+            else:
+                return DataFrame._from_data(
+                    columns,
+                    index=(
+                        RangeIndex(
+                            start=start,
+                            stop=stop,
+                            step=stride,
+                            name=self.index.name,
+                        )
+                        if isinstance(self.index, RangeIndex)
+                        else Index(
+                            [], dtype=self.index.dtype, name=self.index.name
+                        )
+                    ),
+                )
+
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
             if self._num_columns == 0:
                 result = self._empty_like(keep_index)
-                result._index = self.index[start:stop]
+                result._index = self.index[start:stop:stride]
                 return result
             keep_index = False
 
@@ -5169,82 +5211,81 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         falcon      True       True
         dog        False      False
         """
-        if isinstance(values, dict):
+        # TODO: propagate nulls through isin
+        # https://github.com/rapidsai/cudf/issues/7556
 
-            result_df = DataFrame()
+        fill_value = cudf.Scalar(False)
 
-            for col in self._data.names:
-                if col in values:
-                    val = values[col]
-                    result_df[col] = self._data[col].isin(val)
-                else:
-                    result_df[col] = column.full(
-                        size=len(self), fill_value=False, dtype="bool"
-                    )
+        def make_false_column_like_self():
+            return column.full(len(self), fill_value, "bool")
 
-            result_df.index = self.index
-            return result_df
-        elif isinstance(values, Series):
+        # Preprocess different input types into a mapping from column names to
+        # a list of values to check.
+        result = {}
+        if isinstance(values, IndexedFrame):
+            # Note: In the case where values is a Series, computing some
+            # information about the values column outside the loop may result
+            # in performance gains.  However, since categorical conversion
+            # depends on the current column in the loop, using the correct
+            # precomputed variables inside the loop requires nontrivial logic.
+            # This optimization could be attempted if `isin` ever becomes a
+            # bottleneck.
             values = values.reindex(self.index)
+            other_cols = (
+                values._data
+                if isinstance(values, DataFrame)
+                else {name: values._column for name in self._data}
+            )
+            for col, self_col in self._data.items():
+                if col in other_cols:
+                    other_col = other_cols[col]
+                    self_is_cat = isinstance(self_col, CategoricalColumn)
+                    other_is_cat = isinstance(other_col, CategoricalColumn)
 
-            result = DataFrame()
-            # TODO: propagate nulls through isin
-            # https://github.com/rapidsai/cudf/issues/7556
-            for col in self._data.names:
-                if isinstance(
-                    self[col]._column, cudf.core.column.CategoricalColumn
-                ) and isinstance(
-                    values._column, cudf.core.column.CategoricalColumn
-                ):
-                    res = (self._data[col] == values._column).fillna(False)
-                    result[col] = res
-                elif (
-                    isinstance(
-                        self[col]._column, cudf.core.column.CategoricalColumn
-                    )
-                    or np.issubdtype(self[col].dtype, cudf.dtype("object"))
-                ) or (
-                    isinstance(
-                        values._column, cudf.core.column.CategoricalColumn
-                    )
-                    or np.issubdtype(values.dtype, cudf.dtype("object"))
-                ):
-                    result[col] = utils.scalar_broadcast_to(False, len(self))
+                    if self_is_cat != other_is_cat:
+                        # It is valid to compare the levels of a categorical
+                        # column to a non-categorical column.
+                        if self_is_cat:
+                            self_col = self_col._get_decategorized_column()
+                        else:
+                            other_col = other_col._get_decategorized_column()
+
+                    # We use the type checks from _before_ the conversion
+                    # because if only one was categorical then it's already
+                    # been converted and we have to check if they're strings.
+                    if self_is_cat and other_is_cat:
+                        self_is_str = other_is_str = False
+                    else:
+                        # These checks must happen after the conversions above
+                        # since numpy can't handle categorical dtypes.
+                        self_is_str = is_string_dtype(self_col.dtype)
+                        other_is_str = is_string_dtype(other_col.dtype)
+
+                    if self_is_str != other_is_str:
+                        # Strings can't compare to anything else.
+                        result[col] = make_false_column_like_self()
+                    else:
+                        result[col] = (self_col == other_col).fillna(False)
                 else:
-                    result[col] = (self._data[col] == values._column).fillna(
-                        False
-                    )
-
-            result.index = self.index
-            return result
-        elif isinstance(values, DataFrame):
-            values = values.reindex(self.index)
-
-            result = DataFrame()
-            for col in self._data.names:
-                if col in values.columns:
-                    result[col] = (
-                        self._data[col] == values[col]._column
-                    ).fillna(False)
+                    result[col] = make_false_column_like_self()
+        elif is_dict_like(values):
+            for name, col in self._data.items():
+                if name in values:
+                    result[name] = col.isin(values[name])
                 else:
-                    result[col] = utils.scalar_broadcast_to(False, len(self))
-            result.index = self.index
-            return result
+                    result[name] = make_false_column_like_self()
+        elif is_list_like(values):
+            for name, col in self._data.items():
+                result[name] = col.isin(values)
         else:
-            if not is_list_like(values):
-                raise TypeError(
-                    f"only list-like or dict-like objects are "
-                    f"allowed to be passed to DataFrame.isin(), "
-                    f"you passed a "
-                    f"'{type(values).__name__}'"
-                )
+            raise TypeError(
+                "only list-like or dict-like objects are "
+                "allowed to be passed to DataFrame.isin(), "
+                "you passed a "
+                f"'{type(values).__name__}'"
+            )
 
-            result_df = DataFrame()
-
-            for col in self._data.names:
-                result_df[col] = self._data[col].isin(values)
-            result_df.index = self.index
-            return result_df
+        return DataFrame._from_data(result, self.index)
 
     #
     # Stats
