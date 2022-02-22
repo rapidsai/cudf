@@ -41,14 +41,6 @@ class BaseIndex(Serializable):
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
-        else:
-            return NotImplemented
-
     @cached_property
     def _values(self) -> ColumnBase:
         raise NotImplementedError

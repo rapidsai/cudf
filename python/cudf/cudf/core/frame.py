@@ -3496,7 +3496,9 @@ class Frame:
         Frame
             A new instance containing the result of the operation.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Binary operations are not supported for {self.__class__}"
+        )
 
     @classmethod
     @annotate("FRAME_COLWISE_BINOP", color="green", domain="cudf_python")

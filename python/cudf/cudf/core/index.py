@@ -520,6 +520,11 @@ class RangeIndex(BaseIndex):
         # that are not defined directly on RangeIndex.
         return Int64Index._from_data(self._data)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return self._as_int64().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
+
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
         # on the corresponding integer index if possible.
@@ -772,6 +777,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+
+        if method == "__call__" and hasattr(cudf, ufunc.__name__):
+            func = getattr(cudf, ufunc.__name__)
+            return func(*inputs)
+        else:
+            return NotImplemented
 
     def _binaryop(
         self,
