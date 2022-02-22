@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,8 @@ auto is_sorted(cudf::table_view const& in,
                                                  *d_input,
                                                  *d_input,
                                                  d_column_order.data(),
-                                                 d_null_precedence.data());
+                                                 d_null_precedence.data(),
+                                                 stream);
 
   auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator(0),

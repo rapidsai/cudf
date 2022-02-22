@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,9 +151,26 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
 }
 
 namespace detail {
+/**
+ * @brief Indicates whether respective columns in device tables are relationally comparable.
+ *
+ * @param lhs The first table
+ * @param rhs The second table (may be the same table as `lhs`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return true all of respective columns on `lhs` and 'rhs` tables are comparable.
+ * @return false any of respective columns on `lhs` and 'rhs` tables are not comparable.
+ */
+template <typename TableDeviceView>
+bool is_relationally_comparable(TableDeviceView const& lhs,
+                                TableDeviceView const& rhs,
+                                rmm::cuda_stream_view stream);
+
 extern template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
-                                                                   table_device_view const& rhs);
+                                                                   table_device_view const& rhs,
+                                                                   rmm::cuda_stream_view stream);
 extern template bool is_relationally_comparable<mutable_table_device_view>(
-  mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
+  mutable_table_device_view const& lhs,
+  mutable_table_device_view const& rhs,
+  rmm::cuda_stream_view stream);
 }  // namespace detail
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,11 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
+
+#include <algorithm>
 
 namespace cudf {
 namespace detail {
@@ -67,15 +70,13 @@ struct is_relationally_comparable_functor {
 template <typename TableView>
 bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
 {
-  return thrust::all_of(thrust::counting_iterator<size_type>(0),
-                        thrust::counting_iterator<size_type>(lhs.num_columns()),
-                        [lhs, rhs] __device__(auto const i) {
-                          // Simplified this for compile time. (Ideally use double_type_dispatcher)
-                          // TODO: possible to implement without double type dispatcher.
-                          return lhs.column(i).type() == rhs.column(i).type() and
-                                 type_dispatcher(lhs.column(i).type(),
-                                                 is_relationally_comparable_functor{});
-                        });
+  return std::all_of(thrust::counting_iterator<size_type>(0),
+                     thrust::counting_iterator<size_type>(lhs.num_columns()),
+                     [lhs, rhs](auto const i) {
+                       return lhs.column(i).type() == rhs.column(i).type() and
+                              type_dispatcher(lhs.column(i).type(),
+                                              is_relationally_comparable_functor{});
+                     });
 }
 
 // Explicit extern template instantiation for a table of immutable views
@@ -86,13 +87,31 @@ extern template bool is_relationally_comparable<table_view>(table_view const& lh
 extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
                                                                     mutable_table_view const& rhs);
 
+template <typename TableDeviceView>
+bool is_relationally_comparable(TableDeviceView const& lhs,
+                                TableDeviceView const& rhs,
+                                rmm::cuda_stream_view stream)
+{
+  return thrust::all_of(rmm::exec_policy(stream),
+                        thrust::counting_iterator<size_type>(0),
+                        thrust::counting_iterator<size_type>(lhs.num_columns()),
+                        [lhs, rhs] __device__(auto const i) {
+                          return lhs.column(i).type() == rhs.column(i).type() and
+                                 type_dispatcher(lhs.column(i).type(),
+                                                 is_relationally_comparable_functor{});
+                        });
+}
+
 // Explicit extern template instantiation for a device table of immutable views
 template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
-                                                            table_device_view const& rhs);
+                                                            table_device_view const& rhs,
+                                                            rmm::cuda_stream_view stream);
 
 // Explicit extern template instantiation for a device table of mutable views
 template bool is_relationally_comparable<mutable_table_device_view>(
-  mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
+  mutable_table_device_view const& lhs,
+  mutable_table_device_view const& rhs,
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf

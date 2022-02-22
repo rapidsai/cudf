@@ -40,9 +40,10 @@ struct row_arg_minmax_fn {
   row_arg_minmax_fn(table_device_view const& table,
                     bool has_nulls,
                     null_order const* null_precedence,
-                    bool const arg_min)
+                    bool const arg_min,
+                    rmm::cuda_stream_view stream)
     : num_rows(table.num_rows()),
-      comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
+      comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence, stream),
       arg_min(arg_min)
   {
   }
@@ -117,9 +118,10 @@ class comparison_binop_generator {
   }
 
  public:
-  auto binop() const
+  auto binop(rmm::cuda_stream_view stream) const
   {
-    return row_arg_minmax_fn(*d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op);
+    return row_arg_minmax_fn(
+      *d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op, stream);
   }
 
   template <typename BinOp>

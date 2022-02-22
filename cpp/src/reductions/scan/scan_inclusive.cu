@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,7 +164,7 @@ struct scan_functor<Op, cudf::struct_view> {
                            thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(input.size()),
                            gather_map.begin(),
-                           binop_generator.binop());
+                           binop_generator.binop(stream));
 
     // Gather the children columns of the input column. Must use `get_sliced_child` to properly
     // handle input in case it is a sliced view.

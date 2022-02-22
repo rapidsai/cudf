@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,8 @@ std::unique_ptr<column> sorted_order(table_view input,
                                                        *device_table,
                                                        *device_table,
                                                        d_column_order.data(),
-                                                       d_null_precedence.data());
+                                                       d_null_precedence.data(),
+                                                       stream);
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),
                         mutable_indices_view.begin<size_type>(),

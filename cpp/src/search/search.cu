@@ -128,7 +128,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                                  lhs,
                                                  rhs,
                                                  column_order_dv.data(),
-                                                 null_precedence_dv.data());
+                                                 null_precedence_dv.data(),
+                                                 stream);
   launch_search(
     count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
 

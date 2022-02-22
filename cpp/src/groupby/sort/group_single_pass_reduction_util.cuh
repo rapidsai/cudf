@@ -273,7 +273,7 @@ struct group_reduction_functor<
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     auto const binop_generator =
       cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
-    do_reduction(count_iter, result_begin, binop_generator.binop());
+    do_reduction(count_iter, result_begin, binop_generator.binop(stream));
 
     if (values.has_nulls()) {
       // Generate bitmask for the output by segmented reduction of the input bitmask.
