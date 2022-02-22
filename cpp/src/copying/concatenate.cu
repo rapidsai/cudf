@@ -166,7 +166,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   auto const output_size = output_view.size();
   auto* output_data      = output_view.data<T>();
 
-  size_type output_index     = threadIdx.x + blockIdx.x * blockDim.x;
+  std::size_t output_index   = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
