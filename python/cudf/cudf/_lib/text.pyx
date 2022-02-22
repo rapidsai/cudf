@@ -42,8 +42,13 @@ def read_text(object filepaths_or_buffers,
         c_byte_range_size = byte_range[1]
         with nogil:
             datasource = move(make_source_from_file(filename))
-            c_byte_range = byte_range_info(c_byte_range_offset, c_byte_range_size)
-            c_col = move(multibyte_split(dereference(datasource), delim, c_byte_range))
+            c_byte_range = byte_range_info(
+                c_byte_range_offset,
+                c_byte_range_size)
+            c_col = move(multibyte_split(
+                dereference(datasource),
+                delim,
+                c_byte_range))
     else:
         with nogil:
             datasource = move(make_source_from_file(filename))
