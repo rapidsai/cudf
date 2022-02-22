@@ -1206,7 +1206,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _prep_for_binop(
+    def _make_operands_and_index_for_binop(
         self,
         other: Any,
         fn: str,
@@ -1217,20 +1217,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         **kwargs,
     ):
         # Specialize binops to align indices.
-        if isinstance(other, SingleColumnFrame):
+        if isinstance(other, Series):
             if (
-                # TODO: The can_reindex logic also needs to be applied for
-                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and (
-                    isinstance(other, Series)
-                    # TODO: mypy doesn't like this line because the index
-                    # property is not defined on SingleColumnFrame (or Index,
-                    # for that matter). Ignoring is the easy solution for now,
-                    # a cleaner fix requires reworking the type hierarchy.
-                    and not self.index.equals(other.index)  # type: ignore
-                )
+                # TODO: mypy doesn't like this line because the index property
+                # is not defined on SingleColumnFrame (or Index, for that
+                # matter). Ignoring is the easy solution for now, a cleaner fix
+                # requires reworking the type hierarchy.
+                and not self.index.equals(other.index)  # type: ignore
             ):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
@@ -1241,27 +1236,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
         return operands, lhs._index
-
-    def _binaryop(
-        self,
-        other: Frame,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        can_reindex: bool = False,
-        *args,
-        **kwargs,
-    ):
-        operands, out_index = self._prep_for_binop(
-            other, fn, fill_value, reflect, can_reindex
-        )
-        return (
-            self._from_data(
-                data=self._colwise_binop(operands, fn), index=out_index,
-            )
-            if operands is not NotImplemented
-            else NotImplemented
-        )
 
     def logical_and(self, other):
         warnings.warn(

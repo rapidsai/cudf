@@ -7,7 +7,7 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Callable, Type, TypeVar
+from typing import Any, Callable, Type, TypeVar
 from uuid import uuid4
 
 import cupy as cp
@@ -1693,6 +1693,41 @@ class IndexedFrame(Frame):
             op=operator.__sub__,
             side="right",
             slice_func=lambda i: self.iloc[i:],
+        )
+
+    def _binaryop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        operands, out_index = self._make_operands_and_index_for_binop(
+            other, fn, fill_value, reflect, can_reindex
+        )
+        if operands is NotImplemented:
+            return NotImplemented
+
+        return self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            index=out_index,
+        )
+
+    def _make_operands_and_index_for_binop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        raise NotImplementedError(
+            "Binary operations are not supported for {self.__class__}"
         )
 
     # For more detail on this function and how it should work, see

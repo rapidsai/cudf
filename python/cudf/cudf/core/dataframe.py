@@ -1898,7 +1898,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return out
 
-    def _prep_for_binop(
+    def _make_operands_and_index_for_binop(
         self,
         other: Any,
         fn: str,
@@ -1985,28 +1985,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return NotImplemented, None
 
         return operands, lhs._index
-
-    @annotate("DATAFRAME_BINARYOP", color="blue", domain="cudf_python")
-    def _binaryop(
-        self,
-        other: Any,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        can_reindex: bool = False,
-        *args,
-        **kwargs,
-    ):
-        operands, out_index = self._prep_for_binop(
-            other, fn, fill_value, reflect, can_reindex
-        )
-        if operands is NotImplemented:
-            return NotImplemented
-
-        return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
-            index=out_index,
-        )
 
     @annotate("DATAFRAME_UPDATE", color="blue", domain="cudf_python")
     def update(
