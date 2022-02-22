@@ -177,34 +177,28 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self.binary_operator("NULL_EQUALS", other).all()
 
     def all(self, skipna: bool = True) -> bool:
+        # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
-        result_col = self.nans_to_nulls() if skipna else self
 
-        if result_col.null_count == result_col.size:
+        if self.null_count == self.size:
             return True
 
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
-
-        return result_col
+        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
-        result_col = self.nans_to_nulls() if skipna else self
-        if not skipna and result_col.has_nulls():
+
+        if not skipna and self.has_nulls():
             return True
-        elif skipna and result_col.null_count == result_col.size:
+        elif skipna and self.null_count == self.size:
             return False
 
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
-
-        return result_col
+        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
+        # The drop_nan argument is only used for numerical columns.
+        return drop_nulls([self])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -341,6 +335,14 @@ class ColumnBase(Column, Serializable, NotIterable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
+        # libcudf currently doesn't handle case when offset > len(df)
+        # ticket to fix the bug in link below:
+        # https://github.com/rapidsai/cudf/issues/10314
+        if abs(offset) > len(self):
+            if fill_value is None:
+                return column_empty_like(self, masked=True)
+            else:
+                return full(len(self), fill_value, dtype=self.dtype)
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -1164,9 +1166,6 @@ class ColumnBase(Column, Serializable, NotIterable):
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    def nans_to_nulls(self: T) -> T:
-        return self
-
     @property
     def contains_na_entries(self) -> bool:
         return self.null_count != 0
@@ -1177,14 +1176,13 @@ class ColumnBase(Column, Serializable, NotIterable):
         skipna = True if skipna is None else skipna
 
         if skipna:
-            result_col = self.nans_to_nulls()
-            if result_col.has_nulls():
-                result_col = result_col.dropna()
+            if self.has_nulls():
+                result_col = self.dropna()
         else:
             if self.has_nulls():
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-            result_col = self
+        result_col = self
 
         if min_count > 0:
             valid_count = len(result_col) - result_col.null_count
@@ -1612,8 +1610,8 @@ def build_struct_column(
 
     Parameters
     ----------
-    names : list-like
-        Field names to map to children dtypes
+    names : sequence of strings
+        Field names to map to children dtypes, must be strings.
     children : tuple
 
     mask: Buffer
@@ -2291,7 +2289,9 @@ def arange(
     if step is None:
         step = 1
 
-    size = int(np.ceil((stop - start) / step))
+    size = len(range(int(start), int(stop), int(step)))
+    if size == 0:
+        return as_column([], dtype=dtype)
 
     return libcudf.filling.sequence(
         size,

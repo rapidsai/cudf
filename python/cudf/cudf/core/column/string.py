@@ -2290,19 +2290,24 @@ class StringMethods(ColumnMethods):
             return res
 
     def split(
-        self, pat: str = None, n: int = -1, expand: bool = None
+        self,
+        pat: str = None,
+        n: int = -1,
+        expand: bool = None,
+        regex: bool = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
 
         Splits the string in the Series/Index from the beginning, at the
-        specified delimiter string. Equivalent to `str.split()
+        specified delimiter string. Similar to `str.split()
         <https://docs.python.org/3/library/stdtypes.html#str.split>`_.
 
         Parameters
         ----------
-        pat : str, default ' ' (space)
-            String to split on, does not yet support regular expressions.
+        pat : str, default None
+            String or regular expression to split on. If not specified, split
+            on whitespace.
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
@@ -2313,6 +2318,13 @@ class StringMethods(ColumnMethods):
               dimensionality.
             * If ``False``, return Series/Index, containing lists
               of strings.
+        regex : bool, default None
+            Determines if the passed-in pattern is a regular expression:
+
+            * If ``True``, assumes the passed-in pattern is a regular
+              expression
+            * If ``False``, treats the pattern as a literal string.
+            * If pat length is 1, treats pat as a literal string.
 
         Returns
         -------
@@ -2412,38 +2424,54 @@ class StringMethods(ColumnMethods):
             )
 
         # Pandas treats 0 as all
-        if n == 0:
+        if n is None or n == 0:
             n = -1
 
         if pat is None:
             pat = ""
 
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
+        if len(str(pat)) <= 1:
+            regex = False
+
         if expand:
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                data, index = libstrings.split(
-                    self._column, cudf.Scalar(pat, "str"), n
-                )
+                if regex is True:
+                    data, index = libstrings.split_re(self._column, pat, n)
+                else:
+                    data, index = libstrings.split(
+                        self._column, cudf.Scalar(pat, "str"), n
+                    )
                 if len(data) == 1 and data[0].null_count == len(self._column):
                     result_table = cudf.core.frame.Frame({})
                 else:
                     result_table = cudf.core.frame.Frame(data, index)
         else:
-            result_table = libstrings.split_record(
-                self._column, cudf.Scalar(pat, "str"), n
-            )
+            if regex is True:
+                result_table = libstrings.split_record_re(self._column, pat, n)
+            else:
+                result_table = libstrings.split_record(
+                    self._column, cudf.Scalar(pat, "str"), n
+                )
 
         return self._return_or_inplace(result_table, expand=expand)
 
     def rsplit(
-        self, pat: str = None, n: int = -1, expand: bool = None
+        self,
+        pat: str = None,
+        n: int = -1,
+        expand: bool = None,
+        regex: bool = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
 
         Splits the string in the Series/Index from the end, at the
-        specified delimiter string. Equivalent to `str.rsplit()
+        specified delimiter string. Similar to `str.rsplit()
         <https://docs.python.org/3/library/stdtypes.html#str.rsplit>`_.
 
         Parameters
@@ -2460,6 +2488,13 @@ class StringMethods(ColumnMethods):
               dimensionality.
             * If ``False``, return Series/Index, containing lists
               of strings.
+        regex : bool, default None
+            Determines if the passed-in pattern is a regular expression:
+
+            * If ``True``, assumes the passed-in pattern is a regular
+              expression
+            * If ``False``, treats the pattern as a literal string.
+            * If pat length is 1, treats pat as a literal string.
 
         Returns
         -------
@@ -2574,21 +2609,32 @@ class StringMethods(ColumnMethods):
         if pat is None:
             pat = ""
 
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
         if expand:
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                data, index = libstrings.rsplit(
-                    self._column, cudf.Scalar(pat, "str"), n
-                )
+                if regex is True:
+                    data, index = libstrings.rsplit_re(self._column, pat, n)
+                else:
+                    data, index = libstrings.rsplit(
+                        self._column, cudf.Scalar(pat, "str"), n
+                    )
                 if len(data) == 1 and data[0].null_count == len(self._column):
                     result_table = cudf.core.frame.Frame({})
                 else:
                     result_table = cudf.core.frame.Frame(data, index)
         else:
-            result_table = libstrings.rsplit_record(
-                self._column, cudf.Scalar(pat), n
-            )
+            if regex is True:
+                result_table = libstrings.rsplit_record_re(
+                    self._column, pat, n
+                )
+            else:
+                result_table = libstrings.rsplit_record(
+                    self._column, cudf.Scalar(pat), n
+                )
 
         return self._return_or_inplace(result_table, expand=expand)
 
@@ -5339,7 +5385,9 @@ class StringColumn(column.ColumnBase):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = cudf.DataFrame._from_data(
+            {"old": to_replace_col, "new": replacement_col}
+        )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
@@ -5411,7 +5459,7 @@ class StringColumn(column.ColumnBase):
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
-                        cudf.DataFrame({0: lhs, 1: rhs}),
+                        cudf.DataFrame._from_data(data={0: lhs, 1: rhs}),
                         sep=cudf.Scalar(""),
                         na_rep=cudf.Scalar(None, "str"),
                     ),

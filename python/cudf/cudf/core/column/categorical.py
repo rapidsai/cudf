@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1048,7 +1048,9 @@ class CategoricalColumn(column.ColumnBase):
                 f"got to_replace dtype: {to_replace_col.dtype} and "
                 f"value dtype: {replacement_col.dtype}"
             )
-        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = cudf.DataFrame._from_data(
+            {"old": to_replace_col, "new": replacement_col}
+        )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             fill_value = df._data["new"][df._data["old"].isnull()][0]
@@ -1058,8 +1060,7 @@ class CategoricalColumn(column.ColumnBase):
                 new_categories = self.categories.append(
                     column.as_column([fill_value])
                 )
-                replaced = self.copy()
-                replaced = replaced._set_categories(new_categories)
+                replaced = self._set_categories(new_categories)
                 replaced = replaced.fillna(fill_value)
             df = df.dropna(subset=["old"])
             to_replace_col = df._data["old"]
@@ -1078,35 +1079,41 @@ class CategoricalColumn(column.ColumnBase):
             replacement_col = df._data["new"]
 
         # create a dataframe containing the pre-replacement categories
-        # and a copy of them to work with. The index of this dataframe
-        # represents the original ints that map to the categories
-        old_cats = cudf.DataFrame()
-        old_cats["cats"] = column.as_column(replaced.dtype.categories)
-        new_cats = old_cats.copy(deep=True)
-
-        # Create a column with the appropriate labels replaced
-        old_cats["cats_replace"] = old_cats["cats"].replace(
-            to_replace_col, replacement_col
+        # and a column with the appropriate labels replaced.
+        # The index of this dataframe represents the original
+        # ints that map to the categories
+        cats_col = column.as_column(replaced.dtype.categories)
+        old_cats = cudf.DataFrame._from_data(
+            {
+                "cats": cats_col,
+                "cats_replace": cats_col.find_and_replace(
+                    to_replace_col, replacement_col
+                ),
+            }
         )
 
         # Construct the new categorical labels
         # If a category is being replaced by an existing one, we
         # want to map it to None. If it's totally new, we want to
         # map it to the new label it is to be replaced by
-        dtype_replace = cudf.Series(replacement_col)
-        dtype_replace[dtype_replace.isin(old_cats["cats"])] = None
-        new_cats["cats"] = new_cats["cats"].replace(
-            to_replace_col, dtype_replace
+        dtype_replace = cudf.Series._from_data({None: replacement_col})
+        dtype_replace[dtype_replace.isin(cats_col)] = None
+        new_cats_col = cats_col.find_and_replace(
+            to_replace_col, dtype_replace._column
         )
 
         # anything we mapped to None, we want to now filter out since
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = new_cats._data["cats"].notnull()
-        new_cats = cudf.DataFrame(
-            {"cats": new_cats._data["cats"].apply_boolean_mask(bmask)}
-        ).reset_index()
+        bmask = new_cats_col.notnull()
+        new_cats_col = new_cats_col.apply_boolean_mask(bmask)
+        new_cats = cudf.DataFrame._from_data(
+            {
+                "index": cudf.core.column.arange(len(new_cats_col)),
+                "cats": new_cats_col,
+            }
+        )
 
         # old_cats contains replaced categories and the ints that
         # previously mapped to those categories and the index of
@@ -1507,9 +1514,15 @@ class CategoricalColumn(column.ColumnBase):
         old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
         new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
 
-        new_df = cudf.DataFrame({"new_codes": new_codes, "cats": new_cats})
-        old_df = cudf.DataFrame({"old_codes": old_codes, "cats": cur_cats})
-        cur_df = cudf.DataFrame({"old_codes": cur_codes, "order": cur_order})
+        new_df = cudf.DataFrame._from_data(
+            data={"new_codes": new_codes, "cats": new_cats}
+        )
+        old_df = cudf.DataFrame._from_data(
+            data={"old_codes": old_codes, "cats": cur_cats}
+        )
+        cur_df = cudf.DataFrame._from_data(
+            data={"old_codes": cur_codes, "order": cur_order}
+        )
 
         # Join the old and new categories and line up their codes
         df = old_df.merge(new_df, on="cats", how="left")
@@ -1519,7 +1532,7 @@ class CategoricalColumn(column.ColumnBase):
         df.reset_index(drop=True, inplace=True)
 
         ordered = ordered if ordered is not None else self.ordered
-        new_codes = df["new_codes"]._column
+        new_codes = df._data["new_codes"]
 
         # codes can't have masks, so take mask out before moving in
         return column.build_categorical_column(
