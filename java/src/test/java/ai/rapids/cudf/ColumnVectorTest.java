@@ -4360,17 +4360,23 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testExtractListElements() {
-      try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
-           ColumnVector expected = ColumnVector.fromStrings("Héllo",
-                   "thésé",
-                   null,
-                   "",
-                   "ARé",
-                   "test");
-           ColumnVector tmp = v.stringSplitRecord(" ");
-           ColumnVector result = tmp.extractListElement(0)) {
-          assertColumnsAreEqual(expected, result);
-      }
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
+         ColumnVector expected = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "test");
+         ColumnVector list = v.stringSplitRecord(" ");
+         ColumnVector result = list.extractListElement(0)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testExtractListElementsV() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
+         ColumnVector indices = ColumnVector.fromInts(0, 2, 0, 0, 1, -1);
+         ColumnVector expected = ColumnVector.fromStrings("Héllo", null, null, "", "some", "strings");
+         ColumnVector list = v.stringSplitRecord(" ");
+         ColumnVector result = list.extractListElement(indices)) {
+      assertColumnsAreEqual(expected, result);
+    }
   }
 
   @Test
