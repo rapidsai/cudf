@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,25 +58,25 @@ struct TypeParam_to_host_type<numeric::decimal128> {
 };
 
 template <typename TypeParam, typename T>
-typename std::enable_if<std::is_same_v<TypeParam, cudf::string_view>,
-                        thrust::host_vector<std::string>>::type
+typename std::enable_if_t<std::is_same_v<TypeParam, cudf::string_view>,
+                          thrust::host_vector<std::string>>
 make_vector(std::initializer_list<T> const& init)
 {
   return cudf::test::make_type_param_vector<std::string, T>(init);
 }
 
 template <typename TypeParam, typename T>
-typename std::enable_if<cudf::is_fixed_point<TypeParam>(),
-                        thrust::host_vector<typename TypeParam::rep>>::type
+typename std::enable_if_t<cudf::is_fixed_point<TypeParam>(),
+                          thrust::host_vector<typename TypeParam::rep>>
 make_vector(std::initializer_list<T> const& init)
 {
   return cudf::test::make_type_param_vector<typename TypeParam::rep, T>(init);
 }
 
 template <typename TypeParam, typename T>
-typename std::enable_if<not(std::is_same_v<TypeParam, cudf::string_view> ||
-                            cudf::is_fixed_point<TypeParam>()),
-                        thrust::host_vector<TypeParam>>::type
+typename std::enable_if_t<not(std::is_same_v<TypeParam, cudf::string_view> ||
+                              cudf::is_fixed_point<TypeParam>()),
+                          thrust::host_vector<TypeParam>>
 make_vector(std::initializer_list<T> const& init)
 {
   return cudf::test::make_type_param_vector<TypeParam, T>(init);

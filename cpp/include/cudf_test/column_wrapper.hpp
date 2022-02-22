@@ -93,31 +93,31 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT                                                   = From,
-            typename ToT                                                     = To,
-            typename std::enable_if<std::is_same_v<FromT, ToT>, void>::type* = nullptr>
+  template <typename FromT                                               = From,
+            typename ToT                                                 = To,
+            typename std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT                       = From,
-            typename ToT                         = To,
-            typename std::enable_if<!std::is_same_v<FromT, ToT> &&
-                                      (cudf::is_convertible<FromT, ToT>::value ||
-                                       std::is_constructible_v<ToT, FromT>),
-                                    void>::type* = nullptr>
+  template <typename FromT                   = From,
+            typename ToT                     = To,
+            typename std::enable_if_t<!std::is_same_v<FromT, ToT> &&
+                                        (cudf::is_convertible<FromT, ToT>::value ||
+                                         std::is_constructible_v<ToT, FromT>),
+                                      void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return static_cast<ToT>(element);
   }
 
   // Convert integral values to timestamps
-  template <typename FromT                       = From,
-            typename ToT                         = To,
-            typename std::enable_if<std::is_integral_v<FromT> && cudf::is_timestamp<ToT>(),
-                                    void>::type* = nullptr>
+  template <typename FromT                   = From,
+            typename ToT                     = To,
+            typename std::enable_if_t<std::is_integral_v<FromT> && cudf::is_timestamp<ToT>(),
+                                      void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return ToT{typename ToT::duration{element}};
