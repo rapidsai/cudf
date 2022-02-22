@@ -77,12 +77,12 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import NotIterable, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
 
-class ColumnBase(Column, Serializable):
+class ColumnBase(Column, Serializable, NotIterable):
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
@@ -129,9 +129,6 @@ class ColumnBase(Column, Serializable):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
     def values_host(self) -> "np.ndarray":
@@ -180,34 +177,28 @@ class ColumnBase(Column, Serializable):
         return self.binary_operator("NULL_EQUALS", other).all()
 
     def all(self, skipna: bool = True) -> bool:
+        # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
-        result_col = self.nans_to_nulls() if skipna else self
 
-        if result_col.null_count == result_col.size:
+        if self.null_count == self.size:
             return True
 
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
-
-        return result_col
+        return libcudf.reduce.reduce("all", self, dtype=np.bool_)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
-        result_col = self.nans_to_nulls() if skipna else self
-        if not skipna and result_col.has_nulls():
+
+        if not skipna and self.has_nulls():
             return True
-        elif skipna and result_col.null_count == result_col.size:
+        elif skipna and self.null_count == self.size:
             return False
 
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
-
-        return result_col
+        return libcudf.reduce.reduce("any", self, dtype=np.bool_)
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
+        # The drop_nan argument is only used for numerical columns.
+        return drop_nulls([self])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -314,51 +305,6 @@ class ColumnBase(Column, Serializable):
             n += bitmask_allocation_size_bytes(self.size)
         return n
 
-    def _default_na_value(self) -> Any:
-        raise NotImplementedError()
-
-    # TODO: This method is deprecated and can be removed when the associated
-    # Frame methods are removed.
-    def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        if fillna:
-            return self.fillna(self._default_na_value()).data_array_view
-        else:
-            return self.dropna(drop_nan=False).data_array_view
-
-    # TODO: This method is deprecated and can be removed when the associated
-    # Frame methods are removed.
-    def to_array(self, fillna=None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : scalar, 'pandas', or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-
-        return self.to_gpu_array(fillna=fillna).copy_to_host()
-
     def _fill(
         self,
         fill_value: ScalarLike,
@@ -389,6 +335,14 @@ class ColumnBase(Column, Serializable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
+        # libcudf currently doesn't handle case when offset > len(df)
+        # ticket to fix the bug in link below:
+        # https://github.com/rapidsai/cudf/issues/10314
+        if abs(offset) > len(self):
+            if fill_value is None:
+                return column_empty_like(self, masked=True)
+            else:
+                return full(len(self), fill_value, dtype=self.dtype)
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -1031,7 +985,7 @@ class ColumnBase(Column, Serializable):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed. To explicitly construct a host array, consider using "
-            ".to_array()"
+            ".to_numpy()"
         )
 
     @property
@@ -1212,12 +1166,9 @@ class ColumnBase(Column, Serializable):
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    def nans_to_nulls(self: T) -> T:
-        # Only floats can contain nan.
-        if self.dtype.kind != "f":
-            return self
-        newmask = libcudf.transform.nans_to_nulls(self)
-        return self.set_mask(newmask)
+    @property
+    def contains_na_entries(self) -> bool:
+        return self.null_count != 0
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
@@ -1225,14 +1176,13 @@ class ColumnBase(Column, Serializable):
         skipna = True if skipna is None else skipna
 
         if skipna:
-            result_col = self.nans_to_nulls()
-            if result_col.has_nulls():
-                result_col = result_col.dropna()
+            if self.has_nulls():
+                result_col = self.dropna()
         else:
             if self.has_nulls():
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-            result_col = self
+        result_col = self
 
         if min_count > 0:
             valid_count = len(result_col) - result_col.null_count
@@ -1319,6 +1269,12 @@ def column_empty(
         children = tuple(
             column_empty(row_count, field_dtype)
             for field_dtype in dtype.fields.values()
+        )
+    elif is_list_dtype(dtype):
+        data = None
+        children = (
+            full(row_count + 1, 0, dtype="int32"),
+            column_empty(row_count, dtype=dtype.element_type),
         )
     elif is_categorical_dtype(dtype):
         data = None
@@ -1654,8 +1610,8 @@ def build_struct_column(
 
     Parameters
     ----------
-    names : list-like
-        Field names to map to children dtypes
+    names : sequence of strings
+        Field names to map to children dtypes, must be strings.
     children : tuple
 
     mask: Buffer
@@ -2333,7 +2289,9 @@ def arange(
     if step is None:
         step = 1
 
-    size = int(np.ceil((stop - start) / step))
+    size = len(range(int(start), int(stop), int(step)))
+    if size == 0:
+        return as_column([], dtype=dtype)
 
     return libcudf.filling.sequence(
         size,

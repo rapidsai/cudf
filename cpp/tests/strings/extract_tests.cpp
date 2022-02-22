@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,6 +150,39 @@ TEST_F(StringsExtractTests, ExtractEventTest)
   }
 }
 
+TEST_F(StringsExtractTests, MultiLine)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto view = cudf::strings_column_view(input);
+
+  auto results = cudf::strings::extract(view, "(^[a-c]+$)", cudf::strings::regex_flags::MULTILINE);
+  cudf::test::strings_column_wrapper expected_multiline({"abc", "abc", "abc", "", "abc"},
+                                                        {1, 1, 1, 0, 1});
+  auto expected = cudf::table_view{{expected_multiline}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+  results = cudf::strings::extract(view, "^([a-c]+)$");
+  cudf::test::strings_column_wrapper expected_default({"", "", "abc", "", ""}, {0, 0, 1, 0, 0});
+  expected = cudf::table_view{{expected_default}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+}
+
+TEST_F(StringsExtractTests, DotAll)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc\nfa\nef", "fff\nabbc\nfff", "abcdef", ""});
+  auto view  = cudf::strings_column_view(input);
+
+  auto results = cudf::strings::extract(view, "(a.*f)", cudf::strings::regex_flags::DOTALL);
+  cudf::test::strings_column_wrapper expected_dotall({"abc\nfa\nef", "abbc\nfff", "abcdef", ""},
+                                                     {1, 1, 1, 0});
+  auto expected = cudf::table_view{{expected_dotall}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+  results = cudf::strings::extract(view, "(a.*f)");
+  cudf::test::strings_column_wrapper expected_default({"", "", "abcdef", ""}, {0, 0, 1, 0});
+  expected = cudf::table_view{{expected_default}};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+}
+
 TEST_F(StringsExtractTests, EmptyExtractTest)
 {
   std::vector<const char*> h_strings{nullptr, "AAA", "AAA_A", "AAA_AAA_", "A__", ""};
@@ -181,9 +214,9 @@ TEST_F(StringsExtractTests, ExtractAllTest)
   cudf::test::strings_column_wrapper input(h_input.begin(), h_input.end(), validity);
   auto sv = cudf::strings_column_view(input);
 
-  auto results = cudf::strings::extract_all(sv, "(\\d+) (\\w+)");
+  auto results = cudf::strings::extract_all_record(sv, "(\\d+) (\\w+)");
 
-  bool valids[] = {1, 1, 1, 0, 0, 0, 1};
+  bool valids[] = {true, true, true, false, false, false, true};
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"123", "banana", "7", "eleven"},
                 LCW{"41", "apple"},
@@ -201,7 +234,7 @@ TEST_F(StringsExtractTests, Errors)
   cudf::test::strings_column_wrapper input({"this column intentionally left blank"});
   auto sv = cudf::strings_column_view(input);
   EXPECT_THROW(cudf::strings::extract(sv, "\\w+"), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::extract_all(sv, "\\w+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::extract_all_record(sv, "\\w+"), cudf::logic_error);
 }
 
 TEST_F(StringsExtractTests, MediumRegex)

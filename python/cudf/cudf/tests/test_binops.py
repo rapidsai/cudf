@@ -1,11 +1,10 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import division
 
 import decimal
 import operator
 import random
-from itertools import product
+from itertools import combinations_with_replacement, product
 
 import cupy as cp
 import numpy as np
@@ -217,13 +216,12 @@ def test_series_compare(cmpop, obj_class, dtype):
 
 
 def _series_compare_nulls_typegen():
-    tests = []
-    tests += list(product(DATETIME_TYPES, DATETIME_TYPES))
-    tests += list(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
-    tests += list(product(NUMERIC_TYPES, NUMERIC_TYPES))
-    tests += list(product(STRING_TYPES, STRING_TYPES))
-
-    return tests
+    return [
+        *combinations_with_replacement(DATETIME_TYPES, 2),
+        *combinations_with_replacement(TIMEDELTA_TYPES, 2),
+        *combinations_with_replacement(NUMERIC_TYPES, 2),
+        *combinations_with_replacement(STRING_TYPES, 2),
+    ]
 
 
 @pytest.mark.parametrize("cmpop", _cmpops)

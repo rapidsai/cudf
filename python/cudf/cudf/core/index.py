@@ -1,10 +1,11 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import math
 import pickle
 import warnings
+from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -54,7 +55,7 @@ from cudf.core.frame import Frame
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import cached_property, search_range
+from cudf.utils.utils import search_range
 
 T = TypeVar("T", bound="Frame")
 
@@ -682,6 +683,7 @@ class RangeIndex(BaseIndex):
         return new_index
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
+        gather_map = cudf.core.column.as_column(gather_map)
         return Int64Index._from_columns(
             [self._values.take(gather_map, nullify, check_bounds)], [self.name]
         )
@@ -771,23 +773,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
-    @classmethod
-    def deserialize(cls, header, frames):
-        if "index_column" in header:
-            warnings.warn(
-                "Index objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("index_column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
-            )
-
-        return super().deserialize(header, frames)
-
     def _binaryop(
         self,
         other: T,
@@ -841,6 +826,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         result.name = name
         return result
+
+    def memory_usage(self, deep=False):
+        return sum(super().memory_usage(deep=deep).values())
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
@@ -2508,7 +2496,7 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}({self._values.to_array()},"
+            f"{self.__class__.__name__}({self._values.values_host},"
             f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"

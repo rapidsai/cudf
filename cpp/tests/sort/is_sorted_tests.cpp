@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,48 +36,47 @@ namespace testdata {
 // ----- most numerics
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same_v<T, bool>,
+typename std::enable_if<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
                         fixed_width_column_wrapper<T>>::type
 ascending()
 {
-  return std::is_signed<T>::value ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
-                                                                   T(-100),
-                                                                   T(-10),
-                                                                   T(-1),
-                                                                   T(0),
-                                                                   T(1),
-                                                                   T(10),
-                                                                   T(100),
-                                                                   std::numeric_limits<T>::max()})
-                                  : fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
-                                                                   T(0),
-                                                                   T(1),
-                                                                   T(10),
-                                                                   T(100),
-                                                                   std::numeric_limits<T>::max()});
+  return std::is_signed_v<T> ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
+                                                              T(-100),
+                                                              T(-10),
+                                                              T(-1),
+                                                              T(0),
+                                                              T(1),
+                                                              T(10),
+                                                              T(100),
+                                                              std::numeric_limits<T>::max()})
+                             : fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
+                                                              T(0),
+                                                              T(1),
+                                                              T(10),
+                                                              T(100),
+                                                              std::numeric_limits<T>::max()});
 }
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same_v<T, bool>,
+typename std::enable_if<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
                         fixed_width_column_wrapper<T>>::type
 descending()
 {
-  return std::is_signed<T>::value
-           ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
-                                            T(100),
-                                            T(10),
-                                            T(1),
-                                            T(0),
-                                            T(-1),
-                                            T(-10),
-                                            T(-100),
-                                            std::numeric_limits<T>::lowest()})
-           : fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
-                                            T(100),
-                                            T(10),
-                                            T(1),
-                                            T(0),
-                                            std::numeric_limits<T>::lowest()});
+  return std::is_signed_v<T> ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
+                                                              T(100),
+                                                              T(10),
+                                                              T(1),
+                                                              T(0),
+                                                              T(-1),
+                                                              T(-10),
+                                                              T(-100),
+                                                              std::numeric_limits<T>::lowest()})
+                             : fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
+                                                              T(100),
+                                                              T(10),
+                                                              T(1),
+                                                              T(0),
+                                                              std::numeric_limits<T>::lowest()});
 }
 
 template <typename T>

@@ -16,6 +16,7 @@ import pytest
 
 import cudf
 from cudf.io.orc import ORCWriter
+from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
     assert_eq,
     gen_rand_series,
@@ -93,7 +94,7 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
         path, engine=engine, columns=columns, use_index=use_index
     )
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_frame_equal(cudf.from_pandas(expect), got, check_categorical=False)
 
 
 def test_orc_reader_filenotfound(tmpdir):
@@ -384,9 +385,69 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
         else:
             print(type(excpr).__name__)
 
-    expect = orcfile.read(columns=columns).to_pandas()
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, compression=compression)
-    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    expect = cudf.from_pandas(orcfile.read(columns=columns).to_pandas())
+    expect.to_orc(gdf_fname.strpath, compression=compression)
+    got = cudf.from_pandas(
+        pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    )
+
+    assert_frame_equal(expect, got)
+
+
+@pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
+def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
+    reference_file = "TestOrcFile.demo-12-zlib.orc"
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = cudf.from_pandas(orcfile.read().to_pandas())
+    expect.to_orc(gdf_fname.strpath, statistics=stats_freq)
+    got = cudf.from_pandas(pa.orc.ORCFile(gdf_fname).read().to_pandas())
+
+    assert_frame_equal(expect, got)
+
+
+@pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
+def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
+    reference_file = "TestOrcFile.test1.orc"
+    pdf_fname = datadir / reference_file
+    gdf_fname = tmpdir.join("chunked_gdf.orc")
+
+    try:
+        orcfile = pa.orc.ORCFile(pdf_fname)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    columns = [
+        "boolean1",
+        "byte1",
+        "short1",
+        "int1",
+        "long1",
+        "float1",
+        "double1",
+    ]
+    pdf = orcfile.read(columns=columns).to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    expect = pd.concat([pdf, pdf]).reset_index(drop=True)
+
+    writer = ORCWriter(gdf_fname, statistics=stats_freq)
+    writer.write_table(gdf)
+    writer.write_table(gdf)
+    writer.close()
+
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
 
@@ -434,8 +495,7 @@ def test_chunked_orc_writer(
     writer.close()
 
     got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
-
-    assert_eq(expect, got)
+    assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
 
 
 @pytest.mark.parametrize(
@@ -592,8 +652,9 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
+@pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
-def test_orc_write_statistics(tmpdir, datadir, nrows):
+def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Can't write random bool columns until issue #6763 is fixed
     if nrows == 6000000:
@@ -609,7 +670,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath)
+    gdf.to_orc(fname.strpath, statistics=stats_freq)
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)

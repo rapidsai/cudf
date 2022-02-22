@@ -28,7 +28,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
-    random_bitmask,
+    set_random_null_mask_inplace,
 )
 
 
@@ -748,7 +748,10 @@ def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
+@pytest.mark.parametrize("use_python_file_object", [True, False])
+def test_parquet_reader_use_python_file_object(
+    parquet_path_or_buf, use_python_file_object
+):
     # Check that the non-default `use_python_file_object=True`
     # option works as expected
     expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
@@ -756,11 +759,15 @@ def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
 
     # Pass open fsspec file
     with fs.open(paths[0], mode="rb") as fil:
-        got1 = cudf.read_parquet(fil, use_python_file_object=True)
+        got1 = cudf.read_parquet(
+            fil, use_python_file_object=use_python_file_object
+        )
     assert_eq(expect, got1)
 
     # Pass path only
-    got2 = cudf.read_parquet(paths[0], use_python_file_object=True)
+    got2 = cudf.read_parquet(
+        paths[0], use_python_file_object=use_python_file_object
+    )
     assert_eq(expect, got2)
 
 
@@ -1098,9 +1105,9 @@ def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("skip", range(0, 128))
+@pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_skiprows(skip, tmpdir):
-    num_rows = 128
+    num_rows = 10
     src = pd.DataFrame(
         {
             "a": list_gen(int_gen, 0, num_rows, 80, 50),
@@ -1117,9 +1124,9 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("skip", range(0, 120))
+@pytest.mark.parametrize("skip", [0, 1, 5, 10])
 def test_parquet_reader_list_num_rows(skip, tmpdir):
-    num_rows = 128
+    num_rows = 20
     src = pd.DataFrame(
         {
             "a": list_gen(int_gen, 0, num_rows, 80, 50),
@@ -2117,7 +2124,7 @@ def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     gdf = cudf.from_pandas(pdf)
     if add_nulls:
         for col in gdf:
-            gdf[col] = gdf[col].set_mask(random_bitmask(len(gdf)))
+            set_random_null_mask_inplace(gdf[col])
     gdf.to_parquet(file_path, index=False)
 
     # Read back from pyarrow
@@ -2258,18 +2265,17 @@ def test_parquet_writer_nested(tmpdir, data):
     "decimal_type",
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
-def test_parquet_writer_decimal(tmpdir, decimal_type):
-
-    gdf = cudf.DataFrame({"val": [0.00, 0.01, 0.02]})
+@pytest.mark.parametrize("data", [[1, 2, 3], [0.00, 0.01, None, 0.5]])
+def test_parquet_writer_decimal(decimal_type, data):
+    gdf = cudf.DataFrame({"val": data})
 
     gdf["dec_val"] = gdf["val"].astype(decimal_type(7, 2))
 
-    fname = tmpdir.join("test_parquet_writer_decimal.parquet")
-    gdf.to_parquet(fname)
-    assert os.path.exists(fname)
+    buff = BytesIO()
+    gdf.to_parquet(buff)
 
-    got = pd.read_parquet(fname)
-    assert_eq(gdf, got)
+    got = pd.read_parquet(buff, use_nullable_dtypes=True)
+    assert_eq(gdf.to_pandas(nullable=True), got)
 
 
 def test_parquet_writer_column_validation():

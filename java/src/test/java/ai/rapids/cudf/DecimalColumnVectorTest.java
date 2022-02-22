@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,10 +22,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Random;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,17 +35,23 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   private static final Random rdSeed = new Random(1234);
   private static final int dec32Scale = 4;
   private static final int dec64Scale = 10;
+  private static final int dec128Scale = 30;
 
   private static final BigDecimal[] decimal32Zoo = new BigDecimal[20];
   private static final BigDecimal[] decimal64Zoo = new BigDecimal[20];
+  private static final BigDecimal[] decimal128Zoo = new BigDecimal[20];
   private static final int[] unscaledDec32Zoo = new int[decimal32Zoo.length];
   private static final long[] unscaledDec64Zoo = new long[decimal64Zoo.length];
+  private static final BigInteger[] unscaledDec128Zoo = new BigInteger[decimal128Zoo.length];
 
   private final BigDecimal[] boundaryDecimal32 = new BigDecimal[]{
       new BigDecimal("999999999"), new BigDecimal("-999999999")};
 
   private final BigDecimal[] boundaryDecimal64 = new BigDecimal[]{
       new BigDecimal("999999999999999999"), new BigDecimal("-999999999999999999")};
+
+  private final BigDecimal[] boundaryDecimal128 = new BigDecimal[]{
+      new BigDecimal("99999999999999999999999999999999999999"), new BigDecimal("-99999999999999999999999999999999999999")};
 
   private final BigDecimal[] overflowDecimal32 = new BigDecimal[]{
       BigDecimal.valueOf(Integer.MAX_VALUE), BigDecimal.valueOf(Integer.MIN_VALUE)};
@@ -60,6 +68,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     for (int i = 0; i < decimal32Zoo.length; i++) {
       unscaledDec32Zoo[i] = rdSeed.nextInt() / 100;
       unscaledDec64Zoo[i] = rdSeed.nextLong() / 100;
+      unscaledDec128Zoo[i] = BigInteger.valueOf(rdSeed.nextLong()).multiply(BigInteger.valueOf(rdSeed.nextLong()));
       if (rdSeed.nextBoolean()) {
         // Create BigDecimal with slight variance on scale, in order to test building cv from inputs with different scales.
         decimal32Zoo[i] = BigDecimal.valueOf(rdSeed.nextInt() / 100, dec32Scale - rdSeed.nextInt(2));
@@ -71,6 +80,12 @@ public class DecimalColumnVectorTest extends CudfTestBase {
         decimal64Zoo[i] = BigDecimal.valueOf(rdSeed.nextLong() / 100, dec64Scale - rdSeed.nextInt(2));
       } else {
         decimal64Zoo[i] = null;
+      }
+      if (rdSeed.nextBoolean()) {
+        BigInteger unscaledVal = BigInteger.valueOf(rdSeed.nextLong()).multiply(BigInteger.valueOf(rdSeed.nextLong()));
+        decimal128Zoo[i] = new BigDecimal(unscaledVal, dec128Scale);
+      } else {
+        decimal128Zoo[i] = null;
       }
     }
   }
@@ -190,32 +205,49 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testDecimalFromDecimals() {
-    DecimalColumnVectorTest.testDecimalImpl(false, dec32Scale, decimal32Zoo);
-    DecimalColumnVectorTest.testDecimalImpl(true, dec64Scale, decimal64Zoo);
-    DecimalColumnVectorTest.testDecimalImpl(false, 0, boundaryDecimal32);
-    DecimalColumnVectorTest.testDecimalImpl(true, 0, boundaryDecimal64);
+    DecimalColumnVectorTest.testDecimalImpl(DType.DTypeEnum.DECIMAL32, dec32Scale, decimal32Zoo);
+    DecimalColumnVectorTest.testDecimalImpl(DType.DTypeEnum.DECIMAL64, dec64Scale, decimal64Zoo);
+    DecimalColumnVectorTest.testDecimalImpl(DType.DTypeEnum.DECIMAL128, dec128Scale, decimal128Zoo);
+    DecimalColumnVectorTest.testDecimalImpl(DType.DTypeEnum.DECIMAL32, 0, boundaryDecimal32);
+    DecimalColumnVectorTest.testDecimalImpl(DType.DTypeEnum.DECIMAL64, 0, boundaryDecimal64);
+    DecimalColumnVectorTest.testDecimalImpl(DType.DTypeEnum.DECIMAL128, 0, boundaryDecimal128);
   }
 
-  private static void testDecimalImpl(boolean isInt64, int scale, BigDecimal[] decimalZoo) {
-    try (ColumnVector cv = ColumnVector.fromDecimals(decimalZoo)) {
-      try (HostColumnVector hcv = cv.copyToHost()) {
-        assertEquals(-scale, hcv.getType().getScale());
-        assertEquals(isInt64, hcv.getType().typeId == DType.DTypeEnum.DECIMAL64);
-        assertEquals(decimalZoo.length, hcv.rows);
-        for (int i = 0; i < decimalZoo.length; i++) {
-          assertEquals(decimalZoo[i] == null, hcv.isNull(i));
-          if (decimalZoo[i] != null) {
-            assertEquals(decimalZoo[i].floatValue(), hcv.getBigDecimal(i).floatValue());
-            long backValue = isInt64 ? hcv.getLong(i) : hcv.getInt(i);
-            assertEquals(decimalZoo[i].setScale(scale, RoundingMode.UNNECESSARY), BigDecimal.valueOf(backValue, scale));
+  private static void testDecimalImpl(DType.DTypeEnum decimalType, int scale, BigDecimal[] decimalZoo) {
+    Consumer<HostColumnVector> assertions = (hcv) -> {
+      assertEquals(-scale, hcv.getType().getScale());
+      assertEquals(hcv.getType().typeId, decimalType);
+      assertEquals(decimalZoo.length, hcv.rows);
+      for (int i = 0; i < decimalZoo.length; i++) {
+        assertEquals(decimalZoo[i] == null, hcv.isNull(i));
+        if (decimalZoo[i] != null) {
+          BigDecimal actual;
+          switch (decimalType) {
+          case DECIMAL32:
+            actual = BigDecimal.valueOf(hcv.getInt(i), scale);
+            break;
+          case DECIMAL64:
+            actual = BigDecimal.valueOf(hcv.getLong(i), scale);
+            break;
+          default:
+            actual = hcv.getBigDecimal(i);
           }
+          assertEquals(decimalZoo[i].subtract(actual).longValueExact(), 0L);
         }
       }
+    };
+    try (ColumnVector cv = ColumnVector.fromDecimals(decimalZoo)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        assertions.accept(hcv);
+      }
+    }
+    try (HostColumnVector hcv = ColumnBuilderHelper.fromDecimals(decimalZoo)) {
+      assertions.accept(hcv);
     }
   }
 
   @Test
-  private void testDecimalFromInts() {
+  public void testDecimalFromInts() {
     try (ColumnVector cv = ColumnVector.decimalFromInts(-DecimalColumnVectorTest.dec32Scale, DecimalColumnVectorTest.unscaledDec32Zoo)) {
       try (HostColumnVector hcv = cv.copyToHost()) {
         for (int i = 0; i < DecimalColumnVectorTest.unscaledDec32Zoo.length; i++) {
@@ -227,13 +259,29 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  private static void testDecimalFromLongs() {
+  public void testDecimalFromLongs() {
     try (ColumnVector cv = ColumnVector.decimalFromLongs(-DecimalColumnVectorTest.dec64Scale, DecimalColumnVectorTest.unscaledDec64Zoo)) {
       try (HostColumnVector hcv = cv.copyToHost()) {
         for (int i = 0; i < DecimalColumnVectorTest.unscaledDec64Zoo.length; i++) {
           assertEquals(DecimalColumnVectorTest.unscaledDec64Zoo[i], hcv.getLong(i));
           assertEquals(BigDecimal.valueOf(DecimalColumnVectorTest.unscaledDec64Zoo[i], DecimalColumnVectorTest.dec64Scale), hcv.getBigDecimal(i));
         }
+      }
+    }
+  }
+
+  @Test
+  public void testDecimalFromBigInts() {
+    try (ColumnVector cv = ColumnVector.decimalFromBigInt(-DecimalColumnVectorTest.dec128Scale, DecimalColumnVectorTest.unscaledDec128Zoo)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        for (int i = 0; i < DecimalColumnVectorTest.unscaledDec128Zoo.length; i++) {
+          assertEquals(DecimalColumnVectorTest.unscaledDec128Zoo[i], hcv.getBigDecimal(i).unscaledValue());
+        }
+      }
+    }
+    try (HostColumnVector hcv = ColumnBuilderHelper.decimalFromBigInts(-DecimalColumnVectorTest.dec128Scale, DecimalColumnVectorTest.unscaledDec128Zoo)) {
+      for (int i = 0; i < DecimalColumnVectorTest.unscaledDec128Zoo.length; i++) {
+        assertEquals(DecimalColumnVectorTest.unscaledDec128Zoo[i], hcv.getBigDecimal(i).unscaledValue());
       }
     }
   }

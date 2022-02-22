@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,8 +47,7 @@ struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(
-    rmm::cuda_stream_view stream)
+  std::enable_if_t<std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view stream)
   {
     using ScalarType = cudf::scalar_type_t<T>;
 #if 1
@@ -65,8 +64,7 @@ struct count_accessor {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(
-    rmm::cuda_stream_view)
+  std::enable_if_t<not std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view)
   {
     CUDF_FAIL("count value should be a integral type.");
   }
@@ -76,7 +74,7 @@ struct count_checker {
   cudf::column_view const& count;
 
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, void> operator()(rmm::cuda_stream_view stream)
+  std::enable_if_t<std::is_integral_v<T>, void> operator()(rmm::cuda_stream_view stream)
   {
     // static_cast is necessary due to bool
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
@@ -89,7 +87,7 @@ struct count_checker {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral<T>::value, void> operator()(rmm::cuda_stream_view)
+  std::enable_if_t<not std::is_integral_v<T>, void> operator()(rmm::cuda_stream_view)
   {
     CUDF_FAIL("count value type should be integral.");
   }

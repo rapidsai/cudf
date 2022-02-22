@@ -1,9 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import pickle
-import warnings
+from functools import cached_property
 from typing import Any, Set
 
 import pandas as pd
@@ -32,7 +32,6 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
 
 
 class BaseIndex(Serializable):
@@ -568,17 +567,6 @@ class BaseIndex(Serializable):
         """{docstring}"""
 
         return cudf.io.dlpack.to_dlpack(self)
-
-    @property
-    def gpu_values(self):
-        """
-        View the data as a numba device array object
-        """
-        warnings.warn(
-            "The gpu_values property is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._values.data_array_view
 
     def append(self, other):
         """
@@ -1213,9 +1201,9 @@ class BaseIndex(Serializable):
             self.name = name
             return None
         else:
-            out = self.copy(deep=False)
+            out = self.copy(deep=True)
             out.name = name
-            return out.copy(deep=True)
+            return out
 
     def astype(self, dtype, copy=False):
         """
@@ -1253,10 +1241,6 @@ class BaseIndex(Serializable):
         return cudf.Index(
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
-
-    # TODO: This method is deprecated and can be removed.
-    def to_array(self, fillna=None):
-        return self._values.to_array(fillna=fillna)
 
     def to_series(self, index=None, name=None):
         """
@@ -1363,29 +1347,17 @@ class BaseIndex(Serializable):
         array([ True, False, False])
         """
 
-        return self._values.isin(values).values
-
-    def memory_usage(self, deep=False):
-        """
-        Memory usage of the values.
-
-        Parameters
-        ----------
-            deep : bool
-                Introspect the data deeply,
-                interrogate `object` dtypes for system-level
-                memory consumption.
-
-        Returns
-        -------
-            bytes used
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
             )
-        return self._values.memory_usage()
+
+        return self._values.isin(values).values
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
@@ -1444,7 +1416,8 @@ class BaseIndex(Serializable):
         """
 
         # This utilizes the fact that all `Index` is also a `Frame`.
-        result = self.__class__._from_columns(
+        # Except RangeIndex.
+        return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
                 keys=range(len(self._data)),
@@ -1453,8 +1426,6 @@ class BaseIndex(Serializable):
             ),
             self._column_names,
         )
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def dropna(self, how="any"):
         """
@@ -1476,12 +1447,10 @@ class BaseIndex(Serializable):
             for col in self._columns
         ]
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
             self._column_names,
         )
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         """Gather rows of index specified by indices in `gather_map`.
@@ -1501,13 +1470,10 @@ class BaseIndex(Serializable):
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             gather(list(self._columns), gather_map, nullify=nullify),
             self._column_names,
         )
-
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def take(self, indices, axis=0, allow_fill=True, fill_value=None):
         """Return a new index containing the rows specified by *indices*
@@ -1542,14 +1508,6 @@ class BaseIndex(Serializable):
                 "`allow_fill` and `fill_value` are unsupported."
             )
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _apply_boolean_mask(self, boolean_mask):
@@ -1561,12 +1519,10 @@ class BaseIndex(Serializable):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             apply_boolean_mask(list(self._columns), boolean_mask),
             column_names=self._column_names,
         )
-        result._copy_type_metadata(self)
-        return result
 
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,13 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <limits>
+#include <type_traits>
 #include <vector>
 
 /**
@@ -123,17 +128,17 @@ class column_view_base {
   /**
    * @brief Returns the number of elements in the column
    */
-  size_type size() const noexcept { return _size; }
+  [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
    */
-  size_type is_empty() const noexcept { return size() == 0; }
+  [[nodiscard]] size_type is_empty() const noexcept { return size() == 0; }
 
   /**
    * @brief Returns the element `data_type`
    */
-  data_type type() const noexcept { return _type; }
+  [[nodiscard]] data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates if the column can contain null elements, i.e., if it has
@@ -144,7 +149,7 @@ class column_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  bool nullable() const noexcept { return nullptr != _null_mask; }
+  [[nodiscard]] bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns the count of null elements
@@ -154,7 +159,7 @@ class column_view_base {
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
    */
-  size_type null_count() const;
+  [[nodiscard]] size_type null_count() const;
 
   /**
    * @brief Returns the count of null elements in the range [begin, end)
@@ -169,7 +174,7 @@ class column_view_base {
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
    */
-  size_type null_count(size_type begin, size_type end) const;
+  [[nodiscard]] size_type null_count(size_type begin, size_type end) const;
 
   /**
    * @brief Indicates if the column contains null elements,
@@ -178,7 +183,7 @@ class column_view_base {
    * @return true One or more elements are null
    * @return false All elements are valid
    */
-  bool has_nulls() const { return null_count() > 0; }
+  [[nodiscard]] bool has_nulls() const { return null_count() > 0; }
 
   /**
    * @brief Indicates if the column contains null elements in the range
@@ -192,7 +197,10 @@ class column_view_base {
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
    */
-  bool has_nulls(size_type begin, size_type end) const { return null_count(begin, end) > 0; }
+  [[nodiscard]] bool has_nulls(size_type begin, size_type end) const
+  {
+    return null_count(begin, end) > 0;
+  }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -201,13 +209,13 @@ class column_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  bitmask_type const* null_mask() const noexcept { return _null_mask; }
+  [[nodiscard]] bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
    */
-  size_type offset() const noexcept { return _offset; }
+  [[nodiscard]] size_type offset() const noexcept { return _offset; }
 
  protected:
   data_type _type{type_id::EMPTY};   ///< Element type
@@ -352,12 +360,15 @@ class column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  column_view child(size_type child_index) const noexcept { return _children[child_index]; }
+  [[nodiscard]] column_view child(size_type child_index) const noexcept
+  {
+    return _children[child_index];
+  }
 
   /**
    * @brief Returns the number of child columns.
    */
-  size_type num_children() const noexcept { return _children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
@@ -368,6 +379,44 @@ class column_view : public detail::column_view_base {
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
    */
   auto child_end() const noexcept { return _children.cend(); }
+
+  /**
+   * @brief Construct a column view from a device_span<T>.
+   *
+   * Only numeric and chrono types are supported.
+   *
+   * @tparam T The device span type. Must be const and match the column view's type.
+   * @param data A typed device span containing the column view's data.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  column_view(device_span<T const> data)
+    : column_view(
+        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
+  {
+    CUDF_EXPECTS(
+      data.size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Data exceeds the maximum size of a column view.");
+  }
+
+  /**
+   * @brief Converts a column view into a device span.
+   *
+   * Only numeric and chrono data types are supported. The column view must not
+   * be nullable.
+   *
+   * @tparam T The device span type. Must be const and match the column view's type.
+   * @throws cudf::logic_error if the column view type does not match the span type.
+   * @throws cudf::logic_error if the column view is nullable.
+   * @return A typed device span of the column view's data.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  [[nodiscard]] operator device_span<T const>() const
+  {
+    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<T>()},
+                 "Device span type must match column view type.");
+    CUDF_EXPECTS(!nullable(), "A nullable column view cannot be converted to a device span.");
+    return device_span<T const>(data<T>(), size());
+  }
 
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
@@ -524,7 +573,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  bitmask_type* null_mask() const noexcept
+  [[nodiscard]] bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_view_base::null_mask());
   }
@@ -544,7 +593,7 @@ class mutable_column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return mutable_column_view The requested child `mutable_column_view`
    */
-  mutable_column_view child(size_type child_index) const noexcept
+  [[nodiscard]] mutable_column_view child(size_type child_index) const noexcept
   {
     return mutable_children[child_index];
   }
@@ -552,7 +601,7 @@ class mutable_column_view : public detail::column_view_base {
   /**
    * @brief Returns the number of child columns.
    */
-  size_type num_children() const noexcept { return mutable_children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return mutable_children.size(); }
 
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
