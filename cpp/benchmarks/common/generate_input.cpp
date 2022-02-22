@@ -19,17 +19,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-
-#include <thrust/random.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -549,44 +545,6 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   }
   return list_column;  // return the top-level column
 }
-
-struct valid_generator {
-  thrust::minstd_rand engine;
-  thrust::uniform_real_distribution<float> dist;
-  float valid_prob;
-  valid_generator(thrust::minstd_rand engine, float valid_probability)
-    : engine(engine), dist{0, 1}, valid_prob{valid_probability}
-  {
-  }
-  valid_generator(unsigned seed, float valid_probability)
-    : engine(seed), dist{0, 1}, valid_prob{valid_probability}
-  {
-  }
-
-  __device__ bool operator()(size_t n)
-  {
-    engine.discard(n);
-    return dist(engine) < valid_prob;
-  }
-};
-
-std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
-                                                                       float null_probability,
-                                                                       unsigned seed)
-{
-  if (null_probability < 0.0f) {
-    return {rmm::device_buffer{}, 0};
-  } else if (null_probability >= 1.0f or null_probability == 0.0f) {
-    return {
-      cudf::create_null_mask(
-        size, null_probability >= 1.0f ? cudf::mask_state::ALL_VALID : cudf::mask_state::ALL_NULL),
-      null_probability >= 1.0f ? size : 0};
-  } else {
-    return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
-                                  thrust::make_counting_iterator<cudf::size_type>(size),
-                                  valid_generator{seed, 1.0f - null_probability});
-  }
-};
 
 using columns_vector = std::vector<std::unique_ptr<cudf::column>>;
 

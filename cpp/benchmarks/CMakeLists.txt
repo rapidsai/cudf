@@ -14,12 +14,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu)
-set_property(
-  SOURCE common/generate_input.cu
-  APPEND
-  PROPERTY COMPILE_FLAGS "-Xcompiler=-std=gnu++17"
-)
+add_library(cudf_datagen STATIC common/generate_input.cpp common/generate_nullmask.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
