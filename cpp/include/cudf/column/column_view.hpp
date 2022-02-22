@@ -393,8 +393,9 @@ class column_view : public detail::column_view_base {
     : column_view(
         cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
   {
-    CUDF_EXPECTS(data.size() < std::numeric_limits<cudf::size_type>::max(),
-                 "Data exceeds the maximum size of a column view.");
+    CUDF_EXPECTS(
+      data.size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Data exceeds the maximum size of a column view.");
   }
 
   /**

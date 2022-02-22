@@ -21,6 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 

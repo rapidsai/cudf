@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/span.hpp>
 
 namespace cudf {
 /**
@@ -25,6 +24,22 @@ namespace cudf {
  * @{
  * @file
  */
+
+/**
+ *  @brief Identifies the hash function to be used
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,         ///< Murmur3 hash function
+  HASH_MD5,             ///< MD5 hash function
+  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
+  HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
+};
+
+/**
+ * @brief The default seed value for hash functions
+ */
+static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /**
  * @brief Computes the hash value of each row in the input set of columns.
