@@ -125,6 +125,7 @@ class Frame(Scannable):
     # Necessary because the function names don't directly map to the docs.
     _SCAN_DOCSTRINGS = {
         "cumsum": {"op_name": "cumulative sum"},
+        "cumprod": {"op_name": "cumulative product"},
         "cummin": {"op_name": "cumulative min"},
         "cummax": {"op_name": "cumulative max"},
     }
@@ -4701,7 +4702,6 @@ class Frame(Scannable):
         3  10  34
         """
         cast_to_int = op in ("cumsum", "cumprod")
-        op = op.replace("cum", "")
         skipna = True if skipna is None else skipna
 
         results = {}
@@ -4734,7 +4734,7 @@ class Frame(Scannable):
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
                 result_col = result_col.astype(np.int64)
-            results[name] = result_col._apply_scan_op(op)
+            results[name] = getattr(result_col, op)()
         # TODO: This will work for Index because it's passing self._index
         # (which is None), but eventually we may want to remove that parameter
         # for Index._from_data and simplify.
