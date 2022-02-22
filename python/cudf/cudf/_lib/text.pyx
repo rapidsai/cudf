@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cudf
 
@@ -36,7 +36,7 @@ def read_text(object filepaths_or_buffers,
     cdef size_t c_byte_range_offset
     cdef size_t c_byte_range_size
     cdef byte_range_info c_byte_range
-    
+
     if (byte_range is not None):
         c_byte_range_offset = byte_range[0]
         c_byte_range_size = byte_range[1]
