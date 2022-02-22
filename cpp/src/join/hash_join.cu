@@ -41,6 +41,15 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
   return std::make_pair(std::move(empty_probe), std::move(empty_build));
 }
 
+/**
+ * @brief Performs bitwise AND of the bitmasks of columns of `build`. Returns
+ * a pair of row bitmasks and count of valid rows.
+ *
+ * @param build Table of columns used to build join hash.
+ * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return A pair of row bitmask and count of valid rows.
+ */
 std::pair<rmm::device_buffer, cudf::size_type> get_valid_row_info(cudf::table_view const& build,
                                                                   null_equality const nulls_equal,
                                                                   rmm::cuda_stream_view stream)
@@ -54,13 +63,14 @@ std::pair<rmm::device_buffer, cudf::size_type> get_valid_row_info(cudf::table_vi
 }
 
 /**
- * @brief Fills the hash table based on the given `build_table`.
+ * @brief Fills the hash table based on the given table `build`.
  *
- * @tparam MultimapType The type of the hash table
+ * @tparam MultimapType Type of the hash table
  *
  * @param build Table of columns used to build join hash.
  * @param hash_table Build hash table.
  * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param row_bitmask Bitmasks to denote whether a row is valid or not.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  */
