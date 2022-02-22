@@ -343,10 +343,10 @@ TEST_F(OverflowTest, OverflowTest)
   // should concatenate up to size_type::max - 1 rows.
   {
     // 5 x size + size_last adds to size_type::max - 1
-    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
+    constexpr auto size      = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
     constexpr auto size_last = static_cast<size_type>(836763647 - 1);
 
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto many_chars      = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
     auto many_chars_last = cudf::make_fixed_width_column(data_type{type_id::INT8}, size_last);
 
     table_view tbl({*many_chars});
