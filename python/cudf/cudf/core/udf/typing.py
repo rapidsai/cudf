@@ -407,6 +407,7 @@ class MaskedStringViewLength(AbstractTemplate):
             return nb_signature(types.int32, args[0])
 
 _len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
+_string_view_startswith = cuda.declare_device("startswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
 
 @cuda_decl_registry.register_global(len)
 class StringLiteralLength(AbstractTemplate):

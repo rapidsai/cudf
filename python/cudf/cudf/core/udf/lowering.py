@@ -16,7 +16,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.typing import MaskedType, NAType, string_view, _len_string_view
+from cudf.core.udf.typing import MaskedType, NAType, string_view, _len_string_view, _string_view_startswith
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -396,10 +396,10 @@ def string_view_len_impl(context, builder, sig, args):
     
     return result
 
-@cuda_lower(len, types.literal('abcde'))
-def string_literal_len_impl(context, builder, sig, args):
-    # todo- should be able to compile out the length of literals...
-    pass
+#@cuda_lower(len, types.literal('abcde'))
+#def string_literal_len_impl(context, builder, sig, args):
+#    # todo- should be able to compile out the length of literals...
+#    pass
 
 @cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)
 def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val):
@@ -425,3 +425,32 @@ def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val)
     to_return.value = str_view._getvalue()
 
     return to_return._getvalue()
+
+
+def call_string_view_startswith(st, tgt):
+    return _string_view_startswith(st, tgt)
+
+@cuda_lower("MaskedType.startswith", MaskedType(string_view), MaskedType(string_view))
+def masked_stringview_startswith(context, builder, sig, args):
+    retty = sig.return_type
+
+    maskedty = sig.args[0]
+    
+    st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
+    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+
+    strty = st.value.type
+
+    st_ptr = builder.alloca(strty)
+    tgt_ptr = builder.alloca(strty)
+
+    builder.store(st.value, st_ptr)
+    builder.store(tgt.value, tgt_ptr)
+
+    result = context.compile_internal(
+        builder,
+        call_string_view_startswith,
+        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
+        (st_ptr, tgt_ptr)
+    )
+    return result
