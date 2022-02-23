@@ -33,6 +33,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 
 #include <algorithm>
 #include <iterator>
@@ -544,75 +545,39 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
       return end - begin;
     });
 
-  // Empty segments are always null in the output mask
   auto const num_segments =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
-  auto const segment_valid_counts = segmented_count_bints(...);
-  auto const length_and_valid_count = thrust::zip_iterator{segment_length_iterator, segment_valid_counts.begin()};
- return cudf::detail::valid_if(
+
+  if (bitmask == nullptr) {
+    return cudf::detail::valid_if(
+      segment_length_iterator,
+      segment_length_iterator + num_segments,
+      [] __device__(auto const& length) { return length > 0; },
+      stream,
+      mr);
+  }
+
+  auto const segment_valid_counts =
+    cudf::detail::segmented_count_bits(bitmask,
+                                       first_bit_indices_begin,
+                                       first_bit_indices_end,
+                                       last_bit_indices_begin,
+                                       cudf::detail::count_bits_policy::SET_BITS,
+                                       stream,
+                                       rmm::mr::get_current_device_resource());
+  auto const length_and_valid_count =
+    thrust::make_zip_iterator(segment_length_iterator, segment_valid_counts.begin());
+  return cudf::detail::valid_if(
     length_and_valid_count,
     length_and_valid_count + num_segments,
-    [] __device__(auto const& length_and_valid_count) { 
-       auto const length = thrust::get<0>(length_and_valid_count);
-       auto const valid_count = thrust::get<1>(length_and_valid_count);
-       return (length > 0) and (null_handling == null_policy::EXCLUDE) ?  valid_count > 0 : valid_count == length; 
+    [null_handling] __device__(auto const& length_and_valid_count) {
+      auto const length      = thrust::get<0>(length_and_valid_count);
+      auto const valid_count = thrust::get<1>(length_and_valid_count);
+      return (length > 0) and
+             ((null_handling == null_policy::EXCLUDE) ? valid_count > 0 : valid_count == length);
     },
     stream,
     mr);
-
-  if (bitmask != nullptr) {
-    [[maybe_unused]] auto const [null_policy_bitmask, _] = [&]() {
-      if (null_handling == null_policy::EXCLUDE) {
-        // Output null mask should be valid if any element in the segment is
-        // valid and the segment is non-empty.
-        auto const valid_counts =
-          cudf::detail::segmented_count_bits(bitmask,
-                                             first_bit_indices_begin,
-                                             first_bit_indices_end,
-                                             last_bit_indices_begin,
-                                             cudf::detail::count_bits_policy::SET_BITS,
-                                             stream,
-                                             rmm::mr::get_current_device_resource());
-        return cudf::detail::valid_if(
-          valid_counts.begin(),
-          valid_counts.end(),
-          [] __device__(auto const valid_count) { return valid_count > 0; },
-          stream);
-      } else {
-        // Output null mask should be valid if all elements in the segment are
-        // valid and the segment is non-empty.
-        auto const null_counts =
-          cudf::detail::segmented_count_bits(bitmask,
-                                             first_bit_indices_begin,
-                                             first_bit_indices_end,
-                                             last_bit_indices_begin,
-                                             cudf::detail::count_bits_policy::UNSET_BITS,
-                                             stream,
-                                             rmm::mr::get_current_device_resource());
-        return cudf::detail::valid_if(
-          null_counts.begin(),
-          null_counts.end(),
-          [] __device__(auto const null_count) { return null_count == 0; },
-          stream);
-      }
-    }();
-
-    std::vector<bitmask_type const*> masks{
-      reinterpret_cast<bitmask_type const*>(output_null_mask.data()),
-      reinterpret_cast<bitmask_type const*>(null_policy_bitmask.data())};
-    std::vector<size_type> begin_bits{0, 0};
-    size_type valid_count = cudf::detail::inplace_bitmask_and(
-      device_span<bitmask_type>(reinterpret_cast<bitmask_type*>(output_null_mask.data()),
-                                num_bitmask_words(num_segments)),
-      masks,
-      begin_bits,
-      num_segments,
-      stream,
-      mr);
-
-    output_null_count = num_segments - valid_count;
-  }
-  return std::make_pair(std::move(output_null_mask), output_null_count);
 }
 
 }  // namespace detail
