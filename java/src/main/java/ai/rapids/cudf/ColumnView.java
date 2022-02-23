@@ -2261,6 +2261,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * For each list in this column pull out the entry at the corresponding index specified in
+   * the index column. If the entry goes off the end of the list a NULL is returned instead.
+   *
+   * The index column should have the same row count with the list column.
+   *
+   * @param indices a column of 0 based offsets into the list. Negative values go backwards from
+   *                the end of the list.
+   * @return a new column of the values at those indexes.
+   */
+  public final ColumnVector extractListElement(ColumnView indices) {
+    assert type.equals(DType.LIST) : "A column of type LIST is required for .extractListElement()";
+    assert indices != null && DType.INT32.equals(indices.type)
+        : "indices should be non-null and integer type";
+    assert indices.getRowCount() == rows
+        : "indices must have the same row count with list column";
+    return new ColumnVector(extractListElementV(getNativeView(), indices.getNativeView()));
+  }
+
+  /**
    * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
    * producing a LIST column in which each list contain only unique elements.
    *
@@ -3751,6 +3770,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
+
+  private static native long extractListElementV(long nativeView, long indicesView);
 
   private static native long dropListDuplicates(long nativeView);
 

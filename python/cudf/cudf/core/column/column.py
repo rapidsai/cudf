@@ -2289,7 +2289,9 @@ def arange(
     if step is None:
         step = 1
 
-    size = int(np.ceil((stop - start) / step))
+    size = len(range(int(start), int(stop), int(step)))
+    if size == 0:
+        return as_column([], dtype=dtype)
 
     return libcudf.filling.sequence(
         size,

@@ -137,9 +137,9 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
     typename C,
     // Only supported containers of types convertible to T
     std::enable_if_t<is_host_span_supported_container<C>::value &&
-                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                           std::declval<C&>().data()))> (*)[],
-                                         T (*)[]>::value>* = nullptr>
+                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                             std::declval<C&>().data()))> (*)[],
+                                           T (*)[]>>* = nullptr>
   constexpr host_span(C& in) : base(in.data(), in.size())
   {
   }
@@ -149,9 +149,9 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
     typename C,
     // Only supported containers of types convertible to T
     std::enable_if_t<is_host_span_supported_container<C>::value &&
-                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                           std::declval<C&>().data()))> (*)[],
-                                         T (*)[]>::value>* = nullptr>
+                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                             std::declval<C&>().data()))> (*)[],
+                                           T (*)[]>>* = nullptr>
   constexpr host_span(C const& in) : base(in.data(), in.size())
   {
   }
@@ -160,7 +160,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   template <typename OtherT,
             std::size_t OtherExtent,
             typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                      std::is_convertible_v<OtherT (*)[], T (*)[]>,
                                     void>::type* = nullptr>
   constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
     : base(other.data(), other.size())
@@ -200,9 +200,9 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
     typename C,
     // Only supported containers of types convertible to T
     std::enable_if_t<is_device_span_supported_container<C>::value &&
-                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                           std::declval<C&>().data()))> (*)[],
-                                         T (*)[]>::value>* = nullptr>
+                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                             std::declval<C&>().data()))> (*)[],
+                                           T (*)[]>>* = nullptr>
   constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
@@ -211,9 +211,9 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
     typename C,
     // Only supported containers of types convertible to T
     std::enable_if_t<is_device_span_supported_container<C>::value &&
-                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                           std::declval<C&>().data()))> (*)[],
-                                         T (*)[]>::value>* = nullptr>
+                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                             std::declval<C&>().data()))> (*)[],
+                                           T (*)[]>>* = nullptr>
   constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
@@ -221,7 +221,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
   template <typename OtherT,
             std::size_t OtherExtent,
             typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                      std::is_convertible_v<OtherT (*)[], T (*)[]>,
                                     void>::type* = nullptr>
   constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
     : base(other.data(), other.size())
@@ -283,8 +283,8 @@ class base_2dspan {
   template <typename OtherT,
             template <typename, size_t>
             typename OtherRowType,
-            typename std::enable_if<std::is_convertible<OtherRowType<OtherT, dynamic_extent>,
-                                                        RowType<T, dynamic_extent>>::value,
+            typename std::enable_if<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
+                                                          RowType<T, dynamic_extent>>,
                                     void>::type* = nullptr>
   constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
     : _data{other.data()}, _size{other.size()}
