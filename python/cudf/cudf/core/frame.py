@@ -3741,7 +3741,6 @@ class Frame:
             "equal": "eq",
         }
 
-        # First look for methods of the class.
         fname = ufunc.__name__
         if fname in binary_operations:
             reflect = self is not inputs[0]
@@ -3766,20 +3765,12 @@ class Frame:
                 reflect = False
             op = f"__{'r' if reflect else ''}{op}__"
 
-            # pandas bitwise operations return bools if indexes are misaligned.
-            # TODO: This needs special handling for IndexedFrames.
-            # if (
-            #     "bitwise" in fname
-            #     and isinstance(other, IndexedFrame)
-            #     and not self.index.equals(other.index)
-            # ):
-            #     return getattr(self, op)(other).astype(bool)
             # Float_power returns float irrespective of the input type.
             if fname == "float_power":
                 return getattr(self, op)(other).astype(float)
             return getattr(self, op)(other)
 
-        # Special handling for unary operations.
+        # Special handling for various unary operations.
         if fname == "negative":
             return self * -1
         if fname == "positive":
@@ -3791,6 +3782,7 @@ class Frame:
         if fname == "fabs":
             return self.abs().astype(np.float64)
 
+        # None is a sentinel used by subclasses to trigger cupy dispatch.
         return None
 
     def _apply_cupy_ufunc_to_operands(
@@ -3798,22 +3790,20 @@ class Frame:
     ):
         # Note: There are some operations that may be supported by libcudf but
         # are not supported by pandas APIs. In particular, libcudf binary
-        # operations support logical and/or operations, but those operations
-        # are not defined on pd.Series/DataFrame. For now those operations will
-        # dispatch to cupy, but if ufuncs are ever a bottleneck we could add
-        # special handling to dispatch those (or any other) functions that we
-        # could implement without cupy.
+        # operations support logical and/or operations as well as
+        # trigonometric, but those operations are not defined on
+        # pd.Series/DataFrame. For now those operations will dispatch to cupy,
+        # but if ufuncs are ever a bottleneck we could add special handling to
+        # dispatch those (or any other) functions that we could implement
+        # without cupy.
 
         mask = None
         data = [{} for _ in range(ufunc.nout)]
         for name, (left, right, _, _) in operands.items():
             cupy_inputs = []
             for inp in (left, right) if ufunc.nin == 2 else (left,):
-                if (
-                    isinstance(inp, cudf.core.column.ColumnBase)
-                    and inp.has_nulls()
-                ):
-                    new_mask = cudf.core.column.as_column(inp.nullmask)
+                if isinstance(inp, ColumnBase) and inp.has_nulls():
+                    new_mask = as_column(inp.nullmask)
 
                     # TODO: This is a hackish way to perform a bitwise and
                     # of bitmasks. Once we expose
@@ -3831,7 +3821,7 @@ class Frame:
             if ufunc.nout == 1:
                 cp_output = (cp_output,)
             for i, out in enumerate(cp_output):
-                data[i][name] = cudf.core.column.as_column(out).set_mask(mask)
+                data[i][name] = as_column(out).set_mask(mask)
         return data
 
     @annotate("FRAME_DOT", color="green", domain="cudf_python")

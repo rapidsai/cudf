@@ -7,7 +7,7 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Any, Callable, Type, TypeVar
+from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -1725,7 +1725,16 @@ class IndexedFrame(Frame):
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[
+                Optional[str],
+                Tuple[cudf.core.column.ColumnBase, Any, bool, Any],
+            ],
+            Type[NotImplemented],
+        ],
+        Optional[cudf.BaseIndex],
+    ]:
         raise NotImplementedError(
             "Binary operations are not supported for {self.__class__}"
         )
@@ -1735,10 +1744,11 @@ class IndexedFrame(Frame):
         fname = ufunc.__name__
 
         if ret is not None:
+            # pandas bitwise operations return bools if indexes are misaligned.
             if "bitwise" in fname:
                 reflect = self is not inputs[0]
                 other = inputs[0] if reflect else inputs[1]
-                if isinstance(other, IndexedFrame) and not self.index.equals(
+                if isinstance(other, self.__class__) and not self.index.equals(
                     other.index
                 ):
                     ret = ret.astype(bool)
@@ -1764,9 +1774,7 @@ class IndexedFrame(Frame):
                 ufunc, cupy_func, inputs, **kwargs
             )
 
-            out = tuple(
-                self.__class__._from_data(out, index=index) for out in data
-            )
+            out = tuple(self._from_data(out, index=index) for out in data)
             return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented

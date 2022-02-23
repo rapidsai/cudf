@@ -780,13 +780,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
-        fname = ufunc.__name__
 
         if ret is not None:
             return ret
 
         # Attempt to dispatch all other functions to cupy.
-        cupy_func = getattr(cupy, fname)
+        cupy_func = getattr(cupy, ufunc.__name__)
         if cupy_func:
             if ufunc.nin == 2:
                 other = inputs[self is inputs[0]]

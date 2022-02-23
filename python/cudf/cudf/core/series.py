@@ -9,7 +9,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -39,6 +39,7 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -435,7 +436,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 data = {}
 
-        if not isinstance(data, column.ColumnBase):
+        if not isinstance(data, ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         else:
             if dtype is not None:
@@ -444,7 +445,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
-        assert isinstance(data, column.ColumnBase)
+        assert isinstance(data, ColumnBase)
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
@@ -1215,7 +1216,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+            Type[NotImplemented],
+        ],
+        Optional[BaseIndex],
+    ]:
         # Specialize binops to align indices.
         if isinstance(other, Series):
             if (
