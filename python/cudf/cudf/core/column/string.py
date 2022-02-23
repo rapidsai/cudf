@@ -6,6 +6,7 @@ import builtins
 import pickle
 import re
 import warnings
+from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -5101,25 +5102,22 @@ class StringColumn(column.ColumnBase):
 
         return self._end_offset
 
+    @cached_property
     def memory_usage(self) -> int:
-        if self._cached_sizeof is None:
-            n = 0
-            if len(self.base_children) == 2:
-                child0_size = (self.size + 1) * self.base_children[
-                    0
-                ].dtype.itemsize
+        n = 0
+        if len(self.base_children) == 2:
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
 
-                child1_size = (
-                    self.end_offset - self.start_offset
-                ) * self.base_children[1].dtype.itemsize
+            child1_size = (
+                self.end_offset - self.start_offset
+            ) * self.base_children[1].dtype.itemsize
 
-                n += child0_size + child1_size
-            if self.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    self.size
-                )
-            self._cached_sizeof = n
-        return self._cached_sizeof
+            n += child0_size + child1_size
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
+        return n
 
     @property
     def base_size(self) -> int:

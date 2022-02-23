@@ -19,7 +19,6 @@ class Column:
     _size: int
     _offset: int
     _null_count: int
-    _cached_sizeof: int
     _children: Tuple[ColumnBase, ...]
     _base_children: Tuple[ColumnBase, ...]
     _distinct_count: Dict[bool, int]
