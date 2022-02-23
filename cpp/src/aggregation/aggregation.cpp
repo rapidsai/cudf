@@ -480,6 +480,7 @@ std::unique_ptr<Base> make_any_aggregation()
 {
   return std::make_unique<detail::any_aggregation>();
 }
+template std::unique_ptr<aggregation> make_any_aggregation<aggregation>();
 template std::unique_ptr<reduce_aggregation> make_any_aggregation<reduce_aggregation>();
 
 /// Factory to create a ALL aggregation
@@ -488,6 +489,7 @@ std::unique_ptr<Base> make_all_aggregation()
 {
   return std::make_unique<detail::all_aggregation>();
 }
+template std::unique_ptr<aggregation> make_all_aggregation<aggregation>();
 template std::unique_ptr<reduce_aggregation> make_all_aggregation<reduce_aggregation>();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
