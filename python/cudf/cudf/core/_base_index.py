@@ -1,9 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import pickle
-import warnings
+from functools import cached_property
 from typing import Any, Set
 
 import pandas as pd
@@ -32,7 +32,6 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
 
 
 class BaseIndex(Serializable):
@@ -1202,9 +1201,9 @@ class BaseIndex(Serializable):
             self.name = name
             return None
         else:
-            out = self.copy(deep=False)
+            out = self.copy(deep=True)
             out.name = name
-            return out.copy(deep=True)
+            return out
 
     def astype(self, dtype, copy=False):
         """
@@ -1348,29 +1347,17 @@ class BaseIndex(Serializable):
         array([ True, False, False])
         """
 
-        return self._values.isin(values).values
-
-    def memory_usage(self, deep=False):
-        """
-        Memory usage of the values.
-
-        Parameters
-        ----------
-            deep : bool
-                Introspect the data deeply,
-                interrogate `object` dtypes for system-level
-                memory consumption.
-
-        Returns
-        -------
-            bytes used
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
             )
-        return self._values.memory_usage()
+
+        return self._values.isin(values).values
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):

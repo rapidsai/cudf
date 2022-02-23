@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,41 @@
 
 #pragma once
 
-#include <benchmark/benchmark.h>
-#include <nvbench/nvbench.cuh>
+#include "generate_input_tables.cuh"
 
-#include <thrust/iterator/counting_iterator.h>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/ast/expressions.hpp>
-#include <cudf/join.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+#include <cudf/ast/expressions.hpp>
+#include <cudf/detail/valid_if.cuh>
+#include <cudf/filling.hpp>
+#include <cudf/join.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <nvbench/nvbench.cuh>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/random/linear_congruential_engine.h>
+#include <thrust/random/uniform_int_distribution.h>
 
 #include <vector>
 
-#include "generate_input_tables.cuh"
+struct null75_generator {
+  thrust::minstd_rand engine;
+  thrust::uniform_int_distribution<unsigned> rand_gen;
+  null75_generator() : engine(), rand_gen() {}
+  __device__ bool operator()(size_t i)
+  {
+    engine.discard(i);
+    // roughly 75% nulls
+    return (rand_gen(engine) & 3) == 0;
+  }
+};
 
 template <typename key_type,
           typename payload_type,
@@ -64,13 +81,11 @@ static void BM_join(state_type& state, Join JoinFunc)
   const int multiplicity   = 1;
 
   // Generate build and probe tables
-  cudf::test::UniformRandomGenerator<cudf::size_type> rand_gen(0, build_table_size);
-  auto build_random_null_mask = [&rand_gen](int size) {
+  auto build_random_null_mask = [](int size) {
     // roughly 75% nulls
-    auto validity = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
-    return cudf::test::detail::make_null_mask(validity, validity + size);
+    auto validity =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(0), null75_generator{});
+    return cudf::detail::valid_if(validity, validity + size, thrust::identity<bool>{}).first;
   };
 
   std::unique_ptr<cudf::column> build_key_column = [&]() {
@@ -96,17 +111,14 @@ static void BM_join(state_type& state, Join JoinFunc)
     selectivity,
     multiplicity);
 
-  auto payload_data_it = thrust::make_counting_iterator(0);
-  cudf::test::fixed_width_column_wrapper<payload_type> build_payload_column(
-    payload_data_it, payload_data_it + build_table_size);
-
-  cudf::test::fixed_width_column_wrapper<payload_type> probe_payload_column(
-    payload_data_it, payload_data_it + probe_table_size);
+  auto init = cudf::make_fixed_width_scalar<payload_type>(static_cast<payload_type>(0));
+  auto build_payload_column = cudf::sequence(build_table_size, *init);
+  auto probe_payload_column = cudf::sequence(probe_table_size, *init);
 
   CHECK_CUDA(0);
 
-  cudf::table_view build_table({build_key_column->view(), build_payload_column});
-  cudf::table_view probe_table({probe_key_column->view(), probe_payload_column});
+  cudf::table_view build_table({build_key_column->view(), *build_payload_column});
+  cudf::table_view probe_table({probe_key_column->view(), *probe_payload_column});
 
   // Setup join parameters and result table
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};

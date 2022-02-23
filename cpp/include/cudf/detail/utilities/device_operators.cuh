@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,6 +129,8 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    // chrono types do not have std::numeric_limits specializations and should use T::max()
+    // https://eel.is/c++draft/numeric.limits.general#6
     if constexpr (cudf::is_chrono<T>()) return T::max();
     return cuda::std::numeric_limits<T>::max();
   }
@@ -171,6 +173,8 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    // chrono types do not have std::numeric_limits specializations and should use T::min()
+    // https://eel.is/c++draft/numeric.limits.general#6
     if constexpr (cudf::is_chrono<T>()) return T::min();
     return cuda::std::numeric_limits<T>::lowest();
   }
@@ -223,7 +227,7 @@ struct DeviceProduct {
  * @brief binary `and` operator
  */
 struct DeviceAnd {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs & rhs)
   {
     return (lhs & rhs);
@@ -234,7 +238,7 @@ struct DeviceAnd {
  * @brief binary `or` operator
  */
 struct DeviceOr {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs | rhs)
   {
     return (lhs | rhs);
@@ -245,7 +249,7 @@ struct DeviceOr {
  * @brief binary `xor` operator
  */
 struct DeviceXor {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs ^ rhs)
   {
     return (lhs ^ rhs);

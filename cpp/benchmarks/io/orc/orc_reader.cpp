@@ -88,13 +88,13 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const use_np_dtypes = (flags & 2) != 0;
   auto const ts_type       = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
 
+  // skip_rows is not supported on nested types
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                                    int32_t(type_group_id::FLOATING_POINT),
                                                    int32_t(type_group_id::FIXED_POINT),
                                                    int32_t(type_group_id::TIMESTAMP),
-                                                   int32_t(cudf::type_id::STRING),
-                                                   int32_t(cudf::type_id::LIST)}),
+                                                   int32_t(cudf::type_id::STRING)}),
                                 col_sel);
   auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -181,11 +181,12 @@ BENCHMARK_REGISTER_F(OrcRead, column_selection)
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
 
+// Need an API to get the number of stripes to enable row_selection::STRIPES here
 BENCHMARK_DEFINE_F(OrcRead, row_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }
 BENCHMARK_REGISTER_F(OrcRead, row_selection)
   ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::STRIPES), int32_t(row_selection::NROWS)},
+                 {int32_t(row_selection::NROWS)},
                  {1, 8},
                  {0b11},  // defaults
                  {int32_t(cudf::type_id::EMPTY)}})

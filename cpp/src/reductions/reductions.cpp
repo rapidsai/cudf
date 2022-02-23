@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ struct reduce_dispatch_functor {
       case aggregation::NUNIQUE: {
         auto nunique_agg = dynamic_cast<nunique_aggregation const*>(agg.get());
         return make_fixed_width_scalar(
-          detail::distinct_count(
+          detail::unordered_distinct_count(
             col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
           stream,
           mr);

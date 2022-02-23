@@ -81,13 +81,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DECIMAL64              "cudf::type_id::DECIMAL64"
         DECIMAL128             "cudf::type_id::DECIMAL128"
 
-    ctypedef enum hash_id "cudf::hash_id":
-        HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
-        HASH_MURMUR3 "cudf::hash_id::HASH_MURMUR3"
-        HASH_MD5 "cudf::hash_id::HASH_MD5"
-        HASH_SERIAL_MURMUR3 "cudf::hash_id::HASH_SERIAL_MURMUR3"
-        HASH_SPARK_MURMUR3 "cudf::hash_id::HASH_SPARK_MURMUR3"
-
     cdef cppclass data_type:
         data_type() except +
         data_type(const data_type&) except +
