@@ -37,21 +37,27 @@
 
 namespace cudf {
 
-bool constexpr is_boolean_output_agg(aggregation::Kind kind)
+bool constexpr is_boolean_output_agg(segmented_reduce_aggregation::Kind kind)
 {
-  return kind == aggregation::ALL || kind == aggregation::ANY;
+  return kind == segmented_reduce_aggregation::ALL || kind == segmented_reduce_aggregation::ANY;
 }
 
-template <aggregation::Kind kind>
-std::unique_ptr<aggregation> make_simple_aggregation()
+template <segmented_reduce_aggregation::Kind kind>
+std::unique_ptr<segmented_reduce_aggregation> make_simple_aggregation()
 {
   switch (kind) {
-    case aggregation::SUM: return make_sum_aggregation();
-    case aggregation::PRODUCT: return make_product_aggregation();
-    case aggregation::MIN: return make_min_aggregation();
-    case aggregation::MAX: return make_max_aggregation();
-    case aggregation::ALL: return make_all_aggregation();
-    case aggregation::ANY: return make_any_aggregation();
+    case segmented_reduce_aggregation::SUM:
+      return make_sum_aggregation<segmented_reduce_aggregation>();
+    case segmented_reduce_aggregation::PRODUCT:
+      return make_product_aggregation<segmented_reduce_aggregation>();
+    case segmented_reduce_aggregation::MIN:
+      return make_min_aggregation<segmented_reduce_aggregation>();
+    case segmented_reduce_aggregation::MAX:
+      return make_max_aggregation<segmented_reduce_aggregation>();
+    case segmented_reduce_aggregation::ALL:
+      return make_all_aggregation<segmented_reduce_aggregation>();
+    case segmented_reduce_aggregation::ANY:
+      return make_any_aggregation<segmented_reduce_aggregation>();
     default: CUDF_FAIL("Unsupported simple segmented aggregation");
   }
 }

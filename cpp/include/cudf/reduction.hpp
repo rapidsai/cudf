@@ -117,7 +117,7 @@ std::unique_ptr<scalar> reduce(
 std::unique_ptr<column> segmented_reduce(
   column_view const& segmented_values,
   device_span<size_type const> offsets,
-  aggregation const& agg,
+  segmented_reduce_aggregation const& agg,
   data_type output_dtype,
   null_policy null_handling,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

@@ -49,31 +49,32 @@ struct segmented_reduce_dispatch_functor {
   {
   }
 
-  template <aggregation::Kind k>
+  template <segmented_reduce_aggregation::Kind k>
   std::unique_ptr<column> operator()()
   {
     switch (k) {
-      case aggregation::SUM:
+      case segmented_reduce_aggregation::SUM:
         return reduction::segmented_sum(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::PRODUCT:
+      case segmented_reduce_aggregation::PRODUCT:
         return reduction::segmented_product(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::MIN:
+      case segmented_reduce_aggregation::MIN:
         return reduction::segmented_min(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::MAX:
+      case segmented_reduce_aggregation::MAX:
         return reduction::segmented_max(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::ANY:
+      case segmented_reduce_aggregation::ANY:
         return reduction::segmented_any(col, offsets, output_dtype, null_handling, stream, mr);
-      case aggregation::ALL:
+      case segmented_reduce_aggregation::ALL:
         return reduction::segmented_all(col, offsets, output_dtype, null_handling, stream, mr);
-      default: CUDF_FAIL("Unsupported aggregation type.");
-      // TODO: Add support for compound_ops
+      default:
+        CUDF_FAIL("Unsupported aggregation type.");
+        // TODO: Add support for compound_ops
     }
   }
 };
 
 std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          device_span<size_type const> offsets,
-                                         aggregation const& agg,
+                                         segmented_reduce_aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
                                          rmm::cuda_stream_view stream,
@@ -91,7 +92,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
 
 std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          device_span<size_type const> offsets,
-                                         aggregation const& agg,
+                                         segmented_reduce_aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
                                          rmm::mr::device_memory_resource* mr)
