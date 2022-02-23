@@ -120,7 +120,7 @@ struct random_value_fn;
  * @brief Creates an random timestamp/duration value
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
   std::function<int64_t(std::mt19937&)> seconds_gen;
   std::function<int64_t(std::mt19937&)> nanoseconds_gen;
 
@@ -162,7 +162,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  * @brief Creates an random fixed_point value. Not implemented yet.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   using rep = typename T::rep;
   rep const lower_bound;
   rep const upper_bound;
@@ -192,9 +192,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
  * @brief Creates an random numeric value with the given distribution.
  */
 template <typename T>
-struct random_value_fn<
-  T,
-  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
+struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   T const lower_bound;
   T const upper_bound;
   distribution_fn<T> dist;
@@ -217,7 +215,7 @@ struct random_value_fn<
  * @brief Creates an boolean value with given probability of returning `true`.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
+struct random_value_fn<T, std::enable_if_t<std::is_same_v<T, bool>>> {
   std::bernoulli_distribution b_dist;
 
   random_value_fn(distribution_params<bool> const& desc) : b_dist{desc.probability_true} {}
@@ -258,7 +256,7 @@ struct stored_as {
 
 // Use `int8_t` for bools because that's how they're stored in columns
 template <typename T>
-struct stored_as<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
+struct stored_as<T, std::enable_if_t<std::is_same_v<T, bool>>> {
   using type = int8_t;
 };
 

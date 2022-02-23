@@ -21,9 +21,8 @@ using namespace cudf;
 using namespace cudf::tdigest;
 
 struct tdigest_gen {
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys, column_view const& values, int delta)
   {
     cudf::table_view t({keys});
@@ -36,9 +35,8 @@ struct tdigest_gen {
     return std::move(result.second[0].results[0]);
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys, column_view const& values, int delta)
   {
     CUDF_FAIL("Invalid tdigest test type");
@@ -89,9 +87,8 @@ std::unique_ptr<column> arrow_percentile_approx(column_view const& _values,
 }
 
 struct percentile_approx_dispatch {
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys,
                                      column_view const& values,
                                      int delta,
@@ -127,9 +124,8 @@ struct percentile_approx_dispatch {
     return result;
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys,
                                      column_view const& values,
                                      int delta,

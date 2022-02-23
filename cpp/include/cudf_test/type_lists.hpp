@@ -80,9 +80,8 @@ constexpr auto types_to_ids()
  * @return Vector of TypeParam with the values specified
  */
 template <typename TypeParam, typename T>
-typename std::enable_if_t<cudf::is_fixed_width<TypeParam>() &&
-                            !cudf::is_timestamp_t<TypeParam>::value,
-                          thrust::host_vector<TypeParam>>
+std::enable_if_t<cudf::is_fixed_width<TypeParam>() && !cudf::is_timestamp_t<TypeParam>::value,
+                 thrust::host_vector<TypeParam>>
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   thrust::host_vector<TypeParam> vec(init_list.size());
@@ -100,7 +99,7 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
  * @return Vector of TypeParam with the values specified
  */
 template <typename TypeParam, typename T>
-typename std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, thrust::host_vector<TypeParam>>
+std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, thrust::host_vector<TypeParam>>
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   thrust::host_vector<TypeParam> vec(init_list.size());
@@ -118,7 +117,7 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
  */
 
 template <typename TypeParam, typename T>
-typename std::enable_if_t<std::is_same_v<TypeParam, std::string>, thrust::host_vector<std::string>>
+std::enable_if_t<std::is_same_v<TypeParam, std::string>, thrust::host_vector<std::string>>
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   thrust::host_vector<std::string> vec(init_list.size());

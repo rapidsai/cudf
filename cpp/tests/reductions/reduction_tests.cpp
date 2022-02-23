@@ -38,7 +38,7 @@
 using aggregation = cudf::aggregation;
 
 template <typename T>
-typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
+std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
   std::vector<int> const& int_values)
 {
   std::vector<T> v(int_values.size());
@@ -50,7 +50,7 @@ typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::vector<T>> conve
 }
 
 template <typename T>
-typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
+std::enable_if_t<cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
   std::vector<int> const& int_values)
 {
   std::vector<T> v(int_values.size());
