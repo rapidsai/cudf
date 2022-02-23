@@ -298,12 +298,14 @@ class ColumnBase(Column, Serializable, NotIterable):
         )
 
     def memory_usage(self) -> int:
-        n = 0
-        if self.data is not None:
-            n += self.data.size
-        if self.nullable:
-            n += bitmask_allocation_size_bytes(self.size)
-        return n
+        if self._cached_sizeof is None:
+            n = 0
+            if self.data is not None:
+                n += self.data.size
+            if self.nullable:
+                n += bitmask_allocation_size_bytes(self.size)
+            self._cached_sizeof = n
+        return self._cached_sizeof
 
     def _fill(
         self,
