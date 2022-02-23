@@ -371,7 +371,6 @@ cdef class Column:
         self._null_count = None
         self._children = None
         self._data = None
-        self._memory_usage = None
 
         return mutable_column_view(
             dtype,
