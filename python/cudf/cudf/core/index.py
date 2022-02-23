@@ -779,12 +779,32 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         super().__init__({name: data})
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+        fname = ufunc.__name__
 
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
-        else:
-            return NotImplemented
+        if ret is not None:
+            return ret
+
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cupy, fname)
+        if cupy_func:
+            if ufunc.nin == 2:
+                other = inputs[self is inputs[0]]
+                inputs = self._make_operands_for_binop(other)
+            else:
+                inputs = {
+                    name: (col, None, False, None)
+                    for name, col in self._data.items()
+                }
+
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
+            )
+
+            out = tuple(_index_from_data(out) for out in data)
+            return out[0] if ufunc.nout == 1 else out
+
+        return NotImplemented
 
     def _binaryop(
         self,
@@ -797,11 +817,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     ) -> SingleColumnFrame:
         # Specialize binops to generate the appropriate output index type.
         operands = self._make_operands_for_binop(other, fill_value, reflect)
-        return (
-            _index_from_data(data=self._colwise_binop(operands, fn),)
-            if operands is not NotImplemented
-            else NotImplemented
-        )
+        if operands is NotImplemented:
+            return NotImplemented
+        return _index_from_data(self._colwise_binop(operands, fn))
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True

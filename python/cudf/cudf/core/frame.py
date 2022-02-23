@@ -3660,6 +3660,135 @@ class Frame:
 
         return output
 
+    # For more detail on this function and how it should work, see
+    # https://numpy.org/doc/stable/reference/ufuncs.html
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # We don't currently support reduction, accumulation, etc. We also
+        # don't support any special kwargs or higher arity ufuncs than binary.
+        if method != "__call__" or kwargs or ufunc.nin > 2:
+            return NotImplemented
+
+        # Binary operations
+        binary_operations = {
+            # Arithmetic binary operations.
+            "add": "add",
+            "subtract": "sub",
+            "multiply": "mul",
+            "matmul": "matmul",
+            "divide": "truediv",
+            "true_divide": "truediv",
+            "floor_divide": "floordiv",
+            "power": "pow",
+            "float_power": "pow",
+            "remainder": "mod",
+            "mod": "mod",
+            "fmod": "mod",
+            # Bitwise binary operations.
+            "bitwise_and": "and",
+            "bitwise_or": "or",
+            "bitwise_xor": "xor",
+            # Comparison binary operators
+            "greater": "gt",
+            "greater_equal": "ge",
+            "less": "lt",
+            "less_equal": "le",
+            "not_equal": "ne",
+            "equal": "eq",
+        }
+
+        # First look for methods of the class.
+        fname = ufunc.__name__
+        if fname in binary_operations:
+            reflect = self is not inputs[0]
+            other = inputs[0] if reflect else inputs[1]
+
+            # These operators need to be mapped to their inverses when
+            # performing a reflected operation because no reflected version of
+            # the operators themselves exist.
+            ops_without_reflection = {
+                "gt": "lt",
+                "ge": "le",
+                "lt": "gt",
+                "le": "ge",
+                # ne and eq are symmetric, so they are their own inverse op
+                "ne": "ne",
+                "eq": "eq",
+            }
+
+            op = binary_operations[fname]
+            if reflect and op in ops_without_reflection:
+                op = ops_without_reflection[op]
+                reflect = False
+            op = f"__{'r' if reflect else ''}{op}__"
+
+            # pandas bitwise operations return bools if indexes are misaligned.
+            # TODO: This needs special handling for IndexedFrames.
+            # if (
+            #     "bitwise" in fname
+            #     and isinstance(other, IndexedFrame)
+            #     and not self.index.equals(other.index)
+            # ):
+            #     return getattr(self, op)(other).astype(bool)
+            # Float_power returns float irrespective of the input type.
+            if fname == "float_power":
+                return getattr(self, op)(other).astype(float)
+            return getattr(self, op)(other)
+
+        # Special handling for unary operations.
+        if fname == "negative":
+            return self * -1
+        if fname == "positive":
+            return self.copy(deep=True)
+        if fname == "invert":
+            return ~self
+        if fname == "absolute":
+            return self.abs()
+        if fname == "fabs":
+            return self.abs().astype(np.float64)
+
+        return None
+
+    def _apply_cupy_ufunc_to_operands(
+        self, ufunc, cupy_func, operands, **kwargs
+    ):
+        # Note: There are some operations that may be supported by libcudf but
+        # are not supported by pandas APIs. In particular, libcudf binary
+        # operations support logical and/or operations, but those operations
+        # are not defined on pd.Series/DataFrame. For now those operations will
+        # dispatch to cupy, but if ufuncs are ever a bottleneck we could add
+        # special handling to dispatch those (or any other) functions that we
+        # could implement without cupy.
+
+        mask = None
+        data = [{} for _ in range(ufunc.nout)]
+        for name, (left, right, _, _) in operands.items():
+            cupy_inputs = []
+            for inp in (left, right) if ufunc.nin == 2 else (left,):
+                if (
+                    isinstance(inp, cudf.core.column.ColumnBase)
+                    and inp.has_nulls()
+                ):
+                    new_mask = cudf.core.column.as_column(inp.nullmask)
+
+                    # TODO: This is a hackish way to perform a bitwise and
+                    # of bitmasks. Once we expose
+                    # cudf::detail::bitwise_and, then we can use that
+                    # instead.
+                    mask = new_mask if mask is None else (mask & new_mask)
+
+                    # Arbitrarily fill with zeros. For ufuncs, we assume
+                    # that the end result propagates nulls via a bitwise
+                    # and, so these elements are irrelevant.
+                    inp = inp.fillna(0)
+                cupy_inputs.append(cupy.asarray(inp))
+
+            cp_output = cupy_func(*cupy_inputs, **kwargs)
+            if ufunc.nout == 1:
+                cp_output = (cp_output,)
+            for i, out in enumerate(cp_output):
+                data[i][name] = cudf.core.column.as_column(out).set_mask(mask)
+        return data
+
     @annotate("FRAME_DOT", color="green", domain="cudf_python")
     def dot(self, other, reflect=False):
         """
