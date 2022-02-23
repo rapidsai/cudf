@@ -1615,9 +1615,8 @@ class SeriesGroupBy(GroupBy):
                 return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
-        cols = result._data.to_pandas_index()
-        if result._data.multiindex and cols.nlevels > 1:
-            result.columns = cols.droplevel(0)
+        if result._data.nlevels > 1:
+            result.columns = result._data.to_pandas_index().droplevel(0)
 
         return result
 
