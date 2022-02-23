@@ -1744,10 +1744,6 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     expected = val == data.to_pandas()
     got = val == data
 
-    # In case of index, expected would be a numpy array
-    if isinstance(data, cudf.BaseIndex):
-        expected = pd.Index(expected)
-
     utils.assert_eq(expected, got)
 
 
@@ -2945,7 +2941,7 @@ def test_binops_non_cudf_types(obj_class, binop, other_type):
     data = range(1, 100)
     lhs = obj_class(data)
     rhs = other_type(data)
-    assert cp.all((binop(lhs, rhs) == binop(lhs, lhs)).values)
+    assert (binop(lhs, rhs) == binop(lhs, lhs)).all()
 
 
 @pytest.mark.parametrize("binop", _binops + _binops_compare)
