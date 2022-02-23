@@ -48,7 +48,7 @@ TEST_F(TextBPETokenize, BytePairEncoding)
   nvtext::bpe_merge_pairs merge_pairs{cudf::strings_column_view(mpt)};
 
   auto validity = cudf::test::iterators::null_at(4);
-  cudf::test::strings_column_wrapper input({"This\tis  it\n",
+  cudf::test::strings_column_wrapper input({" This\tis  it\n",
                                             "This is test-sentence-1",
                                             "This is test sentence-2",
                                             "This-is test sentence 3",
@@ -59,7 +59,7 @@ TEST_F(TextBPETokenize, BytePairEncoding)
 
   auto results = nvtext::byte_pair_encoding(sv, merge_pairs);
 
-  auto expected = cudf::test::strings_column_wrapper({"This is it",
+  auto expected = cudf::test::strings_column_wrapper({" This is it",
                                                       "This is test - sent ence - 1",
                                                       "This is test sent ence - 2",
                                                       "This - is test sent ence 3",
