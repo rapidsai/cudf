@@ -129,7 +129,46 @@ cpdef read_orc(object filepaths_or_buffers,
         c_result = move(libcudf_read_orc(c_orc_reader_options))
 
     names = [name.decode() for name in c_result.metadata.column_names]
-    cdef map[string, string] user_data = c_result.metadata.user_data
+    actual_index_names, names, is_range_index, reset_index_name, range_idx = \
+        _get_index_from_metadata(c_result.metadata.user_data,
+                                 names,
+                                 skip_rows,
+                                 num_rows)
+
+    data, index = data_from_unique_ptr(
+        move(c_result.tbl),
+        names,
+        actual_index_names
+    )
+
+    if is_range_index:
+        index = range_idx
+    elif reset_index_name:
+        index.names = [None] * len(index.names)
+
+    data = {
+        name: update_column_struct_field_names(
+            col, c_result.metadata.schema_info[i]
+        )
+        for i, (name, col) in enumerate(data.items())
+    }
+
+    return data, index
+
+
+cdef compression_type _get_comp_type(object compression):
+    if compression is None or compression is False:
+        return compression_type.NONE
+    elif compression == "snappy":
+        return compression_type.SNAPPY
+    else:
+        raise ValueError(f"Unsupported `compression` type {compression}")
+
+cdef tuple _get_index_from_metadata(
+        map[string, string] user_data,
+        object names,
+        object skip_rows,
+        object num_rows):
     json_str = user_data[b'pandas'].decode('utf-8')
     meta = None
     index_col = None
@@ -172,35 +211,13 @@ cpdef read_orc(object filepaths_or_buffers,
             actual_index_names = list(index_col_names.values())
             names = names[len(actual_index_names):]
 
-    data, index = data_from_unique_ptr(
-        move(c_result.tbl),
+    return (
+        actual_index_names,
         names,
-        actual_index_names
+        is_range_index,
+        reset_index_name,
+        range_idx
     )
-
-    if is_range_index:
-        index = range_idx
-    elif reset_index_name:
-        index.names = [None] * len(index.names)
-
-    data = {
-        name: update_column_struct_field_names(
-            col, c_result.metadata.schema_info[i]
-        )
-        for i, (name, col) in enumerate(data.items())
-    }
-
-    return data, index
-
-
-cdef compression_type _get_comp_type(object compression):
-    if compression is None or compression is False:
-        return compression_type.NONE
-    elif compression == "snappy":
-        return compression_type.SNAPPY
-    else:
-        raise ValueError(f"Unsupported `compression` type {compression}")
-
 
 cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
     """
@@ -238,7 +255,9 @@ cpdef write_orc(table,
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
     cdef unique_ptr[table_input_metadata] tbl_meta
     cdef map[string, string] user_data
-    user_data[str.encode("pandas")] = str.encode(generate_pandas_metadata(table, None))
+    user_data[str.encode("pandas")] = str.encode(generate_pandas_metadata(
+        table, None)
+    )
 
     if not isinstance(table._index, cudf.RangeIndex):
         tv = table_view_from_table(table)
