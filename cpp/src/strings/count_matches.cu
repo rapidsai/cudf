@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/dispatcher.hpp>
 #include <strings/regex/regex.cuh>
 
 #include <cudf/column/column_device_view.cuh>
@@ -54,6 +55,29 @@ struct count_matches_fn {
     return count;
   }
 };
+
+struct count_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  std::unique_ptr<column> operator()(column_device_view const& d_strings,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    // create the output column
+    auto results = make_numeric_column(
+      data_type{type_id::INT32}, d_strings.size() + 1, mask_state::UNALLOCATED, stream, mr);
+
+    // fill the output column
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(d_strings.size()),
+                      results->mutable_view().data<int32_t>(),
+                      count_matches_fn<stack_size>{d_strings, d_prog});
+    return results;
+  }
+};
+
 }  // namespace
 
 /**
@@ -71,31 +95,7 @@ std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  // Create output column
-  auto counts = make_numeric_column(
-    data_type{type_id::INT32}, d_strings.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_counts = counts->mutable_view().data<offset_type>();
-
-  auto begin = thrust::make_counting_iterator<size_type>(0);
-  auto end   = thrust::make_counting_iterator<size_type>(d_strings.size());
-
-  // Count matches
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    count_matches_fn<RX_STACK_SMALL> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    count_matches_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    count_matches_fn<RX_STACK_LARGE> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else {
-    count_matches_fn<RX_STACK_ANY> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  }
-
-  return counts;
+  return regex_dispatcher(d_prog, count_dispatch_fn{d_prog}, d_strings, stream, mr);
 }
 
 }  // namespace detail
