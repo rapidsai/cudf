@@ -33,6 +33,9 @@ namespace detail {
  *
  * Patterns with instruction counts bigger than large use global memory rather than the stack
  * for managing the evaluation state data.
+ *
+ * @tparam Functor The functor to invoke with stack size templated value.
+ * @tparam Ts Parameter types for the functor call.
  */
 template <typename Functor, typename... Ts>
 constexpr decltype(auto) regex_dispatcher(reprog_device d_prog, Functor f, Ts&&... args)

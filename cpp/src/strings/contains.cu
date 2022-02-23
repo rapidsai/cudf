@@ -68,7 +68,6 @@ struct contains_dispatch_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    // create the output column
     auto results = make_numeric_column(data_type{type_id::BOOL8},
                                        input.size(),
                                        cudf::detail::copy_bitmask(input.parent(), stream, mr),
@@ -77,8 +76,6 @@ struct contains_dispatch_fn {
                                        mr);
 
     auto const d_strings = column_device_view::create(input.parent(), stream);
-
-    // fill the output column
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),
@@ -173,7 +170,6 @@ struct count_dispatch_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    // create the output column
     auto results = make_numeric_column(data_type{type_id::INT32},
                                        input.size(),
                                        cudf::detail::copy_bitmask(input.parent(), stream, mr),
@@ -182,8 +178,6 @@ struct count_dispatch_fn {
                                        mr);
 
     auto const d_strings = column_device_view::create(input.parent(), stream);
-
-    // fill the output column
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(input.size()),

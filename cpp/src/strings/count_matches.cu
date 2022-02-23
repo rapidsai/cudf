@@ -64,11 +64,9 @@ struct count_dispatch_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    // create the output column
     auto results = make_numeric_column(
       data_type{type_id::INT32}, d_strings.size() + 1, mask_state::UNALLOCATED, stream, mr);
 
-    // fill the output column
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(d_strings.size()),

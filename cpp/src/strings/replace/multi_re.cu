@@ -170,7 +170,6 @@ std::unique_ptr<column> replace_re(
   for (auto itr = patterns.begin(); itr != patterns.end(); ++itr) {
     auto h_prog = reprog_device::create(*itr, flags, d_char_table, input.size(), stream);
     if (!max_prog || max_prog->insts_counts() < h_prog->insts_counts()) { max_prog = h_prog.get(); }
-    // regex_insts = std::max(regex_insts, prog->insts_counts());
     progs.push_back(*h_prog);
     h_progs.emplace_back(std::move(h_prog));
   }

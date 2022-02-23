@@ -58,10 +58,11 @@ struct findall_fn {
       return string_index_pair{nullptr, 0};
     }
 
-    string_view d_str      = d_strings.element<string_view>(idx);
-    auto const nchars      = d_str.length();
-    int32_t spos           = 0;
-    auto epos              = static_cast<int32_t>(nchars);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+    int32_t spos      = 0;
+    auto epos         = static_cast<int32_t>(nchars);
+
     size_type column_count = 0;
     while (spos <= nchars) {
       if (prog.find<stack_size>(idx, d_str, spos, epos) <= 0) break;  // no more matches found
