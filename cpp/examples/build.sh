@@ -9,6 +9,7 @@ PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Root of examples
 EXAMPLES_DIR=$(dirname "$(realpath "$0")")
+LIB_BUILD_DIR=${LIB_BUILD_DIR:-$(readlink -f "${EXAMPLES_DIR}/../build")}
 
 ################################################################################
 # Add individual libcudf examples build scripts down below
