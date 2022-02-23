@@ -547,10 +547,16 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   // Empty segments are always null in the output mask
   auto const num_segments =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
-  auto [output_null_mask, output_null_count] = cudf::detail::valid_if(
-    segment_length_iterator,
-    segment_length_iterator + num_segments,
-    [] __device__(auto const& len) { return len > 0; },
+  auto const segment_valid_counts = segmented_count_bints(...);
+  auto const length_and_valid_count = thrust::zip_iterator{segment_length_iterator, segment_valid_counts.begin()};
+ return cudf::detail::valid_if(
+    length_and_valid_count,
+    length_and_valid_count + num_segments,
+    [] __device__(auto const& length_and_valid_count) { 
+       auto const length = thrust::get<0>(length_and_valid_count);
+       auto const valid_count = thrust::get<1>(length_and_valid_count);
+       return (length > 0) and (null_handling == null_policy::EXCLUDE) ?  valid_count > 0 : valid_count == length; 
+    },
     stream,
     mr);
 
