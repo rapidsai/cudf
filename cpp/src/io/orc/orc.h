@@ -137,17 +137,17 @@ int inline constexpr encode_field_number(int field_number, ProtofType field_type
 }
 
 namespace {
-template <typename base_t,
-          typename std::enable_if_t<!std::is_arithmetic<base_t>::value and
-                                    !std::is_enum<base_t>::value>* = nullptr>
+template <
+  typename base_t,
+  typename std::enable_if_t<!std::is_arithmetic_v<base_t> and !std::is_enum_v<base_t>>* = nullptr>
 int static constexpr encode_field_number_base(int field_number) noexcept
 {
   return encode_field_number(field_number, ProtofType::FIXEDLEN);
 }
 
-template <typename base_t,
-          typename std::enable_if_t<std::is_integral<base_t>::value or
-                                    std::is_enum<base_t>::value>* = nullptr>
+template <
+  typename base_t,
+  typename std::enable_if_t<std::is_integral_v<base_t> or std::is_enum_v<base_t>>* = nullptr>
 int static constexpr encode_field_number_base(int field_number) noexcept
 {
   return encode_field_number(field_number, ProtofType::VARINT);
@@ -168,7 +168,7 @@ int static constexpr encode_field_number_base(int field_number) noexcept
 
 template <
   typename T,
-  typename std::enable_if_t<!std::is_class<T>::value or std::is_same_v<T, std::string>>* = nullptr>
+  typename std::enable_if_t<!std::is_class_v<T> or std::is_same_v<T, std::string>>* = nullptr>
 int constexpr encode_field_number(int field_number) noexcept
 {
   return encode_field_number_base<T>(field_number);
@@ -177,16 +177,16 @@ int constexpr encode_field_number(int field_number) noexcept
 // containters change the field number encoding
 template <
   typename T,
-  typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value>* = nullptr>
+  typename std::enable_if_t<std::is_same_v<T, std::vector<typename T::value_type>>>* = nullptr>
 int constexpr encode_field_number(int field_number) noexcept
 {
   return encode_field_number_base<T>(field_number);
 }
 
 // optional fields don't change the field number encoding
-template <typename T,
-          typename std::enable_if_t<
-            std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
+template <
+  typename T,
+  typename std::enable_if_t<std::is_same_v<T, std::optional<typename T::value_type>>>* = nullptr>
 int constexpr encode_field_number(int field_number) noexcept
 {
   return encode_field_number_base<typename T::value_type>(field_number);
@@ -244,13 +244,13 @@ class ProtobufReader {
 
   uint32_t read_field_size(const uint8_t* end);
 
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     value = get<T>();
   }
 
-  template <typename T, typename std::enable_if_t<std::is_enum<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_enum_v<T>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     value = static_cast<T>(get<uint32_t>());
@@ -265,7 +265,7 @@ class ProtobufReader {
   }
 
   template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value>* = nullptr>
+            typename std::enable_if_t<std::is_same_v<T, std::vector<std::string>>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
@@ -275,7 +275,7 @@ class ProtobufReader {
 
   template <
     typename T,
-    typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value and
+    typename std::enable_if_t<std::is_same_v<T, std::vector<typename T::value_type>> and
                               !std::is_same_v<std::string, typename T::value_type>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
@@ -284,9 +284,9 @@ class ProtobufReader {
     read(value.back(), size);
   }
 
-  template <typename T,
-            typename std::enable_if_t<
-              std::is_same<T, std::optional<typename T::value_type>>::value>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<std::is_same_v<T, std::optional<typename T::value_type>>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     typename T::value_type contained_value;
@@ -301,7 +301,7 @@ class ProtobufReader {
     read(value, size);
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     memcpy(&value, m_cur, sizeof(T));

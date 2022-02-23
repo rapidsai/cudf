@@ -1,3 +1,4 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -14,7 +15,11 @@ from cudf.core.udf._ops import (
     unary_ops,
 )
 from cudf.core.udf.utils import precompiled
-from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
+from cudf.testing._utils import (
+    _decimal_series,
+    assert_eq,
+    parametrize_numeric_dtypes_pairwise,
+)
 
 
 def run_masked_udf_test(func, data, args=(), **kwargs):
@@ -238,10 +243,9 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("dtype_a", list(NUMERIC_TYPES))
-@pytest.mark.parametrize("dtype_b", list(NUMERIC_TYPES))
+@parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
-def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
+def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
     """
     Test that operations can be performed between columns
     of different dtypes and return a column with the correct
@@ -251,7 +255,7 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
     # First perform the op on two dummy data on host, if numpy can
     # safely type cast, we should expect it to work in udf too.
     try:
-        op(getattr(np, dtype_a)(0), getattr(np, dtype_b)(42))
+        op(np.dtype(left_dtype).type(0), np.dtype(right_dtype).type(42))
     except TypeError:
         pytest.skip("Operation is unsupported for corresponding dtype.")
 
@@ -261,8 +265,8 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1.5, None, 3, None], "b": [4, 5, None, None]})
-    gdf["a"] = gdf["a"].astype(dtype_a)
-    gdf["b"] = gdf["b"].astype(dtype_b)
+    gdf["a"] = gdf["a"].astype(left_dtype)
+    gdf["b"] = gdf["b"].astype(right_dtype)
 
     run_masked_udf_test(func, gdf, check_dtype=False)
 

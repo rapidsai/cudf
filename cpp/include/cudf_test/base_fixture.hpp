@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ template <typename T, typename Enable = void>
 struct uniform_distribution_impl {
 };
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral<T>::value>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral_v<T>>> {
   using type = std::uniform_int_distribution<T>;
 };
 
@@ -69,7 +69,7 @@ struct uniform_distribution_impl<bool> {
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point_v<T>>> {
   using type = std::uniform_real_distribution<T>;
 };
 

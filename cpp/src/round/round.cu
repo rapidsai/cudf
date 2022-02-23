@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy_range.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
@@ -47,26 +49,26 @@ inline double __device__ generic_round_half_even(double d) { return rint(d); }
 inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
 inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
 
-template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_signed_v<T>>* = nullptr>
 T __device__ generic_abs(T value)
 {
   return numeric::detail::abs(value);
 }
 
-template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<not cuda::std::is_signed_v<T>>* = nullptr>
 T __device__ generic_abs(T value)
 {
   return value;
 }
 
-template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_signed_v<T>>* = nullptr>
 int16_t __device__ generic_sign(T value)
 {
   return value < 0 ? -1 : 1;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
-template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<not cuda::std::is_signed_v<T>>* = nullptr>
 int16_t __device__ generic_sign(T)
 {
   return 1;
@@ -87,7 +89,7 @@ struct half_up_zero {
     return generic_round(e);
   }
 
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -106,7 +108,7 @@ struct half_up_positive {
     return integer_part + generic_round(fractional_part * n) / n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -123,7 +125,7 @@ struct half_up_negative {
     return generic_round(e / n) * n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U e)
   {
     auto const down = (e / n) * n;  // result from rounding down
@@ -140,7 +142,7 @@ struct half_even_zero {
     return generic_round_half_even(e);
   }
 
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -159,7 +161,7 @@ struct half_even_positive {
     return integer_part + generic_round_half_even(fractional_part * n) / n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -176,7 +178,7 @@ struct half_even_negative {
     return generic_round_half_even(e / n) * n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U e)
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
@@ -211,7 +213,7 @@ std::unique_ptr<column> round_with(column_view const& input,
 {
   using Functor = RoundFunctor<T>;
 
-  if (decimal_places >= 0 && std::is_integral<T>::value)
+  if (decimal_places >= 0 && std::is_integral_v<T>)
     return std::make_unique<cudf::column>(input, stream, mr);
 
   auto result = cudf::make_fixed_width_column(
@@ -259,8 +261,10 @@ std::unique_ptr<column> round_with(column_view const& input,
   // overflow. Under this circumstance, we can simply output a zero column because no digits can
   // survive such a large scale movement.
   if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
-    auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
-    detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
+    thrust::uninitialized_fill(rmm::exec_policy(stream),
+                               out_view.template begin<Type>(),
+                               out_view.template end<Type>(),
+                               static_cast<Type>(0));
   } else {
     Type const n = std::pow(10, scale_movement);
     thrust::transform(rmm::exec_policy(stream),
