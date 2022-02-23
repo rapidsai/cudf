@@ -2753,7 +2753,7 @@ class Frame:
                     dtype='float64')
         """
         warnings.warn(
-            "sin is deprecated and will be removed in the future",
+            "sin is deprecated and will be removed. Use numpy.sin instead",
             FutureWarning,
         )
 
@@ -2820,7 +2820,7 @@ class Frame:
                     dtype='float64')
         """
         warnings.warn(
-            "cos is deprecated and will be removed in the future",
+            "cos is deprecated and will be removed. Use numpy.cos instead",
             FutureWarning,
         )
 
@@ -2887,7 +2887,7 @@ class Frame:
                     dtype='float64')
         """
         warnings.warn(
-            "tan is deprecated and will be removed in the future",
+            "tan is deprecated and will be removed. Use numpy.tan instead",
             FutureWarning,
         )
 
@@ -2999,7 +2999,7 @@ class Frame:
                     dtype='float64')
         """
         warnings.warn(
-            "acos is deprecated and will be removed in the future",
+            "acos is deprecated and will be removed. Use numpy.acos instead",
             FutureWarning,
         )
 
@@ -3073,7 +3073,7 @@ class Frame:
                     dtype='float64')
         """
         warnings.warn(
-            "atan is deprecated and will be removed in the future",
+            "atan is deprecated and will be removed. Use numpy.atan instead",
             FutureWarning,
         )
 
@@ -3141,7 +3141,7 @@ class Frame:
                     dtype='float64')
         """
         warnings.warn(
-            "exp is deprecated and will be removed in the future",
+            "exp is deprecated and will be removed. Use numpy.exp instead",
             FutureWarning,
         )
 
@@ -3208,7 +3208,7 @@ class Frame:
                     6.214608098422191], dtype='float64')
         """
         warnings.warn(
-            "log is deprecated and will be removed in the future",
+            "log is deprecated and will be removed. Use numpy.log instead",
             FutureWarning,
         )
 
@@ -3269,7 +3269,7 @@ class Frame:
         Float64Index([nan, 10.0, 25.0], dtype='float64')
         """
         warnings.warn(
-            "sqrt is deprecated and will be removed in the future",
+            "sqrt is deprecated and will be removed. Use numpy.sqrt instead",
             FutureWarning,
         )
 
