@@ -6,6 +6,7 @@ import builtins
 import pickle
 import re
 import warnings
+from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -5024,7 +5025,6 @@ class StringColumn(column.ColumnBase):
 
     _start_offset: Optional[int]
     _end_offset: Optional[int]
-    _cached_sizeof: Optional[int]
 
     def __init__(
         self,
@@ -5102,6 +5102,7 @@ class StringColumn(column.ColumnBase):
 
         return self._end_offset
 
+    @cached_property
     def memory_usage(self) -> int:
         n = 0
         if len(self.base_children) == 2:

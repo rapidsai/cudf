@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
+from functools import cached_property
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -297,6 +298,7 @@ class ColumnBase(Column, Serializable, NotIterable):
             self.base_mask, self.offset, self.offset + len(self)
         )
 
+    @cached_property
     def memory_usage(self) -> int:
         n = 0
         if self.data is not None:
