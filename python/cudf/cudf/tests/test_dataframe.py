@@ -5195,8 +5195,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.categories.memory_usage()
-        + gdf.B._column.codes.memory_usage()
+        gdf.B._column.categories.memory_usage
+        + gdf.B._column.codes.memory_usage
     )
 
     # Check cat column
@@ -5209,8 +5209,7 @@ def test_memory_usage_cat():
 def test_memory_usage_list():
     df = cudf.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
     expected = (
-        df.A._column.offsets.memory_usage()
-        + df.A._column.elements.memory_usage()
+        df.A._column.offsets.memory_usage + df.A._column.elements.memory_usage
     )
     assert expected == df.A.memory_usage()
 
