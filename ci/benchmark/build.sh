@@ -83,7 +83,7 @@ if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     gpuci_mamba_retry update dask
 else
     gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2021.11.1 --force-reinstall"
-    gpuci_mamba_retry install conda-forge::dask>=2021.11.1 --force-reinstall
+    gpuci_mamba_retry install "conda-forge::dask>=2021.11.1" --force-reinstall
 fi
 
 # Install the master version of streamz
