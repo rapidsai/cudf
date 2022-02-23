@@ -2752,6 +2752,11 @@ class Frame:
                     0.8011526357338306, 0.8939966636005579],
                     dtype='float64')
         """
+        warnings.warn(
+            "sin is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("sin")
 
     @annotate("FRAME_COS", color="green", domain="cudf_python")
@@ -2814,6 +2819,11 @@ class Frame:
                     -0.5984600690578581, -0.4480736161291701],
                     dtype='float64')
         """
+        warnings.warn(
+            "cos is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("cos")
 
     @annotate("FRAME_TAN", color="green", domain="cudf_python")
@@ -2876,6 +2886,11 @@ class Frame:
                     -1.3386902103511544, -1.995200412208242],
                     dtype='float64')
         """
+        warnings.warn(
+            "tan is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("tan")
 
     @annotate("FRAME_ASIN", color="green", domain="cudf_python")
@@ -2927,6 +2942,11 @@ class Frame:
                     1.5707963267948966, 0.3046926540153975],
                     dtype='float64')
         """
+        warnings.warn(
+            "asin is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("asin")
 
     @annotate("FRAME_ACOS", color="green", domain="cudf_python")
@@ -2978,6 +2998,11 @@ class Frame:
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
+        warnings.warn(
+            "acos is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         result = self.copy(deep=False)
         for col in result._data:
             min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
@@ -3047,6 +3072,11 @@ class Frame:
                                     0.2914567944778671],
                     dtype='float64')
         """
+        warnings.warn(
+            "atan is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("atan")
 
     @annotate("FRAME_EXP", color="green", domain="cudf_python")
@@ -3110,6 +3140,11 @@ class Frame:
                       2.718281828459045, 1.0,  1.3498588075760032],
                     dtype='float64')
         """
+        warnings.warn(
+            "exp is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("exp")
 
     @annotate("FRAME_LOG", color="green", domain="cudf_python")
@@ -3172,6 +3207,11 @@ class Frame:
         Float64Index([2.302585092994046, 2.3978952727983707,
                     6.214608098422191], dtype='float64')
         """
+        warnings.warn(
+            "log is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("log")
 
     @annotate("FRAME_SQRT", color="green", domain="cudf_python")
@@ -3228,6 +3268,11 @@ class Frame:
         >>> index.sqrt()
         Float64Index([nan, 10.0, 25.0], dtype='float64')
         """
+        warnings.warn(
+            "sqrt is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("sqrt")
 
     @annotate("FRAME_ABS", color="green", domain="cudf_python")
