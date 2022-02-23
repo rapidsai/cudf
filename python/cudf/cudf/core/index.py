@@ -801,8 +801,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 ufunc, cupy_func, inputs, **kwargs
             )
 
-            out = tuple(_index_from_data(out) for out in data)
-            return out[0] if ufunc.nout == 1 else out
+            out = [_index_from_data(out) for out in data]
+
+            # pandas returns numpy arrays when the outputs are boolean.
+            for i, o in enumerate(out):
+                # We explicitly _do not_ use isinstance here: we want only
+                # boolean GenericIndexes, not dtype-specific subclasses.
+                if type(o) is GenericIndex and o.dtype.kind == "b":
+                    out[i] = o.values
+
+            return out[0] if ufunc.nout == 1 else tuple(out)
 
         return NotImplemented
 
@@ -819,7 +827,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
-        return _index_from_data(self._colwise_binop(operands, fn))
+        ret = _index_from_data(self._colwise_binop(operands, fn))
+
+        # pandas returns numpy arrays when the outputs are boolean. We
+        # explicitly _do not_ use isinstance here: we want only boolean
+        # GenericIndexes, not dtype-specific subclasses.
+        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+            return ret.values
+        return ret
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
