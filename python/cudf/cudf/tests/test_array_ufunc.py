@@ -51,12 +51,9 @@ def _hide_ufunc_warnings(ufunc):
 
 
 @pytest.mark.parametrize("ufunc", _UFUNCS)
-@pytest.mark.parametrize("has_nulls", [True, False])
-def test_ufunc_index(ufunc, has_nulls):
+def test_ufunc_index(ufunc):
     # Note: This test assumes that all ufuncs are unary or binary.
     fname = ufunc.__name__
-    if has_nulls and fname == "matmul":
-        pytest.xfail("Frame.dot currently does not support indexes or nulls")
 
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
@@ -92,6 +89,42 @@ def test_ufunc_index(ufunc, has_nulls):
             if (got - expect).abs().max() == 1:
                 pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
         raise
+
+
+@pytest.mark.parametrize(
+    "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
+)
+@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
+@pytest.mark.parametrize("reflect", [True, False])
+def test_binary_ufunc_index_array(ufunc, type_, reflect):
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
+
+    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
+    if type_ == "list":
+        arg1 = arg1.tolist()
+
+    if reflect:
+        got = ufunc(arg1, args[0])
+        expect = ufunc(args[1].to_numpy(), args[0].to_pandas())
+    else:
+        got = ufunc(args[0], arg1)
+        expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
+
+    if ufunc.nout > 1:
+        for g, e in zip(got, expect):
+            if type_ == "cupy" and reflect:
+                assert (cp.asnumpy(g) == e).all()
+            else:
+                assert_eq(g, e, check_exact=False)
+    else:
+        if type_ == "cupy" and reflect:
+            assert (cp.asnumpy(got) == expect).all()
+        else:
+            assert_eq(got, expect, check_exact=False)
 
 
 @pytest.mark.parametrize("ufunc", _UFUNCS)
