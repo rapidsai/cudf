@@ -35,6 +35,9 @@ SUPPORTED_NUMBA_TYPES = (
     types.PyObject
 )
 
+from numba.extending import type_callable
+
+
 
 # String object definitions
 class StringView(types.Type):
@@ -163,6 +166,8 @@ class MaskedType(types.Type):
         # Require a cast for another masked with a different value type
         return self.value_type == other.value_type
 
+    def startswith(self, other):
+        pass
 
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
@@ -195,7 +200,7 @@ class MaskedConstructor(ConcreteTemplate):
 # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
 make_attribute_wrapper(MaskedType, "value", "value")
 make_attribute_wrapper(MaskedType, "valid", "valid")
-
+make_attribute_wrapper(StringView, "data", "data")
 
 # Typing for `api.Masked`
 @cuda_decl_registry.register_attr
@@ -403,6 +408,15 @@ class MaskedStringViewLength(AbstractTemplate):
 
 _len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
 
+@cuda_decl_registry.register_global(len)
+class StringLiteralLength(AbstractTemplate):
+    """
+    provide the length of a python string literal by first
+    converting to a cudf::string_view first
+    """
+    def generic(self, args, kws):
+        if isinstance(args[0], types.StringLiteral) and len(args) == 1:
+            return nb_signature(types.int32, args[0])
 
 
 for binary_op in arith_ops + bitwise_ops + comparison_ops:
@@ -413,3 +427,16 @@ for binary_op in arith_ops + bitwise_ops + comparison_ops:
 
 for unary_op in unary_ops:
     cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
+
+class MaskedStringStartsWith(AbstractTemplate):
+    key = "MaskedType.startswith"
+
+    def generic(self, args, kws):
+        return nb_signature(types.boolean, MaskedType(string_view), recvr=self.this)
+
+@cuda_decl_registry.register_attr
+class MaskedStringAttrs(AttributeTemplate):
+    key = MaskedType(string_view)
+
+    def resolve_startswith(self, mod):
+        return types.BoundFunction(MaskedStringStartsWith, MaskedType(string_view))

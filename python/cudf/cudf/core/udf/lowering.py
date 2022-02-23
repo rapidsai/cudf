@@ -8,7 +8,7 @@ from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types
-
+from numba.cuda.cudadrv import nvvm
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -395,3 +395,33 @@ def string_view_len_impl(context, builder, sig, args):
     )
     
     return result
+
+@cuda_lower(len, types.literal('abcde'))
+def string_literal_len_impl(context, builder, sig, args):
+    # todo- should be able to compile out the length of literals...
+    pass
+
+@cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)
+def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val):
+    """
+    cast a literal to a Masked(string_view)
+    """
+    # create an empty string_view
+    str_view = cgutils.create_struct_proxy(toty.value_type)(context, builder)
+
+    # set the empty strview data pointer to point to the literal value
+    s = context.insert_const_string(builder.module, fromty.literal_value)
+    str_view.data = context.insert_addrspace_conv(builder, s, nvvm.ADDRSPACE_CONSTANT)
+
+    # create an empty MaskedType
+    to_return = cgutils.create_struct_proxy(toty)(
+        context, builder
+    )
+
+    # make it valid
+    to_return.valid = context.get_constant(types.boolean, 1)
+
+    # set the value to be the string view
+    to_return.value = str_view._getvalue()
+
+    return to_return._getvalue()
