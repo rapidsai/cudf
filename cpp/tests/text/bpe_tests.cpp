@@ -66,13 +66,30 @@ TEST_F(TextBPETokenize, BytePairEncoding)
                                                       "",
                                                       ""},
                                                      validity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 
   auto sliced          = cudf::slice(input, {1, 4}).front();
   auto sliced_expected = cudf::slice(expected, {1, 4}).front();
 
   results = nvtext::byte_pair_encoding(cudf::strings_column_view(sliced), merge_pairs);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), sliced_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), sliced_expected);
+}
+
+TEST_F(TextBPETokenize, BytePairEncodingSeparator)
+{
+  auto mpt = cudf::test::strings_column_wrapper(
+    {"e n", "i t", "e s", "en t", "c e", "es t", "en ce", "t est", "s ent"});
+  nvtext::bpe_merge_pairs merge_pairs{cudf::strings_column_view(mpt)};
+
+  cudf::test::strings_column_wrapper input(
+    {"test-sentence-1", "test sentence-2", "test sentence 3", " test sentence 4 "});
+  auto sv = cudf::strings_column_view(input);
+
+  auto results = nvtext::byte_pair_encoding(sv, merge_pairs, std::string(" Ġ"));
+
+  auto expected = cudf::test::strings_column_wrapper(
+    {"test - sent ence - 1", "test Ġsent ence - 2", "test Ġsent ence Ġ3", " Ġtest Ġsent ence Ġ4"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(TextBPETokenize, BPE_Empty)
