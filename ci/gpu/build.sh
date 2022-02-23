@@ -174,10 +174,13 @@ else
 
     gpuci_logger "GoogleTests"
 
+    strings /opt/conda/envs/rapids/lib/libcudart.so.11.0 | grep cudaMalloc
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
-        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
+        ldd ${gt}
+        readelf -s ${gt} | grep cudaMalloc
+        LD_BIND_NOW=1 ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     # Copy libcudf build time results
