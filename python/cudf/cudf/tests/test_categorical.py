@@ -152,8 +152,9 @@ def test_categorical_binary_add():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([pdsr, pdsr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        expected_error_message="Series of dtype `category` cannot perform "
-        "the operation: add",
+        expected_error_message=(
+            "Series of dtype `category` cannot perform the operation: add"
+        ),
     )
 
 
@@ -223,26 +224,25 @@ def test_cat_series_binop_error():
     df["a"] = pd.Categorical(list("aababcabbc"), categories=list("abc"))
     df["b"] = np.arange(len(df))
 
-    dfa = df["a"]
-    dfb = df["b"]
+    pdf = df.to_pandas()
 
-    # lhs is a categorical
+    # lhs is categorical
     assert_exceptions_equal(
         lfunc=operator.add,
         rfunc=operator.add,
-        lfunc_args_and_kwargs=([dfa, dfb],),
-        rfunc_args_and_kwargs=([dfa, dfb],),
-        check_exception_type=False,
-        expected_error_message="Series of dtype `category` cannot "
-        "perform the operation: add",
+        lfunc_args_and_kwargs=([pdf["a"], pdf["b"]],),
+        rfunc_args_and_kwargs=([df["a"], df["b"]],),
+        expected_error_message=(
+            "Series of dtype `category` cannot perform the operation: add"
+        ),
     )
-    # if lhs is a numerical
+
+    # lhs is numerical
     assert_exceptions_equal(
         lfunc=operator.add,
         rfunc=operator.add,
-        lfunc_args_and_kwargs=([dfb, dfa],),
-        rfunc_args_and_kwargs=([dfb, dfa],),
-        check_exception_type=False,
+        lfunc_args_and_kwargs=([pdf["b"], pdf["a"]],),
+        rfunc_args_and_kwargs=([df["b"], df["a"]],),
         expected_error_message="'add' operator not supported",
     )
 
