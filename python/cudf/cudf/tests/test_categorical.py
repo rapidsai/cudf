@@ -21,13 +21,16 @@ from cudf.testing._utils import (
 
 @contextmanager
 def _hide_deprecated_pandas_categorical_inplace_warnings(function_name):
-    with pytest.warns(
-        FutureWarning,
-        match=(
-            f"The `inplace` parameter in pandas.Categorical.{function_name} "
-            "is deprecated and will be removed in a future version."
-        ),
-    ):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            (
+                "The `inplace` parameter in "
+                f"pandas.Categorical.{function_name} is deprecated and will "
+                "be removed in a future version."
+            ),
+            category=FutureWarning,
+        )
         yield
 
 
@@ -511,13 +514,16 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     assert_eq(pd_sr_1, cd_sr_1)
 
     # test using ordered operators
-    assert_exceptions_equal(
-        lfunc=cd_sr.to_pandas().cat.remove_categories,
-        rfunc=cd_sr.cat.remove_categories,
-        lfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
-        rfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
-        expected_error_message="removals must all be in old categories",
-    )
+    with _hide_deprecated_pandas_categorical_inplace_warnings(
+        "remove_categories"
+    ):
+        assert_exceptions_equal(
+            lfunc=cd_sr.to_pandas().cat.remove_categories,
+            rfunc=cd_sr.cat.remove_categories,
+            lfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
+            rfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
+            expected_error_message="removals must all be in old categories",
+        )
 
 
 def test_categorical_dataframe_slice_copy():
