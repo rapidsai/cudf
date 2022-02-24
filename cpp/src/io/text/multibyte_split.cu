@@ -417,8 +417,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   auto string_count = string_offsets_out.size() - 1;
 
-  std::cout << string_count << std::endl;
-
   return cudf::make_strings_column(
     string_count, std::move(string_offsets_out), std::move(string_chars));
 }
