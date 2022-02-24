@@ -426,6 +426,16 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
                                                    unsigned seed          = 1);
 
 /**
+ * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
+ * elements.
+ *
+ * @param dtype_ids Vector of requested column types
+ * @param num_cols Number of types in the output vector
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols);
+/**
  * @brief Create a random null mask object
  *
  * @param size number of rows

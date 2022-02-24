@@ -573,11 +573,11 @@ columns_vector create_random_columns(data_profile const& profile,
 }
 
 /**
- * @brief Repeats the input data types in round-robin order to fill a vector of @ref num_cols
+ * @brief Repeats the input data types cyclically order to fill a vector of @ref num_cols
  * elements.
  */
-std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
-                                         cudf::size_type num_cols)
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols)
 {
   if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
@@ -593,7 +593,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
+  auto const out_dtype_ids = cycle_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
     std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
@@ -609,7 +609,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
+  auto const out_dtype_ids = cycle_dtypes(dtype_ids, num_cols);
   auto seed_engine         = deterministic_engine(seed);
 
   auto const processor_count            = std::thread::hardware_concurrency();
@@ -650,7 +650,7 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
                                                    float null_probability,
                                                    unsigned seed)
 {
-  auto const out_dtype_ids    = repeat_dtypes(dtype_ids, num_cols);
+  auto const out_dtype_ids    = cycle_dtypes(dtype_ids, num_cols);
   auto columns                = std::vector<std::unique_ptr<cudf::column>>(num_cols);
   auto create_sequence_column = [&](auto const& init) mutable {
     auto col           = cudf::sequence(num_rows.count, init);
