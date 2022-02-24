@@ -35,8 +35,8 @@ namespace cudf {
 namespace experimental {
 
 template <cudf::type_id t>
-struct non_nested_id_to_type {
-  using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
+struct non_struct_id_to_type {
+  using type = std::conditional_t<t == type_id::STRUCT, void, id_to_type<t>>;
 };
 
 /**
@@ -139,7 +139,7 @@ class element_relational_comparator {
 
     if (state == weak_ordering::EQUIVALENT) {
       auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence};
-      thrust::tie(state, last_null_depth) = cudf::type_dispatcher<non_nested_id_to_type>(
+      thrust::tie(state, last_null_depth) = cudf::type_dispatcher<non_struct_id_to_type>(
         lcol.type(), comparator, lhs_element_index, rhs_element_index);
     }
 

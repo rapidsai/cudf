@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/row_operator3.cuh>
+#include <cudf/table/row_operator_list.cuh>
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
@@ -251,5 +252,27 @@ row_lex_operator::row_lex_operator(table_view const& lhs,
   any_nulls |= has_nested_nulls(rhs);
 }
 
+row_eq_operator::row_eq_operator(table_view const& t, rmm::cuda_stream_view stream)
+  : any_nulls(has_nested_nulls(t))
+{
+  auto [verticalized_lhs, _, __, ___] = struct_lex_verticalize(t);
+
+  d_lhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+}
+
+row_eq_operator::row_eq_operator(table_view const& lhs,
+                                 table_view const& rhs,
+                                 rmm::cuda_stream_view stream)
+  : row_eq_operator(lhs, stream)
+{
+  check_shape_compatibility(lhs, rhs);
+  auto [verticalized_rhs, _, __, ___] = struct_lex_verticalize(rhs);
+
+  d_rhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_rhs, stream));
+
+  any_nulls |= has_nested_nulls(rhs);
+}
 }  // namespace experimental
 }  // namespace cudf

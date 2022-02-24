@@ -55,26 +55,26 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   //   table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   // auto const d_flat_order = table_device_view::create(flattened, stream);
 
-  auto [verticalized, depths] =
-    cudf::structs::detail::experimental::verticalize_nested_columns(table_view{{order_by}}, {}, {});
-  auto device_table = table_device_view::create(verticalized.flattened_columns(), stream);
+  // auto [verticalized, depths] =
+  //   cudf::structs::detail::experimental::verticalize_nested_columns(table_view{{order_by}}, {},
+  //   {});
+  // auto device_table = table_device_view::create(verticalized.flattened_columns(), stream);
 
-  cudf::experimental::row_equality_comparator comparator(
-    nullate::DYNAMIC{has_nulls}, *device_table, *device_table, null_equality::EQUAL);
-  auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
-                                       verticalized.flattened_columns().num_rows(),
-                                       mask_state::UNALLOCATED,
-                                       stream,
-                                       mr);
+  // cudf::experimental::row_equality_comparator comparator(
+  //   nullate::DYNAMIC{has_nulls}, *device_table, *device_table, null_equality::EQUAL);
+
+  auto comp  = cudf::experimental::row_eq_operator(table_view{{order_by}}, stream);
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  thrust::tabulate(rmm::exec_policy(stream),
-                   mutable_ranks.begin<size_type>(),
-                   mutable_ranks.end<size_type>(),
-                   [comparator, resolver] __device__(size_type row_index) {
-                     return resolver(row_index == 0 || !comparator(row_index, row_index - 1),
-                                     row_index);
-                   });
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    mutable_ranks.begin<size_type>(),
+    mutable_ranks.end<size_type>(),
+    [comparator = comp.device_comparator(), resolver] __device__(size_type row_index) {
+      return resolver(row_index == 0 || !comparator(row_index, row_index - 1), row_index);
+    });
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),

@@ -207,5 +207,31 @@ class row_equality_comparator {
   null_equality nulls_are_equal;
 };
 
+struct row_eq_operator {
+  row_eq_operator(table_view const& lhs, table_view const& rhs, rmm::cuda_stream_view stream);
+
+  row_eq_operator(table_view const& t, rmm::cuda_stream_view stream);
+
+  template <typename Nullate = nullate::DYNAMIC>
+  row_equality_comparator<Nullate> device_comparator()
+  {
+    auto lhs = **d_lhs;
+    auto rhs = (d_rhs ? **d_rhs : **d_lhs);
+    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
+      return row_equality_comparator(Nullate{any_nulls}, lhs, rhs);
+    } else {
+      return row_equality_comparator(Nullate{}, lhs, rhs);
+    }
+  }
+
+ private:
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  std::unique_ptr<table_device_view_owner> d_lhs;
+  std::unique_ptr<table_device_view_owner> d_rhs;
+  bool any_nulls;
+};
+
 }  // namespace experimental
 }  // namespace cudf
