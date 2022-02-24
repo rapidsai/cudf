@@ -118,7 +118,7 @@ class element_relational_comparator {
                                                          size_type rhs_element_index)
   {
     weak_ordering state{weak_ordering::EQUIVALENT};
-    int last_null_depth = std::numeric_limits<int>::max();
+    int last_null_depth;
 
     column_device_view lcol = lhs;
     column_device_view rcol = rhs;
@@ -129,10 +129,7 @@ class element_relational_comparator {
       if (lhs_is_null or rhs_is_null) {  // atleast one is null
         state           = null_compare(lhs_is_null, rhs_is_null, null_precedence);
         last_null_depth = depth;
-        if (state == weak_ordering::EQUIVALENT) {
-          return thrust::make_pair(state, last_null_depth);
-        }
-        break;
+        return thrust::make_pair(state, last_null_depth);
       }
 
       lcol = lcol.children()[0];
@@ -224,11 +221,8 @@ class row_lexicographic_comparator {
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      if (_depth[i] > last_null_depth) {
-        continue;
-      } else {
-        last_null_depth = std::numeric_limits<int>::max();
-      }
+      int depth = _depth == nullptr ? std::numeric_limits<int>::max() : _depth[i];
+      if (depth > last_null_depth) { continue; }
 
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
@@ -236,7 +230,7 @@ class row_lexicographic_comparator {
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
       auto comparator = element_relational_comparator{
-        _nulls, _lhs.column(i), _rhs.column(i), null_precedence, _depth[i]};
+        _nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
 
       weak_ordering state;
       thrust::tie(state, last_null_depth) =
