@@ -5,13 +5,10 @@ from .mixin_factory import Operation, _create_delegating_mixin, _partialmethod
 
 class _BinaryOperation(Operation):
     def _make_partial(self):
-        op_name = self._name.replace("_", "")
-        reflect = op_name[0] == "r"
-        if reflect:
-            op_name = op_name[1:]
-        return _partialmethod(
-            self._base_operation, op=op_name, reflect=reflect
-        )
+        op = self._name
+        reflect = op[2] == "r" and op != "__rshift__"
+        op = op[:2] + op[3:] if reflect else op
+        return _partialmethod(self._base_operation, op=op, reflect=reflect)
 
 
 BinaryOperand = _create_delegating_mixin(

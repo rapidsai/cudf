@@ -3621,6 +3621,7 @@ class Frame(BinaryOperand):
             A dict of columns constructed from the result of performing the
             requested operation on the operands.
         """
+        fn = fn[2:-2]
 
         # Now actually perform the binop on the columns in left and right.
         output = {}
@@ -5118,7 +5119,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "add", fill_value)
+        return self._binaryop(other, "__add__", fill_value)
 
     @annotate("FRAME_RADD", color="green", domain="cudf_python")
     def radd(self, other, axis, level=None, fill_value=None):
@@ -5198,7 +5199,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "add", fill_value, reflect=True)
+        return self._binaryop(other, "__add__", fill_value, reflect=True)
 
     @annotate("FRAME_SUBTRACT", color="green", domain="cudf_python")
     def subtract(self, other, axis, level=None, fill_value=None):
@@ -5279,7 +5280,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "sub", fill_value)
+        return self._binaryop(other, "__sub__", fill_value)
 
     sub = subtract
 
@@ -5365,7 +5366,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "sub", fill_value, reflect=True)
+        return self._binaryop(other, "__sub__", fill_value, reflect=True)
 
     @annotate("FRAME_MULTIPLY", color="green", domain="cudf_python")
     def multiply(self, other, axis, level=None, fill_value=None):
@@ -5448,7 +5449,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mul", fill_value)
+        return self._binaryop(other, "__mul__", fill_value)
 
     mul = multiply
 
@@ -5535,7 +5536,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mul", fill_value, reflect=True)
+        return self._binaryop(other, "__mul__", fill_value, reflect=True)
 
     @annotate("FRAME_MOD", color="green", domain="cudf_python")
     def mod(self, other, axis, level=None, fill_value=None):
@@ -5606,7 +5607,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mod", fill_value)
+        return self._binaryop(other, "__mod__", fill_value)
 
     @annotate("FRAME_RMOD", color="green", domain="cudf_python")
     def rmod(self, other, axis, level=None, fill_value=None):
@@ -5689,7 +5690,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mod", fill_value, reflect=True)
+        return self._binaryop(other, "__mod__", fill_value, reflect=True)
 
     @annotate("FRAME_POW", color="green", domain="cudf_python")
     def pow(self, other, axis, level=None, fill_value=None):
@@ -5769,7 +5770,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "pow", fill_value)
+        return self._binaryop(other, "__pow__", fill_value)
 
     @annotate("FRAME_RPOW", color="green", domain="cudf_python")
     def rpow(self, other, axis, level=None, fill_value=None):
@@ -5849,7 +5850,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "pow", fill_value, reflect=True)
+        return self._binaryop(other, "__pow__", fill_value, reflect=True)
 
     @annotate("FRAME_FLOORDIV", color="green", domain="cudf_python")
     def floordiv(self, other, axis, level=None, fill_value=None):
@@ -5929,7 +5930,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "floordiv", fill_value)
+        return self._binaryop(other, "__floordiv__", fill_value)
 
     @annotate("FRAME_RFLOORDIV", color="green", domain="cudf_python")
     def rfloordiv(self, other, axis, level=None, fill_value=None):
@@ -6026,7 +6027,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "floordiv", fill_value, reflect=True)
+        return self._binaryop(other, "__floordiv__", fill_value, reflect=True)
 
     @annotate("FRAME_TRUEDIV", color="green", domain="cudf_python")
     def truediv(self, other, axis, level=None, fill_value=None):
@@ -6111,7 +6112,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "truediv", fill_value)
+        return self._binaryop(other, "__truediv__", fill_value)
 
     # Alias for truediv
     div = truediv
@@ -6205,7 +6206,7 @@ class Frame(BinaryOperand):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "truediv", fill_value, reflect=True)
+        return self._binaryop(other, "__truediv__", fill_value, reflect=True)
 
     # Alias for rtruediv
     rdiv = rtruediv
@@ -6283,7 +6284,7 @@ class Frame(BinaryOperand):
         dtype: bool
         """
         return self._binaryop(
-            other=other, op="eq", fill_value=fill_value, can_reindex=True
+            other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_NE", color="green", domain="cudf_python")
@@ -6359,7 +6360,7 @@ class Frame(BinaryOperand):
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, op="ne", fill_value=fill_value, can_reindex=True
+            other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_LT", color="green", domain="cudf_python")
@@ -6435,7 +6436,7 @@ class Frame(BinaryOperand):
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, op="lt", fill_value=fill_value, can_reindex=True
+            other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_LE", color="green", domain="cudf_python")
@@ -6511,7 +6512,7 @@ class Frame(BinaryOperand):
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, op="le", fill_value=fill_value, can_reindex=True
+            other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_GT", color="green", domain="cudf_python")
@@ -6587,7 +6588,7 @@ class Frame(BinaryOperand):
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, op="gt", fill_value=fill_value, can_reindex=True
+            other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_GE", color="green", domain="cudf_python")
@@ -6663,7 +6664,7 @@ class Frame(BinaryOperand):
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, op="ge", fill_value=fill_value, can_reindex=True
+            other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
     def nunique(self, method: builtins.str = "sort", dropna: bool = True):
