@@ -253,33 +253,32 @@ class row_lexicographic_comparator {
 };  // class row_lexicographic_comparator
 
 struct row_lex_operator {
-  // Problems I see here:
-  // 1. What if lhs == rhs. We're doing duplicate work then. We didn't need to before.
-  //    Possible to have a table_view::operator==() so we can figure out internally
   row_lex_operator(table_view const& lhs,
                    table_view const& rhs,
-                   std::vector<order> const& column_order,
-                   std::vector<null_order> const& null_precedence,
+                   host_span<order const> column_order,
+                   host_span<null_order const> null_precedence,
+                   rmm::cuda_stream_view stream);
+
+  row_lex_operator(table_view const& t,
+                   host_span<order const> column_order,
+                   host_span<null_order const> null_precedence,
                    rmm::cuda_stream_view stream);
 
   template <typename Nullate>
   row_lexicographic_comparator<Nullate> device_comparator()
   {
-    // TODO: checks, if constexpr dynamic then based on
+    auto lhs = **d_lhs;
+    auto rhs = (d_rhs ? **d_rhs : **d_lhs);
     if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
       return row_lexicographic_comparator(Nullate{any_nulls},
-                                          **d_lhs,
-                                          **d_rhs,
+                                          lhs,
+                                          rhs,
                                           d_depths.data(),
                                           d_column_order.data(),
                                           d_null_precedence.data());
     } else {
-      return row_lexicographic_comparator<Nullate>(Nullate{},
-                                                   **d_lhs,
-                                                   **d_rhs,
-                                                   d_depths.data(),
-                                                   d_column_order.data(),
-                                                   d_null_precedence.data());
+      return row_lexicographic_comparator<Nullate>(
+        Nullate{}, lhs, rhs, d_depths.data(), d_column_order.data(), d_null_precedence.data());
     }
   }
 
