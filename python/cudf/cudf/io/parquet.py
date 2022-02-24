@@ -565,7 +565,7 @@ def to_parquet(
 
     if engine == "cudf":
         # Ensure that no columns dtype is 'category'
-        for col in df.columns:
+        for col in df._column_names:
             if partition_cols is None or col not in partition_cols:
                 if df[col].dtype.name == "category":
                     raise ValueError(

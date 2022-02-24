@@ -227,7 +227,7 @@ struct DeviceProduct {
  * @brief binary `and` operator
  */
 struct DeviceAnd {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs & rhs)
   {
     return (lhs & rhs);
@@ -238,7 +238,7 @@ struct DeviceAnd {
  * @brief binary `or` operator
  */
 struct DeviceOr {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs | rhs)
   {
     return (lhs | rhs);
@@ -249,7 +249,7 @@ struct DeviceOr {
  * @brief binary `xor` operator
  */
 struct DeviceXor {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs ^ rhs)
   {
     return (lhs ^ rhs);

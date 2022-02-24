@@ -1294,8 +1294,8 @@ def test_loc_datetime_index(sli, is_dataframe):
 @pytest.mark.parametrize(
     "gdf_kwargs",
     [
-        {"data": {"a": range(100000)}},
-        {"data": {"a": range(100000), "b": range(100000)}},
+        {"data": {"a": range(1000)}},
+        {"data": {"a": range(1000), "b": range(1000)}},
         {
             "data": {
                 "a": range(20),
@@ -1304,26 +1304,33 @@ def test_loc_datetime_index(sli, is_dataframe):
             }
         },
         {"index": [1, 2, 3]},
-        {"index": range(100000)},
+        {"index": range(1000)},
         {"columns": ["a", "b", "c", "d"]},
-        {"columns": ["a"], "index": range(100000)},
-        {"columns": ["a", "col2", "...col n"], "index": range(100000)},
-        {"index": cudf.Series(range(100000)).astype("str")},
+        {"columns": ["a"], "index": range(1000)},
+        {"columns": ["a", "col2", "...col n"], "index": range(1000)},
+        {"index": cudf.Series(range(1000)).astype("str")},
         {
             "columns": ["a", "b", "c", "d"],
-            "index": cudf.Series(range(100000)).astype("str"),
+            "index": cudf.Series(range(1000)).astype("str"),
         },
     ],
 )
 @pytest.mark.parametrize(
     "slice",
     [
-        slice(25000, 50000),
-        slice(25000, 25001),
-        slice(50000),
+        slice(6, None),  # start but no stop, [6:]
+        slice(None, None, 3),  # only step, [::3]
+        slice(1, 10, 2),  # start, stop, step
+        slice(3, -5, 2),  # negative stop
+        slice(-2, -4),  # slice is empty
+        slice(-10, -20, -1),  # reversed slice
+        slice(None),  # slices everything, same as [:]
+        slice(250, 500),
+        slice(250, 251),
+        slice(50),
         slice(1, 10),
         slice(10, 20),
-        slice(15, 24000),
+        slice(15, 24),
         slice(6),
     ],
 )
