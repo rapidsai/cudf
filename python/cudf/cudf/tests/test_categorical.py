@@ -2,6 +2,7 @@
 
 import operator
 import string
+from contextlib import contextmanager
 from textwrap import dedent
 
 import numpy as np
@@ -15,6 +16,18 @@ from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+
+
+@contextmanager
+def _hide_deprecated_pandas_categorical_inplace_warnings(function_name):
+    with pytest.warns(
+        FutureWarning,
+        match=(
+            f"The `inplace` parameter in pandas.Categorical.{function_name} "
+            "is deprecated and will be removed in a future version."
+        ),
+    ):
+        yield
 
 
 @pytest.fixture
@@ -409,7 +422,10 @@ def test_categorical_reorder_categories(
 
     kwargs = dict(ordered=to_ordered, inplace=inplace)
 
-    pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
+    with _hide_deprecated_pandas_categorical_inplace_warnings(
+        "reorder_categories"
+    ):
+        pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
     cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
     if inplace:
         pd_sr_1 = pd_sr
@@ -442,7 +458,10 @@ def test_categorical_add_categories(pd_str_cat, inplace):
 
     assert str(pd_sr) == str(cd_sr)
 
-    pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
+    with _hide_deprecated_pandas_categorical_inplace_warnings(
+        "add_categories"
+    ):
+        pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
     cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
     if inplace:
         pd_sr_1 = pd_sr
@@ -476,7 +495,10 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
 
     assert str(pd_sr) == str(cd_sr)
 
-    pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
+    with _hide_deprecated_pandas_categorical_inplace_warnings(
+        "remove_categories"
+    ):
+        pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
     cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
     if inplace:
         pd_sr_1 = pd_sr
