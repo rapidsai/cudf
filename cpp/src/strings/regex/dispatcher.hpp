@@ -41,12 +41,15 @@ template <typename Functor, typename... Ts>
 constexpr decltype(auto) regex_dispatcher(reprog_device d_prog, Functor f, Ts&&... args)
 {
   auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS)
+  if (regex_insts <= RX_SMALL_INSTS) {
     return f.template operator()<RX_STACK_SMALL>(std::forward<Ts>(args)...);
-  if (regex_insts <= RX_MEDIUM_INSTS)
+  }
+  if (regex_insts <= RX_MEDIUM_INSTS) {
     return f.template operator()<RX_STACK_MEDIUM>(std::forward<Ts>(args)...);
-  if (regex_insts <= RX_LARGE_INSTS)
+  }
+  if (regex_insts <= RX_LARGE_INSTS) {
     return f.template operator()<RX_STACK_LARGE>(std::forward<Ts>(args)...);
+  }
 
   return f.template operator()<RX_STACK_ANY>(std::forward<Ts>(args)...);
 }

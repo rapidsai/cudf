@@ -200,7 +200,6 @@ std::unique_ptr<column> count_re(
   auto d_prog =
     reprog_device::create(pattern, flags, get_character_flags_table(), input.size(), stream);
 
-  // dispatch for result
   return regex_dispatcher(*d_prog, count_dispatch_fn{*d_prog}, input, stream, mr);
 }
 
