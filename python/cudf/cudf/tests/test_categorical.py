@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -154,21 +154,6 @@ def test_categorical_binary_add():
         rfunc_args_and_kwargs=([sr, sr],),
         expected_error_message="Series of dtype `category` cannot perform "
         "the operation: add",
-    )
-
-
-def test_categorical_unary_ceil():
-    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
-    pdsr = pd.Series(cat)
-    sr = cudf.Series(cat)
-
-    assert_exceptions_equal(
-        lfunc=getattr,
-        rfunc=sr.ceil,
-        lfunc_args_and_kwargs=([pdsr, "ceil"],),
-        check_exception_type=False,
-        expected_error_message="Series of dtype `category` cannot "
-        "perform the operation: ceil",
     )
 
 
