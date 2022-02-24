@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -696,9 +696,9 @@ struct ParquetFieldUnionFunctor<T, true> {
 };
 
 template <typename T>
-ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bool& b, T& v)
+ParquetFieldUnionFunctor<T, std::is_empty_v<T>> ParquetFieldUnion(int f, bool& b, T& v)
 {
-  return ParquetFieldUnionFunctor<T, std::is_empty<T>::value>(f, b, v);
+  return ParquetFieldUnionFunctor<T, std::is_empty_v<T>>(f, b, v);
 }
 
 /**

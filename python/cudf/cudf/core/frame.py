@@ -360,7 +360,7 @@ class Frame:
                 "The deep parameter is ignored and is only included "
                 "for pandas compatibility."
             )
-        return {name: col.memory_usage() for name, col in self._data.items()}
+        return {name: col.memory_usage for name, col in self._data.items()}
 
     def __len__(self):
         return self._num_rows

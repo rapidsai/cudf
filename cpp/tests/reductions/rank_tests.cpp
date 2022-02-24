@@ -69,7 +69,7 @@ TYPED_TEST_SUITE(TypedRankScanTest, RankTypes);
 TYPED_TEST(TypedRankScanTest, Rank)
 {
   auto const v = [] {
-    if (std::is_signed<TypeParam>::value)
+    if (std::is_signed_v<TypeParam>)
       return make_vector<TypeParam>({-120, -120, -120, -16, -16, 5, 6, 6, 6, 6, 34, 113});
     return make_vector<TypeParam>({5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 14, 34});
   }();
@@ -97,7 +97,7 @@ TYPED_TEST(TypedRankScanTest, Rank)
 TYPED_TEST(TypedRankScanTest, RankWithNulls)
 {
   auto const v = [] {
-    if (std::is_signed<TypeParam>::value)
+    if (std::is_signed_v<TypeParam>)
       return make_vector<TypeParam>({-120, -120, -120, -16, -16, 5, 6, 6, 6, 6, 34, 113});
     return make_vector<TypeParam>({5, 5, 5, 6, 6, 9, 11, 11, 11, 11, 14, 34});
   }();

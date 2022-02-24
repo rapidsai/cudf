@@ -1,3 +1,4 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from cudf._lib.nvtext.edit_distance import edit_distance, edit_distance_matrix
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams,
@@ -78,9 +79,13 @@ from cudf._lib.strings.replace_re import (
 from cudf._lib.strings.split.partition import partition, rpartition
 from cudf._lib.strings.split.split import (
     rsplit,
+    rsplit_re,
     rsplit_record,
+    rsplit_record_re,
     split,
+    split_re,
     split_record,
+    split_record_re,
 )
 from cudf._lib.strings.strip import lstrip, rstrip, strip
 from cudf._lib.strings.substring import get, slice_from, slice_strings

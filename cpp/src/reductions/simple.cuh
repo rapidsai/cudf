@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -226,8 +226,7 @@ struct cast_numeric_scalar_fn {
  */
 template <typename Op>
 struct bool_result_element_dispatcher {
-  template <typename ElementType,
-            std::enable_if_t<std::is_arithmetic<ElementType>::value>* = nullptr>
+  template <typename ElementType, std::enable_if_t<std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -236,7 +235,7 @@ struct bool_result_element_dispatcher {
   }
 
   template <typename ElementType,
-            std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
+            std::enable_if_t<not std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
@@ -354,7 +353,7 @@ struct element_type_dispatcher {
    * @brief Specialization for reducing floating-point column types to any output type.
    */
   template <typename ElementType,
-            typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
+            typename std::enable_if_t<std::is_floating_point_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
                                          rmm::cuda_stream_view stream,
@@ -377,7 +376,7 @@ struct element_type_dispatcher {
    * @brief Specialization for reducing integer column types to any output type.
    */
   template <typename ElementType,
-            typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
+            typename std::enable_if_t<std::is_integral_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
                                          rmm::cuda_stream_view stream,

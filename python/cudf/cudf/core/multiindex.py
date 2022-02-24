@@ -1415,7 +1415,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 usage += level.memory_usage(deep=deep)
         if self.codes:
             for col in self.codes._data.columns:
-                usage += col.memory_usage()
+                usage += col.memory_usage
         return usage
 
     def difference(self, other, sort=None):

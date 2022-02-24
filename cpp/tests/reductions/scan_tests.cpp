@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,7 +307,7 @@ TYPED_TEST(ScanTest, Product)
 TYPED_TEST(ScanTest, Sum)
 {
   auto const v = [] {
-    if (std::is_signed<TypeParam>::value)
+    if (std::is_signed_v<TypeParam>)
       return make_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
     return make_vector<TypeParam>({12, 5, 6, 13, 11, 14, 3, 9, 34, 16});
   }();
