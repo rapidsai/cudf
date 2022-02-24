@@ -537,7 +537,7 @@ class _CuDFDataFrame:
         return {"cudf.index": self._df.index}
 
     def num_columns(self) -> int:
-        return len(self._df.columns)
+        return len(self._df._column_names)
 
     def num_rows(self) -> int:
         return len(self._df)
@@ -546,7 +546,7 @@ class _CuDFDataFrame:
         return 1
 
     def column_names(self) -> Iterable[str]:
-        return self._df.columns.tolist()
+        return self._df._column_names
 
     def get_column(self, i: int) -> _CuDFColumn:
         return _CuDFColumn(

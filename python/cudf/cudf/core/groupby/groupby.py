@@ -7,7 +7,6 @@ import warnings
 from functools import cached_property
 
 import numpy as np
-import pandas as pd
 from nvtx import annotate
 
 import cudf
@@ -905,7 +904,7 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        _cols = self.grouping.values.columns.tolist()
+        _cols = self.grouping.values._data.to_pandas_index().tolist()
         len_cols = len(_cols)
 
         new_df_data = {}
@@ -1048,7 +1047,7 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs used in the covariance calculation
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values.columns.tolist()
+        column_names = self.grouping.values._column_names
         num_cols = len(column_names)
 
         column_pair_structs = {}
@@ -1616,11 +1615,8 @@ class SeriesGroupBy(GroupBy):
                 return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
-        if (
-            isinstance(result.columns, pd.MultiIndex)
-            and result.columns.nlevels > 1
-        ):
-            result.columns = result.columns.droplevel(0)
+        if result._data.nlevels > 1:
+            result.columns = result._data.to_pandas_index().droplevel(0)
 
         return result
 
