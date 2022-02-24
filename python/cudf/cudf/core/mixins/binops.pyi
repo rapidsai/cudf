@@ -78,3 +78,7 @@ class BinaryOperand:
 
     def __ge__(self, other):
         ...
+
+    @staticmethod
+    def _is_reflected_op(op) -> bool:
+        ...

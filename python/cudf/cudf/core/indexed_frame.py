@@ -1699,11 +1699,13 @@ class IndexedFrame(Frame):
         other: Any,
         op: str,
         fill_value: Any = None,
-        reflect: bool = False,
         can_reindex: bool = False,
         *args,
         **kwargs,
     ):
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
         operands, out_index = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )

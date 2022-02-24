@@ -1,15 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from .mixin_factory import Operation, _create_delegating_mixin, _partialmethod
-
-
-class _BinaryOperation(Operation):
-    def _make_partial(self):
-        op = self._name
-        reflect = op[2] == "r" and op != "__rshift__"
-        op = op[:2] + op[3:] if reflect else op
-        return _partialmethod(self._base_operation, op=op, reflect=reflect)
-
+from .mixin_factory import _create_delegating_mixin
 
 BinaryOperand = _create_delegating_mixin(
     "BinaryOperand",
@@ -55,5 +46,11 @@ BinaryOperand = _create_delegating_mixin(
         "__gt__",
         "__ge__",
     },
-    _BinaryOperation,
 )
+
+
+def _is_reflected_op(op):
+    return op[2] == "r" and op != "__rshift__"
+
+
+BinaryOperand._is_reflected_op = staticmethod(_is_reflected_op)

@@ -16,8 +16,6 @@ def _partialmethod(method, *args1, **kwargs1):
 class AllOperations:
     """Sentinel value to indicate that all supported operations are valid."""
 
-    pass
-
 
 class Operation:
     """Descriptor used to define operations for delegating mixins.
@@ -46,11 +44,8 @@ class Operation:
         self._docstring_format_args = docstring_format_args
         self._base_operation = base_operation
 
-    def _make_partial(self):
-        return _partialmethod(self._base_operation, op=self._name)
-
     def __get__(self, obj, owner=None):
-        retfunc = self._make_partial()
+        retfunc = _partialmethod(self._base_operation, op=self._name)
 
         # Required attributes that will exist.
         retfunc.__name__ = self._name
@@ -122,7 +117,6 @@ def _create_delegating_mixin(
     category_name,
     base_operation_name,
     supported_operations,
-    operation_cls=Operation,
 ):
     """Factory for mixins defining collections of delegated operations.
 
@@ -250,7 +244,7 @@ def _create_delegating_mixin(
                     docstring_format_args = getattr(
                         cls, docstring_attr, {}
                     ).get(operation, {})
-                    op_attr = operation_cls(
+                    op_attr = Operation(
                         operation, docstring_format_args, base_operation
                     )
                     setattr(cls, operation, op_attr)

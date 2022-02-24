@@ -702,8 +702,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
-    def _binaryop(self, other, op: str, reflect: bool = False):
-        return self._as_int64()._binaryop(other, op=op, reflect=reflect)
+    def _binaryop(self, other, op: str):
+        return self._as_int64()._binaryop(other, op=op)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -791,15 +791,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return NotImplemented
 
     def _binaryop(
-        self,
-        other: T,
-        op: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        *args,
-        **kwargs,
+        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
     ) -> SingleColumnFrame:
-        # Specialize binops to generate the appropriate output index type.
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
