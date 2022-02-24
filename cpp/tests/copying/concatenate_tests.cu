@@ -342,9 +342,9 @@ TEST_F(OverflowTest, OverflowTest)
   using namespace cudf;
   // should concatenate up to size_type::max - 1 rows.
   {
-    // 5 x size + size_last adds to size_type::max - 1
+    // 5 x size + size_last adds to size_type::max
     constexpr auto size      = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
-    constexpr auto size_last = static_cast<size_type>(836763647 - 1);
+    constexpr auto size_last = static_cast<size_type>(836763647);
 
     auto many_chars      = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
     auto many_chars_last = cudf::make_fixed_width_column(data_type{type_id::INT8}, size_last);
@@ -354,7 +354,7 @@ TEST_F(OverflowTest, OverflowTest)
     std::vector<cudf::table_view> table_views_to_concat({tbl, tbl, tbl, tbl, tbl, tbl_last});
     std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
     EXPECT_NO_THROW(rmm::cuda_stream_default.synchronize());
-    ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max() - 1);
+    ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max());
   }
 
   // primitive column
