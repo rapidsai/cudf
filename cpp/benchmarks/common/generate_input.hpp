@@ -370,18 +370,13 @@ struct row_count {
 /**
  * @brief Deterministically generates a table filled with data with the given parameters.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
- *
  * @param dtype_ids Vector of requested column types
- * @param num_cols Number of columns in the output table
  * @param table_bytes Target size of the output table, in bytes. Some type may not produce columns
  * of exact size
  * @param data_params optional, set of data parameters describing the data profile for each type
  * @param seed optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
@@ -389,17 +384,12 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 /**
  * @brief Deterministically generates a table filled with data with the given parameters.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
- *
  * @param dtype_ids Vector of requested column types
- * @param num_cols Number of columns in the output table
  * @param num_rows Number of rows in the output table
  * @param data_params optional, set of data parameters describing the data profile for each type
  * @param seed optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  row_count num_rows,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);

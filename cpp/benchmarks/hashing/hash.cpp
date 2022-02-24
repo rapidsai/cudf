@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ enum contains_nulls { no_nulls, nulls };
 static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls has_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const data = create_random_table({cudf::type_id::INT64}, 1, row_count{n_rows});
+  auto const data = create_random_table({cudf::type_id::INT64}, row_count{n_rows});
   if (has_nulls == contains_nulls::no_nulls)
     data->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
