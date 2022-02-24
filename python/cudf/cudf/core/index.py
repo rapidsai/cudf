@@ -52,6 +52,7 @@ from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
+from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
@@ -122,7 +123,7 @@ def _index_from_columns(
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
 
 
-class RangeIndex(BaseIndex):
+class RangeIndex(BaseIndex, BinaryOperand):
     """
     Immutable Index implementing a monotonic integer range.
 
@@ -154,6 +155,36 @@ class RangeIndex(BaseIndex):
     >>> cudf.RangeIndex(range(1, 10, 1), name="a")
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
+
+    _VALID_BINARY_OPERATIONS = {
+        # Numeric operations.
+        "__add__",
+        "__sub__",
+        "__mul__",
+        "__truediv__",
+        "__floordiv__",
+        "__mod__",
+        "__pow__",
+        "__and__",
+        "__xor__",
+        "__or__",
+        "__radd__",
+        "__rsub__",
+        "__rmul__",
+        "__rtruediv__",
+        "__rfloordiv__",
+        "__rmod__",
+        "__rpow__",
+        "__rand__",
+        "__rxor__",
+        "__ror__",
+        "__lt__",
+        "__le__",
+        "__eq__",
+        "__ne__",
+        "__gt__",
+        "__ge__",
+    }
 
     _range: range
 
@@ -698,43 +729,16 @@ class RangeIndex(BaseIndex):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def _binaryop(self, other, op: str, reflect: bool = False):
+        return self._as_int64()._binaryop(other, op=op, reflect=reflect)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
-for binop in (
-    "__add__",
-    "__radd__",
-    "__sub__",
-    "__rsub__",
-    "__mod__",
-    "__rmod__",
-    "__pow__",
-    "__rpow__",
-    "__floordiv__",
-    "__rfloordiv__",
-    "__truediv__",
-    "__rtruediv__",
-    "__and__",
-    "__or__",
-    "__xor__",
-    "__eq__",
-    "__ne__",
-    "__lt__",
-    "__le__",
-    "__gt__",
-    "__ge__",
-):
-    setattr(
-        RangeIndex,
-        binop,
-        lambda self, other, op=binop: getattr(self._as_int64(), op)(other),
-    )
-
-
 for unaop in ("__neg__", "__pos__", "__abs__"):
     setattr(
         RangeIndex,
-        binop,
+        unaop,
         lambda self, op=unaop: getattr(self._as_int64(), op)(),
     )
 
