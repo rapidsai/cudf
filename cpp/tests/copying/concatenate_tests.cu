@@ -340,7 +340,7 @@ struct OverflowTest : public cudf::test::BaseFixture {
 TEST_F(OverflowTest, OverflowTest)
 {
   using namespace cudf;
-  // should concatenate up to size_type::max - 1 rows.
+  // should concatenate up to size_type::max rows.
   {
     // 5 x size + size_last adds to size_type::max
     constexpr auto size      = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
