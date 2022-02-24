@@ -89,7 +89,7 @@ static void BM_ast_transform(benchmark::State& state)
   // Execute benchmark
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::compute_column(table.view(), expression_tree_root);
+    cudf::compute_column(table, expression_tree_root);
   }
 
   // Use the number of bytes read from global memory

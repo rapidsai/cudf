@@ -34,7 +34,7 @@ void BM_reduction(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
-  auto const table = create_random_table({dtype}, 1, row_count{column_size});
+  auto const table = create_random_table({dtype}, row_count{column_size});
   table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
   cudf::column_view input_column(table->view().column(0));
 

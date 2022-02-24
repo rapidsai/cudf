@@ -86,10 +86,10 @@ void BM_contiguous_split(benchmark::State& state)
   profile.set_distribution_params<int>(
     cudf::type_id::INT32, distribution_id::UNIFORM, range.first, range.second);
 
-  auto src_cols =
-    create_random_table(
-      {cudf::type_id::INT32}, num_cols, row_count{static_cast<cudf::size_type>(num_rows)}, profile)
-      ->release();
+  auto src_cols = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
+                                      row_count{static_cast<cudf::size_type>(num_rows)},
+                                      profile)
+                    ->release();
 
   int64_t const total_bytes =
     total_desired_bytes +
@@ -129,7 +129,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
   std::vector<std::unique_ptr<cudf::column>> src_cols(num_cols);
   for (int64_t idx = 0; idx < num_cols; idx++) {
     auto random_indices = create_random_table(
-      {cudf::type_id::INT32}, 1, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
+      {cudf::type_id::INT32}, row_count{static_cast<cudf::size_type>(num_rows)}, profile);
     auto str_table = cudf::gather(cudf::table_view{{one_col}},
                                   random_indices->get_column(0),
                                   (include_validity ? cudf::out_of_bounds_policy::NULLIFY

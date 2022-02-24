@@ -137,8 +137,8 @@ struct bool_generator {
     : engine(engine), dist{0, 1}, probability_true{probability_true}
   {
   }
-  bool_generator(unsigned seed, float valid_probability)
-    : engine(seed), dist{0, 1}, probability_true{valid_probability}
+  bool_generator(unsigned seed, float probability_true)
+    : engine(seed), dist{0, 1}, probability_true{probability_true}
   {
   }
 

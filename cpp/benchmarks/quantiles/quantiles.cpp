@@ -46,8 +46,8 @@ static void BM_quantiles(benchmark::State& state, bool nulls)
   profile.set_cardinality(0);
   profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
-  auto input_table =
-    create_random_table({cudf::type_to_id<Type>()}, n_cols, row_count{n_rows}, profile);
+  auto input_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
   auto input = cudf::table_view(*input_table);
 
   std::vector<double> q(n_quantiles);

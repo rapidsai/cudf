@@ -189,7 +189,6 @@ auto build_json_string_column(int desired_bytes, int num_rows)
     cudf::type_id::FLOAT32, distribution_id::UNIFORM, 0.0, 1.0);
   auto float_2bool_columns =
     create_random_table({cudf::type_id::FLOAT32, cudf::type_id::BOOL8, cudf::type_id::BOOL8},
-                        3,
                         row_count{num_rows},
                         profile);
 

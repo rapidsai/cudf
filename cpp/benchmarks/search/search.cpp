@@ -73,7 +73,7 @@ BENCHMARK_REGISTER_F(Search, Column_Nulls)
 
 void BM_table(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<float>;
+  using Type = float;
 
   auto const num_columns{static_cast<cudf::size_type>(state.range(0))};
   auto const column_size{static_cast<cudf::size_type>(state.range(1))};
@@ -83,10 +83,10 @@ void BM_table(benchmark::State& state)
   profile.set_cardinality(0);
   profile.set_null_frequency(0.1);
   profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
-  auto data_table =
-    create_random_table({cudf::type_to_id<Type>()}, num_columns, row_count{column_size}, profile);
-  auto values_table =
-    create_random_table({cudf::type_to_id<Type>()}, num_columns, row_count{values_size}, profile);
+  auto data_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{column_size}, profile);
+  auto values_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{values_size}, profile);
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);

@@ -37,7 +37,7 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> co
   auto const dtype = cudf::type_to_id<type>();
   data_profile profile;
   profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 100);
-  auto const table = create_random_table({dtype}, 1, row_count{column_size}, profile);
+  auto const table = create_random_table({dtype}, row_count{column_size}, profile);
   table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
   cudf::column_view input_column(table->view().column(0));
 

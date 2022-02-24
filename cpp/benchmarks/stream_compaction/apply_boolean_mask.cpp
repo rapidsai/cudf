@@ -83,12 +83,12 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
   profile.set_cardinality(0);
   profile.set_distribution_params<T>(cudf::type_to_id<T>(), distribution_id::UNIFORM, 0, 100);
 
-  auto source_table =
-    create_random_table({cudf::type_to_id<T>()}, num_columns, row_count{column_size}, profile);
+  auto source_table = create_random_table(
+    cycle_dtypes({cudf::type_to_id<T>()}, num_columns), row_count{column_size}, profile);
 
   profile.set_bool_probability(percent_true / 100.0);
   profile.set_null_frequency(-0.1);  // <0 means, no null mask
-  auto mask_table = create_random_table({cudf::type_id::BOOL8}, 1, row_count{column_size}, profile);
+  auto mask_table = create_random_table({cudf::type_id::BOOL8}, row_count{column_size}, profile);
   cudf::column_view mask = mask_table->get_column(0);
 
   for (auto _ : state) {
