@@ -47,6 +47,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.mixins import BinaryOperand
+from cudf.core.mixins.mixin_factory import AllOperations
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -115,35 +116,7 @@ class Frame(BinaryOperand):
     _index: Optional[cudf.core.index.BaseIndex]
     _names: Optional[List]
 
-    _VALID_BINARY_OPERATIONS = {
-        # Numeric operations.
-        "__add__",
-        "__sub__",
-        "__mul__",
-        "__truediv__",
-        "__floordiv__",
-        "__mod__",
-        "__pow__",
-        "__and__",
-        "__xor__",
-        "__or__",
-        "__radd__",
-        "__rsub__",
-        "__rmul__",
-        "__rtruediv__",
-        "__rfloordiv__",
-        "__rmod__",
-        "__rpow__",
-        "__rand__",
-        "__rxor__",
-        "__ror__",
-        "__lt__",
-        "__le__",
-        "__eq__",
-        "__ne__",
-        "__gt__",
-        "__ge__",
-    }
+    _VALID_BINARY_OPERATIONS = AllOperations
 
     def __init__(self, data=None, index=None):
         if data is None:

@@ -53,6 +53,7 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
+from cudf.core.mixins.mixin_factory import AllOperations
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
@@ -156,35 +157,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
-    _VALID_BINARY_OPERATIONS = {
-        # Numeric operations.
-        "__add__",
-        "__sub__",
-        "__mul__",
-        "__truediv__",
-        "__floordiv__",
-        "__mod__",
-        "__pow__",
-        "__and__",
-        "__xor__",
-        "__or__",
-        "__radd__",
-        "__rsub__",
-        "__rmul__",
-        "__rtruediv__",
-        "__rfloordiv__",
-        "__rmod__",
-        "__rpow__",
-        "__rand__",
-        "__rxor__",
-        "__ror__",
-        "__lt__",
-        "__le__",
-        "__eq__",
-        "__ne__",
-        "__gt__",
-        "__ge__",
-    }
+    _VALID_BINARY_OPERATIONS = AllOperations
 
     _range: range
 
