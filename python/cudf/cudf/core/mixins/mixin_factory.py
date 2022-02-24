@@ -204,6 +204,12 @@ def _create_delegating_mixin(
     class OperationMixin:
         @classmethod
         def __init_subclass__(cls):
+            # Support composition of various OperationMixins. Note that since
+            # this __init_subclass__ is defined on mixins, it does not prohibit
+            # classes that inherit it from implementing this method as well as
+            # long as those implementations also include this super call.
+            super().__init_subclass__()
+
             # Only add the valid set of operations for a particular class.
             valid_operations = set()
             for base_cls in cls.__mro__:
