@@ -361,6 +361,7 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/collect_ops.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
