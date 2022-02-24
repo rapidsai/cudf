@@ -144,14 +144,15 @@ struct DeviceRolling {
 };
 
 /**
- * @brief The base struct used for checking supported ops.
+ * @brief The base struct used for checking if the combination of input types and aggregation op is
+ * supported.
  */
 template <typename InputType, aggregation::Kind op>
 struct DeviceRollingArgMinMaxBase {
   template <typename T = InputType, aggregation::Kind O = op>
   static constexpr bool is_supported()
   {
-    // Right now the only use case is utilities for MIN/MAX on strings and structs.
+    // Right now only support ARGMIN/ARGMAX of strings and structs.
     auto const type_supported =
       std::is_same_v<T, cudf::string_view> || std::is_same_v<T, cudf::struct_view>;
     auto const op_supported = op == aggregation::ARGMIN || op == aggregation::ARGMAX;
@@ -163,13 +164,13 @@ struct DeviceRollingArgMinMaxBase {
 /**
  * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window.
  */
-template <typename InputType, aggregation::Kind op, typename Comparator>
+template <typename InputType, aggregation::Kind op, typename AggOp>
 struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
-  Comparator comp;
+  AggOp agg_op;
   size_type min_periods;
 
-  DeviceRollingArgMinMax(size_type _min_periods, Comparator const& _comp)
-    : min_periods(_min_periods), comp(_comp)
+  DeviceRollingArgMinMax(size_type _min_periods, AggOp const& _agg_op)
+    : min_periods(_min_periods), agg_op(_agg_op)
   {
   }
 
@@ -182,9 +183,6 @@ struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
              size_type end_index,
              size_type current_index)
   {
-    using AggOp = typename corresponding_operator<op>::type;
-    AggOp agg_op;
-
     // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
     // for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
@@ -223,7 +221,7 @@ struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
                                            thrust::make_counting_iterator(start_index),
                                            thrust::make_counting_iterator(end_index),
                                            size_type{start_index},
-                                           comp);
+                                           agg_op);
     auto const valid_count =
       has_nulls ? thrust::count_if(thrust::seq,
                                    thrust::make_counting_iterator(start_index),
