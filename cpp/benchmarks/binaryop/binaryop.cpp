@@ -14,24 +14,15 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
-
-#include <benchmark/benchmark.h>
-#include <common/generate_input.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <numeric>
 #include <vector>
 
 // This set of benchmarks is designed to be a comparison for the AST benchmarks
@@ -48,21 +39,21 @@ class BINARYOP : public cudf::benchmark {
 template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)
 {
-  const cudf::size_type table_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
+  auto const table_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
-  auto n_cols = reuse_columns ? 1 : tree_levels + 1;
-  auto source_table =
-    create_sequence_table({cudf::type_to_id<key_type>()}, n_cols, row_count{table_size});
+  auto const n_cols       = reuse_columns ? 1 : tree_levels + 1;
+  auto const source_table = create_sequence_table(
+    cycle_dtypes({cudf::type_to_id<key_type>()}, n_cols), row_count{table_size});
   cudf::table_view table{*source_table};
 
   // Execute benchmark
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     // Execute tree that chains additions like (((a + b) + c) + d)
-    auto const op         = cudf::binary_operator::ADD;
-    auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
+    auto const op               = cudf::binary_operator::ADD;
+    auto const result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
     if (reuse_columns) {
       auto result = cudf::binary_operation(table.column(0), table.column(0), op, result_data_type);
       for (cudf::size_type i = 0; i < tree_levels - 1; i++) {

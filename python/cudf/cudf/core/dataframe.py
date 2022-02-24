@@ -53,7 +53,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -1219,13 +1219,54 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return self
         start, stop, stride = arg.indices(num_rows)
 
+        # early stop for empty cases
+        if len(range(start, stop, stride)) == 0:
+            columns = ColumnAccessor(
+                {
+                    colname: column.column_empty_like(col, newsize=0)
+                    for colname, col in self._data.items()
+                },
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
+            )
+
+            if isinstance(self.index, MultiIndex):
+                mi_columns = ColumnAccessor(
+                    {
+                        colname: column.column_empty_like(col, newsize=0)
+                        for colname, col in self.index._data.items()
+                    }
+                )
+                return DataFrame._from_data(
+                    columns,
+                    index=MultiIndex._from_data(
+                        mi_columns, name=self.index.name
+                    ),
+                )
+            else:
+                return DataFrame._from_data(
+                    columns,
+                    index=(
+                        RangeIndex(
+                            start=start,
+                            stop=stop,
+                            step=stride,
+                            name=self.index.name,
+                        )
+                        if isinstance(self.index, RangeIndex)
+                        else Index(
+                            [], dtype=self.index.dtype, name=self.index.name
+                        )
+                    ),
+                )
+
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
         if self.index is not None and isinstance(self.index, RangeIndex):
             if self._num_columns == 0:
                 result = self._empty_like(keep_index)
-                result._index = self.index[start:stop]
+                result._index = self.index[start:stop:stride]
                 return result
             keep_index = False
 

@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include <common/generate_input.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <fixture/templated_benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/binaryop.hpp>
 
@@ -27,13 +26,10 @@ class COMPILED_BINARYOP : public cudf::benchmark {
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  data_profile profile;
-  profile.set_null_frequency(-0.1);  // no null mask (<0)
-  profile.set_cardinality(0);
-  auto source_table = create_random_table(
-    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, 2, row_count{column_size}, profile);
+  auto const source_table = create_sequence_table(
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{column_size});
 
   auto lhs          = cudf::column_view(source_table->get_column(0));
   auto rhs          = cudf::column_view(source_table->get_column(1));

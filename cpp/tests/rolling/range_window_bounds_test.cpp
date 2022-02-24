@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,17 +49,17 @@ TEST_F(RangeWindowBoundsTest, TestBasicTimestampRangeTypeMapping)
 
   using namespace cudf::detail;
 
-  static_assert(std::is_same<range_type<timestamp_D>, duration_D>::value);
-  static_assert(std::is_same<range_type<timestamp_s>, duration_s>::value);
-  static_assert(std::is_same<range_type<timestamp_ms>, duration_ms>::value);
-  static_assert(std::is_same<range_type<timestamp_us>, duration_us>::value);
-  static_assert(std::is_same<range_type<timestamp_ns>, duration_ns>::value);
+  static_assert(std::is_same_v<range_type<timestamp_D>, duration_D>);
+  static_assert(std::is_same_v<range_type<timestamp_s>, duration_s>);
+  static_assert(std::is_same_v<range_type<timestamp_ms>, duration_ms>);
+  static_assert(std::is_same_v<range_type<timestamp_us>, duration_us>);
+  static_assert(std::is_same_v<range_type<timestamp_ns>, duration_ns>);
 
-  static_assert(std::is_same<range_rep_type<timestamp_D>, int32_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_s>, int64_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_ms>, int64_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_us>, int64_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_ns>, int64_t>::value);
+  static_assert(std::is_same_v<range_rep_type<timestamp_D>, int32_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_s>, int64_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_ms>, int64_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_us>, int64_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_ns>, int64_t>);
 }
 
 TYPED_TEST(TimestampRangeWindowBoundsTest, BoundsConstruction)
@@ -124,7 +124,7 @@ TYPED_TEST(NumericRangeWindowBoundsTest, BoundsConstruction)
 
   using range_window_bounds = cudf::range_window_bounds;
 
-  static_assert(std::is_integral<range_type>::value);
+  static_assert(std::is_integral_v<range_type>);
   auto range_3 = range_window_bounds::get(numeric_scalar<range_type>{3, true});
   EXPECT_FALSE(range_3.is_unbounded() &&
                "range_window_bounds constructed from scalar cannot be unbounded.");

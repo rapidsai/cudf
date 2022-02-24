@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-#include <common/generate_input.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <fixture/templated_benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -40,28 +33,23 @@ enum class TreeType {
                    // child column reference
 };
 
+template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 class AST : public cudf::benchmark {
 };
 
 template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 static void BM_ast_transform(benchmark::State& state)
 {
-  const cudf::size_type table_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
+  auto const table_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
-  auto n_cols  = reuse_columns ? 1 : tree_levels + 1;
-  auto columns = std::vector<std::unique_ptr<cudf::column>>(n_cols);
-
-  auto init = cudf::make_fixed_width_scalar<key_type>(static_cast<key_type>(0));
-  std::generate_n(columns.begin(), n_cols, [&]() { return cudf::sequence(table_size, *init); });
-
-  if constexpr (Nullable) {
-    for (auto i = 0; i < n_cols; i++) {
-      columns[i]->set_null_mask(create_random_null_mask(columns[i]->size(), 0.5));
-    }
-  }
-  cudf::table table{std::move(columns)};
+  auto const n_cols = reuse_columns ? 1 : tree_levels + 1;
+  auto const source_table =
+    create_sequence_table(cycle_dtypes({cudf::type_to_id<key_type>()}, n_cols),
+                          row_count{table_size},
+                          Nullable ? 0.5 : -1.0);
+  auto table = source_table->view();
 
   // Create column references
   auto column_refs = std::vector<cudf::ast::column_reference>();
@@ -120,10 +108,15 @@ static void CustomRanges(benchmark::internal::Benchmark* b)
   }
 }
 
-#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable)   \
-  TEMPLATED_BENCHMARK_F(AST, BM_ast_transform, key_type, tree_type, reuse_columns, nullable) \
-    ->Apply(CustomRanges)                                                                    \
-    ->Unit(benchmark::kMillisecond)                                                          \
+#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
+  BENCHMARK_TEMPLATE_DEFINE_F(AST, name, key_type, tree_type, reuse_columns, nullable)     \
+  (::benchmark::State & st)                                                                \
+  {                                                                                        \
+    BM_ast_transform<key_type, tree_type, reuse_columns, nullable>(st);                    \
+  }                                                                                        \
+  BENCHMARK_REGISTER_F(AST, name)                                                          \
+    ->Apply(CustomRanges)                                                                  \
+    ->Unit(benchmark::kMillisecond)                                                        \
     ->UseManualTime();
 
 AST_TRANSFORM_BENCHMARK_DEFINE(

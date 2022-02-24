@@ -22,6 +22,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -123,6 +124,30 @@ size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
   if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
   return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
+
+/**
+ * @brief bool generator with given probability [0.0 - 1.0] of returning true.
+ *
+ */
+struct bool_generator {
+  thrust::minstd_rand engine;
+  thrust::uniform_real_distribution<float> dist;
+  float probability_true;
+  bool_generator(thrust::minstd_rand engine, float probability_true)
+    : engine(engine), dist{0, 1}, probability_true{probability_true}
+  {
+  }
+  bool_generator(unsigned seed, float valid_probability)
+    : engine(seed), dist{0, 1}, probability_true{valid_probability}
+  {
+  }
+
+  __device__ bool operator()(size_t n)
+  {
+    engine.discard(n);
+    return dist(engine) < probability_true;
+  }
+};
 
 /**
  * @brief Functor that computes a random column element with the given data profile.
@@ -259,36 +284,6 @@ struct random_value_fn<
   }
 };
 
-struct valid_generator {
-  thrust::minstd_rand engine;
-  thrust::uniform_real_distribution<float> dist;
-  float valid_prob;
-  valid_generator(thrust::minstd_rand engine, float valid_probability)
-    : engine(engine), dist{0, 1}, valid_prob{valid_probability}
-  {
-  }
-  valid_generator(unsigned seed, float valid_probability)
-    : engine(seed), dist{0, 1}, valid_prob{valid_probability}
-  {
-  }
-
-  __device__ bool operator()(size_t n)
-  {
-    engine.discard(n);
-    return dist(engine) < valid_prob;
-  }
-};
-
-rmm::device_buffer create_random_null_mask(cudf::size_type size,
-                                           float null_probability,
-                                           unsigned seed)
-{
-  return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
-                                thrust::make_counting_iterator<cudf::size_type>(size),
-                                valid_generator{seed, 1.0f - null_probability})
-    .first;
-};
-
 /**
  * @brief Creates an boolean value with given probability of returning `true`.
  */
@@ -303,7 +298,7 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
           thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<bool> {
           rmm::device_uvector<bool> result(size, rmm::cuda_stream_default);
           thrust::tabulate(
-            thrust::device, result.begin(), result.end(), valid_generator(engine, valid_prob));
+            thrust::device, result.begin(), result.end(), bool_generator(engine, valid_prob));
           return result;
         }}
   {
@@ -682,11 +677,11 @@ columns_vector create_random_columns(data_profile const& profile,
 }
 
 /**
- * @brief Repeats the input data types in round-robin order to fill a vector of @ref num_cols
+ * @brief Repeats the input data types cyclically order to fill a vector of @ref num_cols
  * elements.
  */
-std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
-                                         cudf::size_type num_cols)
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols)
 {
   if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
@@ -697,42 +692,70 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
-    std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
 
-  return create_random_table(out_dtype_ids, num_cols, row_count{num_rows}, profile, seed);
+  return create_random_table(dtype_ids, row_count{num_rows}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  row_count num_rows,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
-  auto seed_engine         = deterministic_engine(seed);
+  auto seed_engine = deterministic_engine(seed);
   thrust::uniform_int_distribution<unsigned> seed_dist;
 
   columns_vector output_columns;
-  std::transform(out_dtype_ids.begin(),
-                 out_dtype_ids.end(),
-                 std::back_inserter(output_columns),
-                 [&](auto tid) mutable {
-                   auto engine = deterministic_engine(seed_dist(seed_engine));
-                   return cudf::type_dispatcher(
-                     cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows.count);
-                 });
+  std::transform(
+    dtype_ids.begin(), dtype_ids.end(), std::back_inserter(output_columns), [&](auto tid) mutable {
+      auto engine = deterministic_engine(seed_dist(seed_engine));
+      return cudf::type_dispatcher(
+        cudf::data_type(tid), create_rand_col_fn{}, profile, engine, num_rows.count);
+    });
   return std::make_unique<cudf::table>(std::move(output_columns));
 }
+
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   row_count num_rows,
+                                                   float null_probability,
+                                                   unsigned seed)
+{
+  auto columns = std::vector<std::unique_ptr<cudf::column>>(dtype_ids.size());
+  std::transform(dtype_ids.begin(), dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
+    auto init          = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
+    auto col           = cudf::sequence(num_rows.count, *init);
+    auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
+    col->set_null_mask(std::move(mask), count);
+    return col;
+  });
+  return std::make_unique<cudf::table>(std::move(columns));
+}
+
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
+                                                                       float null_probability,
+                                                                       unsigned seed)
+{
+  if (null_probability < 0.0f) {
+    return {rmm::device_buffer{}, 0};
+  } else if (null_probability == 0.0f) {
+    return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
+  } else if (null_probability >= 1.0f) {
+    return {cudf::create_null_mask(size, cudf::mask_state::ALL_VALID), 0};
+  } else {
+    return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
+                                  thrust::make_counting_iterator<cudf::size_type>(size),
+                                  bool_generator{seed, 1.0f - null_probability});
+  }
+};
+
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id)
 {
@@ -770,26 +793,6 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
     if (type != cudf::type_id::EMPTY && fn(cudf::data_type(type))) types.push_back(type);
   }
   return types;
-}
-
-std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                   cudf::size_type num_cols,
-                                                   row_count num_rows)
-{
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
-  auto columns             = std::vector<std::unique_ptr<cudf::column>>(num_cols);
-  auto init                = cudf::make_default_constructed_scalar(cudf::data_type{dtype_ids[0]});
-  if (dtype_ids.size() == 1) {
-    std::generate_n(
-      columns.begin(), num_cols, [&]() { return cudf::sequence(num_rows.count, *init); });
-  } else {
-    std::transform(
-      out_dtype_ids.begin(), out_dtype_ids.end(), columns.begin(), [num_rows](auto dtype) {
-        auto init = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
-        return cudf::sequence(num_rows.count, *init);
-      });
-  }
-  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::vector<cudf::type_id> get_type_or_group(std::vector<int32_t> const& ids)

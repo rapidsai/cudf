@@ -80,7 +80,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
-template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   if (isnan(lhs) and isnan(rhs)) {
@@ -123,7 +123,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
-template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   return detail::compare_elements(lhs, rhs);
@@ -137,7 +137,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @param rhs second element
  * @return `true` if `lhs` == `rhs` else `false`.
  */
-template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
 __device__ bool equality_compare(Element lhs, Element rhs)
 {
   if (isnan(lhs) and isnan(rhs)) { return true; }
@@ -152,7 +152,7 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  * @param rhs second element
  * @return `true` if `lhs` == `rhs` else `false`.
  */
-template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
 {
   return lhs == rhs;

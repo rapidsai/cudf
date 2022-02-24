@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -30,8 +32,8 @@ class Search : public cudf::benchmark {
 
 void BM_column(benchmark::State& state, bool nulls)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type values_size = column_size;
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const values_size = column_size;
 
   auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
   auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
@@ -39,8 +41,10 @@ void BM_column(benchmark::State& state, bool nulls)
   auto column     = cudf::sequence(column_size, *init_data);
   auto values     = cudf::sequence(values_size, *init_value, *step);
   if (nulls) {
-    column->set_null_mask(create_random_null_mask(column->size(), 0.1));
-    values->set_null_mask(create_random_null_mask(values->size(), 0.1));
+    auto [column_null_mask, column_null_count] = create_random_null_mask(column->size(), 0.1, 1);
+    column->set_null_mask(std::move(column_null_mask), column_null_count);
+    auto [values_null_mask, values_null_count] = create_random_null_mask(values->size(), 0.1, 2);
+    values->set_null_mask(std::move(values_null_mask), values_null_count);
   }
 
   auto data_table = cudf::sort(cudf::table_view({*column}));
@@ -69,10 +73,11 @@ BENCHMARK_REGISTER_F(Search, Column_Nulls)
 
 void BM_table(benchmark::State& state)
 {
-  using Type = int;
-  const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
-  const cudf::size_type column_size{(cudf::size_type)state.range(1)};
-  const cudf::size_type values_size = column_size;
+  using wrapper = cudf::test::fixed_width_column_wrapper<float>;
+
+  auto const num_columns{static_cast<cudf::size_type>(state.range(0))};
+  auto const column_size{static_cast<cudf::size_type>(state.range(1))};
+  auto const values_size = column_size;
 
   data_profile profile;
   profile.set_cardinality(0);
@@ -109,8 +114,8 @@ BENCHMARK_REGISTER_F(Search, Table)
 
 void BM_contains(benchmark::State& state, bool nulls)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type values_size = column_size;
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const values_size = column_size;
 
   auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
   auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
@@ -118,8 +123,10 @@ void BM_contains(benchmark::State& state, bool nulls)
   auto column     = cudf::sequence(column_size, *init_data);
   auto values     = cudf::sequence(values_size, *init_value, *step);
   if (nulls) {
-    column->set_null_mask(create_random_null_mask(column->size(), 0.1, 1));
-    values->set_null_mask(create_random_null_mask(values->size(), 0.1, 2));
+    auto [column_null_mask, column_null_count] = create_random_null_mask(column->size(), 0.1, 1);
+    column->set_null_mask(std::move(column_null_mask), column_null_count);
+    auto [values_null_mask, values_null_count] = create_random_null_mask(values->size(), 0.1, 2);
+    values->set_null_mask(std::move(values_null_mask), values_null_count);
   }
 
   for (auto _ : state) {
