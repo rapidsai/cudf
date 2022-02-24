@@ -2,6 +2,7 @@
 
 import operator
 import string
+import warnings
 from contextlib import contextmanager
 from textwrap import dedent
 
@@ -598,19 +599,27 @@ def test_categorical_set_categories_categoricals(data, new_categories):
     pd_data = data.copy().astype("category")
     gd_data = cudf.from_pandas(pd_data)
 
-    assert_eq(
-        pd_data.cat.set_categories(new_categories=new_categories),
-        gd_data.cat.set_categories(new_categories=new_categories),
-    )
+    expected = pd_data.cat.set_categories(new_categories=new_categories)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "Can't safely cast column", category=UserWarning,
+        )
+        actual = gd_data.cat.set_categories(new_categories=new_categories)
 
-    assert_eq(
-        pd_data.cat.set_categories(
-            new_categories=pd.Series(new_categories, dtype="category")
-        ),
-        gd_data.cat.set_categories(
-            new_categories=cudf.Series(new_categories, dtype="category")
-        ),
+    assert_eq(expected, actual)
+
+    expected = pd_data.cat.set_categories(
+        new_categories=pd.Series(new_categories, dtype="category")
     )
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "Can't safely cast column", category=UserWarning,
+        )
+        actual = gd_data.cat.set_categories(
+            new_categories=cudf.Series(new_categories, dtype="category")
+        )
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -718,7 +727,11 @@ def test_add_categories(data, add):
     gds = cudf.Series(data, dtype="category")
 
     expected = pds.cat.add_categories(add)
-    actual = gds.cat.add_categories(add)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "Can't safely cast column", category=UserWarning,
+        )
+        actual = gds.cat.add_categories(add)
     assert_eq(
         expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype)
     )
