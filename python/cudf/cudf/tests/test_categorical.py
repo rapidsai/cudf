@@ -2,6 +2,7 @@
 
 import operator
 import string
+from textwrap import dedent
 
 import numpy as np
 import pandas as pd
@@ -51,9 +52,8 @@ t a
     assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
 
+@pytest.mark.skipif(not PANDAS_GE_110, reason="requires pandas>=1.1.0")
 def test_categorical_integer():
-    if not PANDAS_GE_110:
-        pytest.xfail(reason="pandas >=1.1 required")
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
@@ -67,17 +67,17 @@ def test_categorical_integer():
         sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_numpy(),
     )
 
-    string = str(sr)
-    expect_str = """
-0 a
-1 <NA>
-2 <NA>
-3 c
-4 a
-dtype: category
-Categories (3, object): ['a', 'b', 'c']
-"""
-    assert string.split() == expect_str.split()
+    expect_str = dedent(
+        """\
+        0       a
+        1    <NA>
+        2    <NA>
+        3       c
+        4       a
+        dtype: category
+        Categories (3, object): ['a', 'b', 'c']"""
+    )
+    assert str(sr) == expect_str
 
 
 def test_categorical_compare_unordered():
