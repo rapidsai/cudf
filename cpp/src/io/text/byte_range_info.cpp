@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 
 #include <limits>
 

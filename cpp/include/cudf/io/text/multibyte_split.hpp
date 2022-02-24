@@ -37,12 +37,13 @@ namespace text {
  * provided, and ignore all other records, including any record which may end (but not begin)
  * within the range, and including any record which may begin in the range but end outside of the
  * range.
- * 
+ *
  * @param source The source string
  * @param delimiter UTF-8 encoded string for which to find offsets in the source
  * @param byte_range range in which to consider offsets relevant
  * @param mr Memory resource to use for the device memory allocation
- * @return The strings found by splitting the source by the delimiter within the relevant byte range.
+ * @return The strings found by splitting the source by the delimiter within the relevant byte
+ * range.
  */
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
