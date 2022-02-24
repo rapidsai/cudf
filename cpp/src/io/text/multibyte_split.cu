@@ -415,8 +415,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                relevant_bytes->data() + relevant_bytes->size(),
                string_chars.begin());
 
+  auto string_count = string_offsets_out.size() - 1;
+
   return cudf::make_strings_column(
-    string_offsets_out.size() - 1, std::move(string_offsets_out), std::move(string_chars));
+    string_count, std::move(string_offsets_out), std::move(string_chars));
 }
 
 }  // namespace detail

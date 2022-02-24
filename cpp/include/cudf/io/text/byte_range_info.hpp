@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/integer_utils.hpp>
-
+#include <cstdint>
 #include <vector>
 
 namespace cudf {
@@ -40,11 +39,11 @@ struct byte_range_info {
    * @brief Create a collection of consecutive ranges between [0, total_bytes).
    *
    * Each range wil be the same size except if `total_bytes` is not evenly divisible by
-   * `range_count`, in which cas the last range size will be the remainder.
+   * `range_count`, in which case the last range size will be the remainder.
    *
    * @param total_bytes total number of bytes in all ranges
    * @param range_count total number of ranges in which to divide bytes
-   * @return
+   * @return Vector of range objects
    */
   static std::vector<byte_range_info> create_consecutive(int64_t total_bytes, int64_t range_count);
 };

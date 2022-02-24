@@ -15,6 +15,7 @@
  */
 
 #include <cudf/io/text/byte_range_info.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <limits>
 
