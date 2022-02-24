@@ -44,9 +44,11 @@ static void BM_ast_transform(benchmark::State& state)
   auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
-  auto const n_cols       = reuse_columns ? 1 : tree_levels + 1;
-  auto const source_table = create_sequence_table(
-    {cudf::type_to_id<key_type>()}, n_cols, row_count{table_size}, Nullable ? 0.5 : -1.0);
+  auto const n_cols = reuse_columns ? 1 : tree_levels + 1;
+  auto const source_table =
+    create_sequence_table(cycle_dtypes({cudf::type_to_id<key_type>()}, n_cols),
+                          row_count{table_size},
+                          Nullable ? 0.5 : -1.0);
   auto table = source_table->view();
 
   // Create column references

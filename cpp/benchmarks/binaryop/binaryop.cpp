@@ -43,9 +43,9 @@ static void BM_binaryop_transform(benchmark::State& state)
   auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
-  auto const n_cols = reuse_columns ? 1 : tree_levels + 1;
-  auto const source_table =
-    create_sequence_table({cudf::type_to_id<key_type>()}, n_cols, row_count{table_size});
+  auto const n_cols       = reuse_columns ? 1 : tree_levels + 1;
+  auto const source_table = create_sequence_table(
+    cycle_dtypes({cudf::type_to_id<key_type>()}, n_cols), row_count{table_size});
   cudf::table_view table{*source_table};
 
   // Execute benchmark

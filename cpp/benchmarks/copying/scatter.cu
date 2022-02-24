@@ -35,7 +35,7 @@ void BM_scatter(benchmark::State& state)
 
   // Gather indices
   auto scatter_map_table =
-    create_sequence_table({cudf::type_to_id<cudf::size_type>()}, 1, row_count{source_size});
+    create_sequence_table({cudf::type_to_id<cudf::size_type>()}, row_count{source_size});
   auto scatter_map = scatter_map_table->get_column(0).mutable_view();
 
   if (coalesce) {
@@ -49,10 +49,10 @@ void BM_scatter(benchmark::State& state)
   }
 
   // Every element is valid
-  auto source_table =
-    create_sequence_table({cudf::type_to_id<TypeParam>()}, n_cols, row_count{source_size});
-  auto target_table =
-    create_sequence_table({cudf::type_to_id<TypeParam>()}, n_cols, row_count{source_size});
+  auto source_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
+                                            row_count{source_size});
+  auto target_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
+                                            row_count{source_size});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0

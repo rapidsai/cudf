@@ -645,30 +645,18 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 }
 
 std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                   cudf::size_type num_cols,
                                                    row_count num_rows,
                                                    float null_probability,
                                                    unsigned seed)
 {
-  auto const out_dtype_ids    = cycle_dtypes(dtype_ids, num_cols);
-  auto columns                = std::vector<std::unique_ptr<cudf::column>>(num_cols);
-  auto create_sequence_column = [&](auto const& init) mutable {
-    auto col           = cudf::sequence(num_rows.count, init);
+  auto columns = std::vector<std::unique_ptr<cudf::column>>(dtype_ids.size());
+  std::transform(dtype_ids.begin(), dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
+    auto init          = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
+    auto col           = cudf::sequence(num_rows.count, *init);
     auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
     col->set_null_mask(std::move(mask), count);
     return col;
-  };
-  if (dtype_ids.size() == 1) {
-    auto init = cudf::make_default_constructed_scalar(cudf::data_type{dtype_ids[0]});
-    std::generate_n(
-      columns.begin(), num_cols, [&]() mutable { return create_sequence_column(*init); });
-  } else {
-    std::transform(
-      out_dtype_ids.begin(), out_dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
-        auto init = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
-        return create_sequence_column(*init);
-      });
-  }
+  });
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
