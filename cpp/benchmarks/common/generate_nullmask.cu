@@ -22,26 +22,26 @@
 #include <thrust/random.h>
 
 /**
- * @brief valid bit generator with given probability [0.0 - 1.0]
+ * @brief bool generator with given probability [0.0 - 1.0] of returning true.
  *
  */
-struct valid_generator {
+struct bool_generator {
   thrust::minstd_rand engine;
   thrust::uniform_real_distribution<float> dist;
-  float valid_prob;
-  valid_generator(thrust::minstd_rand engine, float valid_probability)
-    : engine(engine), dist{0, 1}, valid_prob{valid_probability}
+  float probability_true;
+  bool_generator(thrust::minstd_rand engine, float probability_true)
+    : engine(engine), dist{0, 1}, probability_true{probability_true}
   {
   }
-  valid_generator(unsigned seed, float valid_probability)
-    : engine(seed), dist{0, 1}, valid_prob{valid_probability}
+  bool_generator(unsigned seed, float valid_probability)
+    : engine(seed), dist{0, 1}, probability_true{valid_probability}
   {
   }
 
   __device__ bool operator()(size_t n)
   {
     engine.discard(n);
-    return dist(engine) < valid_prob;
+    return dist(engine) < probability_true;
   }
 };
 
@@ -59,6 +59,6 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::siz
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),
-                                  valid_generator{seed, 1.0f - null_probability});
+                                  bool_generator{seed, 1.0f - null_probability});
   }
 };
