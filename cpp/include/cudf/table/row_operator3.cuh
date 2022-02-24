@@ -62,7 +62,7 @@ class element_relational_comparator {
                                                     column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence,
-                                                    int depth = 0)
+                                                    int depth = std::numeric_limits<int>::max())
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}, depth{depth}
   {
   }
@@ -84,37 +84,38 @@ class element_relational_comparator {
    */
   template <typename Element,
             std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index) const noexcept
+  __device__ thrust::pair<weak_ordering, int> operator()(size_type lhs_element_index,
+                                                         size_type rhs_element_index) const noexcept
   {
     if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
       if (lhs_is_null or rhs_is_null) {  // at least one is null
-        return null_compare(lhs_is_null, rhs_is_null, null_precedence);
+        return thrust::make_pair(null_compare(lhs_is_null, rhs_is_null, null_precedence), depth);
       }
     }
 
-    return relational_compare(lhs.element<Element>(lhs_element_index),
-                              rhs.element<Element>(rhs_element_index));
+    return thrust::make_pair(relational_compare(lhs.element<Element>(lhs_element_index),
+                                                rhs.element<Element>(rhs_element_index)),
+                             std::numeric_limits<int>::max());
   }
 
   template <typename Element,
             CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                            not std::is_same_v<Element, cudf::struct_view>)>
-  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
+  __device__ thrust::pair<weak_ordering, int> operator()(size_type lhs_element_index,
+                                                         size_type rhs_element_index)
   {
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return weak_ordering::LESS;
+    return thrust::make_pair(weak_ordering::LESS, std::numeric_limits<int>::max());
   }
 
   template <typename Element,
             CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                            std::is_same_v<Element, cudf::struct_view>)>
   __device__ thrust::pair<weak_ordering, int> operator()(size_type lhs_element_index,
-                                                         size_type rhs_element_index,
-                                                         int depth)
+                                                         size_type rhs_element_index)
   {
     weak_ordering state{weak_ordering::EQUIVALENT};
     int last_null_depth = std::numeric_limits<int>::max();
@@ -141,7 +142,7 @@ class element_relational_comparator {
 
     if (state == weak_ordering::EQUIVALENT) {
       auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence};
-      state           = cudf::type_dispatcher<non_nested_id_to_type>(
+      thrust::tie(state, last_null_depth) = cudf::type_dispatcher<non_nested_id_to_type>(
         lcol.type(), comparator, lhs_element_index, rhs_element_index);
     }
 
@@ -153,7 +154,7 @@ class element_relational_comparator {
   column_device_view rhs;
   Nullate nulls;
   null_order null_precedence{};
-  int depth{};
+  int depth{std::numeric_limits<int>::max()};
 };
 
 /**
@@ -234,17 +235,12 @@ class row_lexicographic_comparator {
       null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
-      auto comparator =
-        element_relational_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence};
+      auto comparator = element_relational_comparator{
+        _nulls, _lhs.column(i), _rhs.column(i), null_precedence, _depth[i]};
 
       weak_ordering state;
-      if (is_nested(_lhs.column(i).type())) {
-        thrust::tie(state, last_null_depth) =
-          comparator.template operator()<cudf::struct_view>(lhs_index, rhs_index, _depth[i]);
-      } else {
-        state = cudf::type_dispatcher<non_nested_id_to_type>(
-          _lhs.column(i).type(), comparator, lhs_index, rhs_index);
-      }
+      thrust::tie(state, last_null_depth) =
+        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
