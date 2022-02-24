@@ -28,18 +28,34 @@ namespace cudf {
 namespace io {
 namespace text {
 
+/**
+ * @brief Splits the source text in to a strings column using a multiple byte delimiter.
+ *
+ * providing a byte range allows multibyte_split to read a whole file, but only return the offsets
+ * of delimiters which begin within the range. If thinking in terms of "records", where each
+ * delimiter dictates the end of a record, we return all records which begin within the byte range
+ * provided, and ignore all other records, including any record which may end (but not begin)
+ * within the range, and including any record which may begin in the range but end outside of the
+ * range.
+ * 
+ * @param source The source string
+ * @param delimiter UTF-8 encoded string for which to find offsets in the source
+ * @param byte_range range in which to consider offsets relevant
+ * @param mr Memory resource to use for the device memory allocation
+ * @return The strings found by splitting the source by the delimiter within the relevant byte range.
+ */
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
   std::optional<byte_range_info> byte_range = std::nullopt,
   rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
+std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
                                               std::string const& delimiter,
                                               byte_range_info byte_range,
                                               rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
+std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
                                               std::string const& delimiter,
                                               rmm::mr::device_memory_resource* mr);
 

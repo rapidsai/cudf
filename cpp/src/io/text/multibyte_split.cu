@@ -376,7 +376,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto relevant_offsets_begin = thrust::lower_bound(
     rmm::exec_policy(stream), string_offsets.begin(), string_offsets.end() - 1, byte_range.offset);
 
-  auto relevant_offsets_end = thrust::lower_bound(rmm::exec_policy(stream),
+  auto relevant_offsets_end = thrust::upper_bound(rmm::exec_policy(stream),
                                                   string_offsets.begin(),
                                                   string_offsets.end() - 1,
                                                   byte_range.offset + byte_range.size) +
@@ -416,6 +416,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                string_chars.begin());
 
   auto string_count = string_offsets_out.size() - 1;
+
+  std::cout << string_count << std::endl;
 
   return cudf::make_strings_column(
     string_count, std::move(string_offsets_out), std::move(string_chars));
