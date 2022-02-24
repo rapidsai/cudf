@@ -30,7 +30,6 @@ from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
-from cudf.utils.dtypes import is_column_like
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -1723,7 +1722,9 @@ class IndexedFrame(Frame):
         used, the output is guaranteed to match the output of the corresponding
         pandas method call, but generating the sample may be slow. If exact
         pandas equivalence is not required, using a cupy random state will
-        achieve better performance, especially at high item counts.
+        achieve better performance, especially when sampling large number of
+        items. It's advised to use the matching `ndarray` type to the random
+        state for the `weights` array.
 
         Parameters
         ----------
@@ -1735,7 +1736,7 @@ class IndexedFrame(Frame):
         replace : bool, default False
             Allow or disallow sampling of the same row more than once.
             replace == True is not yet supported for axis = 1/"columns"
-        weights : numpy ndarray-like, optional
+        weights : ndarray-like, optional
             Default `None` for uniform probability distribution over rows to
             sample from. If `ndarray` is passed, the length of `weights` should
             equal to the number of rows to sample from, and will be normalized
@@ -1828,9 +1829,7 @@ class IndexedFrame(Frame):
 
         # Normalize `weights` array.
         if weights is not None:
-            if is_column_like(weights):
-                weights = np.asarray(weights)
-            else:
+            if isinstance(weights, str):
                 raise NotImplementedError(
                     "Weights specified by string is unsupported yet."
                 )

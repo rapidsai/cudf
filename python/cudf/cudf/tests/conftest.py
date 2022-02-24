@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import pathlib
 
 import cupy as cp
@@ -51,16 +53,22 @@ def random_state_tuple(request):
         pytest.skip("Unsupported params.")
 
 
-@pytest.fixture(params=[None, np.ones])
-def make_weights(request):
+@pytest.fixture(params=[None, "ones"])
+def make_weights(request, random_state_tuple):
     """Specific to `test_dataframe_sample*` and `test_series_sample*` tests.
+    Only testing weights array that matches type with random state.
     """
+    _, gd_random_state, _ = random_state_tuple
+
     if request.param is None:
-        return lambda _: None
+        return lambda _: (None, None)
     else:
 
         def wrapped(size):
             # Uniform distribution, non-normalized
-            return request.param(size)
+            if isinstance(gd_random_state, np.random.RandomState):
+                return np.ones(size), np.ones(size)
+            else:
+                return np.ones(size), cp.ones(size)
 
         return wrapped
