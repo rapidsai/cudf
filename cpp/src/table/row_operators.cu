@@ -17,11 +17,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/table/row_operator3.cuh>
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
-namespace structs::detail::experimental {
+namespace experimental {
+
+namespace {
 
 struct linked_column_view;
 
@@ -70,10 +74,9 @@ LinkedColVector input_table_to_linked_columns(table_view const& table)
   return result;
 }
 
-std::tuple<structs::detail::flattened_table, std::vector<int>> verticalize_nested_columns(
-  table_view input,
-  std::vector<order> const& column_order,
-  std::vector<null_order> const& null_precedence)
+auto struct_lex_verticalize(table_view input,
+                            host_span<order const> column_order         = {},
+                            host_span<null_order const> null_precedence = {})
 {
   // auto [table, null_masks] = superimpose_parent_nulls(input);
   auto linked_columns = input_table_to_linked_columns(input);
@@ -165,11 +168,88 @@ std::tuple<structs::detail::flattened_table, std::vector<int>> verticalize_neste
       verticalized_columns.push_back(*col);
     }
   }
-  return std::make_tuple(
-    structs::detail::flattened_table(
-      table_view(verticalized_columns), new_column_order, new_null_precedence, {}, {}),
-    std::move(verticalized_col_depths));
+  return std::make_tuple(table_view(verticalized_columns),
+                         std::move(new_column_order),
+                         std::move(new_null_precedence),
+                         std::move(verticalized_col_depths));
 }
 
-}  // namespace structs::detail::experimental
+void check_lex_compatibility(table_view const& input)
+{
+  // Basically check if there's any LIST hiding anywhere in the table
+  std::function<void(column_view const&)> check_column = [&](column_view const& c) {
+    CUDF_EXPECTS(c.type().id() != type_id::LIST,
+                 "Cannot lexicographic compare a table with a LIST column");
+    for (int i = 0; i < c.num_children(); ++i) {
+      check_column(c.child(i));
+    }
+  };
+  for (column_view const& c : input) {
+    check_column(c);
+  }
+}
+
+void check_shape_compatibility(table_view const& lhs, table_view const& rhs)
+{
+  std::function<void(column_view const&, column_view const&)> check_column =
+    [&](column_view const& l, column_view const& r) {
+      CUDF_EXPECTS(l.type().id() == r.type().id(),
+                   "Cannot compare tables with different column types");
+      CUDF_EXPECTS(l.num_children() == r.num_children(), "Mismatched number of children");
+      for (size_type i = 0; i < l.num_children(); ++i) {
+        check_column(l.child(i), r.child(i));
+      }
+    };
+
+  CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
+               "Cannot compare tables with different number of columns");
+  for (size_type i = 0; i < lhs.num_columns(); ++i) {
+    check_column(lhs.column(i), rhs.column(i));
+  }
+}
+
+}  // namespace
+
+row_lex_operator::row_lex_operator(table_view const& t,
+                                   host_span<order const> column_order,
+                                   host_span<null_order const> null_precedence,
+                                   rmm::cuda_stream_view stream)
+  : d_column_order(0, stream),
+    d_null_precedence(0, stream),
+    d_depths(0, stream),
+    any_nulls(has_nested_nulls(t))
+{
+  check_lex_compatibility(t);
+
+  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
+    struct_lex_verticalize(t, column_order, null_precedence);
+
+  d_lhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+
+  d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
+  d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
+  d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+}
+
+row_lex_operator::row_lex_operator(table_view const& lhs,
+                                   table_view const& rhs,
+                                   host_span<order const> column_order,
+                                   host_span<null_order const> null_precedence,
+                                   rmm::cuda_stream_view stream)
+  : row_lex_operator(lhs, column_order, null_precedence, stream)
+{
+  check_lex_compatibility(rhs);
+  check_shape_compatibility(lhs, rhs);
+
+  table_view verticalized_rhs;
+  std::tie(verticalized_rhs, std::ignore, std::ignore, std::ignore) = struct_lex_verticalize(rhs);
+
+  d_rhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_rhs, stream));
+
+  any_nulls |= has_nested_nulls(rhs);
+}
+
+}  // namespace experimental
 }  // namespace cudf

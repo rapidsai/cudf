@@ -34,6 +34,126 @@
 namespace cudf {
 namespace experimental {
 
+template <cudf::type_id t>
+struct non_nested_id_to_type {
+  using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
+};
+
+/**
+ * @brief Performs a relational comparison between two elements in two columns.
+ *
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ */
+template <typename Nullate>
+class element_relational_comparator {
+ public:
+  /**
+   * @brief Construct type-dispatched function object for performing a
+   * relational comparison between two elements.
+   *
+   * @note `lhs` and `rhs` may be the same.
+   *
+   * @param lhs The column containing the first element
+   * @param rhs The column containing the second element (may be the same as lhs)
+   * @param has_nulls Indicates if either input column contains nulls.
+   * @param null_precedence Indicates how null values are ordered with other values
+   */
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
+                                                    column_device_view rhs,
+                                                    null_order null_precedence,
+                                                    int depth = std::numeric_limits<int>::max())
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}, depth{depth}
+  {
+  }
+
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
+                                                    column_device_view rhs)
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}
+  {
+  }
+
+  /**
+   * @brief Performs a relational comparison between the specified elements
+   *
+   * @param lhs_element_index The index of the first element
+   * @param rhs_element_index The index of the second element
+   * @return Indicates the relationship between the elements in
+   * the `lhs` and `rhs` columns.
+   */
+  template <typename Element,
+            std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
+  __device__ thrust::pair<weak_ordering, int> operator()(size_type lhs_element_index,
+                                                         size_type rhs_element_index) const noexcept
+  {
+    if (nulls) {
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
+
+      if (lhs_is_null or rhs_is_null) {  // at least one is null
+        return thrust::make_pair(null_compare(lhs_is_null, rhs_is_null, null_precedence), depth);
+      }
+    }
+
+    return thrust::make_pair(relational_compare(lhs.element<Element>(lhs_element_index),
+                                                rhs.element<Element>(rhs_element_index)),
+                             std::numeric_limits<int>::max());
+  }
+
+  template <typename Element,
+            CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
+                           not std::is_same_v<Element, cudf::struct_view>)>
+  __device__ thrust::pair<weak_ordering, int> operator()(size_type lhs_element_index,
+                                                         size_type rhs_element_index)
+  {
+    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
+    return thrust::make_pair(weak_ordering::LESS, std::numeric_limits<int>::max());
+  }
+
+  template <typename Element,
+            CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
+                           std::is_same_v<Element, cudf::struct_view>)>
+  __device__ thrust::pair<weak_ordering, int> operator()(size_type lhs_element_index,
+                                                         size_type rhs_element_index)
+  {
+    weak_ordering state{weak_ordering::EQUIVALENT};
+    int last_null_depth;
+
+    column_device_view lcol = lhs;
+    column_device_view rcol = rhs;
+    while (lcol.type().id() == type_id::STRUCT) {
+      bool const lhs_is_null{lcol.is_null(lhs_element_index)};
+      bool const rhs_is_null{rcol.is_null(rhs_element_index)};
+
+      if (lhs_is_null or rhs_is_null) {  // atleast one is null
+        state           = null_compare(lhs_is_null, rhs_is_null, null_precedence);
+        last_null_depth = depth;
+        return thrust::make_pair(state, last_null_depth);
+      }
+
+      lcol = lcol.children()[0];
+      rcol = rcol.children()[0];
+      ++depth;
+    }
+
+    if (state == weak_ordering::EQUIVALENT) {
+      auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence};
+      thrust::tie(state, last_null_depth) = cudf::type_dispatcher<non_nested_id_to_type>(
+        lcol.type(), comparator, lhs_element_index, rhs_element_index);
+    }
+
+    return thrust::make_pair(state, last_null_depth);
+  }
+
+ private:
+  column_device_view lhs;
+  column_device_view rhs;
+  Nullate nulls;
+  null_order null_precedence{};
+  int depth{std::numeric_limits<int>::max()};
+};
+
 /**
  * @brief Computes whether one row is lexicographically *less* than another row.
  *
@@ -101,44 +221,20 @@ class row_lexicographic_comparator {
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      if (_depth[i] > last_null_depth) {
-        continue;
-      } else {
-        last_null_depth = std::numeric_limits<int>::max();
-      }
+      int depth = _depth == nullptr ? std::numeric_limits<int>::max() : _depth[i];
+      if (depth > last_null_depth) { continue; }
 
-      bool continue_to_next_col = false;
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
-      weak_ordering state{weak_ordering::EQUIVALENT};
       null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
-      column_device_view lcol = _lhs.column(i);
-      column_device_view rcol = _rhs.column(i);
-      int depth               = _depth[i];
-      while (lcol.type().id() == type_id::STRUCT) {
-        bool const lhs_is_null{lcol.is_null(lhs_index)};
-        bool const rhs_is_null{rcol.is_null(rhs_index)};
+      auto comparator = element_relational_comparator{
+        _nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
 
-        if (lhs_is_null or rhs_is_null) {  // atleast one is null
-          state = null_compare(lhs_is_null, rhs_is_null, null_precedence);
-          if (state == weak_ordering::EQUIVALENT) { continue_to_next_col = true; }
-          last_null_depth = depth;
-          break;
-        }
-
-        lcol = lcol.children()[0];
-        rcol = rcol.children()[0];
-        ++depth;
-      }
-
-      if (continue_to_next_col) { continue; }
-
-      if (state == weak_ordering::EQUIVALENT) {
-        auto comparator = element_relational_comparator{_nulls, lcol, rcol, null_precedence};
-        state           = cudf::type_dispatcher(lcol.type(), comparator, lhs_index, rhs_index);
-      }
+      weak_ordering state;
+      thrust::tie(state, last_null_depth) =
+        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -155,6 +251,48 @@ class row_lexicographic_comparator {
   order const* _column_order{};
   int const* _depth;
 };  // class row_lexicographic_comparator
+
+struct row_lex_operator {
+  row_lex_operator(table_view const& lhs,
+                   table_view const& rhs,
+                   host_span<order const> column_order,
+                   host_span<null_order const> null_precedence,
+                   rmm::cuda_stream_view stream);
+
+  row_lex_operator(table_view const& t,
+                   host_span<order const> column_order,
+                   host_span<null_order const> null_precedence,
+                   rmm::cuda_stream_view stream);
+
+  template <typename Nullate>
+  row_lexicographic_comparator<Nullate> device_comparator()
+  {
+    auto lhs = **d_lhs;
+    auto rhs = (d_rhs ? **d_rhs : **d_lhs);
+    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
+      return row_lexicographic_comparator(Nullate{any_nulls},
+                                          lhs,
+                                          rhs,
+                                          d_depths.data(),
+                                          d_column_order.data(),
+                                          d_null_precedence.data());
+    } else {
+      return row_lexicographic_comparator<Nullate>(
+        Nullate{}, lhs, rhs, d_depths.data(), d_column_order.data(), d_null_precedence.data());
+    }
+  }
+
+ private:
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  std::unique_ptr<table_device_view_owner> d_lhs;
+  std::unique_ptr<table_device_view_owner> d_rhs;
+  rmm::device_uvector<order> d_column_order;
+  rmm::device_uvector<null_order> d_null_precedence;
+  rmm::device_uvector<size_type> d_depths;
+  bool any_nulls;
+};
 
 }  // namespace experimental
 }  // namespace cudf
