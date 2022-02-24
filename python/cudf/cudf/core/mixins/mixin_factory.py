@@ -40,8 +40,11 @@ class Operation:
         self._docstring_format_args = docstring_format_args
         self._base_operation = base_operation
 
+    def _make_partial(self):
+        return _partialmethod(self._base_operation, op=self._name)
+
     def __get__(self, obj, owner=None):
-        retfunc = _partialmethod(self._base_operation, op=self._name)
+        retfunc = self._make_partial()
 
         # Required attributes that will exist.
         retfunc.__name__ = self._name
@@ -86,14 +89,18 @@ def _should_define_operation(cls, operation, base_operation_name):
     # At this point we know that the class has the operation defined but it
     # also overrides the base operation. Since this function is called before
     # the operation is defined on the current class, we know that it inherited
-    # the operation from a parent. We therefore have two possibilities:
+    # the operation from a parent. We therefore have three possibilities:
     # 1. A parent class manually defined the operation. That override takes
     #    precedence even if the current class defined the base operation.
     # 2. A parent class has an auto-generated operation, i.e. it is of type
     #    Operation and was created by OperationMixin.__init_subclass__. The
     #    current class must override it so that its base operation is used
     #    rather than the parent's base operation.
+    # 3. The method is defined for all classes, i.e. it is a method of object.
     for base_cls in cls.__mro__:
+        # We always override methods defined for object.
+        if base_cls is object:
+            return True
         # The first attribute in the MRO is the one that will be used.
         if operation in base_cls.__dict__:
             return isinstance(base_cls.__dict__[operation], Operation)
@@ -109,6 +116,7 @@ def _create_delegating_mixin(
     category_name,
     base_operation_name,
     supported_operations,
+    operation_cls=Operation,
 ):
     """Factory for mixins defining collections of delegated operations.
 
@@ -231,7 +239,7 @@ def _create_delegating_mixin(
                     docstring_format_args = getattr(
                         cls, docstring_attr, {}
                     ).get(operation, {})
-                    op_attr = Operation(
+                    op_attr = operation_cls(
                         operation, docstring_format_args, base_operation
                     )
                     setattr(cls, operation, op_attr)

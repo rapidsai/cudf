@@ -46,6 +46,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
+from cudf.core.mixins import BinaryOperand
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -97,7 +98,7 @@ _ops_without_reflection = {
 }
 
 
-class Frame:
+class Frame(BinaryOperand):
     """A collection of Column objects with an optional index.
 
     Parameters
@@ -113,6 +114,36 @@ class Frame:
     # attribute should be moved to IndexedFrame.
     _index: Optional[cudf.core.index.BaseIndex]
     _names: Optional[List]
+
+    _VALID_BINARY_OPERATIONS = {
+        # Numeric operations.
+        "__add__",
+        "__sub__",
+        "__mul__",
+        "__truediv__",
+        "__floordiv__",
+        "__mod__",
+        "__pow__",
+        "__and__",
+        "__xor__",
+        "__or__",
+        "__radd__",
+        "__rsub__",
+        "__rmul__",
+        "__rtruediv__",
+        "__rfloordiv__",
+        "__rmod__",
+        "__rpow__",
+        "__rand__",
+        "__rxor__",
+        "__ror__",
+        "__lt__",
+        "__le__",
+        "__eq__",
+        "__ne__",
+        "__gt__",
+        "__ge__",
+    }
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -3557,7 +3588,7 @@ class Frame:
     def _binaryop(
         self,
         other: T,
-        fn: str,
+        op: str,
         fill_value: Any = None,
         reflect: bool = False,
         *args,
@@ -3569,7 +3600,7 @@ class Frame:
         ----------
         other : Frame
             The second operand.
-        fn : str
+        op : str
             The operation to perform.
         fill_value : Any, default None
             The value to replace null values with. If ``None``, nulls are not
@@ -3899,82 +3930,11 @@ class Frame:
             return cudf.DataFrame(result)
         return result.item()
 
-    # Binary arithmetic operations.
-    def __add__(self, other):
-        return self._binaryop(other, "add")
-
-    def __radd__(self, other):
-        return self._binaryop(other, "add", reflect=True)
-
-    def __sub__(self, other):
-        return self._binaryop(other, "sub")
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "sub", reflect=True)
-
     def __matmul__(self, other):
         return self.dot(other)
 
     def __rmatmul__(self, other):
         return self.dot(other, reflect=True)
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
-
-    def __rmul__(self, other):
-        return self._binaryop(other, "mul", reflect=True)
-
-    def __mod__(self, other):
-        return self._binaryop(other, "mod")
-
-    def __rmod__(self, other):
-        return self._binaryop(other, "mod", reflect=True)
-
-    def __pow__(self, other):
-        return self._binaryop(other, "pow")
-
-    def __rpow__(self, other):
-        return self._binaryop(other, "pow", reflect=True)
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "floordiv")
-
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "floordiv", reflect=True)
-
-    def __truediv__(self, other):
-        return self._binaryop(other, "truediv")
-
-    def __rtruediv__(self, other):
-        return self._binaryop(other, "truediv", reflect=True)
-
-    def __and__(self, other):
-        return self._binaryop(other, "and")
-
-    def __or__(self, other):
-        return self._binaryop(other, "or")
-
-    def __xor__(self, other):
-        return self._binaryop(other, "xor")
-
-    # Binary rich comparison operations.
-    def __eq__(self, other):
-        return self._binaryop(other, "eq")
-
-    def __ne__(self, other):
-        return self._binaryop(other, "ne")
-
-    def __lt__(self, other):
-        return self._binaryop(other, "lt")
-
-    def __le__(self, other):
-        return self._binaryop(other, "le")
-
-    def __gt__(self, other):
-        return self._binaryop(other, "gt")
-
-    def __ge__(self, other):
-        return self._binaryop(other, "ge")
 
     # Unary logical operators
     def __neg__(self):
@@ -6350,7 +6310,7 @@ class Frame:
         dtype: bool
         """
         return self._binaryop(
-            other=other, fn="eq", fill_value=fill_value, can_reindex=True
+            other=other, op="eq", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_NE", color="green", domain="cudf_python")
@@ -6426,7 +6386,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="ne", fill_value=fill_value, can_reindex=True
+            other=other, op="ne", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_LT", color="green", domain="cudf_python")
@@ -6502,7 +6462,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="lt", fill_value=fill_value, can_reindex=True
+            other=other, op="lt", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_LE", color="green", domain="cudf_python")
@@ -6578,7 +6538,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="le", fill_value=fill_value, can_reindex=True
+            other=other, op="le", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_GT", color="green", domain="cudf_python")
@@ -6654,7 +6614,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="gt", fill_value=fill_value, can_reindex=True
+            other=other, op="gt", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_GE", color="green", domain="cudf_python")
@@ -6730,7 +6690,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="ge", fill_value=fill_value, can_reindex=True
+            other=other, op="ge", fill_value=fill_value, can_reindex=True
         )
 
     def nunique(self, method: builtins.str = "sort", dropna: bool = True):

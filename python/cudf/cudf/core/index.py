@@ -816,7 +816,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def _binaryop(
         self,
         other: T,
-        fn: str,
+        op: str,
         fill_value: Any = None,
         reflect: bool = False,
         *args,
@@ -826,7 +826,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
-        ret = _index_from_data(self._colwise_binop(operands, fn))
+        ret = _index_from_data(self._colwise_binop(operands, op))
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
