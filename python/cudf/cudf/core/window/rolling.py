@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION
+# Copyright (c) 2020-2022, NVIDIA CORPORATION
 
 import itertools
 
@@ -198,8 +198,7 @@ class Rolling(GetAttrGetItemMixin):
             center=self.center,
         )
 
-    def _apply_agg_series(self, sr, agg_name):
-        source_column = sr._column
+    def _apply_agg_column(self, source_column, agg_name):
         min_periods = self.min_periods or 1
         if isinstance(self.window, int):
             preceding_window = None
@@ -230,7 +229,7 @@ class Rolling(GetAttrGetItemMixin):
             )
             window = None
 
-        result_col = libcudf.rolling.rolling(
+        return libcudf.rolling.rolling(
             source_column=source_column,
             pre_column_window=preceding_window,
             fwd_column_window=following_window,
@@ -240,19 +239,26 @@ class Rolling(GetAttrGetItemMixin):
             op=agg_name,
             agg_params=self.agg_params,
         )
-        return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
-        result_df = cudf.DataFrame({})
-        for i, col_name in enumerate(df.columns):
-            result_col = self._apply_agg_series(df[col_name], agg_name)
-            result_df.insert(i, col_name, result_col)
-        result_df.index = df.index
-        return result_df
+        return cudf.DataFrame._from_data(
+            {
+                col_name: self._apply_agg_column(col, agg_name)
+                for col_name, col in df._data.items()
+            },
+            index=df.index,
+        )
 
     def _apply_agg(self, agg_name):
         if isinstance(self.obj, cudf.Series):
-            return self._apply_agg_series(self.obj, agg_name)
+            return cudf.Series._from_data(
+                {
+                    self.obj.name: self._apply_agg_column(
+                        self.obj._column, agg_name
+                    )
+                },
+                index=self.obj.index,
+            )
         else:
             return self._apply_agg_dataframe(self.obj, agg_name)
 
