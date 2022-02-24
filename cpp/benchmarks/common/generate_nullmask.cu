@@ -51,11 +51,10 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::siz
 {
   if (null_probability < 0.0f) {
     return {rmm::device_buffer{}, 0};
-  } else if (null_probability >= 1.0f or null_probability == 0.0f) {
-    return {
-      cudf::create_null_mask(
-        size, null_probability >= 1.0f ? cudf::mask_state::ALL_VALID : cudf::mask_state::ALL_NULL),
-      null_probability >= 1.0f ? size : 0};
+  } else if (null_probability == 0.0f) {
+    return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
+  } else if (null_probability >= 1.0f) {
+    return {cudf::create_null_mask(size, cudf::mask_state::ALL_VALID), 0};
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),

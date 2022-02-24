@@ -43,8 +43,10 @@ void BM_column(benchmark::State& state, bool nulls)
   auto column     = cudf::sequence(column_size, *init_data);
   auto values     = cudf::sequence(values_size, *init_value, *step);
   if (nulls) {
-    column->set_null_mask(create_random_null_mask(column->size(), 0.1, 1).first);
-    values->set_null_mask(create_random_null_mask(values->size(), 0.1, 2).first);
+    auto [column_null_mask, column_null_count] = create_random_null_mask(column->size(), 0.1, 1);
+    column->set_null_mask(std::move(column_null_mask), column_null_count);
+    auto [values_null_mask, values_null_count] = create_random_null_mask(values->size(), 0.1, 2);
+    values->set_null_mask(std::move(values_null_mask), values_null_count);
   }
 
   auto data_table = cudf::sort(cudf::table_view({*column}));
