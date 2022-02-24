@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_134
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
@@ -352,8 +352,9 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
 
     pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
     cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+    if inplace:
+        pd_sr_1 = pd_sr
+        cd_sr_1 = cd_sr
 
     assert cd_sr_1.cat.ordered is True
     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
@@ -371,8 +372,9 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
 
     pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
     cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+    if inplace:
+        pd_sr_1 = pd_sr
+        cd_sr_1 = cd_sr
 
     assert cd_sr_1.cat.ordered is False
     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
@@ -386,8 +388,9 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
     [
         pytest.param(
             True,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43232"
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_134,
+                reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
         False,
@@ -408,8 +411,9 @@ def test_categorical_reorder_categories(
 
     pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
     cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+    if inplace:
+        pd_sr_1 = pd_sr
+        cd_sr_1 = cd_sr
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -421,8 +425,9 @@ def test_categorical_reorder_categories(
     [
         pytest.param(
             True,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43232"
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_134,
+                reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
         False,
@@ -439,8 +444,9 @@ def test_categorical_add_categories(pd_str_cat, inplace):
 
     pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
     cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+    if inplace:
+        pd_sr_1 = pd_sr
+        cd_sr_1 = cd_sr
 
     assert "d" in pd_sr_1.cat.categories.to_list()
     assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
@@ -453,8 +459,9 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     [
         pytest.param(
             True,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43232"
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_134,
+                reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
         False,
@@ -471,8 +478,9 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
 
     pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
     cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+    if inplace:
+        pd_sr_1 = pd_sr
+        cd_sr_1 = cd_sr
 
     assert "a" not in pd_sr_1.cat.categories.to_list()
     assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
