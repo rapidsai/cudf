@@ -1050,8 +1050,10 @@ TYPED_TEST(ReductionTest, Quantile)
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   double expected_value0 = std::is_same_v<T, bool> || std::is_unsigned_v<T> ? v[4] : v[6];
-  this->reduction_test(
-    col, expected_value0, this->ret_non_arithmetic, cudf::make_quantile_aggregation<reduce_aggregation>({0.0}, interp));
+  this->reduction_test(col,
+                       expected_value0,
+                       this->ret_non_arithmetic,
+                       cudf::make_quantile_aggregation<reduce_aggregation>({0.0}, interp));
   double expected_value1 = v[3];
   this->reduction_test(col,
                        expected_value1,
