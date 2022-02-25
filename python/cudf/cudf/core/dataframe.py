@@ -6343,11 +6343,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         columns = self._data.names
-        if not replace and n > len(columns):
-            raise ValueError(
-                "Cannot take a larger sample than population when"
-                "`replace=False`."
-            )
 
         sampled_column_labels = random_state.choice(
             columns, size=n, replace=False, p=weights

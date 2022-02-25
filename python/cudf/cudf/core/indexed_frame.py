@@ -1811,12 +1811,6 @@ class IndexedFrame(Frame):
                 "Cannot take a sample larger than 0 when axis is empty."
             )
 
-        if not replace and n > size:
-            raise ValueError(
-                "Cannot take a larger sample than population when "
-                "`replace=False`."
-            )
-
         # Construct random state if `random_state` parameter is a seed.
         if not isinstance(
             random_state, (np.random.RandomState, cp.random.RandomState)
