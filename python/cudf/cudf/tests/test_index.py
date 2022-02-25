@@ -1648,6 +1648,7 @@ def test_index_sample_basic(n, frac, replace):
                     "random_state": random_state,
                 },
             ),
+            compare_error_message=False
         )
     else:
         gout = gindex.sample(
