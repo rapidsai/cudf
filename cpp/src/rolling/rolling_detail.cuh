@@ -638,64 +638,56 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::LAG> {
 /**
  * @brief Functor for creating a device rolling operator based on input type and aggregation type.
  */
-template <typename InputType, aggregation::Kind op, typename Enable = void>
+template <typename InputType, aggregation::Kind k>
 struct create_rolling_operator {
-  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  auto operator()(size_type min_periods, rolling_aggregation const&)
   {
-    CUDF_FAIL("Invalid aggregation/type pair");
+    return typename corresponding_rolling_operator<InputType, k>::type(min_periods);
   }
 };
 
-template <typename InputType, aggregation::Kind op>
-struct create_rolling_operator<
-  InputType,
-  op,
-  std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported()>> {
-  template <typename T                                        = InputType,
-            aggregation::Kind O                               = op,
-            std::enable_if_t<O != aggregation::Kind::LEAD && O != aggregation::Kind::LAG &&
-                             O != aggregation::Kind::VARIANCE && O != aggregation::Kind::ARGMIN &&
-                             O != aggregation::Kind::ARGMAX>* = nullptr>
-  auto operator()(size_type min_periods, rolling_aggregation const&)
-  {
-    return typename corresponding_rolling_operator<InputType, op>::type(min_periods);
-  }
-
-  template <typename T                                          = InputType,
-            aggregation::Kind O                                 = op,
-            std::enable_if_t<O == aggregation::Kind::VARIANCE>* = nullptr>
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
     return DeviceRollingVariance<InputType>{
       min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }
+};
 
-  template <typename T                                      = InputType,
-            aggregation::Kind O                             = op,
-            std::enable_if_t<O == aggregation::Kind::LEAD>* = nullptr>
-  auto operator()(size_type, rolling_aggregation const& agg)
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::LEAD> {
+  auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
     return DeviceRollingLead<InputType>{
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
   }
+};
 
-  template <typename T                                     = InputType,
-            aggregation::Kind O                            = op,
-            std::enable_if_t<O == aggregation::Kind::LAG>* = nullptr>
-  auto operator()(size_type, rolling_aggregation const& agg)
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
+  auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
     return DeviceRollingLag<InputType>{
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
   }
+};
 
-  template <
-    typename T          = InputType,
-    aggregation::Kind O = op,
-    typename Comparator,
-    std::enable_if_t<O == aggregation::Kind::ARGMIN || O == aggregation::Kind::ARGMAX>* = nullptr>
-  auto operator()(size_type min_periods, Comparator const& comp)
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::ARGMIN> {
+  template <typename AggOp>
+  auto operator()(size_type min_periods, AggOp const& agg_op)
   {
-    return DeviceRollingArgMinMax<InputType, op, Comparator>{min_periods, comp};
+    return DeviceRollingArgMinMax<InputType, aggregation::Kind::ARGMIN, AggOp>{min_periods, agg_op};
+  }
+};
+
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::ARGMAX> {
+  template <typename AggOp>
+  auto operator()(size_type min_periods, AggOp const& agg_op)
+  {
+    return DeviceRollingArgMinMax<InputType, aggregation::Kind::ARGMAX, AggOp>{min_periods, agg_op};
   }
 };
 
@@ -1045,7 +1037,6 @@ __launch_bounds__(block_size) __global__
  */
 template <typename InputType>
 struct rolling_window_launcher {
-  // ARG_MIN/ARG_MAX need to be handled separately.
   template <aggregation::Kind op>
   static constexpr bool is_arg_minmax()
   {
@@ -1113,7 +1104,7 @@ struct rolling_window_launcher {
     };  // end do_rolling
 
     if constexpr (is_arg_minmax<op>() && std::is_same_v<InputType, cudf::struct_view>) {
-      // Using comp_generator to create a LESS comparator for finding ARG_MIN/ARG_MAX.
+      // Using comp_generator to create a LESS comparator for finding ARGMIN/ARGMAX.
       auto const comp_generator =
         cudf::reduction::detail::comparison_binop_generator::create<op>(input, stream);
       auto const device_op =
