@@ -1812,9 +1812,11 @@ class IndexedFrame(Frame):
             )
 
         # Construct random state if `random_state` parameter is a seed.
-        if not isinstance(
-            random_state, (np.random.RandomState, cp.random.RandomState)
-        ):
+        if isinstance(random_state, cp.random.RandomState):
+            lib = cp
+        elif isinstance(random_state, np.random.RandomState):
+            lib = np
+        else:
             # By default, cupy random state is used to sample from rows and
             # numpy is used to sample from columns. In general, cuDF assumes
             # the number of columns is much smaller than the number of rows,
@@ -1835,7 +1837,8 @@ class IndexedFrame(Frame):
                     "Weights and axis to be sampled must be of same length."
                 )
 
-            weights /= weights.sum()
+            weights = lib.asarray(weights)
+            weights = weights / weights.sum()
 
         if axis == 0:
             return self._sample_axis_0(

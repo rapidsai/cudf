@@ -56,7 +56,7 @@ def random_state_tuple(request):
         pytest.skip("Unsupported params.")
 
 
-@pytest.fixture(params=[None, "ones"])
+@pytest.fixture(params=[None, "builtin-list", "nd-arrays"])
 def make_weights(request, random_state_tuple):
     """Specific to `test_dataframe_sample*` and `test_series_sample*` tests.
     Only testing weights array that matches type with random state.
@@ -65,6 +65,8 @@ def make_weights(request, random_state_tuple):
 
     if request.param is None:
         return lambda _: (None, None)
+    elif request.param == "builtin-list":
+        return lambda size: ([1] * size, [1] * size)
     else:
 
         def wrapped(size):
