@@ -1337,41 +1337,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("DATAFRAME_ARRAY_FUNCTION", color="blue", domain="cudf_python")
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_df_module = DataFrame
-        cudf_series_module = Series
-
-        for submodule in func.__module__.split(".")[1:]:
-            # point cudf to the correct submodule
-            if hasattr(cudf_df_module, submodule):
-                cudf_df_module = getattr(cudf_df_module, submodule)
-            else:
-                return NotImplemented
+        if "out" in kwargs or any(
+            not issubclass(t, (Series, DataFrame)) for t in types
+        ):
+            return NotImplemented
 
         fname = func.__name__
 
-        handled_types = [cudf_df_module, cudf_series_module]
-
-        for t in types:
-            if t not in handled_types:
-                return NotImplemented
-
-        if hasattr(cudf_df_module, fname):
-            cudf_func = getattr(cudf_df_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
-                return NotImplemented
-            # numpy returns an array from the dot product of two dataframes
-            elif (
+        cudf_func = getattr(self.__class__, fname, None)
+        if cudf_func:
+            out = cudf_func(*args, **kwargs)
+            # pandas returns an array from the dot product of two dataframes
+            if (
                 func is np.dot
                 and isinstance(args[0], (DataFrame, pd.DataFrame))
                 and isinstance(args[1], (DataFrame, pd.DataFrame))
             ):
-                return cudf_func(*args, **kwargs).values
-            else:
-                return cudf_func(*args, **kwargs)
-        else:
-            return NotImplemented
+                return out.values
+            return out
+        return NotImplemented
 
     # The _get_numeric_data method is necessary for dask compatibility.
     @annotate("DATAFRAME_GET_NUMERIC_DATA", color="blue", domain="cudf_python")

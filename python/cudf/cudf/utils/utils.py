@@ -4,7 +4,6 @@ import decimal
 import functools
 import os
 import traceback
-from collections.abc import Sequence
 from typing import FrozenSet, Set, Union
 
 import cupy as cp
@@ -321,52 +320,6 @@ def search_range(start, stop, x, step=1, side="left"):
 
     length = (stop - start) // step
     return max(min(length, i), 0)
-
-
-def _cast_to_appropriate_cudf_type(val, index=None):
-    # Handle scalar
-    if val.ndim == 0:
-        return to_cudf_compatible_scalar(val)
-    # 1D array
-    elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
-        # if index is not None and is of a different length
-        # than the index, cupy dispatching behaviour is undefined
-        # so we don't implement it
-        if (index is None) or (len(index) == len(val)):
-            return cudf.Series(val, index=index)
-
-    return NotImplemented
-
-
-def _get_cupy_compatible_args_index(args, ser_index=None):
-    """
-    This function returns cupy compatible arguments and output index
-    if conversion is not possible it returns None
-    """
-
-    casted_ls = []
-    for arg in args:
-        if isinstance(arg, cp.ndarray):
-            casted_ls.append(arg)
-        elif isinstance(arg, cudf.Series):
-            # check if indexes can be aligned
-            if (ser_index is None) or (ser_index.equals(arg.index)):
-                ser_index = arg.index
-                casted_ls.append(arg.values)
-            else:
-                # this throws a value-error if indexes are not aligned
-                # following pandas behavior for ufunc numpy dispatching
-                raise ValueError(
-                    "Can only compare identically-labeled Series objects"
-                )
-        elif isinstance(arg, Sequence):
-            # we dont handle list of inputs for functions as
-            # these form inputs for functions like
-            # np.concatenate, vstack have ambiguity around index alignment
-            return None, ser_index
-        else:
-            casted_ls.append(arg)
-    return casted_ls, ser_index
 
 
 def _categorical_scalar_broadcast_to(cat_scalar, size):

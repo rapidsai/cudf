@@ -76,11 +76,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_scalar_type,
 )
-from cudf.utils.utils import (
-    _cast_to_appropriate_cudf_type,
-    _get_cupy_compatible_args_index,
-    to_cudf_compatible_scalar,
-)
+from cudf.utils.utils import to_cudf_compatible_scalar
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -960,17 +956,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return sum(super().memory_usage(index, deep).values())
 
     def __array_function__(self, func, types, args, kwargs):
-        if "out" in kwargs:
+        if "out" in kwargs or any(not issubclass(t, (Series,)) for t in types):
             return NotImplemented
-
-        handled_types = [cudf.Series]
-        for t in types:
-            if t not in handled_types:
-                return NotImplemented
 
         fname = func.__name__
 
-        cudf_ser_func = getattr(self.__class__, fname, None)
+        # Apply a Series method if one exists.
+        cudf_ser_func = getattr(Series, fname, None)
         if cudf_ser_func:
             return cudf_ser_func(*args, **kwargs)
 
@@ -979,19 +971,38 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         numpy_submodule = func.__module__.split(".")[1:]
         cupy_submodule = getattr(cupy, ".".join(numpy_submodule), None)
         cupy_func = cupy_submodule and getattr(cupy_submodule, fname, None)
-        if cupy_func:
-            # Handle case if cupy implements it as a numpy function
-            # Unsure if needed
-            if cupy_func is func:
-                return NotImplemented
 
-            cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
-            if cupy_compatible_args:
-                cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                if isinstance(cupy_output, cupy.ndarray):
-                    return _cast_to_appropriate_cudf_type(cupy_output, index)
-                else:
-                    return cupy_output
+        # Handle case if cupy does not implement the function or just aliases
+        # the numpy function.
+        if not cupy_func or cupy_func is func:
+            return NotImplemented
+
+        index = args[0].index
+        if any(not s.index.equals(index) for s in args):
+            # this throws a value-error if indexes are not aligned
+            # following pandas behavior for ufunc numpy dispatching
+            raise ValueError(
+                "Can only compare identically-labeled Series objects"
+            )
+        out = cupy_func(*[s.values for s in args], **kwargs)
+
+        # Return (host) scalar values immediately.
+        if not isinstance(out, cupy.ndarray):
+            return out
+
+        # 0D array (scalar)
+        if out.ndim == 0:
+            return to_cudf_compatible_scalar(out)
+        # 1D array
+        elif (
+            # Only allow 1D arrays
+            ((out.ndim == 1) or (out.ndim == 2 and out.shape[1] == 1))
+            # If we have an index, it must be the same length as the
+            # output for cupy dispatching to be well-defined.
+            and len(index) == len(out)
+        ):
+            return Series(out, index=index)
+
         return NotImplemented
 
     def map(self, arg, na_action=None) -> "Series":
