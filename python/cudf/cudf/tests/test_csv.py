@@ -4,6 +4,7 @@ import gzip
 import os
 import re
 import shutil
+import warnings
 from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -1322,7 +1323,18 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
 
     if gdf_dtype is not None:
         # require explicit `hex` dtype to parse hexadecimals
-        pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                (
+                    "Values are too large to be losslessly cast to int32. In "
+                    "a future version this will raise OverflowError."
+                ),
+                category=FutureWarning,
+            )
+            pdf = pd.DataFrame(
+                data=values, dtype=pdf_dtype, columns=["hex_int"]
+            )
         gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
         np.testing.assert_array_equal(
             pdf["hex_int"], gdf["hex_int"].to_numpy()
