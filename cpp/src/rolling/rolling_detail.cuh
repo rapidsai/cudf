@@ -621,13 +621,13 @@ struct corresponding_rolling_operator<InputType, aggregation::ROW_NUMBER> {
 };
 
 template <typename InputType>
-struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
-  using type = DeviceRollingLead<InputType>;
+struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
+  using type = DeviceRollingVariance<InputType>;
 };
 
 template <typename InputType>
-struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
-  using type = DeviceRollingVariance<InputType>;
+struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
+  using type = DeviceRollingLead<InputType>;
 };
 
 template <typename InputType>
