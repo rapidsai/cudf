@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import itertools
 import re
 import warnings
 from collections.abc import Mapping, Sequence
@@ -330,3 +331,9 @@ def does_not_raise():
 
 def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
+
+
+parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
+)

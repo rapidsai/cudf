@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <map>
 
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 /**
@@ -69,15 +70,14 @@ distribution_id default_distribution_id()
   return distribution_id::GEOMETRIC;
 }
 
-template <typename T,
-          std::enable_if_t<!std::is_unsigned<T>::value && cudf::is_numeric<T>()>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_unsigned_v<T> && cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
 {
   return distribution_id::NORMAL;
 }
 
 template <typename T,
-          std::enable_if_t<!std::is_same_v<T, bool> && std::is_unsigned<T>::value &&
+          std::enable_if_t<!std::is_same_v<T, bool> && std::is_unsigned_v<T> &&
                            cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
 {
@@ -224,9 +224,9 @@ class data_profile {
   cudf::size_type avg_run_length = 4;
 
  public:
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_same_v<T, bool> && std::is_integral<T>::value, T>* = nullptr>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same_v<T, bool> && cuda::std::is_integral_v<T>, T>* =
+              nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -239,7 +239,7 @@ class data_profile {
     }
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = float_params.find(cudf::type_to_id<T>());
@@ -307,7 +307,7 @@ class data_profile {
   // discrete distributions (integers, strings, lists). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+            typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
@@ -331,7 +331,7 @@ class data_profile {
   // have continuous distributions (floating point types). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_floating_point<T>::value, T>* = nullptr>
+            typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
@@ -370,18 +370,13 @@ struct row_count {
 /**
  * @brief Deterministically generates a table filled with data with the given parameters.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
- *
  * @param dtype_ids Vector of requested column types
- * @param num_cols Number of columns in the output table
  * @param table_bytes Target size of the output table, in bytes. Some type may not produce columns
  * of exact size
  * @param data_params optional, set of data parameters describing the data profile for each type
  * @param seed optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
@@ -389,17 +384,51 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 /**
  * @brief Deterministically generates a table filled with data with the given parameters.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
- *
  * @param dtype_ids Vector of requested column types
- * @param num_cols Number of columns in the output table
  * @param num_rows Number of rows in the output table
  * @param data_params optional, set of data parameters describing the data profile for each type
  * @param seed optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  row_count num_rows,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
+
+/**
+ * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
+ * subsequent rows.
+ *
+ * @param dtype_ids Vector of requested column types
+ * @param num_rows Number of rows in the output table
+ * @param null_probability optional, probability of a null value
+ *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ * @param seed optional, seed for the pseudo-random engine
+ * @return A table with the sequence columns.
+ */
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   row_count num_rows,
+                                                   float null_probability = -1.0,
+                                                   unsigned seed          = 1);
+
+/**
+ * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
+ * elements.
+ *
+ * @param dtype_ids Vector of requested column types
+ * @param num_cols Number of types in the output vector
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols);
+/**
+ * @brief Create a random null mask object
+ *
+ * @param size number of rows
+ * @param null_probability probability of a null value
+ *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ * @param seed optional, seed for the pseudo-random engine
+ * @return null mask device buffer with random null mask data and null count
+ */
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
+                                                                       float null_probability,
+                                                                       unsigned seed = 1);

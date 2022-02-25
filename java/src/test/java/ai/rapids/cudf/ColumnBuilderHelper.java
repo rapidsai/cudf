@@ -18,6 +18,7 @@
 package ai.rapids.cudf;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -47,6 +48,17 @@ public class ColumnBuilderHelper {
       init.accept(b);
       return b.buildAndPutOnDevice();
     }
+  }
+
+  public static HostColumnVector decimalFromBigInts(int scale, BigInteger... values) {
+    return ColumnBuilderHelper.build(
+        new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, -scale)),
+        values.length,
+        (b) -> {
+          for (BigInteger v : values)
+            if (v == null) b.appendNull();
+            else b.appendDecimal128(v.toByteArray());
+        });
   }
 
   public static HostColumnVector fromBoxedBytes(boolean signed, Byte... values) {

@@ -1,10 +1,19 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
 import builtins
-from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -46,7 +55,10 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(
                 "numeric_only parameter is not implemented yet"
             )
-        return getattr(self._column, op)(**kwargs)
+        try:
+            return getattr(self._column, op)(**kwargs)
+        except AttributeError:
+            raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
     def _scan(self, op, axis=None, *args, **kwargs):
         if axis not in (None, 0):
@@ -274,12 +286,15 @@ class SingleColumnFrame(Frame, NotIterable):
 
     def _make_operands_for_binop(
         self,
-        other: T,
+        other: Any,
         fill_value: Any = None,
         reflect: bool = False,
         *args,
         **kwargs,
-    ) -> Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]:
+    ) -> Union[
+        Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        Type[NotImplemented],
+    ]:
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters
@@ -310,7 +325,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             result_name = self.name
 
-        # This needs to be tested correctly
+        # TODO: This needs to be tested correctly
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
