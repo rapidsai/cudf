@@ -1811,16 +1811,16 @@ class IndexedFrame(Frame):
                 "Cannot take a sample larger than 0 when axis is empty."
             )
 
-        # Construct random state if `random_state` parameter is a seed.
         if isinstance(random_state, cp.random.RandomState):
             lib = cp
         elif isinstance(random_state, np.random.RandomState):
             lib = np
         else:
-            # By default, cupy random state is used to sample from rows and
-            # numpy is used to sample from columns. In general, cuDF assumes
-            # the number of columns is much smaller than the number of rows,
-            # thus using numpy random states can avoid kernel launching
+            # Construct random state if `random_state` parameter is None or a
+            # seed. By default, cupy random state is used to sample from rows
+            # and numpy is used to sample from columns. In general, cuDF
+            # assumes the number of columns is much smaller than the number of
+            # rows, thus using numpy random states can avoid kernel launching
             # overhead on creating a small gather map.
             lib = cp if axis == 0 else np
             random_state = lib.random.RandomState(seed=random_state)
