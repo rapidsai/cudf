@@ -154,7 +154,7 @@ struct DeviceRollingArgMinMaxBase {
     // Right now only support ARGMIN/ARGMAX of strings and structs.
     auto const type_supported =
       std::is_same_v<InputType, cudf::string_view> || std::is_same_v<InputType, cudf::struct_view>;
-    auto const op_supported = op == aggregation::ARGMIN || op == aggregation::ARGMAX;
+    auto const op_supported = op == aggregation::Kind::ARGMIN || op == aggregation::Kind::ARGMAX;
 
     return type_supported && op_supported;
   }
