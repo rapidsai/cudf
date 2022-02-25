@@ -1844,8 +1844,8 @@ class IndexedFrame(Frame):
         else:
             if isinstance(random_state, cp.random.RandomState):
                 raise ValueError(
-                    "Use a numpy random state when sampling from "
-                    "`axis=1`/`columns`."
+                    "Sampling from `axis=1`/`columns` with cupy random state"
+                    "isn't supported."
                 )
             return self._sample_axis_1(
                 n, weights, replace, random_state, ignore_index
