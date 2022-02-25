@@ -321,7 +321,7 @@ cdef columns_from_table_view(
     lifetime. ``owner`` must be either None or a list of column. If ``owner``
     is a list of columns, the owner of the `i`th ``cudf::column_view`` in the
     table view is ``owners[i]``. For more about memory ownership,
-    see ``Column.from_column_view``
+    see ``Column.from_column_view``.
     """
 
     return [
