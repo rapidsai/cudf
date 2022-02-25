@@ -1344,17 +1344,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         fname = func.__name__
 
-        cudf_func = getattr(self.__class__, fname, None)
-        if cudf_func:
-            out = cudf_func(*args, **kwargs)
-            # pandas returns an array from the dot product of two dataframes
-            if (
-                func is np.dot
-                and isinstance(args[0], (DataFrame, pd.DataFrame))
-                and isinstance(args[1], (DataFrame, pd.DataFrame))
-            ):
-                return out.values
-            return out
+        try:
+            cudf_func = getattr(self.__class__, fname, None)
+            if cudf_func:
+                out = cudf_func(*args, **kwargs)
+                # The dot product of two DataFrames returns an array in pandas.
+                if (
+                    func is np.dot
+                    and isinstance(args[0], (DataFrame, pd.DataFrame))
+                    and isinstance(args[1], (DataFrame, pd.DataFrame))
+                ):
+                    return out.values
+                return out
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
         return NotImplemented
 
     # The _get_numeric_data method is necessary for dask compatibility.

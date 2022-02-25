@@ -961,47 +961,54 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         fname = func.__name__
 
-        # Apply a Series method if one exists.
-        cudf_ser_func = getattr(Series, fname, None)
-        if cudf_ser_func:
-            return cudf_ser_func(*args, **kwargs)
+        try:
+            # Apply a Series method if one exists.
+            cudf_ser_func = getattr(Series, fname, None)
+            if cudf_ser_func:
+                return cudf_ser_func(*args, **kwargs)
 
-        # Assume that cupy subpackages match numpy and search the corresponding
-        # cupy submodule based on the func's __module__.
-        numpy_submodule = func.__module__.split(".")[1:]
-        cupy_submodule = getattr(cupy, ".".join(numpy_submodule), None)
-        cupy_func = cupy_submodule and getattr(cupy_submodule, fname, None)
+            # Assume that cupy subpackages match numpy and search the
+            # corresponding cupy submodule based on the func's __module__.
+            numpy_submodule = func.__module__.split(".")[1:]
+            cupy_submodule = getattr(cupy, ".".join(numpy_submodule), None)
+            cupy_func = cupy_submodule and getattr(cupy_submodule, fname, None)
 
-        # Handle case if cupy does not implement the function or just aliases
-        # the numpy function.
-        if not cupy_func or cupy_func is func:
-            return NotImplemented
+            # Handle case if cupy does not implement the function or just
+            # aliases the numpy function.
+            if not cupy_func or cupy_func is func:
+                return NotImplemented
 
-        index = args[0].index
-        if any(not s.index.equals(index) for s in args):
-            # this throws a value-error if indexes are not aligned
-            # following pandas behavior for ufunc numpy dispatching
-            raise ValueError(
-                "Can only compare identically-labeled Series objects"
-            )
-        out = cupy_func(*[s.values for s in args], **kwargs)
+            # For now just fail on cases with mismatched indices. There is
+            # almost certainly no general solution for all array functions.
+            index = args[0].index
+            if any(not s.index.equals(index) for s in args):
+                return NotImplemented
+            out = cupy_func(*[s.values for s in args], **kwargs)
 
-        # Return (host) scalar values immediately.
-        if not isinstance(out, cupy.ndarray):
-            return out
+            # Return (host) scalar values immediately.
+            if not isinstance(out, cupy.ndarray):
+                return out
 
-        # 0D array (scalar)
-        if out.ndim == 0:
-            return to_cudf_compatible_scalar(out)
-        # 1D array
-        elif (
-            # Only allow 1D arrays
-            ((out.ndim == 1) or (out.ndim == 2 and out.shape[1] == 1))
-            # If we have an index, it must be the same length as the
-            # output for cupy dispatching to be well-defined.
-            and len(index) == len(out)
-        ):
-            return Series(out, index=index)
+            # 0D array (scalar)
+            if out.ndim == 0:
+                return to_cudf_compatible_scalar(out)
+            # 1D array
+            elif (
+                # Only allow 1D arrays
+                ((out.ndim == 1) or (out.ndim == 2 and out.shape[1] == 1))
+                # If we have an index, it must be the same length as the
+                # output for cupy dispatching to be well-defined.
+                and len(index) == len(out)
+            ):
+                return Series(out, index=index)
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
 
         return NotImplemented
 
