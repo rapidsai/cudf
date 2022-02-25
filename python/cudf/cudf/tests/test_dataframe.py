@@ -7233,22 +7233,16 @@ def test_dataframe_sample_basic(
 
 
 @pytest.mark.parametrize("replace", [True, False])
-def test_dataframe_sample_reproducibility(replace, random_state_tuple):
+@pytest.mark.parametrize(
+    "random_state_lib", [cp.random.RandomState, np.random.RandomState]
+)
+def test_dataframe_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
 
-    _, gd_random_state, _ = random_state_tuple
-    if gd_random_state is None:
-        pytest.skip(
-            "`None` seed defaults to global random state that's dependent to "
-            "system implementation. Reproducibility isn't guarenteed."
-        )
-    seed = 10
     expected = df.sample(
-        1024, replace=replace, random_state=type(gd_random_state)(seed)
+        1024, replace=replace, random_state=random_state_lib(10)
     )
-    out = df.sample(
-        1024, replace=replace, random_state=type(gd_random_state)(seed)
-    )
+    out = df.sample(1024, replace=replace, random_state=random_state_lib(10))
 
     assert_eq(expected, out)
 
