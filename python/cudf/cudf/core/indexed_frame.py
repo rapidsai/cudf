@@ -1726,7 +1726,7 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         n : int, optional
-            Number of items from axis to return. Cannot be used with frac.
+            Number of items from axis to return. Cannot be used with `frac`.
             Default = 1 if frac = None.
         frac : float, optional
             Fraction of axis items to return. Cannot be used with n.
@@ -1815,6 +1815,11 @@ class IndexedFrame(Frame):
         if not isinstance(
             random_state, (np.random.RandomState, cp.random.RandomState)
         ):
+            # By default, cupy random state is used to sample from rows and
+            # numpy is used to sample from columns. In general, cuDF assumes
+            # the number of columns is much smaller than the number of rows,
+            # thus using numpy random states can avoid kernel launching
+            # overhead on creating a small gather map.
             lib = cp if axis == 0 else np
             random_state = lib.random.RandomState(seed=random_state)
 
