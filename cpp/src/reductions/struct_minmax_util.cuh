@@ -35,15 +35,15 @@ namespace detail {
 struct row_arg_minmax_fn {
   size_type const num_rows;
   row_lexicographic_comparator<nullate::DYNAMIC> const comp;
-  bool const arg_min;
+  bool const is_arg_min;
 
   row_arg_minmax_fn(table_device_view const& table,
                     bool has_nulls,
                     null_order const* null_precedence,
-                    bool const arg_min)
+                    bool const is_arg_min)
     : num_rows(table.num_rows()),
       comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
-      arg_min(arg_min)
+      is_arg_min(is_arg_min)
   {
   }
 
@@ -62,7 +62,7 @@ struct row_arg_minmax_fn {
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
     //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
-    return comp(lhs_idx, rhs_idx) == arg_min ? lhs_idx : rhs_idx;
+    return comp(lhs_idx, rhs_idx) == is_arg_min ? lhs_idx : rhs_idx;
   }
 };
 

@@ -179,7 +179,7 @@ struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
                              size_type current_index)
   {
     if constexpr (std::is_same_v<InputType, cudf::string_view>) {
-      auto constexpr arg_min = op == aggregation::Kind::ARGMIN;
+      auto constexpr is_arg_min = op == aggregation::Kind::ARGMIN;
 
       auto const get_str = [&] __device__(size_type idx) {
         return !has_nulls || input.is_valid(idx) ? input.element<InputType>(idx)
@@ -194,7 +194,7 @@ struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
         // Return `lhs_idx` iff:
         //   lhs_idx <  rhs and finding ARGMIN, or
         //   lhs_idx >= rhs and finding ARGMAX.
-        return (lhs < rhs) == arg_min ? lhs_idx : rhs_idx;
+        return (lhs < rhs) == is_arg_min ? lhs_idx : rhs_idx;
       };
 
       return do_rolling_arg_minmax<OutputType, has_nulls>(
