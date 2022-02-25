@@ -149,12 +149,11 @@ struct DeviceRolling {
  */
 template <typename InputType, aggregation::Kind op>
 struct DeviceRollingArgMinMaxBase {
-  template <typename T = InputType, aggregation::Kind O = op>
   static constexpr bool is_supported()
   {
     // Right now only support ARGMIN/ARGMAX of strings and structs.
     auto const type_supported =
-      std::is_same_v<T, cudf::string_view> || std::is_same_v<T, cudf::struct_view>;
+      std::is_same_v<InputType, cudf::string_view> || std::is_same_v<InputType, cudf::struct_view>;
     auto const op_supported = op == aggregation::ARGMIN || op == aggregation::ARGMAX;
 
     return type_supported && op_supported;
