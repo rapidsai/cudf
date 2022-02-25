@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy_if.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/lists_column_factories.hpp>
@@ -45,13 +46,12 @@ std::unique_ptr<scalar> collect_list(column_view const& col,
                                      rmm::mr::device_memory_resource* mr)
 {
   if (null_handling == null_policy::EXCLUDE && col.has_nulls()) {
-    auto not_null_pred = [mask = col.null_mask(), offset = col.offset()] __device__(auto i) {
-      return bit_is_set(mask, offset + i);
-    };
-    auto null_purged_table  = cudf::detail::copy_if(table_view{{col}}, not_null_pred, stream, mr);
+    auto d_view             = column_device_view::create(col, stream);
+    auto filter             = detail::validity_accessor(*d_view);
+    auto null_purged_table  = detail::copy_if(table_view{{col}}, filter, stream, mr);
     column* null_purged_col = null_purged_table->release().front().release();
     null_purged_col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-    return std::make_unique<list_scalar>(*null_purged_col, true, stream, mr);
+    return std::make_unique<list_scalar>(std::move(*null_purged_col), true, stream, mr);
   } else {
     return make_list_scalar(col, stream, mr);
   }
