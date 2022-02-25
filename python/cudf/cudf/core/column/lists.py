@@ -1,6 +1,7 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pickle
+from functools import cached_property
 from typing import List, Sequence
 
 import numpy as np
@@ -42,6 +43,7 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
+    @cached_property
     def memory_usage(self):
         n = 0
         if self.nullable:
