@@ -1314,7 +1314,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         else:
             columns_to_slice = [
-                *self._index._data_columns(),
+                *(self._index._data.columns if not is_range_index else []),
                 *self._columns,
             ]
             result = self._from_columns_like_self(

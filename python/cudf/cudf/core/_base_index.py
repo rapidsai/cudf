@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pickle
 from functools import cached_property
-from typing import Any, Set, Tuple
+from typing import Any, Set
 
 import pandas as pd
 
@@ -64,13 +64,6 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     def __getitem__(self, key):
-        raise NotImplementedError()
-
-    def _data_columns(self) -> Tuple[ColumnBase, ...]:
-        """Return a tuple of columns that holds actual data. ``RangeIndex``
-        returns an empty tuple. Unlike ``_values``, this method does not
-        materialize columns.
-        """
         raise NotImplementedError()
 
     def __contains__(self, item):
