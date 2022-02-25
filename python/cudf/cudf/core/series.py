@@ -9,7 +9,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -39,6 +39,7 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -435,7 +436,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 data = {}
 
-        if not isinstance(data, column.ColumnBase):
+        if not isinstance(data, ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         else:
             if dtype is not None:
@@ -444,7 +445,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
-        assert isinstance(data, column.ColumnBase)
+        assert isinstance(data, ColumnBase)
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
@@ -1206,7 +1207,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _prep_for_binop(
+    def _make_operands_and_index_for_binop(
         self,
         other: Any,
         fn: str,
@@ -1215,22 +1216,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+            Type[NotImplemented],
+        ],
+        Optional[BaseIndex],
+    ]:
         # Specialize binops to align indices.
-        if isinstance(other, SingleColumnFrame):
+        if isinstance(other, Series):
             if (
-                # TODO: The can_reindex logic also needs to be applied for
-                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and (
-                    isinstance(other, Series)
-                    # TODO: mypy doesn't like this line because the index
-                    # property is not defined on SingleColumnFrame (or Index,
-                    # for that matter). Ignoring is the easy solution for now,
-                    # a cleaner fix requires reworking the type hierarchy.
-                    and not self.index.equals(other.index)  # type: ignore
-                )
+                and not self.index.equals(other.index)
             ):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
@@ -1241,27 +1239,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
         return operands, lhs._index
-
-    def _binaryop(
-        self,
-        other: Frame,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        can_reindex: bool = False,
-        *args,
-        **kwargs,
-    ):
-        operands, out_index = self._prep_for_binop(
-            other, fn, fill_value, reflect, can_reindex
-        )
-        return (
-            self._from_data(
-                data=self._colwise_binop(operands, fn), index=out_index,
-            )
-            if operands is not NotImplemented
-            else NotImplemented
-        )
 
     def logical_and(self, other):
         warnings.warn(

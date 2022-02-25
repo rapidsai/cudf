@@ -520,6 +520,11 @@ class RangeIndex(BaseIndex):
         # that are not defined directly on RangeIndex.
         return Int64Index._from_data(self._data)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return self._as_int64().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
+
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
         # on the corresponding integer index if possible.
@@ -773,6 +778,41 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+
+        if ret is not None:
+            return ret
+
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cupy, ufunc.__name__)
+        if cupy_func:
+            if ufunc.nin == 2:
+                other = inputs[self is inputs[0]]
+                inputs = self._make_operands_for_binop(other)
+            else:
+                inputs = {
+                    name: (col, None, False, None)
+                    for name, col in self._data.items()
+                }
+
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
+            )
+
+            out = [_index_from_data(out) for out in data]
+
+            # pandas returns numpy arrays when the outputs are boolean.
+            for i, o in enumerate(out):
+                # We explicitly _do not_ use isinstance here: we want only
+                # boolean GenericIndexes, not dtype-specific subclasses.
+                if type(o) is GenericIndex and o.dtype.kind == "b":
+                    out[i] = o.values
+
+            return out[0] if ufunc.nout == 1 else tuple(out)
+
+        return NotImplemented
+
     def _binaryop(
         self,
         other: T,
@@ -784,11 +824,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     ) -> SingleColumnFrame:
         # Specialize binops to generate the appropriate output index type.
         operands = self._make_operands_for_binop(other, fill_value, reflect)
-        return (
-            _index_from_data(data=self._colwise_binop(operands, fn),)
-            if operands is not NotImplemented
-            else NotImplemented
-        )
+        if operands is NotImplemented:
+            return NotImplemented
+        ret = _index_from_data(self._colwise_binop(operands, fn))
+
+        # pandas returns numpy arrays when the outputs are boolean. We
+        # explicitly _do not_ use isinstance here: we want only boolean
+        # GenericIndexes, not dtype-specific subclasses.
+        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+            return ret.values
+        return ret
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
