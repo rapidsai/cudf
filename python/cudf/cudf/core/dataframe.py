@@ -5410,10 +5410,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
-            result = [
-                getattr(self._data[col], op)(**kwargs)
-                for col in self._data.names
-            ]
+            try:
+                result = [
+                    getattr(self._data[col], op)(**kwargs)
+                    for col in self._data.names
+                ]
+            except AttributeError:
+                raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
             return Series._from_data(
                 {None: result}, as_index(self._data.names)

@@ -11,11 +11,12 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
 from cudf.core import column
 from cudf.core.column.column import as_column
+from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling(GetAttrGetItemMixin):
+class Rolling(GetAttrGetItemMixin, Reducible):
     """
     Rolling window calculations.
 
@@ -163,6 +164,15 @@ class Rolling(GetAttrGetItemMixin):
 
     _time_window = False
 
+    _VALID_REDUCTIONS = {
+        "sum",
+        "min",
+        "max",
+        "mean",
+        "var",
+        "std",
+    }
+
     def __init__(
         self,
         obj,
@@ -262,17 +272,17 @@ class Rolling(GetAttrGetItemMixin):
         else:
             return self._apply_agg_dataframe(self.obj, agg_name)
 
-    def sum(self):
-        return self._apply_agg("sum")
+    def _reduce(
+        self, op: str, *args, **kwargs,
+    ):
+        """Calculate the rolling {op}.
 
-    def min(self):
-        return self._apply_agg("min")
-
-    def max(self):
-        return self._apply_agg("max")
-
-    def mean(self):
-        return self._apply_agg("mean")
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        return self._apply_agg(op)
 
     def var(self, ddof=1):
         self.agg_params["ddof"] = ddof
