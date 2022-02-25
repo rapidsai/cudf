@@ -77,8 +77,8 @@ from cudf.utils.dtypes import (
     min_scalar_type,
 )
 from cudf.utils.utils import (
-    get_appropriate_dispatched_func,
-    get_relevant_submodule,
+    _cast_to_appropriate_cudf_type,
+    _get_cupy_compatible_args_index,
     to_cudf_compatible_scalar,
 )
 
@@ -960,23 +960,39 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return sum(super().memory_usage(index, deep).values())
 
     def __array_function__(self, func, types, args, kwargs):
+        if "out" in kwargs:
+            return NotImplemented
+
         handled_types = [cudf.Series]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
 
-        cudf_submodule = get_relevant_submodule(func, cudf)
-        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
-        cupy_submodule = get_relevant_submodule(func, cupy)
+        fname = func.__name__
 
-        return get_appropriate_dispatched_func(
-            cudf_submodule,
-            cudf_ser_submodule,
-            cupy_submodule,
-            func,
-            args,
-            kwargs,
-        )
+        cudf_ser_func = getattr(self.__class__, fname, None)
+        if cudf_ser_func:
+            return cudf_ser_func(*args, **kwargs)
+
+        # Assume that cupy subpackages match numpy and search the corresponding
+        # cupy submodule based on the func's __module__.
+        numpy_submodule = func.__module__.split(".")[1:]
+        cupy_submodule = getattr(cupy, ".".join(numpy_submodule), None)
+        cupy_func = cupy_submodule and getattr(cupy_submodule, fname, None)
+        if cupy_func:
+            # Handle case if cupy implements it as a numpy function
+            # Unsure if needed
+            if cupy_func is func:
+                return NotImplemented
+
+            cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
+            if cupy_compatible_args:
+                cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+                if isinstance(cupy_output, cupy.ndarray):
+                    return _cast_to_appropriate_cudf_type(cupy_output, index)
+                else:
+                    return cupy_output
+        return NotImplemented
 
     def map(self, arg, na_action=None) -> "Series":
         """

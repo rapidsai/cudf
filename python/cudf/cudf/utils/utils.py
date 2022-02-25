@@ -323,80 +323,6 @@ def search_range(start, stop, x, step=1, side="left"):
     return max(min(length, i), 0)
 
 
-_UFUNC_ALIASES = {
-    "power": "pow",
-    "equal": "eq",
-    "not_equal": "ne",
-    "less": "lt",
-    "less_equal": "le",
-    "greater": "gt",
-    "greater_equal": "ge",
-    "absolute": "abs",
-}
-# For op(., cudf.Series) -> cudf.Series.__r{op}__
-_REVERSED_NAMES = {
-    "lt": "__gt__",
-    "le": "__ge__",
-    "gt": "__lt__",
-    "ge": "__le__",
-    "eq": "__eq__",
-    "ne": "__ne__",
-}
-
-
-# todo: can probably be used to remove cudf/core/ops.py
-def _get_cudf_series_ufunc(fname, args, kwargs, cudf_ser_submodule):
-    if isinstance(args[0], cudf.Series):
-        cudf_ser_func = getattr(cudf_ser_submodule, fname)
-        return cudf_ser_func(*args, **kwargs)
-    elif len(args) == 2 and isinstance(args[1], cudf.Series):
-        rev_name = _REVERSED_NAMES.get(fname, f"__r{fname}__")
-        cudf_ser_func = getattr(cudf_ser_submodule, rev_name)
-        return cudf_ser_func(args[1], args[0], **kwargs)
-    return NotImplemented
-
-
-# Utils for using appropriate dispatch for array functions
-def get_appropriate_dispatched_func(
-    cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
-):
-    if kwargs.get("out") is None:
-        fname = func.__name__
-        # Dispatch these functions to appropiate alias from the _UFUNC_ALIASES
-        is_ufunc = fname in _UFUNC_ALIASES
-        fname = _UFUNC_ALIASES.get(fname, fname)
-
-        if hasattr(cudf_submodule, fname):
-            cudf_func = getattr(cudf_submodule, fname)
-            return cudf_func(*args, **kwargs)
-
-        elif hasattr(cudf_ser_submodule, fname):
-            if is_ufunc:
-                return _get_cudf_series_ufunc(
-                    fname, args, kwargs, cudf_ser_submodule
-                )
-            else:
-                cudf_ser_func = getattr(cudf_ser_submodule, fname)
-                return cudf_ser_func(*args, **kwargs)
-
-        elif hasattr(cupy_submodule, fname):
-            cupy_func = getattr(cupy_submodule, fname)
-            # Handle case if cupy implements it as a numpy function
-            # Unsure if needed
-            if cupy_func is func:
-                return NotImplemented
-
-            cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
-            if cupy_compatible_args:
-                cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                if isinstance(cupy_output, cp.ndarray):
-                    return _cast_to_appropriate_cudf_type(cupy_output, index)
-                else:
-                    return cupy_output
-
-    return NotImplemented
-
-
 def _cast_to_appropriate_cudf_type(val, index=None):
     # Handle scalar
     if val.ndim == 0:
@@ -441,16 +367,6 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
         else:
             casted_ls.append(arg)
     return casted_ls, ser_index
-
-
-def get_relevant_submodule(func, module):
-    # point to the correct submodule
-    for submodule in func.__module__.split(".")[1:]:
-        if hasattr(module, submodule):
-            module = getattr(module, submodule)
-        else:
-            return None
-    return module
 
 
 def _categorical_scalar_broadcast_to(cat_scalar, size):
