@@ -701,8 +701,6 @@ class IndexedFrame(Frame):
 
     @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
     def _empty_like(self, keep_index=True):
-        # TODO: RangeIndex._data.columns materializes data,
-        # which is unecessary here.
         return self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
                 [
