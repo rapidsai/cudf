@@ -131,10 +131,10 @@ struct column_to_strings_fn {
     // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
     //
-    return not(
-      (std::is_same_v<column_type, cudf::string_view>) || (std::is_integral<column_type>::value) ||
-      (std::is_floating_point<column_type>::value) || (cudf::is_fixed_point<column_type>()) ||
-      (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
+    return not((std::is_same_v<column_type, cudf::string_view>) ||
+               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
+               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
+               (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(csv_writer_options const& options,
@@ -185,7 +185,7 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same_v<column_type, bool>,
+  std::enable_if_t<std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>,
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
@@ -195,7 +195,7 @@ struct column_to_strings_fn {
   // floats:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_floating_point<column_type>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_floating_point_v<column_type>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);

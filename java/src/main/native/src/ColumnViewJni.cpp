@@ -392,6 +392,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElementV(JNIEnv *env, jclass,
+                                                                           jlong column_view,
+                                                                           jlong indices_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, indices_view, "indices is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *indices = reinterpret_cast<cudf::column_view *>(indices_view);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+    return release_as_jlong(cudf::lists::extract_list_element(lcv, *indices));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv *env, jclass,
                                                                           jlong column_view) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);

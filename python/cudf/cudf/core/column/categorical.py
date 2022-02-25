@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pickle
 from collections.abc import MutableSequence
+from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -1335,8 +1336,9 @@ class CategoricalColumn(column.ColumnBase):
                 size=self.size,
             )
 
+    @cached_property
     def memory_usage(self) -> int:
-        return self.categories.memory_usage() + self.codes.memory_usage()
+        return self.categories.memory_usage + self.codes.memory_usage
 
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False

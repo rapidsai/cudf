@@ -360,7 +360,7 @@ class Frame:
                 "The deep parameter is ignored and is only included "
                 "for pandas compatibility."
             )
-        return {name: col.memory_usage() for name, col in self._data.items()}
+        return {name: col.memory_usage for name, col in self._data.items()}
 
     def __len__(self):
         return self._num_rows
@@ -6806,10 +6806,9 @@ def _drop_rows_by_labels(
         join_res = working_df.join(to_join, how="leftanti")
 
         # 4. Reconstruct original layout, and rename
-        join_res.insert(
+        join_res._insert(
             ilevel, name=join_res._index.name, value=join_res._index
         )
-        join_res = join_res.reset_index(drop=True)
 
         midx = cudf.MultiIndex.from_frame(
             join_res.iloc[:, 0:idx_nlv], names=obj._index.names
@@ -6823,7 +6822,7 @@ def _drop_rows_by_labels(
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
-                columns=obj.columns,
+                columns=obj._data.to_pandas_index(),
             )
 
     else:

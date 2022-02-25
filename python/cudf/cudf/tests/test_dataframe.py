@@ -3442,29 +3442,37 @@ def test_get_numeric_data():
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+@pytest.mark.parametrize("period", [-15, -1, 0, 1, 15])
 @pytest.mark.parametrize("data_empty", [False, True])
 def test_shift(dtype, period, data_empty):
-
+    # TODO : this function currently tests for series.shift()
+    # but should instead test for dataframe.shift()
     if data_empty:
         data = None
     else:
         if dtype == np.int8:
             # to keep data in range
-            data = gen_rand(dtype, 100000, low=-2, high=2)
+            data = gen_rand(dtype, 10, low=-2, high=2)
         else:
-            data = gen_rand(dtype, 100000)
+            data = gen_rand(dtype, 10)
 
-    gdf = cudf.DataFrame({"a": cudf.Series(data, dtype=dtype)})
-    pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
+    gs = cudf.DataFrame({"a": cudf.Series(data, dtype=dtype)})
+    ps = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    shifted_outcome = gdf.a.shift(period).fillna(0)
-    expected_outcome = pdf.a.shift(period).fillna(0).astype(dtype)
+    shifted_outcome = gs.a.shift(period)
+    expected_outcome = ps.a.shift(period)
 
+    # pandas uses NaNs to signal missing value and force converts the
+    # results columns to float types
     if data_empty:
-        assert_eq(shifted_outcome, expected_outcome, check_index_type=False)
+        assert_eq(
+            shifted_outcome,
+            expected_outcome,
+            check_index_type=False,
+            check_dtype=False,
+        )
     else:
-        assert_eq(shifted_outcome, expected_outcome)
+        assert_eq(shifted_outcome, expected_outcome, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
@@ -4245,272 +4253,6 @@ def test_value_counts():
 @pytest.mark.parametrize(
     "data",
     [
-        [],
-        [0, 12, 14],
-        [0, 14, 12, 12, 3, 10, 12, 14],
-        np.random.randint(-100, 100, 200),
-        pd.Series([0.0, 1.0, None, 10.0]),
-        [None, None, None, None],
-        [np.nan, None, -1, 2, 3],
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        np.random.randint(-100, 100, 10),
-        [],
-        [np.nan, None, -1, 2, 3],
-        [1.0, 12.0, None, None, 120],
-        [0, 14, 12, 12, 3, 10, 12, 14, None],
-        [None, None, None],
-        ["0", "12", "14"],
-        ["0", "12", "14", "a"],
-    ],
-)
-def test_isin_numeric(data, values):
-    index = np.random.randint(0, 100, len(data))
-    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
-    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
-
-    expected = psr.isin(values)
-    got = gsr.isin(values)
-
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(
-            ["2018-01-01", "2019-04-03", None, "2019-12-30"],
-            dtype="datetime64[ns]",
-        ),
-        pd.Series(
-            [
-                "2018-01-01",
-                "2019-04-03",
-                None,
-                "2019-12-30",
-                "2018-01-01",
-                "2018-01-01",
-            ],
-            dtype="datetime64[ns]",
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        [1514764800000000000, 1577664000000000000],
-        [
-            1514764800000000000,
-            1577664000000000000,
-            1577664000000000000,
-            1577664000000000000,
-            1514764800000000000,
-        ],
-        ["2019-04-03", "2019-12-30", "2012-01-01"],
-        [
-            "2012-01-01",
-            "2012-01-01",
-            "2012-01-01",
-            "2019-04-03",
-            "2019-12-30",
-            "2012-01-01",
-        ],
-    ],
-)
-def test_isin_datetime(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(["this", "is", None, "a", "test"]),
-        pd.Series(["test", "this", "test", "is", None, "test", "a", "test"]),
-        pd.Series(["0", "12", "14"]),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["this", "is"],
-        [None, None, None],
-        ["12", "14", "19"],
-        pytest.param(
-            [12, 14, 19],
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_120,
-                reason="pandas's failure here seems like a bug(in < 1.2) "
-                "given the reverse succeeds",
-            ),
-        ),
-        ["is", "this", "is", "this", "is"],
-    ],
-)
-def test_isin_string(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
-        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
-        pd.Series([0, 3, 10, 12], dtype="category"),
-        pd.Series([0, 3, 10, 12, 0, 10, 3, 0, 0, 3, 3], dtype="category"),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["a", "b", None, "f", "words"],
-        ["0", "12", None, "14"],
-        [0, 10, 12, None, 39, 40, 1000],
-        [0, 0, 0, 0, 3, 3, 3, None, 1, 2, 3],
-    ],
-)
-def test_isin_categorical(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.isin(values)
-    expected = psr.isin(values)
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(
-            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
-        ),
-        pd.Series([0, 15, 10], index=[0, None, 9]),
-        pd.Series(
-            range(25),
-            index=pd.date_range(
-                start="2019-01-01", end="2019-01-02", freq="H"
-            ),
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values",
-    [
-        [],
-        ["this", "is"],
-        [0, 19, 13],
-        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
-    ],
-)
-def test_isin_index(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series.from_pandas(psr)
-
-    got = gsr.index.isin(values)
-    expected = psr.index.isin(values)
-
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        pd.MultiIndex.from_arrays(
-            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
-        ),
-        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
-        pd.MultiIndex.from_arrays(
-            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
-            names=("number", "color"),
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "values,level,err",
-    [
-        (["red", "orange", "yellow"], "color", None),
-        (["red", "white", "yellow"], "color", None),
-        ([0, 1, 2, 10, 11, 15], "number", None),
-        ([0, 1, 2, 10, 11, 15], None, TypeError),
-        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
-        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
-        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
-        (pd.Index(["red", "white", "yellow"]), "color", None),
-        ([(1, "red"), (3, "red")], None, None),
-        (((1, "red"), (3, "red")), None, None),
-        (
-            pd.MultiIndex.from_arrays(
-                [[1, 2, 3], ["red", "blue", "green"]],
-                names=("number", "color"),
-            ),
-            None,
-            None,
-        ),
-        (
-            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
-            None,
-            None,
-        ),
-        (
-            pd.MultiIndex.from_arrays(
-                [
-                    [1, 2, 3, 10, 100],
-                    ["red", "blue", "green", "pink", "white"],
-                ],
-                names=("number", "color"),
-            ),
-            None,
-            None,
-        ),
-    ],
-)
-def test_isin_multiindex(data, values, level, err):
-    pmdx = data
-    gmdx = cudf.from_pandas(data)
-
-    if err is None:
-        expected = pmdx.isin(values, level=level)
-        if isinstance(values, pd.MultiIndex):
-            values = cudf.from_pandas(values)
-        got = gmdx.isin(values, level=level)
-
-        assert_eq(got, expected)
-    else:
-        assert_exceptions_equal(
-            lfunc=pmdx.isin,
-            rfunc=gmdx.isin,
-            lfunc_args_and_kwargs=([values], {"level": level}),
-            rfunc_args_and_kwargs=([values], {"level": level}),
-            check_exception_type=False,
-            expected_error_message=re.escape(
-                "values need to be a Multi-Index or set/list-like tuple "
-                "squences  when `level=None`."
-            ),
-        )
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
         pd.DataFrame(
             {
                 "num_legs": [2, 4],
@@ -4533,6 +4275,8 @@ def test_isin_multiindex(data, values, level, err):
                 "num_wings": [2, 0, 2, 1, 2, 4, -1],
             }
         ),
+        pd.DataFrame({"a": ["a", "b", "c"]}, dtype="category"),
+        pd.DataFrame({"a": ["a", "b", "c"]}),
     ],
 )
 @pytest.mark.parametrize(
@@ -4561,6 +4305,9 @@ def test_isin_multiindex(data, values, level, err):
         pd.Series([1, 2, 3, 4, 5]),
         "abc",
         123,
+        pd.Series(["a", "b", "c"]),
+        pd.Series(["a", "b", "c"], dtype="category"),
+        pd.DataFrame({"a": ["a", "b", "c"]}, dtype="category"),
     ],
 )
 def test_isin_dataframe(data, values):
@@ -4583,6 +4330,13 @@ def test_isin_dataframe(data, values):
                     not PANDAS_GE_110,
                     "https://github.com/pandas-dev/pandas/issues/34256",
                 )
+        except TypeError as e:
+            # Can't do isin with different categories
+            if str(e) == (
+                "Categoricals can only be compared if 'categories' "
+                "are the same."
+            ):
+                return
 
         if isinstance(values, (pd.DataFrame, pd.Series)):
             values = cudf.from_pandas(values)
@@ -5441,8 +5195,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.categories.memory_usage()
-        + gdf.B._column.codes.memory_usage()
+        gdf.B._column.categories.memory_usage
+        + gdf.B._column.codes.memory_usage
     )
 
     # Check cat column
@@ -5455,8 +5209,7 @@ def test_memory_usage_cat():
 def test_memory_usage_list():
     df = cudf.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
     expected = (
-        df.A._column.offsets.memory_usage()
-        + df.A._column.elements.memory_usage()
+        df.A._column.offsets.memory_usage + df.A._column.elements.memory_usage
     )
     assert expected == df.A.memory_usage()
 
@@ -9064,6 +8817,124 @@ def test_dataframe_add_suffix():
 
 
 @pytest.mark.parametrize(
+    "data, gkey",
+    [
+        (
+            {
+                "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+                "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+                "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+                "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            },
+            ["id"],
+        ),
+        (
+            {
+                "id": [0, 0, 0, 0, 1, 1, 1],
+                "a": [10.0, 3, 4, 2.0, -3.0, 9.0, 10.0],
+                "b": [10.0, 23, -4.0, 2, -3.0, 9, 19.0],
+            },
+            ["id", "a"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "min_periods", [0, 3],
+)
+@pytest.mark.parametrize(
+    "ddof", [1, 2],
+)
+def test_groupby_covariance(data, gkey, min_periods, ddof):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
+    expected = pdf.groupby(gkey).cov(min_periods=min_periods, ddof=ddof)
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_covariance_multiindex_dataframe():
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 1, 2, 3],
+            "c": [2, 3, 4, 5],
+            "d": [6, 8, 9, 1],
+        }
+    ).set_index(["a", "b"])
+
+    actual = gdf.groupby(level=["a", "b"]).cov()
+    expected = gdf.to_pandas().groupby(level=["a", "b"]).cov()
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_covariance_empty_columns():
+    gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby("id").cov()
+    expected = pdf.groupby("id").cov()
+
+    assert_eq(
+        expected, actual, check_dtype=False, check_index_type=False,
+    )
+
+
+def test_groupby_cov_invalid_column_types():
+    gdf = cudf.DataFrame(
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        },
+    )
+    with pytest.raises(
+        TypeError, match="Covariance accepts only numerical column-pairs",
+    ):
+        gdf.groupby("id").cov()
+
+
+def test_groupby_cov_positive_semidefinite_matrix():
+    # Refer to discussions in PR #9889 re "pair-wise deletion" strategy
+    # being used in pandas to compute the covariance of a dataframe with
+    # rows containing missing values.
+    # Note: cuDF currently matches pandas behavior in that the covariance
+    # matrices are not guaranteed PSD (positive semi definite).
+    # https://github.com/rapidsai/cudf/pull/9889#discussion_r794158358
+    gdf = cudf.DataFrame(
+        [[1, 2], [None, 4], [5, None], [7, 8]], columns=["v0", "v1"]
+    )
+    actual = gdf.groupby(by=cudf.Series([1, 1, 1, 1])).cov()
+    actual.reset_index(drop=True, inplace=True)
+
+    pdf = gdf.to_pandas()
+    expected = pdf.groupby(by=pd.Series([1, 1, 1, 1])).cov()
+    expected.reset_index(drop=True, inplace=True)
+
+    assert_eq(
+        expected, actual, check_dtype=False,
+    )
+
+
+@pytest.mark.xfail
+def test_groupby_cov_for_pandas_bug_case():
+    # Handles case: pandas bug using ddof with missing data.
+    # Filed an issue in Pandas on GH, link below:
+    # https://github.com/pandas-dev/pandas/issues/45814
+    pdf = pd.DataFrame(
+        {"id": ["a", "a"], "val1": [1.0, 2.0], "val2": [np.nan, np.nan]}
+    )
+    expected = pdf.groupby("id").cov(ddof=2)
+
+    gdf = cudf.from_pandas(pdf)
+    actual = gdf.groupby("id").cov(ddof=2)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         np.random.RandomState(seed=10).randint(-50, 50, (25, 30)),
@@ -9177,3 +9048,24 @@ def test_dataframe_rename_duplicate_column():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gdf.rename(columns={"a": "b"}, inplace=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.random.RandomState(seed=10).randint(-50, 50, (10, 10)),
+        np.random.RandomState(seed=10).random_sample((4, 4)),
+        np.array([1.123, 2.343, 5.890, 0.0]),
+        {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
+    ],
+)
+@pytest.mark.parametrize("periods", [-5, -2, 0, 2, 5])
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+def test_dataframe_pct_change(data, periods, fill_method):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.pct_change(periods=periods, fill_method=fill_method)
+    expected = pdf.pct_change(periods=periods, fill_method=fill_method)
+
+    assert_eq(expected, actual)
