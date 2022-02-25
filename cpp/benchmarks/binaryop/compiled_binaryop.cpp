@@ -14,15 +14,11 @@
  * limitations under the License.
  */
 
-#include <fixture/benchmark_fixture.hpp>
-#include <fixture/templated_benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/binaryop.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 class COMPILED_BINARYOP : public cudf::benchmark {
 };
@@ -30,14 +26,13 @@ class COMPILED_BINARYOP : public cudf::benchmark {
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  auto data_it = thrust::make_counting_iterator(0);
-  cudf::test::fixed_width_column_wrapper<TypeLhs> input1(data_it, data_it + column_size);
-  cudf::test::fixed_width_column_wrapper<TypeRhs> input2(data_it, data_it + column_size);
+  auto const source_table = create_sequence_table(
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{column_size});
 
-  auto lhs          = cudf::column_view(input1);
-  auto rhs          = cudf::column_view(input2);
+  auto lhs          = cudf::column_view(source_table->get_column(0));
+  auto rhs          = cudf::column_view(source_table->get_column(1));
   auto output_dtype = cudf::data_type(cudf::type_to_id<TypeOut>());
 
   // Call once for hot cache.

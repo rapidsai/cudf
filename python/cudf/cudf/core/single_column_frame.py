@@ -4,7 +4,16 @@
 from __future__ import annotations
 
 import builtins
-from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -279,7 +288,10 @@ class SingleColumnFrame(Frame, NotIterable):
         reflect: bool = False,
         *args,
         **kwargs,
-    ) -> Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]:
+    ) -> Union[
+        Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        Type[NotImplemented],
+    ]:
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters
