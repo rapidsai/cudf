@@ -638,7 +638,7 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::LAG> {
 /**
  * @brief Functor for creating a device rolling operator based on input type and aggregation type.
  */
-template <typename InputType, aggregation::Kind k>
+template <typename InputType, aggregation::Kind k, typename = void>
 struct create_rolling_operator {
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
@@ -657,7 +657,7 @@ struct create_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
 
 template <typename InputType>
 struct create_rolling_operator<InputType, aggregation::Kind::LEAD> {
-  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  auto operator()(size_type, rolling_aggregation const& agg)
   {
     return DeviceRollingLead<InputType>{
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
@@ -666,28 +666,22 @@ struct create_rolling_operator<InputType, aggregation::Kind::LEAD> {
 
 template <typename InputType>
 struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
-  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  auto operator()(size_type, rolling_aggregation const& agg)
   {
     return DeviceRollingLag<InputType>{
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
   }
 };
 
-template <typename InputType>
-struct create_rolling_operator<InputType, aggregation::Kind::ARGMIN> {
+template <typename InputType, aggregation::Kind k>
+struct create_rolling_operator<
+  InputType,
+  k,
+  typename std::enable_if_t<k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX>> {
   template <typename AggOp>
   auto operator()(size_type min_periods, AggOp const& agg_op)
   {
-    return DeviceRollingArgMinMax<InputType, aggregation::Kind::ARGMIN, AggOp>{min_periods, agg_op};
-  }
-};
-
-template <typename InputType>
-struct create_rolling_operator<InputType, aggregation::Kind::ARGMAX> {
-  template <typename AggOp>
-  auto operator()(size_type min_periods, AggOp const& agg_op)
-  {
-    return DeviceRollingArgMinMax<InputType, aggregation::Kind::ARGMAX, AggOp>{min_periods, agg_op};
+    return DeviceRollingArgMinMax<InputType, k, AggOp>{min_periods, agg_op};
   }
 };
 
@@ -696,8 +690,8 @@ struct create_rolling_operator<InputType, aggregation::Kind::ARGMAX> {
  *
  * The purpose of this class is to preprocess incoming aggregation/type pairs and
  * potentially transform them into other aggregation/type pairs. Typically when this
- * happens, the equivalent aggregation/type implementatis_supported_struct_opion of finalize() will
- * perform some postprocessing step.
+ * happens, the equivalent aggregation/type implementation of finalize() will perform
+ * some postprocessing step.
  *
  * An example of this would be applying a MIN aggregation to strings. This cannot be done
  * directly in the rolling operation, so instead the following happens:
