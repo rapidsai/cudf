@@ -19,6 +19,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -571,11 +573,11 @@ columns_vector create_random_columns(data_profile const& profile,
 }
 
 /**
- * @brief Repeats the input data types in round-robin order to fill a vector of @ref num_cols
+ * @brief Repeats the input data types cyclically order to fill a vector of @ref num_cols
  * elements.
  */
-std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
-                                         cudf::size_type num_cols)
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols)
 {
   if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
@@ -586,29 +588,26 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
-    std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
 
-  return create_random_table(out_dtype_ids, num_cols, row_count{num_rows}, profile, seed);
+  return create_random_table(dtype_ids, row_count{num_rows}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  row_count num_rows,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
-  auto seed_engine         = deterministic_engine(seed);
+  cudf::size_type const num_cols = dtype_ids.size();
+  auto seed_engine               = deterministic_engine(seed);
 
   auto const processor_count            = std::thread::hardware_concurrency();
   cudf::size_type const cols_per_thread = (num_cols + processor_count - 1) / processor_count;
@@ -619,8 +618,8 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
     auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
-    std::vector<cudf::type_id> thread_types(out_dtype_ids.begin() + next_col,
-                                            out_dtype_ids.begin() + next_col + thread_num_cols);
+    std::vector<cudf::type_id> thread_types(dtype_ids.begin() + next_col,
+                                            dtype_ids.begin() + next_col + thread_num_cols);
     col_futures.emplace_back(std::async(std::launch::async,
                                         create_random_columns,
                                         std::cref(profile),
@@ -640,6 +639,22 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   }
 
   return std::make_unique<cudf::table>(std::move(output_columns));
+}
+
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   row_count num_rows,
+                                                   float null_probability,
+                                                   unsigned seed)
+{
+  auto columns = std::vector<std::unique_ptr<cudf::column>>(dtype_ids.size());
+  std::transform(dtype_ids.begin(), dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
+    auto init          = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
+    auto col           = cudf::sequence(num_rows.count, *init);
+    auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
+    col->set_null_mask(std::move(mask), count);
+    return col;
+  });
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id)
