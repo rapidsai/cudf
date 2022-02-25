@@ -83,11 +83,16 @@ def _should_define_operation(cls, operation, base_operation_name):
     if base_operation_name not in cls.__dict__:
         return False
 
-    # There are two possibilities here:
-    # 1. A parent class manually overrode the operation. That override takes
-    #    precedence even if the current class overrode the base_operation.
-    # 2. A parent class has an auto-generated operation. The current class must
-    #    override it so that its base operation is used rather than the parent.
+    # At this point we know that the class has the operation defined but it
+    # also overrides the base operation. Since this function is called before
+    # the operation is defined on the current class, we know that it inherited
+    # the operation from a parent. We therefore have two possibilities:
+    # 1. A parent class manually defined the operation. That override takes
+    #    precedence even if the current class defined the base operation.
+    # 2. A parent class has an auto-generated operation, i.e. it is of type
+    #    Operation and was created by OperationMixin.__init_subclass__. The
+    #    current class must override it so that its base operation is used
+    #    rather than the parent's base operation.
     for base_cls in cls.__mro__:
         # The first attribute in the MRO is the one that will be used.
         if operation in base_cls.__dict__:
