@@ -1228,11 +1228,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if (
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                # TODO: mypy doesn't like this line because the index property
-                # is not defined on SingleColumnFrame (or Index, for that
-                # matter). Ignoring is the easy solution for now, a cleaner fix
-                # requires reworking the type hierarchy.
-                and not self.index.equals(other.index)  # type: ignore
+                and not self.index.equals(other.index)
             ):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
