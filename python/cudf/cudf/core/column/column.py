@@ -585,9 +585,9 @@ class ColumnBase(Column, Serializable, NotIterable):
                     [value], [self], key
                 )[0]._with_type_metadata(self.dtype)
             else:
-                return libcudf.copying.scatter(
-                    value, key, self
-                )._with_type_metadata(self.dtype)
+                return libcudf.copying.scatter([value], key, [self])[
+                    0
+                ]._with_type_metadata(self.dtype)
         except RuntimeError as e:
             if "out of bounds" in str(e):
                 raise IndexError(

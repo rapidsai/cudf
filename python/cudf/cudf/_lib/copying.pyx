@@ -191,60 +191,80 @@ def gather(
     return columns_from_unique_ptr(move(c_result))
 
 
-def scatter(object source, Column scatter_map, Column target_column,
-            bool bounds_check=True):
-    """
-    Scattering input into target as per the scatter map,
-    input can be a list of scalars or can be a table
-    """
-
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = table_view_from_columns(
-        (target_column,))
-    cdef bool c_bounds_check = bounds_check
+cdef scatter_scalar(list source_device_slrs,
+                    column_view scatter_map,
+                    table_view target_table,
+                    bool bounds_check):
+    cdef vector[reference_wrapper[constscalar]] c_source
+    cdef DeviceScalar d_slr
     cdef unique_ptr[table] c_result
 
-    # Needed for the table branch
-    cdef table_view source_table_view
+    c_source.reserve(len(source_device_slrs))
+    for d_slr in source_device_slrs:
+        c_source.push_back(
+            reference_wrapper[constscalar](d_slr.get_raw_ptr()[0])
+        )
 
-    # Needed for the scalar branch
-    cdef vector[reference_wrapper[constscalar]] source_scalars
-    cdef DeviceScalar slr
-
-    if isinstance(source, Column):
-        source_table_view = table_view_from_columns((<Column> source,))
-
-        with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source_table_view,
-                    scatter_map_view,
-                    target_table_view,
-                    c_bounds_check
-                )
+    with nogil:
+        c_result = move(
+            cpp_copying.scatter(
+                c_source,
+                scatter_map,
+                target_table,
+                bounds_check
             )
+        )
+
+    return columns_from_unique_ptr(move(c_result))
+
+
+cdef scatter_column(list source_columns,
+                    column_view scatter_map,
+                    table_view target_table,
+                    bool bounds_check):
+    cdef table_view c_source = table_view_from_columns(source_columns)
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.scatter(
+                c_source,
+                scatter_map,
+                target_table,
+                bounds_check
+            )
+        )
+    return columns_from_unique_ptr(move(c_result))
+
+
+def scatter(list sources, Column scatter_map, list target_columns,
+            bool bounds_check=True):
+    """
+    Scattering source into target as per the scatter map.
+    `source` can be a list of scalars, or a list of columns. The number of
+    items in `sources` must equal the number of `target_columns` to scatter.
+    """
+    # TODO: Only single column scatter is used, we should explore multi-column
+    # scatter for frames for performance increase.
+
+    if len(sources) != len(target_columns):
+        raise ValueError("Mismatched number of source and target columns.")
+
+    if len(sources) == 0:
+        return []
+
+    cdef column_view scatter_map_view = scatter_map.view()
+    cdef table_view target_table_view = table_view_from_columns(target_columns)
+
+    if isinstance(sources[0], Column):
+        return scatter_column(
+            sources, scatter_map_view, target_table_view, bounds_check
+        )
     else:
-        slr = as_device_scalar(source, target_column.dtype)
-        source_scalars.push_back(reference_wrapper[constscalar](
-            slr.get_raw_ptr()[0]))
-
-        with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source_scalars,
-                    scatter_map_view,
-                    target_table_view,
-                    c_bounds_check
-                )
-            )
-
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=(None,),
-        index_names=None
-    )
-
-    return next(iter(data.values()))
+        source_scalars = [as_device_scalar(slr) for slr in sources]
+        return scatter_scalar(
+            source_scalars, scatter_map_view, target_table_view, bounds_check
+        )
 
 
 def column_empty_like(Column input_column):
