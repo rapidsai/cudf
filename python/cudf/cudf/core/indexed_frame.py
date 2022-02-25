@@ -1859,7 +1859,6 @@ class IndexedFrame(Frame):
         random_state: Union[np.random.RandomState, cp.random.RandomState],
         ignore_index: bool,
     ):
-        # Dynamic dispatch to numpy/cupy depending on state provided.
         gather_map = cudf.core.column.as_column(
             random_state.choice(len(self), size=n, replace=replace, p=weights)
         )
