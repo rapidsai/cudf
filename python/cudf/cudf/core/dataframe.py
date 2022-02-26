@@ -6337,15 +6337,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ignore_index: bool,
     ):
         if replace:
+            # Since cuDF does not support multiple columns with same name,
+            # sample with replace=True at axis 1 is unsupported.
             raise NotImplementedError(
                 "Sample is not supported for axis 1/`columns` when"
                 "`replace=True`."
             )
 
-        columns = self._data.names
-
         sampled_column_labels = random_state.choice(
-            columns, size=n, replace=False, p=weights
+            self._column_names, size=n, replace=False, p=weights
         )
 
         result = self._get_columns_by_label(sampled_column_labels)

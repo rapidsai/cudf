@@ -7184,21 +7184,12 @@ def test_sample_axis_1(
     checker(expected, got)
 
 
-@pytest.mark.parametrize("n", [0, 2, 10, None])
-@pytest.mark.parametrize("frac", [0.3, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
-def test_sample_axis_0(n, frac, replace, random_state_tuple, make_weights):
-    axis = 0
-    # TODO: decouple valid parameter set from invalid parameter set and
-    # write two separate tests to reduce function complexity.
-    if axis == 1 and replace:
-        pytest.skip(reason="we currently don't support column with same name.")
-
-    pd_random_state, gd_random_state, checker = random_state_tuple
-    if axis == 1 and isinstance(gd_random_state, cp.random.RandomState):
-        pytest.skip(
-            reason="cannot sample column axis with device random state."
-        )
+def test_sample_axis_0(
+    sample_n_frac, replace, random_state_tuple_axis_0, make_weights_axis_0
+):
+    n, frac = sample_n_frac
+    pd_random_state, gd_random_state, checker = random_state_tuple_axis_0
 
     pdf = pd.DataFrame(
         {
@@ -7206,11 +7197,10 @@ def test_sample_axis_0(n, frac, replace, random_state_tuple, make_weights):
             "float": [0.05, 0.2, 0.3, 0.2, 0.25],
             "int": [1, 3, 5, 4, 2],
         },
-        index=[1, 2, 3, 4, 5],
     )
     df = cudf.DataFrame.from_pandas(pdf)
 
-    pd_weights, gd_weights = make_weights(len(pdf))
+    pd_weights, gd_weights = make_weights_axis_0(len(pdf))
     if (
         not replace
         and not isinstance(gd_random_state, np.random.RandomState)
@@ -7221,53 +7211,24 @@ def test_sample_axis_0(n, frac, replace, random_state_tuple, make_weights):
             "without replacement."
         )
 
-    try:
-        expected = pdf.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=pd_random_state,
-            weights=pd_weights,
-            axis=axis,
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=pdf.sample,
-            rfunc=df.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": pd_random_state,
-                    "weights": pd_weights,
-                    "axis": axis,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": gd_random_state,
-                    "weights": gd_weights,
-                    "axis": axis,
-                },
-            ),
-            compare_error_message=False,
-        )
-    else:
-        got = df.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=gd_random_state,
-            weights=gd_weights,
-            axis=axis,
-        )
-        checker(expected, got)
+    expected = pdf.sample(
+        n=n,
+        frac=frac,
+        replace=replace,
+        random_state=pd_random_state,
+        weights=pd_weights,
+        axis=0,
+    )
+
+    got = df.sample(
+        n=n,
+        frac=frac,
+        replace=replace,
+        random_state=gd_random_state,
+        weights=gd_weights,
+        axis=0,
+    )
+    checker(expected, got)
 
 
 @pytest.mark.parametrize("replace", [True, False])
@@ -7323,6 +7284,15 @@ def test_oversample_without_replace(n, frac, axis):
             {"n": n, "frac": frac, "axis": axis, "replace": False},
         ),
     )
+
+
+@pytest.mark.parametrize("random_state", [None, cp.random.RandomState(42)])
+def test_sample_unsupported_arguments(random_state):
+    df = cudf.DataFrame({"float": [0.05, 0.2, 0.3, 0.2, 0.25]})
+    with pytest.raises(NotImplementedError, match="Unsupported argument"):
+        df.sample(
+            n=2, replace=False, random_state=random_state, weights=[1] * 5
+        )
 
 
 @pytest.mark.parametrize(

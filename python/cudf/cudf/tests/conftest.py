@@ -49,8 +49,8 @@ def _random_state_tuple(seed_or_state_ctor):
         return seed_or_state_ctor(42), seed_or_state_ctor(42), exact_checker
     elif seed_or_state_ctor == cp.random.RandomState:
         return np.random.RandomState(42), seed_or_state_ctor(42), shape_checker
-    else:
-        pytest.skip("Unsupported params.")
+
+    assert False, "No random state is specialized beyond the above types."
 
 
 @pytest.fixture(
@@ -97,12 +97,12 @@ def random_state_tuple_axis_0(request):
     return _random_state_tuple(request.param)
 
 
-@pytest.fixture(params=[None, "builtin-list", "nd-arrays"])
-def make_weights_axis_0(request, random_state_tuple):
+@pytest.fixture(params=[None, "builtin_list", "ndarray"])
+def make_weights_axis_0(request, random_state_tuple_axis_0):
     """Specific to `test_sample*_axis_0` tests.
     Only testing weights array that matches type with random state.
     """
-    _, gd_random_state, _ = random_state_tuple
+    _, gd_random_state, _ = random_state_tuple_axis_0
 
     if request.param is None:
         return lambda _: (None, None)

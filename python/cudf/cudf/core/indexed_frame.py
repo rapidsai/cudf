@@ -1732,7 +1732,10 @@ class IndexedFrame(Frame):
             Fraction of axis items to return. Cannot be used with n.
         replace : bool, default False
             Allow or disallow sampling of the same row more than once.
-            replace == True is not yet supported for axis = 1/"columns"
+            `replace == True` is not supported for axis = 1/"columns".
+            `replace == False` is not supported for axis = 0/"index" given
+            `random_state` is `None` or a cupy random state, and `weights` is
+            specified.
         weights : ndarray-like, optional
             Default `None` for uniform probability distribution over rows to
             sample from. If `ndarray` is passed, the length of `weights` should
@@ -1862,12 +1865,19 @@ class IndexedFrame(Frame):
         random_state: Union[np.random.RandomState, cp.random.RandomState],
         ignore_index: bool,
     ):
-        gather_map = cudf.core.column.as_column(
-            random_state.choice(len(self), size=n, replace=replace, p=weights)
-        )
+        try:
+            gather_map_array = random_state.choice(
+                len(self), size=n, replace=replace, p=weights
+            )
+        except NotImplementedError as e:
+            raise NotImplementedError(
+                "Unsupported arguments for gather map generation."
+            ) from e
 
         return self._gather(
-            gather_map, keep_index=not ignore_index, check_bounds=False
+            cudf.core.column.as_column(gather_map_array),
+            keep_index=not ignore_index,
+            check_bounds=False,
         )
 
     def _sample_axis_1(
