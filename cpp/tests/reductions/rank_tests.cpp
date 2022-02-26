@@ -37,7 +37,7 @@ template <typename T>
 using input           = fixed_width_column_wrapper<T>;
 using rank_result_col = fixed_width_column_wrapper<size_type>;
 using percent_result_t =
-  cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+  cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::ANSI_SQL_PERCENT_RANK>;
 using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
 
 auto const rank         = cudf::make_rank_aggregation(cudf::rank_method::MIN);

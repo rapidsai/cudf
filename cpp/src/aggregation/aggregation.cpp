@@ -610,7 +610,7 @@ template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(rank_me
 template std::unique_ptr<groupby_scan_aggregation> make_rank_aggregation<groupby_scan_aggregation>(
   rank_method method, null_policy null_handling, bool percentage);
 
-/// Factory to create a PERCENT_RANK aggregation
+/// Factory to create a ANSI_SQL_PERCENT_RANK aggregation
 template <typename Base>
 std::unique_ptr<Base> make_percent_rank_aggregation()
 {

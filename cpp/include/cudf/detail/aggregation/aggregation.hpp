@@ -652,7 +652,7 @@ class rank_aggregation final : public rolling_aggregation, public groupby_scan_a
 
 class percent_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
  public:
-  percent_rank_aggregation() : aggregation{PERCENT_RANK} {}
+  percent_rank_aggregation() : aggregation{ANSI_SQL_PERCENT_RANK} {}
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
@@ -1248,9 +1248,9 @@ struct target_type_impl<Source, aggregation::RANK> {
   using type = size_type;  // double for percentage=true.
 };
 
-// Always use double for PERCENT_RANK
+// Always use double for ANSI_SQL_PERCENT_RANK
 template <typename SourceType>
-struct target_type_impl<SourceType, aggregation::PERCENT_RANK> {
+struct target_type_impl<SourceType, aggregation::ANSI_SQL_PERCENT_RANK> {
   using type = double;
 };
 
@@ -1414,8 +1414,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
     case aggregation::RANK:
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
-    case aggregation::PERCENT_RANK:
-      return f.template operator()<aggregation::PERCENT_RANK>(std::forward<Ts>(args)...);
+    case aggregation::ANSI_SQL_PERCENT_RANK:
+      return f.template operator()<aggregation::ANSI_SQL_PERCENT_RANK>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_SET:

@@ -141,7 +141,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
 }
 
 template <>
-void scan_result_functor::operator()<aggregation::PERCENT_RANK>(aggregation const& agg)
+void scan_result_functor::operator()<aggregation::ANSI_SQL_PERCENT_RANK>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
   CUDF_EXPECTS(helper.is_presorted(),

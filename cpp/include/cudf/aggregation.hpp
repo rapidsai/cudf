@@ -57,41 +57,41 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,             ///< sum reduction
-    PRODUCT,         ///< product reduction
-    MIN,             ///< min reduction
-    MAX,             ///< max reduction
-    COUNT_VALID,     ///< count number of valid elements
-    COUNT_ALL,       ///< count number of elements
-    ANY,             ///< any reduction
-    ALL,             ///< all reduction
-    SUM_OF_SQUARES,  ///< sum of squares reduction
-    MEAN,            ///< arithmetic mean reduction
-    M2,              ///< sum of squares of differences from the mean
-    VARIANCE,        ///< variance
-    STD,             ///< standard deviation
-    MEDIAN,          ///< median reduction
-    QUANTILE,        ///< compute specified quantile(s)
-    ARGMAX,          ///< Index of max element
-    ARGMIN,          ///< Index of min element
-    NUNIQUE,         ///< count number of unique elements
-    NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    RANK,            ///< get rank of current index
-    PERCENT_RANK,    ///< get percent (i.e. fractional) rank of current index
-    COLLECT_LIST,    ///< collect values into a list
-    COLLECT_SET,     ///< collect values into a list without duplicate entries
-    LEAD,            ///< window function, accesses row at specified offset following current row
-    LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX  UDF based reduction
-    CUDA,            ///< CUDA UDF based reduction
-    MERGE_LISTS,     ///< merge multiple lists values into one list
-    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,        ///< merge partial values of M2 aggregation,
-    COVARIANCE,      ///< covariance between two sets of elements
-    CORRELATION,     ///< correlation between two sets of elements
-    TDIGEST,         ///< create a tdigest from a set of input values
-    MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
+    SUM,                    ///< sum reduction
+    PRODUCT,                ///< product reduction
+    MIN,                    ///< min reduction
+    MAX,                    ///< max reduction
+    COUNT_VALID,            ///< count number of valid elements
+    COUNT_ALL,              ///< count number of elements
+    ANY,                    ///< any reduction
+    ALL,                    ///< all reduction
+    SUM_OF_SQUARES,         ///< sum of squares reduction
+    MEAN,                   ///< arithmetic mean reduction
+    M2,                     ///< sum of squares of differences from the mean
+    VARIANCE,               ///< variance
+    STD,                    ///< standard deviation
+    MEDIAN,                 ///< median reduction
+    QUANTILE,               ///< compute specified quantile(s)
+    ARGMAX,                 ///< Index of max element
+    ARGMIN,                 ///< Index of min element
+    NUNIQUE,                ///< count number of unique elements
+    NTH_ELEMENT,            ///< get the nth element
+    ROW_NUMBER,             ///< get row-number of current index (relative to rolling window)
+    RANK,                   ///< get rank of current index
+    ANSI_SQL_PERCENT_RANK,  ///< get percent (i.e. fractional) rank of current index
+    COLLECT_LIST,           ///< collect values into a list
+    COLLECT_SET,            ///< collect values into a list without duplicate entries
+    LEAD,          ///< window function, accesses row at specified offset following current row
+    LAG,           ///< window function, accesses row at specified offset preceding current row
+    PTX,           ///< PTX  UDF based reduction
+    CUDA,          ///< CUDA UDF based reduction
+    MERGE_LISTS,   ///< merge multiple lists values into one list
+    MERGE_SETS,    ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,      ///< merge partial values of M2 aggregation,
+    COVARIANCE,    ///< covariance between two sets of elements
+    CORRELATION,   ///< correlation between two sets of elements
+    TDIGEST,       ///< create a tdigest from a set of input values
+    MERGE_TDIGEST  ///< create a tdigest by merging multiple tdigests together
   };
 
   aggregation() = delete;
@@ -358,9 +358,9 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
                                             bool percentage           = false);
 
 /**
- * @brief Factory to create a PERCENT_RANK aggregation
+ * @brief Factory to create a ANSI_SQL_PERCENT_RANK aggregation
  *
- * `PERCENT_RANK` returns a non-nullable column of double precision "fractional" ranks.
+ * `ANSI_SQL_PERCENT_RANK` returns a non-nullable column of double precision "fractional" ranks.
  * For row index `i`, the percent rank of row `i` is defined as:
  *   percent_rank = (rank - 1) / (group_row_count - 1)
  * where,
@@ -374,9 +374,9 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
  *
  * Note:
  *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `PERCENT_RANK` aggregations will return a fully valid column regardless of null_handling
- *     policy specified in the scan.
- *  3. `PERCENT_RANK` aggregations are not compatible with exclusive scans.
+ *  2. `ANSI_SQL_PERCENT_RANK` aggregations will return a fully valid column regardless of
+ * null_handling policy specified in the scan.
+ *  3. `ANSI_SQL_PERCENT_RANK` aggregations are not compatible with exclusive scans.
  *
  * @code{.pseudo}
  * Example: Consider a motor-racing statistics dataset, containing the following columns:

@@ -145,8 +145,9 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
       return group_end - group_start;
     });
 
-  // Result type for PERCENT_RANK is independent of input type.
-  using result_type = cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+  // Result type for ANSI_SQL_PERCENT_RANK is independent of input type.
+  using result_type =
+    cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::ANSI_SQL_PERCENT_RANK>;
 
   auto percent_rank_result = cudf::make_fixed_width_column(
     data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);

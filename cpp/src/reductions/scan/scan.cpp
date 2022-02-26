@@ -43,7 +43,7 @@ std::unique_ptr<column> scan(column_view const& input,
     }
     CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
   }
-  if (agg->kind == aggregation::PERCENT_RANK) {
+  if (agg->kind == aggregation::ANSI_SQL_PERCENT_RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
                  "Percent rank aggregation operator requires an inclusive scan");
     return inclusive_percent_rank_scan(input, rmm::cuda_stream_default, mr);
