@@ -14,18 +14,13 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf/column/column.hpp>
-
-#include <cudf/copying.hpp>
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-// to enable, run cmake with -DBUILD_BENCHMARKS=ON
+#include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
 
 template <typename T>
 void BM_contiguous_split_common(benchmark::State& state,

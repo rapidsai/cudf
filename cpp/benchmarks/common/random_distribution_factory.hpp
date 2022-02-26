@@ -18,17 +18,17 @@
 
 #include "generate_input.hpp"
 
-#include <cmath>
-#include <cstddef>
-#include <memory>
 #include <rmm/device_uvector.hpp>
-#include <type_traits>
 
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/random/normal_distribution.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/tabulate.h>
+
+#include <cmath>
+#include <memory>
+#include <type_traits>
 /**
  * @brief Generates a normal(binomial) distribution between zero and upper_bound.
  */

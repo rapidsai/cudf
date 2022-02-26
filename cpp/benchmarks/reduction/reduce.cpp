@@ -25,7 +25,6 @@
 #include <synchronization/synchronization.hpp>
 
 #include <memory>
-#include <random>
 
 class Reduction : public cudf::benchmark {
 };

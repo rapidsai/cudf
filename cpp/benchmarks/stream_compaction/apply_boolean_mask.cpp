@@ -20,8 +20,6 @@
 
 #include <cudf/stream_compaction.hpp>
 
-#include <benchmark/benchmark.h>
-
 namespace {
 
 constexpr cudf::size_type hundredM      = 1e8;
