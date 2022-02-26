@@ -84,7 +84,7 @@ struct json_benchmark_row_builder {
   thrust::minstd_rand rng{5236};
   thrust::uniform_int_distribution<int> dist{};
 
-  // TODO internal data structure for {bytes, out_ptr} operator+=
+  // internal data structure for {bytes, out_ptr} with operator+=
   struct bytes_and_ptr {
     cudf::size_type bytes;
     char* ptr;
@@ -96,30 +96,23 @@ struct json_benchmark_row_builder {
     }
   };
 
-  __device__ inline char* copy_items(char* out_ptr,
-                                     int this_idx,
-                                     cudf::size_type num_books,
-                                     int32_t& bytes)
+  __device__ inline void copy_items(int this_idx,
+                                    cudf::size_type num_items,
+                                    bytes_and_ptr& output_str)
   {
     using param_type = thrust::uniform_int_distribution<int>::param_type;
     dist.param(param_type{0, d_books_bicycles[this_idx].size() - 1});
     cudf::string_view comma(",\n", 2);
-    for (int i = 0; i < num_books; i++) {
-      if (i > 0) {
-        bytes += comma.size_bytes();
-        if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
-      }
+    for (int i = 0; i < num_items; i++) {
+      if (i > 0) { output_str += comma; }
       int idx   = dist(rng);
-      auto book = d_books_bicycles[this_idx].element<cudf::string_view>(idx);
-      bytes += book.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, book); }
+      auto item = d_books_bicycles[this_idx].element<cudf::string_view>(idx);
+      output_str += item;
     }
-    return out_ptr;
   }
 
   __device__ void operator()(cudf::size_type idx)
   {
-    int32_t bytes{0};
     int num_books       = 2;
     int num_bicycles    = 2;
     int remaining_bytes = max(
@@ -134,6 +127,7 @@ struct json_benchmark_row_builder {
     num_bicycles += (remaining_bytes * bicycle_pct) / Approx_bicycle_size;
 
     char* out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    bytes_and_ptr output_str{0, out_ptr};
     //
     cudf::string_view comma(",\n", 2);
     cudf::string_view brace1("{\n", 2);
@@ -143,40 +137,27 @@ struct json_benchmark_row_builder {
     cudf::string_view brace2("\n}", 2);
     cudf::string_view square2{"\n]", 2};
 
-    bytes += brace1.size_bytes();
-    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, brace1); }
+    output_str += brace1;
     if (d_misc_order.element<bool>(idx)) {  // Misc. first.
-      bytes += Misc.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, Misc); }
-      bytes += comma.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
+      output_str += Misc;
+      output_str += comma;
     }
-    bytes += store.size_bytes();
-    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, store); }
+    output_str += store;
     for (int store_order = 0; store_order < 2; store_order++) {
-      if (store_order > 0) {
-        bytes += comma.size_bytes();
-        if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
-      }
+      if (store_order > 0) { output_str += comma; }
       int this_idx    = (d_store_order.element<bool>(idx) == store_order);
       auto& mem_start = store_member_start[this_idx];
-      bytes += mem_start.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, mem_start); }
-      out_ptr = copy_items(out_ptr, this_idx, this_idx == 0 ? num_books : num_bicycles, bytes);
-      bytes += square2.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, square2); }
+      output_str += mem_start;
+      copy_items(this_idx, this_idx == 0 ? num_books : num_bicycles, output_str);
+      output_str += square2;
     }
-    bytes += brace2.size_bytes();
-    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, brace2); }
+    output_str += brace2;
     if (!d_misc_order.element<bool>(idx)) {  // Misc, if not first.
-      bytes += comma.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, comma); }
-      bytes += Misc.size_bytes();
-      if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, Misc); }
+      output_str += comma;
+      output_str += Misc;
     }
-    bytes += brace2.size_bytes();
-    if (out_ptr) { out_ptr = cudf::strings::detail::copy_string(out_ptr, brace2); }
-    if (!out_ptr) d_offsets[idx] = bytes;
+    output_str += brace2;
+    if (!output_str.ptr) d_offsets[idx] = output_str.bytes;
   }
 };
 

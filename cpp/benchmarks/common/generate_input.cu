@@ -754,7 +754,7 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::siz
                                   thrust::make_counting_iterator<cudf::size_type>(size),
                                   bool_generator{seed, 1.0f - null_probability});
   }
-};
+}
 
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id)

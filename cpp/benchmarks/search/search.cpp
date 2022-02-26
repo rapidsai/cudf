@@ -18,9 +18,6 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
