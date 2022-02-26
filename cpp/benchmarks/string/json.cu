@@ -18,15 +18,14 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/strings/string_view.hpp>
-#include <cudf/types.hpp>
-
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/json.hpp>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/types.hpp>
 
 #include <thrust/random.h>
 
