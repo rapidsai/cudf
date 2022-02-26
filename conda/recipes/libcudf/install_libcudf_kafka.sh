@@ -2,10 +2,3 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 ./build.sh -v libcudf_kafka --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib\"
-
-echo "pwd: $PWD"
-echo "!?cpp/build"
-ls -l cpp/build
-
-echo "!?cpp/libcudf_kafka/build"
-ls -l cpp/libcudf_kafka/build
