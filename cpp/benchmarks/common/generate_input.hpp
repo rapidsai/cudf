@@ -302,7 +302,9 @@ class data_profile {
 
   // Users should pass integral values for bounds when setting the parameters for types that have
   // discrete distributions (integers, strings, lists). Otherwise the call with have no effect.
-  template <typename T, typename Type_enum, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
+  template <typename T,
+            typename Type_enum,
+            std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
