@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+import itertools
 import os
 import pathlib
 
@@ -20,30 +21,26 @@ def datadir():
 
 
 @pytest.fixture(
-    params=[None, 42, np.random.RandomState, cp.random.RandomState]
+    params=itertools.product([0, 2, None], [0.3, None]),
+    ids=lambda arg: f"n={arg[0]}-frac={arg[1]}",
 )
-def random_state_tuple(request):
+def sample_n_frac(request):
     """
-    Specific to `test_dataframe_sample*` and `test_series_sample*` tests.
-    A pytest fixture of valid `random_state` parameter pairs for pandas
-    and cudf. Valid parameter combinations, and what to check for each pair
-    are listed below:
-
-    pandas:   None,   seed(int),  np.random.RandomState,  np.random.RandomState
-    cudf:     None,   seed(int),  np.random.RandomState,  cp.random.RandomState
-    ------
-    check:    shape,  shape,      exact result,           shape
-
-    Each column above stands for one valid parameter combination and check.
+    Specific to `test_sample*` tests.
     """
+    n, frac = request.param
+    if n is not None and frac is not None:
+        pytest.skip("Cannot specify both n and frac.")
+    return n, frac
 
+
+def _random_state_tuple(seed_or_state_ctor):
     def shape_checker(expected, got):
         assert expected.shape == got.shape
 
     def exact_checker(expected, got):
         assert_eq(expected, got)
 
-    seed_or_state_ctor = request.param
     if seed_or_state_ctor is None:
         return None, None, shape_checker
     elif isinstance(seed_or_state_ctor, int):
@@ -56,9 +53,53 @@ def random_state_tuple(request):
         pytest.skip("Unsupported params.")
 
 
+@pytest.fixture(
+    params=[None, 42, np.random.RandomState],
+    ids=["None", "IntSeed", "NumpyRandomState"],
+)
+def random_state_tuple_axis_1(request):
+    """
+    Specific to `test_sample*_axis_1` tests.
+    A pytest fixture of valid `random_state` parameter pairs for pandas
+    and cudf. Valid parameter combinations, and what to check for each pair
+    are listed below:
+
+    pandas:   None,   seed(int),  np.random.RandomState
+    cudf:     None,   seed(int),  np.random.RandomState
+    ------
+    check:    shape,  shape,      exact result
+
+    Each column above stands for one valid parameter combination and check.
+    """
+
+    return _random_state_tuple(request.param)
+
+
+@pytest.fixture(
+    params=[None, 42, np.random.RandomState, cp.random.RandomState],
+    ids=["None", "IntSeed", "NumpyRandomState", "CupyRandomState"],
+)
+def random_state_tuple_axis_0(request):
+    """
+    Specific to `test_sample*_axis_0` tests.
+    A pytest fixture of valid `random_state` parameter pairs for pandas
+    and cudf. Valid parameter combinations, and what to check for each pair
+    are listed below:
+
+    pandas:   None,   seed(int),  np.random.RandomState,  np.random.RandomState
+    cudf:     None,   seed(int),  np.random.RandomState,  cp.random.RandomState
+    ------
+    check:    shape,  shape,      exact result,           shape
+
+    Each column above stands for one valid parameter combination and check.
+    """
+
+    return _random_state_tuple(request.param)
+
+
 @pytest.fixture(params=[None, "builtin-list", "nd-arrays"])
-def make_weights(request, random_state_tuple):
-    """Specific to `test_dataframe_sample*` and `test_series_sample*` tests.
+def make_weights_axis_0(request, random_state_tuple):
+    """Specific to `test_sample*_axis_0` tests.
     Only testing weights array that matches type with random state.
     """
     _, gd_random_state, _ = random_state_tuple

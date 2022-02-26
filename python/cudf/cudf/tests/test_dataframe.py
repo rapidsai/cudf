@@ -7144,13 +7144,51 @@ def test_cudf_arrow_array_error():
         sr.__arrow_array__()
 
 
+@pytest.mark.parametrize(
+    "make_weights_axis_1",
+    [lambda _: None, lambda s: [1] * s, lambda s: np.ones(s)],
+)
+def test_sample_axis_1(
+    sample_n_frac, random_state_tuple_axis_1, make_weights_axis_1
+):
+    n, frac = sample_n_frac
+    pd_random_state, gd_random_state, checker = random_state_tuple_axis_1
+
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+            "int": [1, 3, 5, 4, 2],
+        },
+    )
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    weights = make_weights_axis_1(len(pdf.columns))
+
+    expected = pdf.sample(
+        n=n,
+        frac=frac,
+        replace=False,
+        random_state=pd_random_state,
+        weights=weights,
+        axis=1,
+    )
+    got = df.sample(
+        n=n,
+        frac=frac,
+        replace=False,
+        random_state=gd_random_state,
+        weights=weights,
+        axis=1,
+    )
+    checker(expected, got)
+
+
 @pytest.mark.parametrize("n", [0, 2, 10, None])
 @pytest.mark.parametrize("frac", [0.3, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
-@pytest.mark.parametrize("axis", [0, 1])
-def test_dataframe_sample_basic(
-    n, frac, replace, axis, random_state_tuple, make_weights
-):
+def test_sample_axis_0(n, frac, replace, random_state_tuple, make_weights):
+    axis = 0
     # TODO: decouple valid parameter set from invalid parameter set and
     # write two separate tests to reduce function complexity.
     if axis == 1 and replace:
@@ -7236,7 +7274,7 @@ def test_dataframe_sample_basic(
 @pytest.mark.parametrize(
     "random_state_lib", [cp.random.RandomState, np.random.RandomState]
 )
-def test_dataframe_sample_reproducibility(replace, random_state_lib):
+def test_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
 
     expected = df.sample(
@@ -7245,6 +7283,46 @@ def test_dataframe_sample_reproducibility(replace, random_state_lib):
     out = df.sample(1024, replace=replace, random_state=random_state_lib(10))
 
     assert_eq(expected, out)
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+def test_sample_invalid_n_frac_combo(axis):
+    n, frac = 2, 0.5
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+            "int": [1, 3, 5, 4, 2],
+        },
+    )
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert_exceptions_equal(
+        lfunc=pdf.sample,
+        rfunc=df.sample,
+        lfunc_args_and_kwargs=([], {"n": n, "frac": frac, "axis": axis}),
+        rfunc_args_and_kwargs=([], {"n": n, "frac": frac, "axis": axis}),
+    )
+
+
+@pytest.mark.parametrize("n, frac", [(100, None), (None, 3)])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_oversample_without_replace(n, frac, axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert_exceptions_equal(
+        lfunc=pdf.sample,
+        rfunc=df.sample,
+        lfunc_args_and_kwargs=(
+            [],
+            {"n": n, "frac": frac, "axis": axis, "replace": False},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"n": n, "frac": frac, "axis": axis, "replace": False},
+        ),
+    )
 
 
 @pytest.mark.parametrize(
