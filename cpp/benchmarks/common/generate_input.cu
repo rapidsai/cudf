@@ -756,7 +756,6 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::siz
   }
 }
 
-
 std::vector<cudf::type_id> get_type_or_group(int32_t id)
 {
   // identity transformation when passing a concrete type_id
