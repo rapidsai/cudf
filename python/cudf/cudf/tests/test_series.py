@@ -1590,17 +1590,16 @@ def test_fill_new_category():
     gs[0:1] = "d"
 
 
-@pytest.mark.parametrize("n", [0, 2, 10, None])
-@pytest.mark.parametrize("frac", [0.3, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
-def test_series_sample_basic(
-    n, frac, replace, random_state_tuple, make_weights
+def test_sample(
+    sample_n_frac, replace, random_state_tuple_axis_0, make_weights_axis_0
 ):
-    pd_random_state, gd_random_state, checker = random_state_tuple
+    n, frac = sample_n_frac
+    pd_random_state, gd_random_state, checker = random_state_tuple_axis_0
     psr = pd.Series([1, 2, 3, 4, 5])
     sr = cudf.Series.from_pandas(psr)
 
-    pd_weights, gd_weights = make_weights(len(psr))
+    pd_weights, gd_weights = make_weights_axis_0(len(psr))
     if (
         not replace
         and not isinstance(gd_random_state, np.random.RandomState)
@@ -1611,49 +1610,22 @@ def test_series_sample_basic(
             "without replacement."
         )
 
-    try:
-        expected = psr.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            weights=pd_weights,
-            random_state=pd_random_state,
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=psr.sample,
-            rfunc=sr.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "weights": pd_weights,
-                    "random_state": pd_random_state,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "weights": gd_weights,
-                    "random_state": gd_random_state,
-                },
-            ),
-            compare_error_message=False,
-        )
-    else:
-        got = sr.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            weights=gd_weights,
-            random_state=gd_random_state,
-        )
-        checker(expected, got)
+    expected = psr.sample(
+        n=n,
+        frac=frac,
+        replace=replace,
+        weights=pd_weights,
+        random_state=pd_random_state,
+    )
+
+    got = sr.sample(
+        n=n,
+        frac=frac,
+        replace=replace,
+        weights=gd_weights,
+        random_state=gd_random_state,
+    )
+    checker(expected, got)
 
 
 @pytest.mark.parametrize(
