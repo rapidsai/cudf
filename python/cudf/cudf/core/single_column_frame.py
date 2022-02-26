@@ -4,7 +4,16 @@
 from __future__ import annotations
 
 import builtins
-from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -46,7 +55,10 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(
                 "numeric_only parameter is not implemented yet"
             )
-        return getattr(self._column, op)(**kwargs)
+        try:
+            return getattr(self._column, op)(**kwargs)
+        except AttributeError:
+            raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
     def _scan(self, op, axis=None, *args, **kwargs):
         if axis not in (None, 0):
@@ -279,7 +291,10 @@ class SingleColumnFrame(Frame, NotIterable):
         reflect: bool = False,
         *args,
         **kwargs,
-    ) -> Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]:
+    ) -> Union[
+        Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        Type[NotImplemented],
+    ]:
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters
