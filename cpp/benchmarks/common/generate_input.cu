@@ -162,7 +162,7 @@ struct random_value_fn;
  * @brief Creates an random timestamp/duration value
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
   distribution_fn<int64_t> seconds_gen;
   distribution_fn<int64_t> nanoseconds_gen;
 
@@ -220,7 +220,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  * @brief Creates an random fixed_point value. Not implemented yet.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   using rep = typename T::rep;
   rep const lower_bound;
   rep const upper_bound;
@@ -262,9 +262,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
  * @brief Creates an random numeric value with the given distribution.
  */
 template <typename T>
-struct random_value_fn<
-  T,
-  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
+struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   T const lower_bound;
   T const upper_bound;
   distribution_fn<T> dist;
