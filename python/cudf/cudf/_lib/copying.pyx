@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pickle
 
@@ -46,6 +46,23 @@ from cudf._lib.utils cimport (
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
+
+
+def _gather_map_is_valid(
+    gather_map: "cudf.core.column.ColumnBase",
+    nrows: int,
+    check_bounds: bool,
+    nullify: bool,
+) -> bool:
+    """Returns true if gather map is valid.
+
+    A gather map is valid if empty or all indices are within the range
+    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    """
+    if not check_bounds or nullify or len(gather_map) == 0:
+        return True
+    gm_min, gm_max = minmax(gather_map)
+    return gm_min >= -nrows and gm_max < nrows
 
 
 def copy_column(Column input_column):
@@ -520,11 +537,11 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
                 as_device_scalar(lhs), as_device_scalar(rhs), boolean_mask)
 
 
-def _boolean_mask_scatter_table(input_table, target_table,
-                                Column boolean_mask):
+def _boolean_mask_scatter_columns(list input_columns, list target_columns,
+                                  Column boolean_mask):
 
-    cdef table_view input_table_view = table_view_from_columns(input_table)
-    cdef table_view target_table_view = table_view_from_columns(target_table)
+    cdef table_view input_table_view = table_view_from_columns(input_columns)
+    cdef table_view target_table_view = table_view_from_columns(target_columns)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[table] c_result
@@ -538,14 +555,10 @@ def _boolean_mask_scatter_table(input_table, target_table,
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=target_table._index._column_names
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
-def _boolean_mask_scatter_scalar(list input_scalars, target_table,
+def _boolean_mask_scatter_scalar(list input_scalars, list target_columns,
                                  Column boolean_mask):
 
     cdef vector[reference_wrapper[constscalar]] input_scalar_vector
@@ -554,7 +567,7 @@ def _boolean_mask_scatter_scalar(list input_scalars, target_table,
     for scl in input_scalars:
         input_scalar_vector.push_back(reference_wrapper[constscalar](
             scl.get_raw_ptr()[0]))
-    cdef table_view target_table_view = table_view_from_columns(target_table)
+    cdef table_view target_table_view = table_view_from_columns(target_columns)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[table] c_result
@@ -568,29 +581,37 @@ def _boolean_mask_scatter_scalar(list input_scalars, target_table,
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=target_table._index._column_names
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
-# TODO: This function is currently unused but should be used in
-# ColumnBase.__setitem__, see https://github.com/rapidsai/cudf/issues/8667.
-def boolean_mask_scatter(object input, target_table,
+def boolean_mask_scatter(list input_, list target_columns,
                          Column boolean_mask):
+    """Copy the target columns, replacing masked rows with input data.
 
-    if isinstance(input, cudf.core.frame.Frame):
-        return _boolean_mask_scatter_table(
-            input,
-            target_table,
+    The ``input_`` data can be a list of columns or as a list of scalars.
+    A list of input columns will be used to replace corresponding rows in the
+    target columns for which the boolean mask is ``True``. For the nth ``True``
+    in the boolean mask, the nth row in ``input_`` is used to replace. A list
+    of input scalars will replace all rows in the target columns for which the
+    boolean mask is ``True``.
+    """
+    if len(input_) != len(target_columns):
+        raise ValueError("Mismatched number of input and target columns.")
+
+    if len(input_) == 0:
+        return []
+
+    if isinstance(input_[0], Column):
+        return _boolean_mask_scatter_columns(
+            input_,
+            target_columns,
             boolean_mask
         )
     else:
-        scalar_list = [as_device_scalar(i) for i in input]
+        scalar_list = [as_device_scalar(i) for i in input_]
         return _boolean_mask_scatter_scalar(
             scalar_list,
-            target_table,
+            target_columns,
             boolean_mask
         )
 

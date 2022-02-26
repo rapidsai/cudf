@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,19 +17,9 @@
 #pragma once
 
 #ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE      __device__ inline
-
-// This version of the macro maximizes the chances of inlining when applied to
-// a callable that is called on the GPU.
-#define CUDF_HDFI __host__ __device__ __forceinline__
-#define CUDF_DFI  __device__ __forceinline__
+#define CUDF_HOST_DEVICE __host__ __device__
 #else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE      inline
-
-#define CUDF_HDFI inline
-#define CUDF_DFI  inline
+#define CUDF_HOST_DEVICE
 #endif
 
 #include <cassert>
@@ -291,12 +281,12 @@ class data_type {
   /**
    * @brief Returns the type identifier
    */
-  constexpr type_id id() const noexcept { return _id; }
+  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    */
-  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -348,22 +338,6 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
-
-/**
- *  @brief Identifies the hash function to be used
- */
-enum class hash_id {
-  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,         ///< Murmur3 hash function
-  HASH_MD5,             ///< MD5 hash function
-  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
-};
-
-/**
- * @brief The default seed value for hash functions
- */
-static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

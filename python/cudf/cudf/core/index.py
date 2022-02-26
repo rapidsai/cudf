@@ -1,10 +1,11 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import math
 import pickle
 import warnings
+from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -54,7 +55,7 @@ from cudf.core.frame import Frame
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import cached_property, search_range
+from cudf.utils.utils import search_range
 
 T = TypeVar("T", bound="Frame")
 
@@ -519,6 +520,11 @@ class RangeIndex(BaseIndex):
         # that are not defined directly on RangeIndex.
         return Int64Index._from_data(self._data)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return self._as_int64().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
+
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
         # on the corresponding integer index if possible.
@@ -681,6 +687,17 @@ class RangeIndex(BaseIndex):
 
         return new_index
 
+    def _gather(self, gather_map, nullify=False, check_bounds=True):
+        gather_map = cudf.core.column.as_column(gather_map)
+        return Int64Index._from_columns(
+            [self._values.take(gather_map, nullify, check_bounds)], [self.name]
+        )
+
+    def _apply_boolean_mask(self, boolean_mask):
+        return Int64Index._from_columns(
+            [self._values.apply_boolean_mask(boolean_mask)], [self.name]
+        )
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
@@ -761,22 +778,40 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
-    @classmethod
-    def deserialize(cls, header, frames):
-        if "index_column" in header:
-            warnings.warn(
-                "Index objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("index_column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+
+        if ret is not None:
+            return ret
+
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cupy, ufunc.__name__)
+        if cupy_func:
+            if ufunc.nin == 2:
+                other = inputs[self is inputs[0]]
+                inputs = self._make_operands_for_binop(other)
+            else:
+                inputs = {
+                    name: (col, None, False, None)
+                    for name, col in self._data.items()
+                }
+
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
             )
 
-        return super().deserialize(header, frames)
+            out = [_index_from_data(out) for out in data]
+
+            # pandas returns numpy arrays when the outputs are boolean.
+            for i, o in enumerate(out):
+                # We explicitly _do not_ use isinstance here: we want only
+                # boolean GenericIndexes, not dtype-specific subclasses.
+                if type(o) is GenericIndex and o.dtype.kind == "b":
+                    out[i] = o.values
+
+            return out[0] if ufunc.nout == 1 else tuple(out)
+
+        return NotImplemented
 
     def _binaryop(
         self,
@@ -789,11 +824,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     ) -> SingleColumnFrame:
         # Specialize binops to generate the appropriate output index type.
         operands = self._make_operands_for_binop(other, fill_value, reflect)
-        return (
-            _index_from_data(data=self._colwise_binop(operands, fn),)
-            if operands is not NotImplemented
-            else NotImplemented
-        )
+        if operands is NotImplemented:
+            return NotImplemented
+        ret = _index_from_data(self._colwise_binop(operands, fn))
+
+        # pandas returns numpy arrays when the outputs are boolean. We
+        # explicitly _do not_ use isinstance here: we want only boolean
+        # GenericIndexes, not dtype-specific subclasses.
+        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+            return ret.values
+        return ret
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -831,6 +871,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         result.name = name
         return result
+
+    def memory_usage(self, deep=False):
+        return sum(super().memory_usage(deep=deep).values())
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
@@ -1535,9 +1578,11 @@ class DatetimeIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.DatetimeIndex([1, 2, 3, 4], name="a")
-    DatetimeIndex(['1970-01-01 00:00:00.001000', '1970-01-01 00:00:00.002000',
-                   '1970-01-01 00:00:00.003000', '1970-01-01 00:00:00.004000'],
-                  dtype='datetime64[ms]', name='a')
+    DatetimeIndex(['1970-01-01 00:00:00.000000001',
+                   '1970-01-01 00:00:00.000000002',
+                   '1970-01-01 00:00:00.000000003',
+                   '1970-01-01 00:00:00.000000004'],
+                  dtype='datetime64[ns]', name='a')
     """
 
     def __init__(
@@ -1899,12 +1944,13 @@ class DatetimeIndex(GenericIndex):
         Examples
         --------
         >>> import cudf
-        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
-        ... "1999-12-31 18:40:00"])
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:05:42",
+        ...     "1999-12-31 18:40:30",
+        ... ])
         >>> gIndex.ceil("T")
-        DatetimeIndex(['2020-05-31 08:00:00', '1999-12-31 18:40:00'],
-        dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.ceil(freq)
 
         return self.__class__._from_data({self.name: out_column})
@@ -1930,12 +1976,13 @@ class DatetimeIndex(GenericIndex):
         Examples
         --------
         >>> import cudf
-        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:59:59"
-        ... ,"1999-12-31 18:44:59"])
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:59:59",
+        ...     "1999-12-31 18:44:59",
+        ... ])
         >>> gIndex.floor("T")
-        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'],
-        dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.floor(freq)
 
         return self.__class__._from_data({self.name: out_column})
@@ -1967,21 +2014,14 @@ class DatetimeIndex(GenericIndex):
         ...     "2001-01-01 00:05:04",
         ... ], dtype="datetime64[ns]")
         >>> dt_idx
-        DatetimeIndex(['2001-01-01 00:04:45',
-                '2001-01-01 00:05:04',
-                '2001-01-01 00:04:58'],
-                dtype='datetime64[ns]', freq=None)
+        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:04:58',
+                       '2001-01-01 00:05:04'],
+                      dtype='datetime64[ns]')
         >>> dt_idx.round('H')
-        DatetimeIndex(['2001-01-01',
-                    '2001-01-01',
-                    '2001-01-01'],
-                    dtype='datetime64[ns]', freq=None)
+        DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
         >>> dt_idx.round('T')
-        DatetimeIndex(['2001-01-01 00:05:00',
-                    '2001-01-01 00:05:00',
-                    '2001-01-01 00:05:00'],
-                    dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.round(freq)
 
         return self.__class__._from_data({self.name: out_column})
@@ -2018,14 +2058,15 @@ class TimedeltaIndex(GenericIndex):
     --------
     >>> import cudf
     >>> cudf.TimedeltaIndex([1132223, 2023232, 342234324, 4234324],
-    ...     dtype='timedelta64[ns]')
-    TimedeltaIndex(['00:00:00.001132', '00:00:00.002023', '00:00:00.342234',
-                    '00:00:00.004234'],
-                dtype='timedelta64[ns]')
-    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype='timedelta64[s]',
+    ...     dtype="timedelta64[ns]")
+    TimedeltaIndex(['0 days 00:00:00.001132223', '0 days 00:00:00.002023232',
+                    '0 days 00:00:00.342234324', '0 days 00:00:00.004234324'],
+                  dtype='timedelta64[ns]')
+    >>> cudf.TimedeltaIndex([1, 2, 3, 4], dtype="timedelta64[s]",
     ...     name="delta-index")
-    TimedeltaIndex(['00:00:01', '00:00:02', '00:00:03', '00:00:04'],
-                dtype='timedelta64[s]', name='delta-index')
+    TimedeltaIndex(['0 days 00:00:01', '0 days 00:00:02', '0 days 00:00:03',
+                    '0 days 00:00:04'],
+                  dtype='timedelta64[s]', name='delta-index')
     """
 
     def __init__(
@@ -2154,11 +2195,11 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """  # noqa: E501
 
     def __init__(
@@ -2449,9 +2490,7 @@ class IntervalIndex(GenericIndex):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]],
-                    closed='right',
-                    dtype='interval[int64]')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
@@ -2502,7 +2541,7 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}({self._values.to_array()},"
+            f"{self.__class__.__name__}({self._values.values_host},"
             f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"

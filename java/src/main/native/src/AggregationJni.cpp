@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,6 +85,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
           return cudf::make_rank_aggregation(cudf::rank_method::MIN);
         case 29: // DENSE_RANK
           return cudf::make_rank_aggregation(cudf::rank_method::DENSE);
+        case 30: // PERCENT_RANK
+          return cudf::make_percent_rank_aggregation();
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
       }
     }();
@@ -139,10 +141,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv 
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 30: // TDIGEST
+      case 31: // TDIGEST
         ret = cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta);
         break;
-      case 31: // MERGE_TDIGEST
+      case 32: // MERGE_TDIGEST
         ret = cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta);
         break;
       default: throw std::logic_error("Unsupported TDigest Aggregation Operation");

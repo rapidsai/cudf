@@ -156,7 +156,7 @@ struct format_compiler {
 
   format_item const* compiled_format_items() { return d_items.data(); }
 
-  size_type items_count() const { return static_cast<size_type>(d_items.size()); }
+  [[nodiscard]] size_type items_count() const { return static_cast<size_type>(d_items.size()); }
 };
 
 template <typename T>

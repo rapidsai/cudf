@@ -84,11 +84,6 @@ def make_frame(
     return df
 
 
-def get_nelem():
-    for elem in [2, 3, 1000]:
-        yield elem
-
-
 @pytest.fixture
 def gdf():
     return DataFrame({"x": [1, 2, 3], "y": [0, 1, 1]})
@@ -1096,7 +1091,7 @@ def test_groupby_cumcount():
     )
 
 
-@pytest.mark.parametrize("nelem", get_nelem())
+@pytest.mark.parametrize("nelem", [2, 3, 1000])
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmin", "idxmax", "mean", "count"]
@@ -2358,6 +2353,28 @@ def test_groupby_get_group(pdf, group, name, obj):
 
     expected = pdf.groupby(group).get_group(name=name, obj=obj)
     actual = gdf.groupby(group).get_group(name=name, obj=gobj)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        ["a", "b"],
+        pd.Series([2, 1, 1, 2, 2]),
+        pd.Series(["b", "a", "a", "b", "b"]),
+    ],
+)
+@pytest.mark.parametrize("agg", ["sum", "mean", lambda df: df.mean()])
+def test_groupby_transform_aggregation(by, agg):
+    gdf = cudf.DataFrame(
+        {"a": [2, 2, 1, 2, 1], "b": [1, 1, 1, 2, 2], "c": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+
+    expected = pdf.groupby(by).transform(agg)
+    actual = gdf.groupby(by).transform(agg)
 
     assert_groupby_results_equal(expected, actual)
 

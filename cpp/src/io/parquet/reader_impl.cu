@@ -337,7 +337,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  size_type calc_num_rows() const
+  [[nodiscard]] size_type calc_num_rows() const
   {
     return std::accumulate(
       per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
@@ -348,7 +348,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Sums up the number of row groups of each source
    */
-  size_type calc_num_row_groups() const
+  [[nodiscard]] size_type calc_num_row_groups() const
   {
     return std::accumulate(
       per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
@@ -381,16 +381,16 @@ class aggregate_reader_metadata {
     }
   }
 
-  auto const& get_row_group(size_type row_group_index, size_type src_idx) const
+  [[nodiscard]] auto const& get_row_group(size_type row_group_index, size_type src_idx) const
   {
     CUDF_EXPECTS(src_idx >= 0 && src_idx < static_cast<size_type>(per_file_metadata.size()),
                  "invalid source index");
     return per_file_metadata[src_idx].row_groups[row_group_index];
   }
 
-  auto const& get_column_metadata(size_type row_group_index,
-                                  size_type src_idx,
-                                  int schema_idx) const
+  [[nodiscard]] auto const& get_column_metadata(size_type row_group_index,
+                                                size_type src_idx,
+                                                int schema_idx) const
   {
     auto col = std::find_if(
       per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
@@ -401,13 +401,16 @@ class aggregate_reader_metadata {
     return col->meta_data;
   }
 
-  auto get_num_rows() const { return num_rows; }
+  [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
-  auto get_num_row_groups() const { return num_row_groups; }
+  [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
-  auto const& get_schema(int schema_idx) const { return per_file_metadata[0].schema[schema_idx]; }
+  [[nodiscard]] auto const& get_schema(int schema_idx) const
+  {
+    return per_file_metadata[0].schema[schema_idx];
+  }
 
-  auto const& get_key_value_metadata() const { return agg_keyval_map; }
+  [[nodiscard]] auto const& get_key_value_metadata() const { return agg_keyval_map; }
 
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
@@ -416,7 +419,7 @@ class aggregate_reader_metadata {
    *
    * @return comma-separated index column names in quotes
    */
-  inline int get_output_nesting_depth(int schema_index) const
+  [[nodiscard]] inline int get_output_nesting_depth(int schema_index) const
   {
     auto& pfm = per_file_metadata[0];
     int depth = 0;
@@ -441,7 +444,7 @@ class aggregate_reader_metadata {
    *
    * @return comma-separated index column names in quotes
    */
-  std::string get_pandas_index() const
+  [[nodiscard]] std::string get_pandas_index() const
   {
     auto it = agg_keyval_map.find("pandas");
     if (it != agg_keyval_map.end()) {
@@ -472,7 +475,7 @@ class aggregate_reader_metadata {
    *
    * @param names List of column names to load, where index column name(s) will be added
    */
-  std::vector<std::string> get_pandas_index_names() const
+  [[nodiscard]] std::vector<std::string> get_pandas_index_names() const
   {
     std::vector<std::string> names;
     auto str = get_pandas_index();
@@ -511,9 +514,9 @@ class aggregate_reader_metadata {
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(std::vector<std::vector<size_type>> const& row_groups,
-                         size_type& row_start,
-                         size_type& row_count) const
+  [[nodiscard]] auto select_row_groups(std::vector<std::vector<size_type>> const& row_groups,
+                                       size_type& row_start,
+                                       size_type& row_count) const
   {
     if (!row_groups.empty()) {
       std::vector<row_group_info> selection;
@@ -570,10 +573,10 @@ class aggregate_reader_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  auto select_columns(std::vector<std::string> const& use_names,
-                      bool include_index,
-                      bool strings_to_categorical,
-                      type_id timestamp_type_id) const
+  [[nodiscard]] auto select_columns(std::vector<std::string> const& use_names,
+                                    bool include_index,
+                                    bool strings_to_categorical,
+                                    type_id timestamp_type_id) const
   {
     auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
       auto const& col_schema_idx = std::find_if(

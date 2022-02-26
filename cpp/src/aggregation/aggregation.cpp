@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,6 +150,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, rank_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, percent_rank_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
@@ -318,6 +324,11 @@ void aggregation_finalizer::visit(row_number_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(rank_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(percent_rank_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -598,6 +609,16 @@ template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(rank_me
                                                                          bool percentage);
 template std::unique_ptr<groupby_scan_aggregation> make_rank_aggregation<groupby_scan_aggregation>(
   rank_method method, null_policy null_handling, bool percentage);
+
+/// Factory to create a PERCENT_RANK aggregation
+template <typename Base>
+std::unique_ptr<Base> make_percent_rank_aggregation()
+{
+  return std::make_unique<detail::percent_rank_aggregation>();
+}
+template std::unique_ptr<aggregation> make_percent_rank_aggregation<aggregation>();
+template std::unique_ptr<groupby_scan_aggregation>
+make_percent_rank_aggregation<groupby_scan_aggregation>();
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base>

@@ -41,7 +41,7 @@ def test_series(data):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
 
-    np.testing.assert_equal(np.array(pdsr), dsr.compute().to_array())
+    np.testing.assert_equal(np.array(pdsr), dsr.compute().values_host)
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -114,7 +114,7 @@ def test_categorical_basic(data):
     sr = Series(cat)
     dsr = dgd.from_cudf(sr, npartitions=2)
     result = dsr.compute()
-    np.testing.assert_array_equal(cat.codes, result.to_array())
+    np.testing.assert_array_equal(cat.codes, result.cat.codes.values_host)
 
     assert dsr.dtype.to_pandas() == pdsr.dtype
     # Test attributes
@@ -122,7 +122,9 @@ def test_categorical_basic(data):
 
     assert_eq(pdsr.cat.categories, dsr.cat.categories)
 
-    np.testing.assert_array_equal(pdsr.cat.codes.values, result.to_array())
+    np.testing.assert_array_equal(
+        pdsr.cat.codes.values, result.cat.codes.values_host
+    )
 
     string = str(result)
     expect_str = """
@@ -207,12 +209,12 @@ def test_categorical_compare_ordered(data):
     # Test equality
     out = dsr1 == dsr1
     assert out.dtype == np.bool_
-    assert np.all(out.compute().to_array())
+    assert np.all(out.compute().values_host)
     assert np.all(pdsr1 == pdsr1)
 
     # Test inequality
     out = dsr1 != dsr1
-    assert not np.any(out.compute().to_array())
+    assert not np.any(out.compute().values_host)
     assert not np.any(pdsr1 != pdsr1)
 
     assert dsr1.cat.ordered
@@ -220,10 +222,10 @@ def test_categorical_compare_ordered(data):
 
     # Test ordered operators
     np.testing.assert_array_equal(
-        pdsr1 < pdsr2, (dsr1 < dsr2).compute().to_array()
+        pdsr1 < pdsr2, (dsr1 < dsr2).compute().values_host
     )
     np.testing.assert_array_equal(
-        pdsr1 > pdsr2, (dsr1 > dsr2).compute().to_array()
+        pdsr1 > pdsr2, (dsr1 > dsr2).compute().values_host
     )
 
 

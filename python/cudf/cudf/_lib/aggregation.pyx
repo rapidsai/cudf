@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import Enum, IntEnum
 
@@ -60,6 +60,7 @@ class AggregationKind(Enum):
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
     CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
+    COVARIANCE = libcudf_aggregation.aggregation.Kind.COVARIANCE
 
 
 class CorrelationType(IntEnum):
@@ -354,6 +355,7 @@ cdef class Aggregation:
                 c_method, min_periods
             ))
         return agg
+
 
 cdef class RollingAggregation:
     """A Cython wrapper for rolling window aggregations.
@@ -740,6 +742,21 @@ cdef class GroupbyAggregation:
             libcudf_aggregation.
             make_correlation_aggregation[groupby_aggregation](
                 c_method, min_periods
+            ))
+        return agg
+
+    @classmethod
+    def cov(
+        cls,
+        libcudf_types.size_type min_periods,
+        libcudf_types.size_type ddof=1
+    ):
+        cdef GroupbyAggregation agg = cls()
+
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_covariance_aggregation[groupby_aggregation](
+                min_periods, ddof
             ))
         return agg
 

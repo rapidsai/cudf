@@ -12,7 +12,7 @@ export GPUCI_RETRY_SLEEP=30
 export LABEL_OPTION=${LABEL_OPTION:-"--label main"}
 
 # Skip uploads unless BUILD_MODE == "branch"
-if [ ${BUILD_MODE} != "branch" ]; then
+if [ "${BUILD_MODE}" != "branch" ]; then
   echo "Skipping upload"
   return 0
 fi
@@ -24,24 +24,12 @@ if [ -z "$MY_UPLOAD_KEY" ]; then
 fi
 
 ################################################################################
-# SETUP - Get conda file output locations
-################################################################################
-
-gpuci_logger "Get conda file output locations"
-
-export LIBCUDF_FILE=`conda build --no-build-id --croot "$WORKSPACE/.conda-bld" conda/recipes/libcudf --output`
-export LIBCUDF_KAFKA_FILE=`conda build --no-build-id --croot "$WORKSPACE/.conda-bld" conda/recipes/libcudf_kafka --output`
-export CUDF_FILE=`conda build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON --output`
-export DASK_CUDF_FILE=`conda build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON --output`
-export CUDF_KAFKA_FILE=`conda build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON --output`
-export CUSTREAMZ_FILE=`conda build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON --output`
-
-################################################################################
 # UPLOAD - Conda packages
 ################################################################################
 
 gpuci_logger "Starting conda uploads"
 if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF" == "1" ]]; then
+  export LIBCUDF_FILE=$(conda build --no-build-id --croot "${CONDA_BLD_DIR}" conda/recipes/libcudf --output)
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
   echo ${LIBCUDF_FILE}
@@ -49,16 +37,19 @@ if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF" == "1" ]]; then
 fi
 
 if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
+  export CUDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/cudf --python=$PYTHON --output)
   test -e ${CUDF_FILE}
   echo "Upload cudf"
   echo ${CUDF_FILE}
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_FILE} --no-progress
 
+  export DASK_CUDF_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/dask-cudf --python=$PYTHON --output)
   test -e ${DASK_CUDF_FILE}
   echo "Upload dask-cudf"
   echo ${DASK_CUDF_FILE}
   gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${DASK_CUDF_FILE} --no-progress
 
+  export CUSTREAMZ_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/custreamz --python=$PYTHON --output)
   test -e ${CUSTREAMZ_FILE}
   echo "Upload custreamz"
   echo ${CUSTREAMZ_FILE}
@@ -66,6 +57,7 @@ if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
 fi
 
 if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF_KAFKA" == "1" ]]; then
+  export LIBCUDF_KAFKA_FILE=$(conda build --no-build-id --croot "${CONDA_BLD_DIR}" conda/recipes/libcudf_kafka --output)
   test -e ${LIBCUDF_KAFKA_FILE}
   echo "Upload libcudf_kafka"
   echo ${LIBCUDF_KAFKA_FILE}
@@ -73,6 +65,7 @@ if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF_KAFKA" == "1" ]]; then
 fi
 
 if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF_KAFKA" == "1" ]]; then
+  export CUDF_KAFKA_FILE=$(conda build --croot "${CONDA_BLD_DIR}" conda/recipes/cudf_kafka --python=$PYTHON --output)
   test -e ${CUDF_KAFKA_FILE}
   echo "Upload cudf_kafka"
   echo ${CUDF_KAFKA_FILE}

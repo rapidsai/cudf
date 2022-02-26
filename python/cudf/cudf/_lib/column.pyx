@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -8,12 +8,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudfxx
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -79,7 +74,6 @@ cdef class Column:
     ):
 
         self._size = size
-        self._cached_sizeof = None
         self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
@@ -209,7 +203,11 @@ cdef class Column:
 
     def _clear_cache(self):
         self._distinct_count = {}
-        self._cached_sizeof = None
+        try:
+            del self.memory_usage
+        except AttributeError:
+            # `self.memory_usage` was never called before, So ignore.
+            pass
         self._null_count = None
 
     def set_mask(self, value):

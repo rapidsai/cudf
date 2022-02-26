@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -20,11 +20,25 @@
 function(ConfigureTest CMAKE_TEST_NAME)
   add_executable(${CMAKE_TEST_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                  "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+    ${CMAKE_TEST_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               # For std:: support of __int128_t. Can be removed once using cuda::std
+               CXX_EXTENSIONS ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
   )
+
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+  install(
+    TARGETS ${CMAKE_TEST_NAME}
+    COMPONENT testing
+    DESTINATION bin/gtests/libcudf
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################
@@ -34,8 +48,13 @@ endfunction()
 # ##################################################################################################
 # * column tests ----------------------------------------------------------------------------------
 ConfigureTest(
-  COLUMN_TEST column/bit_cast_test.cpp column/column_view_shallow_test.cpp column/column_test.cu
-  column/column_device_view_test.cu column/compound_test.cu
+  COLUMN_TEST
+  column/bit_cast_test.cpp
+  column/column_device_view_test.cu
+  column/column_test.cu
+  column/column_view_device_span_test.cpp
+  column/column_view_shallow_test.cpp
+  column/compound_test.cu
 )
 
 # ##################################################################################################
@@ -95,7 +114,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
 )
 
 # ##################################################################################################
@@ -192,6 +211,7 @@ ConfigureTest(
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
+ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
@@ -292,6 +312,7 @@ ConfigureTest(
 ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
+  stream_compaction/distinct_count_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
   stream_compaction/drop_duplicates_tests.cpp

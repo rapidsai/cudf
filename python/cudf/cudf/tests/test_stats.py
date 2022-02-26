@@ -1,6 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -32,7 +31,8 @@ def test_series_reductions(method, dtype, skipna):
     arr = arr.astype(dtype)
     if dtype in (np.float32, np.float64):
         arr[[2, 5, 14, 19, 50, 70]] = np.nan
-    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+    sr = cudf.Series(arr)
+    sr[~mask] = None
     psr = sr.to_pandas()
     psr[~mask] = np.nan
 
@@ -83,7 +83,8 @@ def test_series_unique():
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+        sr = cudf.Series(arr)
+        sr[~mask] = None
         assert set(arr[mask]) == set(sr.unique().dropna().to_numpy())
         assert len(set(arr[mask])) == sr.nunique()
 
@@ -298,7 +299,8 @@ def test_series_median(dtype, num_na):
     mask = np.arange(100) >= num_na
 
     arr = arr.astype(dtype)
-    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+    sr = cudf.Series(arr)
+    sr[~mask] = None
     arr2 = arr[mask]
     ps = pd.Series(arr2, dtype=dtype)
 
@@ -510,9 +512,7 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.corr,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -520,7 +520,5 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.cov,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform covarience with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )

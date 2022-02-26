@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -12,13 +12,7 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import (
-    BinaryOperand,
-    DatetimeLikeScalar,
-    Dtype,
-    DtypeObj,
-    ScalarLike,
-)
+from cudf._typing import BinaryOperand, DatetimeLikeScalar, Dtype, DtypeObj
 from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -123,7 +117,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
         # Pandas supports only `timedelta64[ns]`, hence the cast.
         pd_series = pd.Series(
-            self.astype("timedelta64[ns]").to_array("NAT"), copy=False
+            self.astype("timedelta64[ns]").fillna("NaT").values_host,
+            copy=False,
         )
 
         if index is not None:
@@ -304,10 +299,6 @@ class TimeDeltaColumn(column.ColumnBase):
             ),
         )
 
-    def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column"""
-        return np.timedelta64("nat", self.time_unit)
-
     @property
     def time_unit(self) -> str:
         return self._time_unit
@@ -394,20 +385,29 @@ class TimeDeltaColumn(column.ColumnBase):
         return result.astype(self.dtype)
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count=0
+        self, skipna: bool = None, min_count: int = 0, dtype: Dtype = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.sum(
-                skipna=skipna, dtype=dtype, min_count=min_count
+            # Since sum isn't overriden in Numerical[Base]Column, mypy only
+            # sees the signature from Reducible (which doesn't have the extra
+            # parameters from ColumnBase._reduce) so we have to ignore this.
+            self.as_numerical.sum(  # type: ignore
+                skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+        self,
+        skipna: bool = None,
+        min_count: int = 0,
+        dtype: Dtype = np.float64,
+        ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
+            self.as_numerical.std(
+                skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
+            ),
             unit=self.time_unit,
         )
 

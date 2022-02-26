@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ std::unique_ptr<column> scan(column_view const& input,
 
   if (agg->kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
-                 "Unsupported rank aggregation operator for exclusive scan");
+                 "Rank aggregation operator requires an inclusive scan");
     auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(*agg);
     if (rank_agg._method == rank_method::MIN) {
       return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
@@ -42,6 +42,11 @@ std::unique_ptr<column> scan(column_view const& input,
       return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
     }
     CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
+  }
+  if (agg->kind == aggregation::PERCENT_RANK) {
+    CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
+                 "Percent rank aggregation operator requires an inclusive scan");
+    return inclusive_percent_rank_scan(input, rmm::cuda_stream_default, mr);
   }
 
   return inclusive == scan_type::EXCLUSIVE
