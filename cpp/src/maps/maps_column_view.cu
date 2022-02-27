@@ -1,0 +1,88 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <cudf/lists/contains.hpp>
+#include <cudf/lists/extract.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/maps/maps_column_view.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/exec_policy.hpp>
+
+namespace cudf {
+
+namespace {
+column_view make_lists(column_view const& lists_child, lists_column_view const& lists_of_structs)
+{
+  return column_view{data_type{type_id::LIST}, 
+                     lists_of_structs.size(), 
+                     nullptr, 
+                     lists_of_structs.null_mask(), 
+                     lists_of_structs.null_count(), 
+                     lists_of_structs.offset(), 
+                     {lists_of_structs.offsets(), lists_child}};
+}
+}
+
+maps_column_view::maps_column_view(lists_column_view const& lists_of_structs, rmm::cuda_stream_view stream)
+  : keys_{make_lists(lists_of_structs.child().child(0), lists_of_structs)},
+    values_{make_lists(lists_of_structs.child().child(1), lists_of_structs)}
+{
+    auto const structs = lists_of_structs.child();
+    CUDF_EXPECTS(structs.type().id() == type_id::STRUCT, "maps_column_view input must have exactly 1 child (STRUCT) column.");
+}
+
+lists_column_view maps_column_view::keys() const
+{
+    return keys_;
+}
+
+lists_column_view maps_column_view::values() const
+{
+    return values_;
+}
+
+// TODO: Move to detail header.
+namespace lists::detail
+{
+std::unique_ptr<column> index_of(
+  cudf::lists_column_view const& lists,
+  cudf::column_view const& search_keys,
+  duplicate_find_option find_option,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+} // namespace lists::detail;
+
+std::unique_ptr<column> maps_column_view::get_values_for(
+    column_view const& keys,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
+{
+    CUDF_EXPECTS(keys.type().id() == keys_.child().type().id(), 
+                 "Lookup keys must have the same type as the keys of the map column.");
+    CUDF_EXPECTS(keys.size() == size(), 
+                 "Lookup keys must have the same size as the map column.");
+    
+    auto key_indices = lists::detail::index_of(keys_, keys, lists::duplicate_find_option::FIND_LAST, stream); 
+
+    auto constexpr absent_offset = size_type{-1};
+    auto constexpr nullity_offset = std::numeric_limits<size_type>::max();
+    thrust::replace(rmm::exec_policy(stream), key_indices->mutable_view().begin<size_type>(), key_indices->mutable_view().end<size_type>(), absent_offset, nullity_offset);
+    // TODO: Extract detail function to a header.
+    return cudf::lists::extract_list_element(values_, key_indices->view(), mr);
+}
+
+} // namespace cudf;

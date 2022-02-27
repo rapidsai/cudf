@@ -352,6 +352,7 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
+  src/maps/maps_column_view.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
