@@ -676,13 +676,13 @@ constexpr inline bool is_nested(data_type type)
 
 template <typename FromType>
 struct is_bit_castable_to_impl {
-  template <typename ToType, typename std::enable_if_t<is_compound<ToType>()>* = nullptr>
+  template <typename ToType, std::enable_if_t<is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
     return false;
   }
 
-  template <typename ToType, typename std::enable_if_t<not is_compound<ToType>()>* = nullptr>
+  template <typename ToType, std::enable_if_t<not is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
     if (not cuda::std::is_trivially_copyable_v<FromType> ||
@@ -696,13 +696,13 @@ struct is_bit_castable_to_impl {
 };
 
 struct is_bit_castable_from_impl {
-  template <typename FromType, typename std::enable_if_t<is_compound<FromType>()>* = nullptr>
+  template <typename FromType, std::enable_if_t<is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type)
   {
     return false;
   }
 
-  template <typename FromType, typename std::enable_if_t<not is_compound<FromType>()>* = nullptr>
+  template <typename FromType, std::enable_if_t<not is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type to)
   {
     return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});
