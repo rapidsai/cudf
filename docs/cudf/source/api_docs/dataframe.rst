@@ -209,7 +209,7 @@ Reshaping, sorting, transposing
    DataFrame.T
    DataFrame.transpose
 
-Combining / comparing / joining / merging / encoding
+Combining / comparing / joining / merging
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
