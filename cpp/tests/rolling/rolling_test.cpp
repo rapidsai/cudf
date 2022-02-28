@@ -237,44 +237,29 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
     return structs_col{{child1, child2}};
   }();
 
-  auto const input_sliced = [] {
+  auto const input_before_sliced = [] {
     auto constexpr dont_care{0};
     // input_original needs to be static so it will not be destroyed.
-    static auto const input_original = [] {
-      auto child1 = strings_col{"1dont_care",
-                                "1dont_care",
-                                "@dont_care",
-                                "This",
-                                "is",
-                                "rolling",
-                                "test",
-                                "being",
-                                "operated",
-                                "on",
-                                "string",
-                                "column",
-                                "1dont_care",
-                                "1dont_care",
-                                "@dont_care"};
-      auto child2 = ints_col{dont_care,
-                             dont_care,
-                             dont_care,
-                             1,
-                             2,
-                             3,
-                             4,
-                             5,
-                             6,
-                             7,
-                             8,
-                             9,
-                             dont_care,
-                             dont_care,
-                             dont_care};
-      return structs_col{{child1, child2}};
-    }();
-    return cudf::slice(input_original, {3, 12})[0];
+    auto child1 = strings_col{"1dont_care",
+                              "1dont_care",
+                              "@dont_care",
+                              "This",
+                              "is",
+                              "rolling",
+                              "test",
+                              "being",
+                              "operated",
+                              "on",
+                              "string",
+                              "column",
+                              "1dont_care",
+                              "1dont_care",
+                              "@dont_care"};
+    auto child2 = ints_col{
+      dont_care, dont_care, dont_care, 1, 2, 3, 4, 5, 6, 7, 8, 9, dont_care, dont_care, dont_care};
+    return structs_col{{child1, child2}};
   }();
+  auto const input_sliced = cudf::slice(input_before_sliced, {3, 12})[0];
 
   do_test(input_no_sliced);
   do_test(input_sliced);
