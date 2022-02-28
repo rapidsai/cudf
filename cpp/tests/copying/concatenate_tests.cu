@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -340,10 +340,26 @@ struct OverflowTest : public cudf::test::BaseFixture {
 TEST_F(OverflowTest, OverflowTest)
 {
   using namespace cudf;
+  // should concatenate up to size_type::max rows.
+  {
+    // 5 x size + size_last adds to size_type::max
+    constexpr auto size      = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
+    constexpr auto size_last = static_cast<size_type>(836763647);
+
+    auto many_chars      = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto many_chars_last = cudf::make_fixed_width_column(data_type{type_id::INT8}, size_last);
+
+    table_view tbl({*many_chars});
+    table_view tbl_last({*many_chars_last});
+    std::vector<cudf::table_view> table_views_to_concat({tbl, tbl, tbl, tbl, tbl, tbl_last});
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
+    EXPECT_NO_THROW(rmm::cuda_stream_default.synchronize());
+    ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max());
+  }
 
   // primitive column
   {
-    constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 char columns of size 1 billion each
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
@@ -355,7 +371,7 @@ TEST_F(OverflowTest, OverflowTest)
 
   // string column, overflow on chars
   {
-    constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns of with 1 billion chars in each
     auto offsets    = cudf::test::fixed_width_column_wrapper<offset_type>{0, size};
@@ -370,7 +386,7 @@ TEST_F(OverflowTest, OverflowTest)
 
   // string column, overflow on offsets (rows)
   {
-    constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 6 string columns 1 billion rows each
     auto many_offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, size + 1);
@@ -385,8 +401,7 @@ TEST_F(OverflowTest, OverflowTest)
 
   // list<struct>, structs too long
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
 
     // struct
     std::vector<std::unique_ptr<column>> children;
@@ -408,9 +423,8 @@ TEST_F(OverflowTest, OverflowTest)
 
   // struct<int, list>, list child too long
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
-    constexpr size_type size = 3;
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
+    constexpr size_type size  = 3;
 
     // list
     auto offsets    = cudf::test::fixed_width_column_wrapper<offset_type>{0, 0, 0, inner_size};
@@ -437,7 +451,7 @@ TEST_F(OverflowTest, Presliced)
 
   // primitive column
   {
-    constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 4 char columns of size ~1/2 billion each
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
@@ -454,7 +468,7 @@ TEST_F(OverflowTest, Presliced)
 
   // struct<int8> column
   {
-    constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // try and concatenate 4 char columns of size ~1/2 billion each
     std::vector<std::unique_ptr<column>> children;
@@ -542,8 +556,7 @@ TEST_F(OverflowTest, Presliced)
 
   // list<struct>, structs too long
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     // struct
     std::vector<std::unique_ptr<column>> children;
@@ -616,8 +629,7 @@ TEST_F(OverflowTest, Presliced)
 
   // struct<int8, list>, list child elements too long
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
     constexpr size_type num_rows  = 4;
     constexpr size_type list_size = inner_size / num_rows;
 
@@ -656,7 +668,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
 
   // primitive column
   {
-    constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
     auto sliced     = cudf::slice(*many_chars, {16, 32});
@@ -668,8 +680,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
 
   // strings column
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
     constexpr size_type num_rows    = 1024;
     constexpr size_type string_size = inner_size / num_rows;
 
@@ -696,8 +707,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
 
   // list<int8> column
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
     constexpr size_type num_rows  = 1024;
     constexpr size_type list_size = inner_size / num_rows;
 
@@ -724,8 +734,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
 
   // struct<int8, list>
   {
-    constexpr size_type inner_size =
-      static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+    constexpr auto inner_size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
     constexpr size_type num_rows  = 1024;
     constexpr size_type list_size = inner_size / num_rows;
 

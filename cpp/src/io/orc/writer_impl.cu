@@ -181,7 +181,7 @@ class orc_column_view {
 
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
   void set_dict_stride(size_t stride) noexcept { _dict_stride = stride; }
-  auto dict_stride() const noexcept { return _dict_stride; }
+  [[nodiscard]] auto dict_stride() const noexcept { return _dict_stride; }
 
   /**
    * @brief Function that associates an existing dictionary chunk allocation
@@ -192,14 +192,14 @@ class orc_column_view {
     dict   = host_dict;
     d_dict = dev_dict;
   }
-  auto host_dict_chunk(size_t rowgroup) const
+  [[nodiscard]] auto host_dict_chunk(size_t rowgroup) const
   {
     CUDF_EXPECTS(is_string(), "Dictionary chunks are only present in string columns.");
     return &dict[rowgroup * _dict_stride + _str_idx];
   }
-  auto device_dict_chunk() const { return d_dict; }
+  [[nodiscard]] auto device_dict_chunk() const { return d_dict; }
 
-  auto const& decimal_offsets() const { return d_decimal_offsets; }
+  [[nodiscard]] auto const& decimal_offsets() const { return d_decimal_offsets; }
   void attach_decimal_offsets(uint32_t* sizes_ptr) { d_decimal_offsets = sizes_ptr; }
 
   /**
@@ -211,39 +211,39 @@ class orc_column_view {
     stripe_dict   = host_stripe_dict;
     d_stripe_dict = dev_stripe_dict;
   }
-  auto host_stripe_dict(size_t stripe) const
+  [[nodiscard]] auto host_stripe_dict(size_t stripe) const
   {
     CUDF_EXPECTS(is_string(), "Stripe dictionary is only present in string columns.");
     return &stripe_dict[stripe * _dict_stride + _str_idx];
   }
-  auto device_stripe_dict() const noexcept { return d_stripe_dict; }
+  [[nodiscard]] auto device_stripe_dict() const noexcept { return d_stripe_dict; }
 
   // Index in the table
-  uint32_t index() const noexcept { return _index; }
+  [[nodiscard]] uint32_t index() const noexcept { return _index; }
   // Id in the ORC file
-  auto id() const noexcept { return _index + 1; }
+  [[nodiscard]] auto id() const noexcept { return _index + 1; }
 
-  auto is_child() const noexcept { return _is_child; }
+  [[nodiscard]] auto is_child() const noexcept { return _is_child; }
   auto parent_index() const noexcept { return _parent_index.value(); }
   auto child_begin() const noexcept { return children.cbegin(); }
   auto child_end() const noexcept { return children.cend(); }
   auto num_children() const noexcept { return children.size(); }
 
-  auto type_width() const noexcept { return _type_width; }
+  [[nodiscard]] auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
 
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }
-  bool nullable() const noexcept { return null_mask() != nullptr; }
+  [[nodiscard]] bool nullable() const noexcept { return null_mask() != nullptr; }
   auto user_defined_nullable() const noexcept { return nullable_from_metadata; }
 
-  auto scale() const noexcept { return _scale; }
-  auto precision() const noexcept { return _precision; }
+  [[nodiscard]] auto scale() const noexcept { return _scale; }
+  [[nodiscard]] auto precision() const noexcept { return _precision; }
 
   void set_orc_encoding(ColumnEncodingKind e) noexcept { _encoding_kind = e; }
-  auto orc_kind() const noexcept { return _type_kind; }
-  auto orc_encoding() const noexcept { return _encoding_kind; }
-  std::string_view orc_name() const noexcept { return name; }
+  [[nodiscard]] auto orc_kind() const noexcept { return _type_kind; }
+  [[nodiscard]] auto orc_encoding() const noexcept { return _encoding_kind; }
+  [[nodiscard]] std::string_view orc_name() const noexcept { return name; }
 
  private:
   column_view cudf_column;
@@ -1063,15 +1063,15 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
 }
 
 writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
-  bool are_statistics_enabled,
+  statistics_freq stats_freq,
   orc_table_view const& orc_table,
   file_segmentation const& segmentation)
 {
-  auto const num_rowgroup_blobs = segmentation.rowgroups.count();
-  auto const num_stripe_blobs   = segmentation.num_stripes() * orc_table.num_columns();
-  auto const num_file_blobs     = orc_table.num_columns();
-  auto const num_stat_blobs     = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
-
+  auto const num_rowgroup_blobs     = segmentation.rowgroups.count();
+  auto const num_stripe_blobs       = segmentation.num_stripes() * orc_table.num_columns();
+  auto const num_file_blobs         = orc_table.num_columns();
+  auto const num_stat_blobs         = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
+  auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
   if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
@@ -1164,17 +1164,27 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
 
   hostdevice_vector<uint8_t> blobs(
     stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks, stream);
-  gpu::orc_encode_statistics(
-    blobs.device_ptr(), stat_merge.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
+  // Skip rowgroup blobs when encoding, if chosen granularity is coarser than "ROW_GROUP".
+  auto const is_granularity_rowgroup = stats_freq == ORC_STATISTICS_ROW_GROUP;
+  auto const num_skip                = is_granularity_rowgroup ? 0 : num_rowgroup_blobs;
+  gpu::orc_encode_statistics(blobs.device_ptr(),
+                             stat_merge.device_ptr(num_skip),
+                             stat_chunks.data() + num_skip,
+                             num_stat_blobs - num_skip,
+                             stream);
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
 
-  std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
-  for (size_t i = 0; i < num_rowgroup_blobs; i++) {
-    auto const stat_begin = blobs.host_ptr(rowgroup_stat_merge[i].start_chunk);
-    auto const stat_end   = stat_begin + rowgroup_stat_merge[i].num_chunks;
-    rowgroup_blobs[i].assign(stat_begin, stat_end);
-  }
+  auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
+    if (not is_granularity_rowgroup) { return {}; }
+    std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
+    for (size_t i = 0; i < num_rowgroup_blobs; i++) {
+      auto const stat_begin = blobs.host_ptr(rowgroup_stat_merge[i].start_chunk);
+      auto const stat_end   = stat_begin + rowgroup_stat_merge[i].num_chunks;
+      rowgroup_blobs[i].assign(stat_begin, stat_end);
+    }
+    return rowgroup_blobs;
+  }();
 
   std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
   for (size_t i = 0; i < num_stripe_blobs; i++) {
@@ -1351,7 +1361,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.is_enabled_statistics()),
+    stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
@@ -1372,7 +1382,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.is_enabled_statistics()),
+    stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
@@ -1954,7 +1964,7 @@ void writer::impl::write(table_view const& table)
 
     ProtobufWriter pbw_(&buffer_);
 
-    auto const statistics = gather_statistic_blobs(enable_statistics_, orc_table, segmentation);
+    auto const statistics = gather_statistic_blobs(stats_freq_, orc_table, segmentation);
 
     // Write stripes
     std::vector<std::future<void>> write_tasks;

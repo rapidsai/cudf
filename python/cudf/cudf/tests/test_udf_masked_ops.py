@@ -1,3 +1,4 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -13,7 +14,12 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
+from cudf.core.udf.utils import precompiled
+from cudf.testing._utils import (
+    _decimal_series,
+    assert_eq,
+    parametrize_numeric_dtypes_pairwise,
+)
 
 
 def run_masked_udf_test(func, data, args=(), **kwargs):
@@ -237,10 +243,9 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("dtype_a", list(NUMERIC_TYPES))
-@pytest.mark.parametrize("dtype_b", list(NUMERIC_TYPES))
+@parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
-def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
+def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
     """
     Test that operations can be performed between columns
     of different dtypes and return a column with the correct
@@ -250,7 +255,7 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
     # First perform the op on two dummy data on host, if numpy can
     # safely type cast, we should expect it to work in udf too.
     try:
-        op(getattr(np, dtype_a)(0), getattr(np, dtype_b)(42))
+        op(np.dtype(left_dtype).type(0), np.dtype(right_dtype).type(42))
     except TypeError:
         pytest.skip("Operation is unsupported for corresponding dtype.")
 
@@ -260,8 +265,8 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1.5, None, 3, None], "b": [4, 5, None, None]})
-    gdf["a"] = gdf["a"].astype(dtype_a)
-    gdf["b"] = gdf["b"].astype(dtype_b)
+    gdf["a"] = gdf["a"].astype(left_dtype)
+    gdf["b"] = gdf["b"].astype(right_dtype)
 
     run_masked_udf_test(func, gdf, check_dtype=False)
 
@@ -485,7 +490,7 @@ def test_masked_udf_nested_function_support(op):
         {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
     )
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError):
         gdf.apply(outer, axis=1)
 
     pdf = gdf.to_pandas(nullable=True)
@@ -538,7 +543,7 @@ def test_masked_udf_unsupported_dtype(unsupported_col):
         return row["unsupported_col"]
 
     # check that we fail when an unsupported type is used within a function
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         data.apply(func, axis=1)
 
     # also check that a DF containing unsupported dtypes can still run a
@@ -595,6 +600,44 @@ def test_masked_udf_scalar_args_binops_multiple(data, op):
     run_masked_udf_test(func, data, args=(1, 2), check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, cudf.NA, 3],
+        [0.5, 2.0, cudf.NA, cudf.NA, 5.0],
+        [True, False, cudf.NA],
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_mask_udf_scalar_args_binops_series(data, op):
+    data = cudf.Series(data)
+
+    def func(x, c):
+        return x + c
+
+    run_masked_udf_series(func, data, args=(1,), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, cudf.NA, 3],
+        [0.5, 2.0, cudf.NA, cudf.NA, 5.0],
+        [True, False, cudf.NA],
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_scalar_args_binops_multiple_series(data, op):
+    data = cudf.Series(data)
+
+    def func(data, c, k):
+        x = op(data, c)
+        y = op(x, k)
+        return y
+
+    run_masked_udf_series(func, data, args=(1, 2), check_dtype=False)
+
+
 def test_masked_udf_caching():
     # Make sure similar functions that differ
     # by simple things like constants actually
@@ -612,3 +655,16 @@ def test_masked_udf_caching():
     expect = data ** 3
     got = data.applymap(lambda x: x ** 3)
     assert_eq(expect, got, check_dtype=False)
+
+    # make sure we get a hit when reapplying
+    def f(x):
+        return x + 1
+
+    precompiled.clear()
+    assert precompiled.currsize == 0
+    data.apply(f)
+
+    assert precompiled.currsize == 1
+    data.apply(f)
+
+    assert precompiled.currsize == 1

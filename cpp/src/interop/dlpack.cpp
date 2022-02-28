@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,9 +91,9 @@ struct data_type_to_DLDataType_impl {
   {
     uint8_t const bits{sizeof(T) * 8};
     uint16_t const lanes{1};
-    if (std::is_floating_point<T>::value) {
+    if (std::is_floating_point_v<T>) {
       return DLDataType{kDLFloat, bits, lanes};
-    } else if (std::is_signed<T>::value) {
+    } else if (std::is_signed_v<T>) {
       return DLDataType{kDLInt, bits, lanes};
     } else {
       return DLDataType{kDLUInt, bits, lanes};
@@ -168,7 +168,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   data_type const dtype = DLDataType_to_data_type(tensor.dtype);
 
   size_t const byte_width = size_of(dtype);
-  size_t const num_rows   = static_cast<size_t>(tensor.shape[0]);
+  auto const num_rows     = static_cast<size_t>(tensor.shape[0]);
   size_t const bytes      = num_rows * byte_width;
 
   // For 2D tensors, if the strides pointer is not null, then strides[1] is the

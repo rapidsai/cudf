@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -250,9 +250,8 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
   chars_per_thread[char_for_thread] = num_new_chars;
 
-  typedef cub::
-    BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>
-      BlockStore;
+  using BlockStore =
+    cub::BlockStore<uint32_t, THREADS_PER_BLOCK, MAX_NEW_CHARS, cub::BLOCK_STORE_WARP_TRANSPOSE>;
   __shared__ typename BlockStore::TempStorage temp_storage;
 
   // Now we perform coalesced writes back to global memory using cub.
@@ -262,17 +261,17 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
 }  // namespace
 
-data_normalizer::data_normalizer(rmm::cuda_stream_view stream, bool do_lower_case)
-  : do_lower_case(do_lower_case)
+data_normalizer::data_normalizer(codepoint_metadata_type const* cp_metadata,
+                                 aux_codepoint_data_type const* aux_table,
+                                 bool do_lower_case)
+  : d_cp_metadata{cp_metadata}, d_aux_table{aux_table}, do_lower_case{do_lower_case}
 {
-  d_cp_metadata = detail::get_codepoint_metadata(stream);
-  d_aux_table   = detail::get_aux_codepoint_data(stream);
 }
 
 uvector_pair data_normalizer::normalize(char const* d_strings,
                                         uint32_t const* d_offsets,
                                         uint32_t num_strings,
-                                        rmm::cuda_stream_view stream)
+                                        rmm::cuda_stream_view stream) const
 {
   if (num_strings == 0)
     return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),

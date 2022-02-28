@@ -219,7 +219,6 @@ Combining / comparing / joining / merging / encoding
    DataFrame.join
    DataFrame.merge
    DataFrame.update
-   DataFrame.label_encoding
    DataFrame.one_hot_encoding
 
 Numerical operations
@@ -249,8 +248,6 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
-   DataFrame.as_gpu_matrix
-   DataFrame.as_matrix
    DataFrame.from_arrow
    DataFrame.from_pandas
    DataFrame.from_records
