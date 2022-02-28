@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,25 @@
  * limitations under the License.
  */
 
-#include <fixture/benchmark_fixture.hpp>
-#include <fixture/templated_benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/binaryop.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 class COMPILED_BINARYOP : public cudf::benchmark {
 };
 
-template <typename TypeLhs, typename TypeRhs, typename TypeOut, cudf::binary_operator binop>
-void BM_compiled_binaryop(benchmark::State& state)
+template <typename TypeLhs, typename TypeRhs, typename TypeOut>
+void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  auto data_it = thrust::make_counting_iterator(0);
-  cudf::test::fixed_width_column_wrapper<TypeLhs> input1(data_it, data_it + column_size);
-  cudf::test::fixed_width_column_wrapper<TypeRhs> input2(data_it, data_it + column_size);
+  auto const source_table = create_sequence_table(
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{column_size});
 
-  auto lhs          = cudf::column_view(input1);
-  auto rhs          = cudf::column_view(input2);
+  auto lhs          = cudf::column_view(source_table->get_column(0));
+  auto rhs          = cudf::column_view(source_table->get_column(1));
   auto output_dtype = cudf::data_type(cudf::type_to_id<TypeOut>());
 
   // Call once for hot cache.
@@ -50,20 +45,25 @@ void BM_compiled_binaryop(benchmark::State& state)
 }
 
 // TODO tparam boolean for null.
-#define BINARYOP_BENCHMARK_DEFINE(TypeLhs, TypeRhs, binop, TypeOut) \
-  TEMPLATED_BENCHMARK_F(COMPILED_BINARYOP,                          \
-                        BM_compiled_binaryop,                       \
-                        TypeLhs,                                    \
-                        TypeRhs,                                    \
-                        TypeOut,                                    \
-                        cudf::binary_operator::binop)               \
-    ->Unit(benchmark::kMicrosecond)                                 \
-    ->UseManualTime()                                               \
-    ->Arg(10000)      /* 10k */                                     \
-    ->Arg(100000)     /* 100k */                                    \
-    ->Arg(1000000)    /* 1M */                                      \
-    ->Arg(10000000)   /* 10M */                                     \
+#define BM_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)           \
+  BENCHMARK_DEFINE_F(COMPILED_BINARYOP, name)                             \
+  (::benchmark::State & st)                                               \
+  {                                                                       \
+    BM_compiled_binaryop<lhs, rhs, tout>(st, cudf::binary_operator::bop); \
+  }                                                                       \
+  BENCHMARK_REGISTER_F(COMPILED_BINARYOP, name)                           \
+    ->Unit(benchmark::kMicrosecond)                                       \
+    ->UseManualTime()                                                     \
+    ->Arg(10000)      /* 10k */                                           \
+    ->Arg(100000)     /* 100k */                                          \
+    ->Arg(1000000)    /* 1M */                                            \
+    ->Arg(10000000)   /* 10M */                                           \
     ->Arg(100000000); /* 100M */
+
+#define build_name(a, b, c, d) a##_##b##_##c##_##d
+
+#define BINARYOP_BENCHMARK_DEFINE(lhs, rhs, bop, tout) \
+  BM_BINARYOP_BENCHMARK_DEFINE(build_name(bop, lhs, rhs, tout), lhs, rhs, bop, tout)
 
 using namespace cudf;
 using namespace numeric;

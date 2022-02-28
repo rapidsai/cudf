@@ -4,19 +4,21 @@ import collections
 import itertools
 import pickle
 import warnings
+from functools import cached_property
 
 import numpy as np
-import pandas as pd
 from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.reshape import interleave_columns
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
+from cudf.core.mixins import Reducible
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import GetAttrGetItemMixin, cached_property
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -34,7 +36,23 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-class GroupBy(Serializable):
+class GroupBy(Serializable, Reducible):
+
+    _VALID_REDUCTIONS = {
+        "sum",
+        "prod",
+        "idxmin",
+        "idxmax",
+        "min",
+        "max",
+        "mean",
+        "median",
+        "nunique",
+        "first",
+        "last",
+        "var",
+        "std",
+    }
 
     _MAX_GROUPS_BEFORE_WARN = 100
 
@@ -286,7 +304,7 @@ class GroupBy(Serializable):
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
-                result.insert(
+                result._insert(
                     0,
                     col_name,
                     result.index.get_level_values(col_name)._values,
@@ -294,6 +312,46 @@ class GroupBy(Serializable):
             result.index = cudf.core.index.RangeIndex(len(result))
 
         return result
+
+    def _reduce(
+        self,
+        op: str,
+        numeric_only: bool = False,
+        min_count: int = 0,
+        *args,
+        **kwargs,
+    ):
+        """Compute {op} of group values.
+
+        Parameters
+        ----------
+        numeric_only : bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data.
+        min_count : int, default 0
+            The required number of valid values to perform the operation. If
+            fewer than ``min_count`` non-NA values are present the result will
+            be NA.
+
+        Returns
+        -------
+        Series or DataFrame
+            Computed {op} of values within each group.
+
+        Notes
+        -----
+        Difference from pandas:
+            * Not supporting: numeric_only, min_count
+        """
+        if numeric_only:
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+        if min_count != 0:
+            raise NotImplementedError(
+                "min_count parameter is not implemented yet"
+            )
+        return self.agg(op)
 
     aggregate = agg
 
@@ -811,38 +869,6 @@ class GroupBy(Serializable):
         )
         return res
 
-    def sum(self):
-        """Compute the column-wise sum of the values in each group."""
-        return self.agg("sum")
-
-    def prod(self):
-        """Compute the column-wise product of the values in each group."""
-        return self.agg("prod")
-
-    def idxmin(self):
-        """Get the column-wise index of the minimum value in each group."""
-        return self.agg("idxmin")
-
-    def idxmax(self):
-        """Get the column-wise index of the maximum value in each group."""
-        return self.agg("idxmax")
-
-    def min(self):
-        """Get the column-wise minimum value in each group."""
-        return self.agg("min")
-
-    def max(self):
-        """Get the column-wise maximum value in each group."""
-        return self.agg("max")
-
-    def mean(self):
-        """Compute the column-wise mean of the values in each group."""
-        return self.agg("mean")
-
-    def median(self):
-        """Get the column-wise median of the values in each group."""
-        return self.agg("median")
-
     def corr(self, method="pearson", min_periods=1):
         """
         Compute pairwise correlation of columns, excluding NA/null values.
@@ -903,7 +929,7 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        _cols = self.grouping.values.columns.tolist()
+        _cols = self.grouping.values._data.to_pandas_index().tolist()
         len_cols = len(_cols)
 
         new_df_data = {}
@@ -958,6 +984,177 @@ class GroupBy(Serializable):
 
         return res
 
+    def cov(self, min_periods=0, ddof=1):
+        """
+        Compute the pairwise covariance among the columns of a DataFrame,
+        excluding NA/null values.
+
+        The returned DataFrame is the covariance matrix of the columns of
+        the DataFrame.
+
+        Both NA and null values are automatically excluded from the
+        calculation. See the note below about bias from missing values.
+
+        A threshold can be set for the minimum number of observations
+        for each value created. Comparisons with observations below this
+        threshold will be returned as `NA`.
+
+        This method is generally used for the analysis of time series data to
+        understand the relationship between different measures across time.
+
+        Parameters
+        ----------
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        ddof: int, optional
+            Delta degrees of freedom, default is 1.
+
+        Returns
+        -------
+        DataFrame
+            Covariance matrix.
+
+        Notes
+        -----
+        Returns the covariance matrix of the DataFrame's time series.
+        The covariance is normalized by N-ddof.
+
+        For DataFrames that have Series that are missing data
+        (assuming that data is missing at random) the returned covariance
+        matrix will be an unbiased estimate of the variance and covariance
+        between the member Series.
+
+        However, for many applications this estimate may not be acceptable
+        because the estimate covariance matrix is not guaranteed to be
+        positive semi-definite. This could lead to estimate correlations
+        having absolute values which are greater than one, and/or a
+        non-invertible covariance matrix. See
+        `Estimation of covariance matrices
+        <https://en.wikipedia.org/wiki/Estimation_of_covariance_matrices>`
+        for more details.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...     "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...     "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...     "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...     "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ... })
+        >>> gdf
+          id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").cov()
+                    val1       val2       val3
+        id
+        a  val1  1.000000   0.500000   0.500000
+           val2  0.500000   1.000000   1.000000
+           val3  0.500000   1.000000   1.000000
+        b  val1  4.333333   3.500000   3.500000
+           val2  3.500000  19.000000  19.000000
+           val3  3.500000  19.000000  19.000000
+        c  val1  2.333333   3.833333   3.833333
+           val2  3.833333  12.333333  12.333333
+           val3  3.833333  12.333333  12.333333
+        """
+
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs used in the covariance calculation
+        # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        column_names = self.grouping.values._column_names
+        num_cols = len(column_names)
+
+        column_pair_structs = {}
+        for x, y in itertools.combinations_with_replacement(column_names, 2):
+            # The number of output columns is the number of input columns
+            # squared. We directly call the struct column factory here to
+            # reduce overhead and avoid copying data. Since libcudf groupby
+            # maintains a cache of aggregation requests, reusing the same
+            # column also makes use of previously cached column means and
+            # reduces kernel costs.
+
+            # checks if input column names are string, raise a warning if
+            # not so and cast them to strings
+            if not (isinstance(x, str) and isinstance(y, str)):
+                warnings.warn(
+                    "DataFrame contains non-string column name(s). "
+                    "Struct columns require field names to be strings. "
+                    "Non-string column names will be cast to strings "
+                    "in the result's field names."
+                )
+                x, y = str(x), str(y)
+
+            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
+                names=(x, y),
+                children=(self.obj._data[x], self.obj._data[y]),
+                size=len(self.obj),
+            )
+
+        column_pair_groupby = cudf.DataFrame._from_data(
+            column_pair_structs
+        ).groupby(by=self.grouping.keys)
+
+        try:
+            gb_cov = column_pair_groupby.agg(
+                lambda x: x.cov(min_periods, ddof)
+            )
+        except RuntimeError as e:
+            if "Unsupported groupby reduction type-agg combination" in str(e):
+                raise TypeError(
+                    "Covariance accepts only numerical column-pairs"
+                )
+            raise
+
+        # ensure that column-pair labels are arranged in ascending order
+        cols_list = [
+            (y, x) if i > j else (x, y)
+            for j, y in enumerate(column_names)
+            for i, x in enumerate(column_names)
+        ]
+        cols_split = [
+            cols_list[i : i + num_cols]
+            for i in range(0, len(cols_list), num_cols)
+        ]
+
+        def combine_columns(gb_cov, ys):
+            list_of_columns = [gb_cov._data[y] for y in ys]
+            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
+            return interleave_columns(frame)
+
+        # interleave: combine the correlation results for each column-pair
+        # into a single column
+        res = cudf.DataFrame._from_data(
+            {
+                x: combine_columns(gb_cov, ys)
+                for ys, x in zip(cols_split, column_names)
+            }
+        )
+
+        # create a multiindex for the groupby correlated dataframe,
+        # to match pandas behavior
+        unsorted_idx = gb_cov.index.repeat(num_cols)
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
+        if len(gb_cov):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            sorted_idx._data[None] = as_column(
+                np.tile(column_names, len(gb_cov.index))
+            )
+        res.index = MultiIndex._from_data(sorted_idx._data)
+
+        return res
+
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -1005,10 +1202,6 @@ class GroupBy(Serializable):
 
         return self.agg(func)
 
-    def nunique(self):
-        """Compute the number of unique values in each column in each group."""
-        return self.agg("nunique")
-
     def collect(self):
         """Get a list of all the values for each column in each group."""
         return self.agg("collect")
@@ -1029,14 +1222,6 @@ class GroupBy(Serializable):
     def cummax(self):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
-
-    def first(self):
-        """Get the first non-null value in each group."""
-        return self.agg("first")
-
-    def last(self):
-        """Get the last non-null value in each group."""
-        return self.agg("last")
 
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.
@@ -1367,12 +1552,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
-    def nunique(self):
-        """
-        Return the number of unique values per group
-        """
-        return self.agg("nunique")
-
 
 class SeriesGroupBy(GroupBy):
     """
@@ -1443,11 +1622,8 @@ class SeriesGroupBy(GroupBy):
                 return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
-        if (
-            isinstance(result.columns, pd.MultiIndex)
-            and result.columns.nlevels > 1
-        ):
-            result.columns = result.columns.droplevel(0)
+        if result._data.nlevels > 1:
+            result.columns = result._data.to_pandas_index().droplevel(0)
 
         return result
 
@@ -1461,7 +1637,7 @@ class SeriesGroupBy(GroupBy):
 
 
 # TODO: should we define this as a dataclass instead?
-class Grouper(object):
+class Grouper:
     def __init__(
         self, key=None, level=None, freq=None, closed=None, label=None
     ):

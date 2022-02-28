@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
@@ -12,8 +12,8 @@ from cudf._lib.cpp.strings.contains cimport (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
     matches_re as cpp_matches_re,
-    regex_flags as regex_flags,
 )
+from cudf._lib.cpp.strings.regex_flags cimport regex_flags
 from cudf._lib.scalar cimport DeviceScalar
 
 

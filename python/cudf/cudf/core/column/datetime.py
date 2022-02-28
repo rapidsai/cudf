@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -199,7 +199,7 @@ class DatetimeColumn(column.ColumnBase):
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
         return pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"),
+            self.astype("datetime64[ns]").fillna("NaT").values_host,
             copy=False,
             index=index,
         )
@@ -346,21 +346,27 @@ class DatetimeColumn(column.ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def _default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column"""
-        return np.datetime64("nat", self.time_unit)
-
-    def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
+    def mean(
+        self, skipna=None, min_count: int = 0, dtype=np.float64
+    ) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            self.as_numerical.mean(
+                skipna=skipna, min_count=min_count, dtype=dtype
+            ),
             unit=self.time_unit,
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+        self,
+        skipna: bool = None,
+        min_count: int = 0,
+        dtype: Dtype = np.float64,
+        ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
+            self.as_numerical.std(
+                skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+            )
             * _numpy_to_pandas_conversion[self.time_unit],
         )
 
@@ -486,15 +492,6 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
-
-
-def binop_offset(lhs, rhs, op):
-    if rhs._is_no_op:
-        return lhs
-    else:
-        rhs = rhs._generate_column(len(lhs), op)
-        out = libcudf.datetime.add_months(lhs, rhs)
-        return out
 
 
 def infer_format(element: str, **kwargs) -> str:

@@ -78,8 +78,8 @@ def parse_args():
     return args
 
 
-def list_all_cmds(cdb):
-    with open(cdb, "r") as fp:
+def get_all_commands(cdb):
+    with open(cdb) as fp:
         return json.load(fp)
 
 
@@ -284,12 +284,26 @@ def parse_results(results):
     return all(r[0] for r in results), [s for r in results for s in r[1]]
 
 
-# mostly used for debugging purposes
-def run_sequential(args, all_files):
-    # lock must be defined as in `run_parallel`
-    global lock
-    lock = LockContext()
-    results = []
+def print_result(passed, stdout, file):
+    status_str = "PASSED" if passed else "FAILED"
+    print(f"{SEPARATOR} File:{file} {status_str} {SEPARATOR}")
+    if stdout:
+        print(stdout)
+        print(f"{SEPARATOR} File:{file} ENDS {SEPARATOR}")
+
+
+def print_results():
+    global results
+    status = True
+    for passed, stdout, file in results:
+        print_result(passed, stdout, file)
+        if not passed:
+            status = False
+    return status
+
+
+def run_tidy_for_all_files(args, all_files):
+    pool = None if args.j == 1 else mp.Pool(args.j)
     # actual tidy checker
     for cmd in all_files:
         # skip files that we don't want to look at

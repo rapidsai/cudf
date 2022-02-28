@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ enum contains_type { contains, count, findall };
 static void BM_contains(benchmark::State& state, contains_type ct)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const table = create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows});
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
@@ -46,7 +46,7 @@ static void BM_contains(benchmark::State& state, contains_type ct)
         cudf::strings::count_re(input, "\\d+");
         break;
       case contains_type::findall:  // returns occurrences of matches
-        cudf::strings::findall_re(input, "\\d+");
+        cudf::strings::findall(input, "\\d+");
         break;
     }
   }

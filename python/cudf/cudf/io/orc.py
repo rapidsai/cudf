@@ -20,8 +20,8 @@ def _make_empty_df(filepath_or_buffer, columns):
     orc_file = orc.ORCFile(filepath_or_buffer)
     schema = orc_file.schema
     col_names = schema.names if columns is None else columns
-    return cudf.DataFrame(
-        {
+    return cudf.DataFrame._from_data(
+        data={
             col_name: cudf.core.column.column_empty(
                 row_count=0,
                 dtype=schema.field(col_name).type.to_pandas_dtype(),
@@ -291,7 +291,12 @@ def read_orc(
     **kwargs,
 ):
     """{docstring}"""
-
+    if decimal_cols_as_float is not None:
+        warnings.warn(
+            "`decimal_cols_as_float` is deprecated and will be removed in "
+            "the future",
+            FutureWarning,
+        )
     from cudf import DataFrame
 
     # Multiple sources are passed as a list. If a single source is passed,

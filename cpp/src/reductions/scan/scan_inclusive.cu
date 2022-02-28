@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,7 +225,7 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy,
                                      rmm::cuda_stream_view stream,

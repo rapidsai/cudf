@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,18 +109,19 @@ struct findall_count_fn : public findall_fn<stack_size> {
 }  // namespace
 
 //
-std::unique_ptr<table> findall_re(
-  strings_column_view const& strings,
+std::unique_ptr<table> findall(
+  strings_column_view const& input,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default)
+  regex_flags const flags,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const strings_count = strings.size();
-  auto const d_strings     = column_device_view::create(strings.parent(), stream);
+  auto const strings_count = input.size();
+  auto const d_strings     = column_device_view::create(input.parent(), stream);
 
-  auto const d_flags = detail::get_character_flags_table();
   // compile regex into device object
-  auto const d_prog      = reprog_device::create(pattern, d_flags, strings_count, stream);
+  auto const d_prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
   auto const regex_insts = d_prog->insts_counts();
 
   rmm::device_uvector<size_type> find_counts(strings_count, stream);
@@ -205,12 +206,13 @@ std::unique_ptr<table> findall_re(
 
 // external API
 
-std::unique_ptr<table> findall_re(strings_column_view const& strings,
-                                  std::string const& pattern,
-                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> findall(strings_column_view const& input,
+                               std::string const& pattern,
+                               regex_flags const flags,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall_re(strings, pattern, mr);
+  return detail::findall(input, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

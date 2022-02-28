@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import operator
 import re
@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_120
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -561,7 +562,9 @@ def test_series_value_counts(dropna, normalize):
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+        sr = cudf.Series.from_masked_array(
+            arr, cudf.Series(mask)._column.as_mask()
+        )
         sr.name = "col"
 
         expect = (
@@ -1517,3 +1520,183 @@ def test_series_transpose(data):
     assert_eq(pd_transposed, cudf_transposed)
     assert_eq(pd_property, cudf_property)
     assert_eq(cudf_transposed, csr)
+
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.nunique()
+    expected = pd_s.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data", [1, 3, 5, 7, 7],
+)
+def test_series_nunique_index(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.index.nunique()
+    expected = pd_s.index.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [0, 12, 14],
+        [0, 14, 12, 12, 3, 10, 12, 14],
+        np.random.randint(-100, 100, 200),
+        pd.Series([0.0, 1.0, None, 10.0]),
+        [None, None, None, None],
+        [np.nan, None, -1, 2, 3],
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        np.random.randint(-100, 100, 10),
+        [],
+        [np.nan, None, -1, 2, 3],
+        [1.0, 12.0, None, None, 120],
+        [0, 14, 12, 12, 3, 10, 12, 14, None],
+        [None, None, None],
+        ["0", "12", "14"],
+        ["0", "12", "14", "a"],
+    ],
+)
+def test_isin_numeric(data, values):
+    index = np.random.randint(0, 100, len(data))
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
+    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
+
+    expected = psr.isin(values)
+    got = gsr.isin(values)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(
+            ["2018-01-01", "2019-04-03", None, "2019-12-30"],
+            dtype="datetime64[ns]",
+        ),
+        pd.Series(
+            [
+                "2018-01-01",
+                "2019-04-03",
+                None,
+                "2019-12-30",
+                "2018-01-01",
+                "2018-01-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        [1514764800000000000, 1577664000000000000],
+        [
+            1514764800000000000,
+            1577664000000000000,
+            1577664000000000000,
+            1577664000000000000,
+            1514764800000000000,
+        ],
+        ["2019-04-03", "2019-12-30", "2012-01-01"],
+        [
+            "2012-01-01",
+            "2012-01-01",
+            "2012-01-01",
+            "2019-04-03",
+            "2019-12-30",
+            "2012-01-01",
+        ],
+    ],
+)
+def test_isin_datetime(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(["this", "is", None, "a", "test"]),
+        pd.Series(["test", "this", "test", "is", None, "test", "a", "test"]),
+        pd.Series(["0", "12", "14"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["this", "is"],
+        [None, None, None],
+        ["12", "14", "19"],
+        pytest.param(
+            [12, 14, 19],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_120,
+                reason="pandas's failure here seems like a bug(in < 1.2) "
+                "given the reverse succeeds",
+            ),
+        ),
+        ["is", "this", "is", "this", "is"],
+    ],
+)
+def test_isin_string(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
+        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
+        pd.Series([0, 3, 10, 12], dtype="category"),
+        pd.Series([0, 3, 10, 12, 0, 10, 3, 0, 0, 3, 3], dtype="category"),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["a", "b", None, "f", "words"],
+        ["0", "12", None, "14"],
+        [0, 10, 12, None, 39, 40, 1000],
+        [0, 0, 0, 0, 3, 3, 3, None, 1, 2, 3],
+    ],
+)
+def test_isin_categorical(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)

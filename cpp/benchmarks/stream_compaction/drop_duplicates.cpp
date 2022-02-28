@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,64 +15,102 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+
+#include <fixture/rmm_pool_raii.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <memory>
 #include <random>
 
-class Compaction : public cudf::benchmark {
-};
+// necessary for custom enum types
+// see: https://github.com/NVIDIA/nvbench/blob/main/examples/enums.cu
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  // Enum type:
+  cudf::duplicate_keep_option,
+  // Callable to generate input strings:
+  [](cudf::duplicate_keep_option option) {
+    switch (option) {
+      case cudf::duplicate_keep_option::KEEP_FIRST: return "KEEP_FIRST";
+      case cudf::duplicate_keep_option::KEEP_LAST: return "KEEP_LAST";
+      case cudf::duplicate_keep_option::KEEP_NONE: return "KEEP_NONE";
+      default: return "ERROR";
+    }
+  },
+  // Callable to generate descriptions:
+  [](auto) { return std::string{}; })
 
-template <typename Type>
-void BM_compaction(benchmark::State& state, cudf::duplicate_keep_option keep)
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
+
+template <typename Type, cudf::duplicate_keep_option Keep>
+void nvbench_drop_duplicates(nvbench::state& state,
+                             nvbench::type_list<Type, nvbench::enum_type<Keep>>)
 {
-  auto const n_rows = static_cast<cudf::size_type>(state.range(0));
+  if constexpr (not std::is_same_v<Type, int32_t> and
+                Keep != cudf::duplicate_keep_option::KEEP_FIRST) {
+    state.skip("Skip unwanted benchmarks.");
+  }
+
+  cudf::rmm_pool_raii pool_raii;
+
+  auto const num_rows = state.get_int64("NumRows");
 
   cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate(); });
   auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 100 == 0 ? false : true; });
-  cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + n_rows, valids);
+  cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + num_rows, valids);
 
   auto input_column = cudf::column_view(values);
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result = cudf::drop_duplicates(input_table, {0}, keep);
-  }
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+    auto result = cudf::detail::drop_duplicates(
+      input_table, {0}, Keep, cudf::null_equality::EQUAL, cudf::null_order::BEFORE, stream_view);
+  });
 }
 
-#define concat(a, b, c) a##b##c
-#define get_keep(op)    cudf::duplicate_keep_option::KEEP_##op
+template <typename Type>
+void nvbench_unordered_drop_duplicates(nvbench::state& state, nvbench::type_list<Type>)
+{
+  cudf::rmm_pool_raii pool_raii;
 
-// TYPE, OP
-#define RBM_BENCHMARK_DEFINE(name, type, keep)                     \
-  BENCHMARK_DEFINE_F(Compaction, name)(::benchmark::State & state) \
-  {                                                                \
-    BM_compaction<type>(state, get_keep(keep));                    \
-  }                                                                \
-  BENCHMARK_REGISTER_F(Compaction, name)                           \
-    ->UseManualTime()                                              \
-    ->Arg(10000)    /* 10k */                                      \
-    ->Arg(100000)   /* 100k */                                     \
-    ->Arg(1000000)  /* 1M */                                       \
-    ->Arg(10000000) /* 10M */
+  auto const num_rows = state.get_int64("NumRows");
 
-#define COMPACTION_BENCHMARK_DEFINE(type, keep) \
-  RBM_BENCHMARK_DEFINE(concat(type, _, keep), type, keep)
+  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [&rand_gen](auto row) { return rand_gen.generate(); });
+  auto valids = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 100 == 0 ? false : true; });
+  cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + num_rows, valids);
 
-COMPACTION_BENCHMARK_DEFINE(bool, NONE);
-COMPACTION_BENCHMARK_DEFINE(int8_t, NONE);
-COMPACTION_BENCHMARK_DEFINE(int32_t, NONE);
-COMPACTION_BENCHMARK_DEFINE(int32_t, FIRST);
-COMPACTION_BENCHMARK_DEFINE(int32_t, LAST);
-using cudf::timestamp_ms;
-COMPACTION_BENCHMARK_DEFINE(timestamp_ms, NONE);
-COMPACTION_BENCHMARK_DEFINE(float, NONE);
+  auto input_column = cudf::column_view(values);
+  auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+    auto result = cudf::detail::unordered_drop_duplicates(
+      input_table, {0}, cudf::null_equality::EQUAL, stream_view);
+  });
+}
+
+using data_type   = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
+using keep_option = nvbench::enum_type_list<cudf::duplicate_keep_option::KEEP_FIRST,
+                                            cudf::duplicate_keep_option::KEEP_LAST,
+                                            cudf::duplicate_keep_option::KEEP_NONE>;
+
+NVBENCH_BENCH_TYPES(nvbench_drop_duplicates, NVBENCH_TYPE_AXES(data_type, keep_option))
+  .set_name("drop_duplicates")
+  .set_type_axes_names({"Type", "KeepOption"})
+  .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
+
+NVBENCH_BENCH_TYPES(nvbench_unordered_drop_duplicates, NVBENCH_TYPE_AXES(data_type))
+  .set_name("unordered_drop_duplicates")
+  .set_type_axes_names({"Type"})
+  .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
