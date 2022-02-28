@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ struct range_scalar_constructor {
   }
 
   template <typename T,
-            std::enable_if_t<std::is_integral<T>::value && !cudf::is_boolean<T>(), void>* = nullptr>
+            std::enable_if_t<std::is_integral_v<T> && !cudf::is_boolean<T>(), void>* = nullptr>
   std::unique_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     return std::make_unique<numeric_scalar<T>>(

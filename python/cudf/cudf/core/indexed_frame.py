@@ -7,7 +7,7 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Callable, Type, TypeVar
+from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -261,8 +261,6 @@ class IndexedFrame(Frame):
 
         Selecting rows and column by position.
 
-        Examples
-        --------
         >>> df = cudf.DataFrame({'a': range(20),
         ...                      'b': range(20),
         ...                      'c': range(20)})
@@ -449,12 +447,11 @@ class IndexedFrame(Frame):
                 out = self._gather(inds)
                 # TODO: frame factory function should handle multilevel column
                 # names
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out._set_column_names_like(self)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -464,12 +461,11 @@ class IndexedFrame(Frame):
                     ascending=ascending, na_position=na_position
                 )
                 out = self._gather(inds)
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out._set_column_names_like(self)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
@@ -943,10 +939,11 @@ class IndexedFrame(Frame):
             ),
             keep_index=not ignore_index,
         )
-        if isinstance(self, cudf.core.dataframe.DataFrame) and isinstance(
-            self.columns, pd.core.indexes.multi.MultiIndex
+        if (
+            isinstance(self, cudf.core.dataframe.DataFrame)
+            and self._data.multiindex
         ):
-            out.columns = self.columns
+            out.columns = self._data.to_pandas_index()
         return out
 
     def _n_largest_or_smallest(self, largest, n, columns, keep):
@@ -1700,150 +1697,86 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
-    # For more detail on this function and how it should work, see
-    # https://numpy.org/doc/stable/reference/ufuncs.html
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        # We don't currently support reduction, accumulation, etc. We also
-        # don't support any special kwargs or higher arity ufuncs than binary.
-        if method != "__call__" or kwargs or ufunc.nin > 2:
+    def _binaryop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        operands, out_index = self._make_operands_and_index_for_binop(
+            other, fn, fill_value, reflect, can_reindex
+        )
+        if operands is NotImplemented:
             return NotImplemented
 
-        # Binary operations
-        binary_operations = {
-            # Arithmetic binary operations.
-            "add": "add",
-            "subtract": "sub",
-            "multiply": "mul",
-            "matmul": "matmul",
-            "divide": "truediv",
-            "true_divide": "truediv",
-            "floor_divide": "floordiv",
-            "power": "pow",
-            "float_power": "pow",
-            "remainder": "mod",
-            "mod": "mod",
-            "fmod": "mod",
-            # Bitwise binary operations.
-            "bitwise_and": "and",
-            "bitwise_or": "or",
-            "bitwise_xor": "xor",
-            # Comparison binary operators
-            "greater": "gt",
-            "greater_equal": "ge",
-            "less": "lt",
-            "less_equal": "le",
-            "not_equal": "ne",
-            "equal": "eq",
-        }
+        return self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            index=out_index,
+        )
 
-        # First look for methods of the class.
+    def _make_operands_and_index_for_binop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ) -> Tuple[
+        Union[
+            Dict[
+                Optional[str],
+                Tuple[cudf.core.column.ColumnBase, Any, bool, Any],
+            ],
+            Type[NotImplemented],
+        ],
+        Optional[cudf.BaseIndex],
+    ]:
+        raise NotImplementedError(
+            "Binary operations are not supported for {self.__class__}"
+        )
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
         fname = ufunc.__name__
-        if fname in binary_operations:
-            reflect = self is not inputs[0]
-            other = inputs[0] if reflect else inputs[1]
 
-            # These operators need to be mapped to their inverses when
-            # performing a reflected operation because no reflected version of
-            # the operators themselves exist.
-            ops_without_reflection = {
-                "gt": "lt",
-                "ge": "le",
-                "lt": "gt",
-                "le": "ge",
-                # ne and eq are symmetric, so they are their own inverse op
-                "ne": "ne",
-                "eq": "eq",
-            }
-
-            op = binary_operations[fname]
-            if reflect and op in ops_without_reflection:
-                op = ops_without_reflection[op]
-                reflect = False
-            op = f"__{'r' if reflect else ''}{op}__"
-
+        if ret is not None:
             # pandas bitwise operations return bools if indexes are misaligned.
-            if (
-                "bitwise" in fname
-                and isinstance(other, IndexedFrame)
-                and not self.index.equals(other.index)
-            ):
-                return getattr(self, op)(other).astype(bool)
-            # Float_power returns float irrespective of the input type.
-            if fname == "float_power":
-                return getattr(self, op)(other).astype(float)
-            return getattr(self, op)(other)
-
-        # Special handling for unary operations.
-        if fname == "negative":
-            return self * -1
-        if fname == "positive":
-            return self.copy(deep=True)
-        if fname == "invert":
-            return ~self
-        if fname == "absolute":
-            return self.abs()
-        if fname == "fabs":
-            return self.abs().astype(np.float64)
-
-        # Note: There are some operations that may be supported by libcudf but
-        # are not supported by pandas APIs. In particular, libcudf binary
-        # operations support logical and/or operations, but those operations
-        # are not defined on pd.Series/DataFrame. For now those operations will
-        # dispatch to cupy, but if ufuncs are ever a bottleneck we could add
-        # special handling to dispatch those (or any other) functions that we
-        # could implement without cupy.
+            if "bitwise" in fname:
+                reflect = self is not inputs[0]
+                other = inputs[0] if reflect else inputs[1]
+                if isinstance(other, self.__class__) and not self.index.equals(
+                    other.index
+                ):
+                    ret = ret.astype(bool)
+            return ret
 
         # Attempt to dispatch all other functions to cupy.
         cupy_func = getattr(cp, fname)
         if cupy_func:
-            # Indices must be aligned before converting to arrays.
             if ufunc.nin == 2:
                 other = inputs[self is inputs[0]]
-                inputs, index = self._prep_for_binop(other, fname)
+                inputs, index = self._make_operands_and_index_for_binop(
+                    other, fname
+                )
             else:
+                # This works for Index too
                 inputs = {
                     name: (col, None, False, None)
                     for name, col in self._data.items()
                 }
                 index = self._index
 
-            mask = None
-            data = [{} for _ in range(ufunc.nout)]
-            for name, (left, right, _, _) in inputs.items():
-                cupy_inputs = []
-                # TODO: I'm jumping through multiple hoops to get the unary
-                # behavior to match up with the binary. I should see if there
-                # are better patterns to employ here.
-                for inp in (left, right) if ufunc.nin == 2 else (left,):
-                    if (
-                        isinstance(inp, cudf.core.column.ColumnBase)
-                        and inp.has_nulls()
-                    ):
-                        new_mask = cudf.core.column.as_column(inp.nullmask)
-
-                        # TODO: This is a hackish way to perform a bitwise and
-                        # of bitmasks. Once we expose
-                        # cudf::detail::bitwise_and, then we can use that
-                        # instead.
-                        mask = new_mask if mask is None else (mask & new_mask)
-
-                        # Arbitrarily fill with zeros. For ufuncs, we assume
-                        # that the end result propagates nulls via a bitwise
-                        # and, so these elements are irrelevant.
-                        inp = inp.fillna(0)
-                    cupy_inputs.append(cp.asarray(inp))
-
-                cp_output = cupy_func(*cupy_inputs, **kwargs)
-                if ufunc.nout == 1:
-                    cp_output = (cp_output,)
-                for i, out in enumerate(cp_output):
-                    data[i][name] = cudf.core.column.as_column(out).set_mask(
-                        mask
-                    )
-
-            out = tuple(
-                self.__class__._from_data(out, index=index) for out in data
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
             )
+
+            out = tuple(self._from_data(out, index=index) for out in data)
             return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented

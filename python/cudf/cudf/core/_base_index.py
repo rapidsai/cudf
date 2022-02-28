@@ -41,14 +41,6 @@ class BaseIndex(Serializable):
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
-        else:
-            return NotImplemented
-
     @cached_property
     def _values(self) -> ColumnBase:
         raise NotImplementedError
@@ -957,7 +949,9 @@ class BaseIndex(Serializable):
         self_df["order"] = self_df.index
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
-        res = res.sort_values(by=res.columns[1:], ignore_index=True)
+        res = res.sort_values(
+            by=res._data.to_pandas_index()[1:], ignore_index=True
+        )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
         if sort is None and len(other):
@@ -1346,6 +1340,16 @@ class BaseIndex(Serializable):
         >>> idx.isin([1, 4])
         array([ True, False, False])
         """
+
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
 
         return self._values.isin(values).values
 

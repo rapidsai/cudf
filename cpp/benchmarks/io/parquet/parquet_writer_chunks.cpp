@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ void PQ_write(benchmark::State& state)
 {
   cudf::size_type num_cols = state.range(0);
 
-  auto tbl = create_random_table({cudf::type_id::INT32}, num_cols, table_size_bytes{data_size});
+  auto tbl              = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
+                                 table_size_bytes{data_size});
   cudf::table_view view = tbl->view();
 
   auto mem_stats_logger = cudf::memory_stats_logger();
@@ -69,8 +70,8 @@ void PQ_write_chunked(benchmark::State& state)
 
   std::vector<std::unique_ptr<cudf::table>> tables;
   for (cudf::size_type idx = 0; idx < num_tables; idx++) {
-    tables.push_back(create_random_table(
-      {cudf::type_id::INT32}, num_cols, table_size_bytes{size_t(data_size / num_tables)}));
+    tables.push_back(create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
+                                         table_size_bytes{size_t(data_size / num_tables)}));
   }
 
   auto mem_stats_logger = cudf::memory_stats_logger();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
-  auto const table = create_random_table({dtype}, 1, row_count{n_rows});
+  auto const table = create_random_table({dtype}, row_count{n_rows});
   if (!include_nulls) table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
   cudf::column_view input(table->view().column(0));
 

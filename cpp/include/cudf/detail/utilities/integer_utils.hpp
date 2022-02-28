@@ -148,14 +148,14 @@ constexpr I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend,
 template <typename I>
 constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
 {
-  using i_is_a_signed_type = std::integral_constant<bool, std::is_signed<I>::value>;
+  using i_is_a_signed_type = std::integral_constant<bool, std::is_signed_v<I>>;
   return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
 }
 
 template <typename I>
 constexpr bool is_a_power_of_two(I val) noexcept
 {
-  static_assert(std::is_integral<I>::value, "This function only applies to integral types");
+  static_assert(std::is_integral_v<I>, "This function only applies to integral types");
   return ((val - 1) & val) == 0;
 }
 
@@ -177,7 +177,7 @@ constexpr bool is_a_power_of_two(I val) noexcept
  *          argument types are: (uint64_t)
  * @endcode
  *
- * Not all cases could be if-ed out using `std::is_signed<T>::value` and satisfy the compiler.
+ * Not all cases could be if-ed out using `std::is_signed_v<T>` and satisfy the compiler.
  *
  * @param value Numeric value can be either integer or float type.
  * @return Absolute value if value type is signed.
