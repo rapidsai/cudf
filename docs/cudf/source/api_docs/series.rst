@@ -208,7 +208,7 @@ Reshaping, sorting
    Series.transpose
 
 Combining / comparing / joining / merging
-----------------------------------------------------
+-----------------------------------------
 .. autosummary::
    :toctree: api/
 
