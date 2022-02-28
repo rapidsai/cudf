@@ -1337,8 +1337,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("DATAFRAME_ARRAY_FUNCTION", color="blue", domain="cudf_python")
     def __array_function__(self, func, types, args, kwargs):
-        if "out" in kwargs or any(
-            not issubclass(t, (Series, DataFrame)) for t in types
+        if "out" in kwargs or not all(
+            issubclass(t, (Series, DataFrame)) for t in types
         ):
             return NotImplemented
 

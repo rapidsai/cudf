@@ -956,7 +956,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return sum(super().memory_usage(index, deep).values())
 
     def __array_function__(self, func, types, args, kwargs):
-        if "out" in kwargs or any(not issubclass(t, (Series,)) for t in types):
+        if "out" in kwargs or not all(issubclass(t, (Series,)) for t in types):
             return NotImplemented
 
         fname = func.__name__
@@ -981,9 +981,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             # For now just fail on cases with mismatched indices. There is
             # almost certainly no general solution for all array functions.
             index = args[0].index
-            if any(not s.index.equals(index) for s in args):
+            if not all(s.index.equals(index) for s in args):
                 return NotImplemented
-            out = cupy_func(*[s.values for s in args], **kwargs)
+            out = cupy_func(*(s.values for s in args), **kwargs)
 
             # Return (host) scalar values immediately.
             if not isinstance(out, cupy.ndarray):
