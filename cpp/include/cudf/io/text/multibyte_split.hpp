@@ -38,6 +38,7 @@ namespace text {
  * the range. Records which begin outside of the range will ignored, even if those records end
  * inside the range.
  *
+ * @code{.pseudo}
  * Examples:
  *  source:     "abc..def..ghi..jkl.."
  *  delimiter:  ".."
@@ -56,6 +57,7 @@ namespace text {
  *
  *  byte_range: [13, 7)
  *  return:     ["jkl..", ""]
+ * @endcode
  *
  * @param source The source string
  * @param delimiter UTF-8 encoded string for which to find offsets in the source
