@@ -182,6 +182,8 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
                              size_type end_index,
                              size_type current_index)
   {
+    auto constexpr default_output = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+
     using InputType = cudf::string_view;
     using AggOp     = typename corresponding_operator<op>::type;
     AggOp agg_op;
@@ -190,7 +192,7 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     // for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
     InputType val                  = AggOp::template identity<InputType>();
-    OutputType val_index = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+    OutputType val_index           = default_output;
 
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
@@ -204,7 +206,7 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     bool output_is_valid = (count >= min_periods);
     // -1 will help identify null elements while gathering for Min and Max
     // In case of count, this would be null, so doesn't matter.
-    output.element<OutputType>(current_index) = (output_is_valid) ? val_index : -1;
+    output.element<OutputType>(current_index) = output_is_valid ? val_index : default_output;
 
     // The gather mask shouldn't contain null values, so
     // always return zero
@@ -232,6 +234,8 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
                              size_type end_index,
                              size_type current_index)
   {
+    auto constexpr default_output = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+
     auto const valid_count =
       has_nulls ? thrust::count_if(thrust::seq,
                                    thrust::make_counting_iterator(start_index),
@@ -246,7 +250,7 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
                                                     thrust::make_counting_iterator(end_index),
                                                     size_type{start_index},
                                                     comp)
-                                   : OutputType{-1};
+                                   : default_output;
 
     // The gather mask shouldn't contain null values, so always return true.
     return true;
