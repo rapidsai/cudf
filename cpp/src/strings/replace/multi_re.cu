@@ -31,6 +31,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -164,21 +166,30 @@ std::unique_ptr<column> replace_re(
 
   // compile regexes into device objects
   auto const d_char_table = get_character_flags_table();
-  reprog_device* max_prog = nullptr;  // keep track of the largest one
-  std::vector<std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>> h_progs;
-  std::vector<reprog_device> progs;
-  for (auto itr = patterns.begin(); itr != patterns.end(); ++itr) {
-    auto h_prog = reprog_device::create(*itr, flags, d_char_table, input.size(), stream);
-    if (!max_prog || max_prog->insts_counts() < h_prog->insts_counts()) { max_prog = h_prog.get(); }
-    progs.push_back(*h_prog);
-    h_progs.emplace_back(std::move(h_prog));
-  }
+  auto h_progs = std::vector<std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>>(
+    patterns.size());
+  std::transform(patterns.begin(),
+                 patterns.end(),
+                 h_progs.begin(),
+                 [flags, d_char_table, input, stream](auto const& ptn) {
+                   return reprog_device::create(ptn, flags, d_char_table, input.size(), stream);
+                 });
+
+  // get the longest regex for the dispatcher
+  auto const max_prog =
+    std::max_element(h_progs.begin(), h_progs.end(), [](auto const& lhs, auto const& rhs) {
+      return lhs->insts_counts() < rhs->insts_counts();
+    });
 
   // copy all the reprog_device instances to a device memory array
+  std::vector<reprog_device> progs;
+  std::transform(h_progs.begin(), h_progs.end(), std::back_inserter(progs), [](auto const& d_prog) {
+    return *d_prog;
+  });
   auto d_progs = cudf::detail::make_device_uvector_async(progs, stream);
 
   return regex_dispatcher(
-    *max_prog, replace_dispatch_fn{}, input, d_progs, replacements, stream, mr);
+    **max_prog, replace_dispatch_fn{}, input, d_progs, replacements, stream, mr);
 }
 
 }  // namespace detail
