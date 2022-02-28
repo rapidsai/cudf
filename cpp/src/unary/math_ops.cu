@@ -348,7 +348,7 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
 
 template <typename UFN>
 struct MathOpDispatcher {
-  template <typename T, typename std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -362,7 +362,7 @@ struct MathOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, typename std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
@@ -377,9 +377,9 @@ struct MathOpDispatcher {
     }
   };
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_arithmetic_v<T> and
-                                      std::is_same_v<T, dictionary32>>* = nullptr>
+  template <
+    typename T,
+    std::enable_if_t<!std::is_arithmetic_v<T> and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -401,7 +401,7 @@ struct MathOpDispatcher {
 
 template <typename UFN>
 struct BitwiseOpDispatcher {
-  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -415,7 +415,7 @@ struct BitwiseOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
@@ -431,8 +431,7 @@ struct BitwiseOpDispatcher {
   };
 
   template <typename T,
-            typename std::enable_if_t<!std::is_integral_v<T> and std::is_same_v<T, dictionary32>>* =
-              nullptr>
+            std::enable_if_t<!std::is_integral_v<T> and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -462,7 +461,7 @@ struct LogicalOpDispatcher {
   }
 
  public:
-  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -477,7 +476,7 @@ struct LogicalOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+    template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
@@ -499,9 +498,8 @@ struct LogicalOpDispatcher {
     }
   };
 
-  template <
-    typename T,
-    typename std::enable_if_t<!is_supported<T>() and std::is_same_v<T, dictionary32>>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!is_supported<T>() and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)

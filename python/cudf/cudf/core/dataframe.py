@@ -11,7 +11,17 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, MutableMapping, Optional, Set, TypeVar
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -44,6 +54,7 @@ from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
+    ColumnBase,
     as_column,
     build_categorical_column,
     build_column,
@@ -1909,7 +1920,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return out
 
-    def _prep_for_binop(
+    def _make_operands_and_index_for_binop(
         self,
         other: Any,
         fn: str,
@@ -1918,7 +1929,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+            Type[NotImplemented],
+        ],
+        Optional[BaseIndex],
+    ]:
         lhs, rhs = self, other
 
         if _is_scalar_or_zero_d_array(rhs):
@@ -1998,28 +2015,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return NotImplemented, None
 
         return operands, lhs._index
-
-    @annotate("DATAFRAME_BINARYOP", color="blue", domain="cudf_python")
-    def _binaryop(
-        self,
-        other: Any,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        can_reindex: bool = False,
-        *args,
-        **kwargs,
-    ):
-        operands, out_index = self._prep_for_binop(
-            other, fn, fill_value, reflect, can_reindex
-        )
-        if operands is NotImplemented:
-            return NotImplemented
-
-        return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
-            index=out_index,
-        )
 
     @annotate("DATAFRAME_UPDATE", color="blue", domain="cudf_python")
     def update(
@@ -2183,9 +2178,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns = pd.Index(range(len(self._data.columns)))
         is_multiindex = isinstance(columns, pd.MultiIndex)
 
-        if isinstance(
-            columns, (Series, cudf.Index, cudf.core.column.ColumnBase)
-        ):
+        if isinstance(columns, (Series, cudf.Index, ColumnBase)):
             columns = pd.Index(columns.to_numpy(), tupleize_cols=is_multiindex)
         elif not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
@@ -5417,10 +5410,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
-            result = [
-                getattr(self._data[col], op)(**kwargs)
-                for col in self._data.names
-            ]
+            try:
+                result = [
+                    getattr(self._data[col], op)(**kwargs)
+                    for col in self._data.names
+                ]
+            except AttributeError:
+                raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
             return Series._from_data(
                 {None: result}, as_index(self._data.names)
@@ -6626,7 +6622,7 @@ def _setitem_with_dataframe(
     input_df: DataFrame,
     replace_df: DataFrame,
     input_cols: Any = None,
-    mask: Optional[cudf.core.column.ColumnBase] = None,
+    mask: Optional[ColumnBase] = None,
     ignore_index: bool = False,
 ):
     """
@@ -6717,9 +6713,7 @@ def _get_union_of_series_names(series_list):
 
 
 def _get_host_unique(array):
-    if isinstance(
-        array, (cudf.Series, cudf.Index, cudf.core.column.ColumnBase)
-    ):
+    if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
         return array.unique.to_pandas()
     elif isinstance(array, (str, numbers.Number)):
         return [array]
