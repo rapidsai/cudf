@@ -203,6 +203,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
     - test -f $PREFIX/include/cudf/strings/detail/json.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/string.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
