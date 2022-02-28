@@ -156,19 +156,13 @@ TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
   auto delimiter = std::string("...:|");
   auto source    = cudf::io::text::make_source(host_input);
 
-  auto byte_ranges = cudf::io::text::byte_range_info::create_consecutive(host_input.size(), 3);
+  auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
   auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
   auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
   auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
 
-  std::cout << out0->size() << std::endl;
-  std::cout << out1->size() << std::endl;
-  std::cout << out2->size() << std::endl;
-
   auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
   auto out       = cudf::concatenate(out_views);
-
-  std::cout << out->size() << std::endl;
 
   auto expected = cudf::io::text::multibyte_split(*source, delimiter);
 

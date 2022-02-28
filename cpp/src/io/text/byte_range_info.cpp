@@ -23,9 +23,9 @@ namespace cudf {
 namespace io {
 namespace text {
 
-byte_range_info byte_range_info::whole_source() { return {0, std::numeric_limits<int64_t>::max()}; }
+byte_range_info create_byte_range_info_max() { return {0, std::numeric_limits<int64_t>::max()}; }
 
-std::vector<byte_range_info> byte_range_info::create_consecutive(int64_t total_bytes,
+std::vector<byte_range_info> create_byte_range_infos_consecutive(int64_t total_bytes,
                                                                  int64_t range_count)
 {
   auto range_size = util::div_rounding_up_safe(total_bytes, range_count);

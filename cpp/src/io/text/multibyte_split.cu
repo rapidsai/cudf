@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -373,13 +373,15 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     stream,
     streams);
 
-  auto relevant_offsets_begin = thrust::lower_bound(
-    rmm::exec_policy(stream), string_offsets.begin(), string_offsets.end() - 1, byte_range.offset);
+  auto relevant_offsets_begin = thrust::lower_bound(rmm::exec_policy(stream),
+                                                    string_offsets.begin(),
+                                                    string_offsets.end() - 1,
+                                                    byte_range.offset());
 
   auto relevant_offsets_end = thrust::upper_bound(rmm::exec_policy(stream),
                                                   string_offsets.begin(),
                                                   string_offsets.end() - 1,
-                                                  byte_range.offset + byte_range.size) +
+                                                  byte_range.offset() + byte_range.size()) +
                               1;
 
   auto string_offsets_out_size = relevant_offsets_end - relevant_offsets_begin;
@@ -431,12 +433,8 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto stream      = rmm::cuda_stream_default;
   auto stream_pool = rmm::cuda_stream_pool(2);
 
-  auto result = detail::multibyte_split(source,
-                                        delimiter,
-                                        byte_range.value_or(byte_range_info::whole_source()),
-                                        stream,
-                                        mr,
-                                        stream_pool);
+  auto result = detail::multibyte_split(
+    source, delimiter, byte_range.value_or(create_byte_range_info_max()), stream, mr, stream_pool);
 
   stream.synchronize();
 

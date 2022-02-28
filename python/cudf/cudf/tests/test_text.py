@@ -797,7 +797,7 @@ def test_read_text_byte_range(datadir):
         ]
     )
 
-    byte_range_size = len(data) / 3
+    byte_range_size = (len(data) // 3) + (len(data) % 3 != 0)
 
     actual_0 = cudf.read_text(
         chess_file,
@@ -821,7 +821,7 @@ def test_read_text_byte_range(datadir):
 
 
 def test_read_text_byte_range_large(datadir):
-    content = str([("\n" if x % 5 == 0 else "x") for x in range(0, 300000000)])
+    content = str(("\n" if x % 5 == 0 else "x") for x in range(0, 300000000))
     delimiter = "1."
     temp_file = str(datadir) + "/temp.txt"
 

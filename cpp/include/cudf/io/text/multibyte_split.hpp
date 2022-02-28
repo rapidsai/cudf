@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,14 +29,14 @@ namespace io {
 namespace text {
 
 /**
- * @brief Splits the source text in to a strings column using a multiple byte delimiter.
+ * @brief Splits the source text into a strings column using a multiple byte delimiter.
  *
  * Providing a byte range allows multibyte_split to read a whole file, but only return the offsets
  * of delimiters which begin within the range. If thinking in terms of "records", where each
- * delimiter dictates the end of a record,  all records which begin within the byte range
- * provided will be returned, including any record which may begin in the range but end outside of
- * the range. Records which begin outside of the range will ignored, even if those records end
- * inside the range.
+ * delimiter dictates the end of a record, all records which begin within the byte range provided
+ * will be returned, including any record which may begin in the range but end outside of the
+ * range. Records which begin outside of the range will ignored, even if those records end inside
+ * the range.
  *
  * @code{.pseudo}
  * Examples:
