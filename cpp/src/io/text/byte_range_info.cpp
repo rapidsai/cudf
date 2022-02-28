@@ -29,8 +29,9 @@ std::vector<byte_range_info> create_byte_range_infos_consecutive(int64_t total_b
                                                                  int64_t range_count)
 {
   auto range_size = util::div_rounding_up_safe(total_bytes, range_count);
+  auto ranges     = std::vector<byte_range_info>();
 
-  std::vector<byte_range_info> ranges;
+  ranges.reserve(range_size);
 
   for (int64_t i = 0; i < range_count; i++) {
     auto offset = i * range_size;

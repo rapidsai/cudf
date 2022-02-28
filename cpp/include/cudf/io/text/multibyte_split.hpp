@@ -74,11 +74,6 @@ std::unique_ptr<cudf::column> multibyte_split(
 
 std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
                                               std::string const& delimiter,
-                                              byte_range_info byte_range,
-                                              rmm::mr::device_memory_resource* mr);
-
-std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
-                                              std::string const& delimiter,
                                               rmm::mr::device_memory_resource* mr);
 
 }  // namespace text

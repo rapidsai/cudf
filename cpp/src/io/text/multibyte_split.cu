@@ -436,17 +436,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   auto result = detail::multibyte_split(
     source, delimiter, byte_range.value_or(create_byte_range_info_max()), stream, mr, stream_pool);
 
-  stream.synchronize();
-
   return result;
-}
-
-std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
-                                              std::string const& delimiter,
-                                              byte_range_info byte_range,
-                                              rmm::mr::device_memory_resource* mr)
-{
-  return multibyte_split(source, delimiter, byte_range, mr);
 }
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
