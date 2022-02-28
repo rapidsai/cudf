@@ -31,7 +31,7 @@ namespace text {
 /**
  * @brief Splits the source text in to a strings column using a multiple byte delimiter.
  *
- * providing a byte range allows multibyte_split to read a whole file, but only return the offsets
+ * Providing a byte range allows multibyte_split to read a whole file, but only return the offsets
  * of delimiters which begin within the range. If thinking in terms of "records", where each
  * delimiter dictates the end of a record,  all records which begin within the byte range
  * provided will be returned, including any record which may begin in the range but end outside of
