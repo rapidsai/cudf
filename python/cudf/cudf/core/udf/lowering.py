@@ -412,6 +412,8 @@ def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val)
     # set the empty strview data pointer to point to the literal value
     s = context.insert_const_string(builder.module, fromty.literal_value)
     str_view.data = context.insert_addrspace_conv(builder, s, nvvm.ADDRSPACE_CONSTANT)
+    str_view.length = context.get_constant(types.int32, len(fromty.literal_value))
+    str_view.bytes = context.get_constant(types.int32, len(fromty.literal_value.encode('UTF-8')))
 
     # create an empty MaskedType
     to_return = cgutils.create_struct_proxy(toty)(
@@ -433,7 +435,6 @@ def call_string_view_startswith(st, tgt):
 @cuda_lower("MaskedType.startswith", MaskedType(string_view), MaskedType(string_view))
 def masked_stringview_startswith(context, builder, sig, args):
     retty = sig.return_type
-
     maskedty = sig.args[0]
     
     st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
