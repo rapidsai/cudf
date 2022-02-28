@@ -51,7 +51,7 @@ constexpr inline bool is_timestamp_sum()
 // Disable SUM of TIMESTAMP types
 template <typename T,
           typename BinaryOp,
-          typename std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+          std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   return {};
@@ -59,7 +59,7 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 
 template <typename T,
           typename BinaryOp,
-          typename std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+          std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   T old_value = *addr;
@@ -92,13 +92,13 @@ __global__ void gpu_atomicCAS_test(T* result, T* data, size_t size)
 }
 
 template <typename T>
-typename std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
+std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
 {
   return std::accumulate(xs.begin(), xs.end(), T{0});
 }
 
 template <typename T>
-typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
+std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
 {
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(

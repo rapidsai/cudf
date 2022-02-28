@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -696,8 +696,8 @@ def assert_frame_equal(
 
     if PANDAS_GE_110:
         pd.testing.assert_index_equal(
-            left.columns,
-            right.columns,
+            left._data.to_pandas_index(),
+            right._data.to_pandas_index(),
             exact=check_column_type,
             check_names=check_names,
             check_exact=check_exact,
@@ -708,8 +708,8 @@ def assert_frame_equal(
         )
     else:
         pd.testing.assert_index_equal(
-            left.columns,
-            right.columns,
+            left._data.to_pandas_index(),
+            right._data.to_pandas_index(),
             exact=check_column_type,
             check_names=check_names,
             check_exact=check_exact,
@@ -717,7 +717,7 @@ def assert_frame_equal(
             obj=f"{obj}.columns",
         )
 
-    for col in left.columns:
+    for col in left._column_names:
         assert_column_equal(
             left._data[col],
             right._data[col],
