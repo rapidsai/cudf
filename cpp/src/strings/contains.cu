@@ -46,7 +46,7 @@ template <int stack_size>
 struct contains_fn {
   reprog_device prog;
   column_device_view const d_strings;
-  bool const bmatch{false};  // do not make this a template parameter to keep compile times down
+  bool const bmatch;  // do not make this a template parameter to keep compile times down
 
   __device__ bool operator()(size_type idx)
   {
