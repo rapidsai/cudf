@@ -4,7 +4,6 @@ import gzip
 import os
 import re
 import shutil
-import warnings
 from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -1316,25 +1315,14 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
 )
 def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
-    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF", "9512c20b"]
+    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF"]
     values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = "\n".join(lines)
 
     if gdf_dtype is not None:
         # require explicit `hex` dtype to parse hexadecimals
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                (
-                    "Values are too large to be losslessly cast to int32. In "
-                    "a future version this will raise OverflowError."
-                ),
-                category=FutureWarning,
-            )
-            pdf = pd.DataFrame(
-                data=values, dtype=pdf_dtype, columns=["hex_int"]
-            )
+        pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
         gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
         np.testing.assert_array_equal(
             pdf["hex_int"], gdf["hex_int"].to_numpy()
@@ -1344,6 +1332,36 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
         gdf = read_csv(StringIO(buffer), names=["hex_int"])
         assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "np_dtype, gdf_dtype",
+    [("int_", "hex"), ("int32", "hex32"), ("int64", "hex64")],
+)
+def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
+    # This tests values which cause an overflow warning that will become an
+    # error in pandas. NumPy wraps the overflow silently up to the bounds of a
+    # signed int64.
+    lines = [
+        "0x0",
+        "-0x1000",
+        "0xfedcba",
+        "0xABCDEF",
+        "0xaBcDeF",
+        "0x9512c20b",
+        "0x7fffffff",
+        "0x7fffffffffffffff",
+        "-0x8000000000000000",
+    ]
+    values = [int(hex_int, 16) for hex_int in lines]
+    buffer = "\n".join(lines)
+
+    gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
+
+    np_dtype = getattr(np, np_dtype)
+    expected = np.array(values, dtype=np_dtype)
+    actual = gdf["hex_int"].to_numpy()
+    np.testing.assert_array_equal(expected, actual)
 
 
 @pytest.mark.parametrize("quoting", [0, 1, 2, 3])
