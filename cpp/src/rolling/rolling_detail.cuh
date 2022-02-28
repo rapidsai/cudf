@@ -239,17 +239,14 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
                                    [&input](size_type idx) { return input.is_valid_nocheck(idx); })
                 : end_index - start_index;
 
-    if (valid_count >= min_periods) {
-      output.element<OutputType>(current_index) =
-        thrust::reduce(thrust::seq,
-                       thrust::make_counting_iterator(start_index),
-                       thrust::make_counting_iterator(end_index),
-                       size_type{start_index},
-                       comp);
-    } else {
-      // Set -1 will help identify null elements while gathering for Min and Max.
-      output.element<OutputType>(current_index) = OutputType{-1};
-    }
+    // Set -1 will help identify null elements while gathering for Min and Max.
+    output.element<OutputType>(current_index) =
+      (valid_count >= min_periods) ? thrust::reduce(thrust::seq,
+                                                    thrust::make_counting_iterator(start_index),
+                                                    thrust::make_counting_iterator(end_index),
+                                                    size_type{start_index},
+                                                    comp)
+                                   : OutputType{-1};
 
     // The gather mask shouldn't contain null values, so always return true.
     return true;
