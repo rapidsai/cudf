@@ -144,11 +144,14 @@ struct DeviceRolling {
 };
 
 /**
- * @brief The base struct used for checking if the combination of input types and aggregation op is
+ * @brief The base struct used for checking if the combination of input type and aggregation op is
  * supported.
  */
 template <typename InputType, aggregation::Kind op>
 struct DeviceRollingArgMinMaxBase {
+  size_type min_periods;
+  DeviceRollingArgMinMaxBase(size_type _min_periods) : min_periods(_min_periods) {}
+
   static constexpr bool is_supported()
   {
     // Right now only support ARGMIN/ARGMAX of strings and structs.
@@ -161,14 +164,15 @@ struct DeviceRollingArgMinMaxBase {
 };
 
 /**
- * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window.
+ * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window for string.
  */
-template <typename InputType, aggregation::Kind op, typename AggOp>
-struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
-  DeviceRollingArgMinMax(size_type _min_periods, AggOp const& _agg_op)
-    : min_periods(_min_periods), agg_op(_agg_op)
+template <aggregation::Kind op>
+struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_view, op> {
+  DeviceRollingArgMinMaxString(size_type _min_periods)
+    : DeviceRollingArgMinMaxBase<cudf::string_view, op>(_min_periods)
   {
   }
+  using DeviceRollingArgMinMaxBase<cudf::string_view, op>::min_periods;
 
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
@@ -178,50 +182,56 @@ struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
                              size_type end_index,
                              size_type current_index)
   {
-    if constexpr (std::is_same_v<InputType, cudf::string_view>) {
-      auto constexpr is_arg_min = op == aggregation::Kind::ARGMIN;
+    using InputType = cudf::string_view;
+    using AggOp     = typename corresponding_operator<op>::type;
+    AggOp agg_op;
 
-      auto const get_str = [&] __device__(size_type idx) {
-        return !has_nulls || input.is_valid(idx) ? input.element<InputType>(idx)
-                                                 : AggOp::template identity<InputType>();
-      };
+    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
+    // for CUDA 10.0 and below (fixed in CUDA 10.1)
+    volatile cudf::size_type count = 0;
+    InputType val                  = AggOp::template identity<InputType>();
+    OutputType val_index = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
 
-      // This bin_op returns the value of ARGMIN/ARGMAX when comparing two strings.
-      auto const bin_op = [&] __device__(size_type lhs_idx, size_type rhs_idx) {
-        auto const lhs = get_str(lhs_idx);
-        auto const rhs = get_str(rhs_idx);
-
-        // Return `lhs_idx` iff:
-        //   lhs_idx <  rhs and finding ARGMIN, or
-        //   lhs_idx >= rhs and finding ARGMAX.
-        return (lhs < rhs) == is_arg_min ? lhs_idx : rhs_idx;
-      };
-
-      return do_rolling_arg_minmax<OutputType, has_nulls>(
-        input, output, bin_op, start_index, end_index, current_index);
-    } else {
-      return do_rolling_arg_minmax<OutputType, has_nulls>(
-        input, output, agg_op, start_index, end_index, current_index);
+    for (size_type j = start_index; j < end_index; j++) {
+      if (!has_nulls || input.is_valid(j)) {
+        InputType element = input.element<InputType>(j);
+        val               = agg_op(element, val);
+        if (val == element) { val_index = j; }
+        count++;
+      }
     }
+
+    bool output_is_valid = (count >= min_periods);
+    // -1 will help identify null elements while gathering for Min and Max
+    // In case of count, this would be null, so doesn't matter.
+    output.element<OutputType>(current_index) = (output_is_valid) ? val_index : -1;
+
+    // The gather mask shouldn't contain null values, so
+    // always return zero
+    return true;
   }
+};
 
- private:
-  AggOp agg_op;  // this is only used for struct type input.
-  size_type min_periods;
-
-  template <typename OutputType, bool has_nulls, typename BinOp>
-  bool __device__ do_rolling_arg_minmax(column_device_view const& input,
-                                        mutable_column_device_view& output,
-                                        BinOp const& binop,
-                                        size_type start_index,
-                                        size_type end_index,
-                                        size_type current_index)
+/**
+ * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window for struct.
+ */
+template <aggregation::Kind op, typename Comparator>
+struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_view, op> {
+  DeviceRollingArgMinMaxStruct(size_type _min_periods, Comparator const& _comp)
+    : DeviceRollingArgMinMaxBase<cudf::struct_view, op>(_min_periods), comp(_comp)
   {
-    auto const minmax_idx = thrust::reduce(thrust::seq,
-                                           thrust::make_counting_iterator(start_index),
-                                           thrust::make_counting_iterator(end_index),
-                                           size_type{start_index},
-                                           binop);
+  }
+  using DeviceRollingArgMinMaxBase<cudf::struct_view, op>::min_periods;
+  Comparator comp;
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const&,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index)
+  {
     auto const valid_count =
       has_nulls ? thrust::count_if(thrust::seq,
                                    thrust::make_counting_iterator(start_index),
@@ -229,9 +239,17 @@ struct DeviceRollingArgMinMax : DeviceRollingArgMinMaxBase<InputType, op> {
                                    [&input](size_type idx) { return input.is_valid_nocheck(idx); })
                 : end_index - start_index;
 
-    // Set -1 will help identify null elements while gathering for Min and Max.
-    output.element<OutputType>(current_index) =
-      valid_count >= min_periods ? minmax_idx : OutputType{-1};
+    if (valid_count >= min_periods) {
+      output.element<OutputType>(current_index) =
+        thrust::reduce(thrust::seq,
+                       thrust::make_counting_iterator(start_index),
+                       thrust::make_counting_iterator(end_index),
+                       size_type{start_index},
+                       comp);
+    } else {
+      // Set -1 will help identify null elements while gathering for Min and Max.
+      output.element<OutputType>(current_index) = OutputType{-1};
+    }
 
     // The gather mask shouldn't contain null values, so always return true.
     return true;
@@ -262,8 +280,8 @@ struct DeviceRollingCountValid {
                              size_type end_index,
                              size_type current_index)
   {
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
+    // declare this as volatile to avoid some compiler optimizations that lead to incorrect
+    // results for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
 
     bool output_is_valid = ((end_index - start_index) >= min_periods);
@@ -676,11 +694,24 @@ template <typename InputType, aggregation::Kind k>
 struct create_rolling_operator<
   InputType,
   k,
-  typename std::enable_if_t<k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX>> {
-  template <typename AggOp>
-  auto operator()(size_type min_periods, AggOp const& agg_op)
+  typename std::enable_if_t<std::is_same_v<InputType, cudf::string_view> &&
+                            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX)>> {
+  auto operator()(size_type min_periods, rolling_aggregation const&)
   {
-    return DeviceRollingArgMinMax<InputType, k, AggOp>{min_periods, agg_op};
+    return DeviceRollingArgMinMaxString<k>{min_periods};
+  }
+};
+
+template <typename InputType, aggregation::Kind k>
+struct create_rolling_operator<
+  InputType,
+  k,
+  typename std::enable_if_t<std::is_same_v<InputType, cudf::struct_view> &&
+                            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX)>> {
+  template <typename Comparator>
+  auto operator()(size_type min_periods, Comparator const& comp)
+  {
+    return DeviceRollingArgMinMaxStruct<k, Comparator>{min_periods, comp};
   }
 };
 
@@ -1097,13 +1128,6 @@ struct rolling_window_launcher {
         cudf::reduction::detail::comparison_binop_generator::create<op>(input, stream);
       auto const device_op =
         create_rolling_operator<InputType, op>{}(min_periods, comp_generator.binop());
-      return do_rolling(device_op);
-    } else if constexpr (is_arg_minmax && std::is_same_v<InputType, cudf::string_view>) {
-      // This should be either DeviceMin or DeviceMax for finding ARGMIN/ARGMAX of strings.
-      using AggOp = typename corresponding_operator<op>::type;
-      static_assert(std::is_same_v<AggOp, DeviceMin> || std::is_same_v<AggOp, DeviceMax>,
-                    "Invalid AggOp for finding ARGMIN/ARGMAX of strings");
-      auto const device_op = create_rolling_operator<InputType, op>{}(min_periods, AggOp{});
       return do_rolling(device_op);
     } else {  // all the remaining rolling operations
       auto const device_op = create_rolling_operator<InputType, op>{}(min_periods, agg);
