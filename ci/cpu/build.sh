@@ -6,7 +6,10 @@
 set -e
 
 # Set path and build parallel level
-export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
+# FIXME: PATH variable shouldn't be necessary.
+# This should be removed once we either stop using the `remote-docker-plugin`
+# or the following issue is addressed: https://github.com/gpuopenanalytics/remote-docker-plugin/issues/47
+export PATH=/usr/local/gcc9/bin:/opt/conda/bin:/usr/local/cuda/bin:$PATH
 export PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Set home to the job's workspace
