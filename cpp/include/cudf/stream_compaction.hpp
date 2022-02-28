@@ -214,13 +214,10 @@ enum class duplicate_keep_option {
 };
 
 /**
- * @brief Create a new table without duplicate rows.
+ * @brief Create a new table with consecutive duplicate rows removed.
  *
- * The output table is sorted according to the lexicographic ordering of the data in the columns
- * indexed by `keys`.
- *
- * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
+ * Given an `input` table_view, one specific row from a group of equivalent elements is copied to
+ * output table depending on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
@@ -232,18 +229,16 @@ enum class duplicate_keep_option {
  * @param[in] keep            keep first row, last row, or no rows of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
- * @param[in] null_precedence flag to denote nulls should appear before or after non-null items
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
- * @return Table with sorted unique rows as specified by `keep`.
+ * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`.
  */
 std::unique_ptr<table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
-  null_order null_precedence          = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

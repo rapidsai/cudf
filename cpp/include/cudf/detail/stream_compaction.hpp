@@ -71,7 +71,6 @@ std::unique_ptr<table> drop_duplicates(
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
-  null_order null_precedence          = null_order::BEFORE,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

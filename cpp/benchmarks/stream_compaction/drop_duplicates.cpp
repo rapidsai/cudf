@@ -72,7 +72,7 @@ void nvbench_drop_duplicates(nvbench::state& state,
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
     auto result = cudf::detail::drop_duplicates(
-      input_table, {0}, Keep, cudf::null_equality::EQUAL, cudf::null_order::BEFORE, stream_view);
+      input_table, {0}, Keep, cudf::null_equality::EQUAL, stream_view);
   });
 }
 
