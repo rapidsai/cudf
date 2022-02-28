@@ -970,8 +970,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             # Assume that cupy subpackages match numpy and search the
             # corresponding cupy submodule based on the func's __module__.
             numpy_submodule = func.__module__.split(".")[1:]
-            cupy_submodule = getattr(cupy, ".".join(numpy_submodule), None)
-            cupy_func = cupy_submodule and getattr(cupy_submodule, fname, None)
+            cupy_func = cupy
+            for name in (*numpy_submodule, func.__name__):
+                cupy_func = getattr(cupy_func, name, None)
 
             # Handle case if cupy does not implement the function or just
             # aliases the numpy function.
