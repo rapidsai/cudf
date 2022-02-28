@@ -214,7 +214,6 @@ Combining / comparing / joining / merging / encoding
 
    Series.append
    Series.update
-   Series.one_hot_encoding
 
 Numerical operations
 ~~~~~~~~~~~~~~~~~~~~

@@ -219,7 +219,6 @@ Combining / comparing / joining / merging / encoding
    DataFrame.join
    DataFrame.merge
    DataFrame.update
-   DataFrame.one_hot_encoding
 
 Numerical operations
 ~~~~~~~~~~~~~~~~~~~~
