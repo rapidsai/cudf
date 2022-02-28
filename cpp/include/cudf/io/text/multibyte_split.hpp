@@ -33,10 +33,29 @@ namespace text {
  *
  * providing a byte range allows multibyte_split to read a whole file, but only return the offsets
  * of delimiters which begin within the range. If thinking in terms of "records", where each
- * delimiter dictates the end of a record, we return all records which begin within the byte range
- * provided, and ignore all other records, including any record which may end (but not begin)
- * within the range, and including any record which may begin in the range but end outside of the
- * range.
+ * delimiter dictates the end of a record,  all records which begin within the byte range
+ * provided will be returned, including any record which may begin in the range but end outside of
+ * the range. Records which begin outside of the range will ignored, even if those records end
+ * inside the range.
+ *
+ * Examples:
+ *  source:     "abc..def..ghi..jkl.."
+ *  delimiter:  ".."
+ *
+ *  byte_range: nullopt
+ *  return:     ["abc..", "def..", "ghi..", jkl..", ""]
+ *
+ *  byte_range: [0, 2)
+ *  return:     ["abc.."]
+ *
+ *  byte_range: [2, 9)
+ *  return:     ["def..", "ghi.."]
+ *
+ *  byte_range: [11, 2)
+ *  return:     []
+ *
+ *  byte_range: [13, 7)
+ *  return:     ["jkl..", ""]
  *
  * @param source The source string
  * @param delimiter UTF-8 encoded string for which to find offsets in the source
