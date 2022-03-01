@@ -74,8 +74,9 @@ struct findall_fn {
 
     auto const result = [&] {
       if (spos > epos) { return string_index_pair{nullptr, 0}; }
-      spos = d_str.byte_offset(spos);  // convert
-      epos = d_str.byte_offset(epos);  // to bytes
+      // convert character positions to byte positions
+      spos = d_str.byte_offset(spos);
+      epos = d_str.byte_offset(epos);
       return string_index_pair{d_str.data() + spos, (epos - spos)};
     }();
 

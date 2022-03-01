@@ -46,22 +46,22 @@ template <int stack_size>
 struct contains_fn {
   reprog_device prog;
   column_device_view const d_strings;
-  bool const bmatch;  // do not make this a template parameter to keep compile times down
+  bool const beginning_only;  // do not make this a template parameter to keep compile times down
 
   __device__ bool operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<string_view>(idx);
     int32_t begin    = 0;
-    int32_t end      = bmatch ? 1    // match only the beginning of the string;
-                              : -1;  // this handles empty strings too
+    int32_t end      = beginning_only ? 1    // match only the beginning of the string;
+                                      : -1;  // match anywhere in the string
     return static_cast<bool>(prog.find<stack_size>(idx, d_str, begin, end));
   }
 };
 
 struct contains_dispatch_fn {
   reprog_device d_prog;
-  bool const beginning_only{false};
+  bool const beginning_only;
 
   template <int stack_size>
   std::unique_ptr<column> operator()(strings_column_view const& input,
