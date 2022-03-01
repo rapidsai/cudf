@@ -1778,6 +1778,26 @@ class IndexedFrame(Frame):
 
         return NotImplemented
 
+    def _append(
+        self, other, ignore_index=False, verify_integrity=False, sort=None
+    ):
+        warnings.warn(
+            "append is deprecated and will be removed in a future version. "
+            "Use concat instead.",
+            FutureWarning,
+        )
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
+            )
+
+        if is_list_like(other):
+            to_concat = [self, *other]
+        else:
+            to_concat = [self, other]
+
+        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+
 
 def _check_duplicate_level_names(specified, level_names):
     """Raise if any of `specified` has duplicates in `level_names`."""

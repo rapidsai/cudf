@@ -6126,19 +6126,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  3
         4  4
         """
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
         if isinstance(other, dict):
             if not ignore_index:
                 raise TypeError("Can only append a dict if ignore_index=True")
             other = DataFrame(other)
-            result = cudf.concat(
-                [self, other], ignore_index=ignore_index, sort=sort
-            )
-            return result
         elif isinstance(other, Series):
             if other.name is None and not ignore_index:
                 raise TypeError(
@@ -6169,23 +6160,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             other = other.reindex(combined_columns, copy=False).to_frame().T
             if not current_cols.equals(combined_columns):
                 self = self.reindex(columns=combined_columns)
-        elif isinstance(other, list):
-            if not other:
-                pass
-            elif not isinstance(other[0], DataFrame):
-                other = DataFrame(other)
-                cols = self._data.to_pandas_index()
-                if (
-                    cols.get_indexer(other._data.to_pandas_index()) >= 0
-                ).all():
-                    other = other.reindex(columns=cols)
+        elif isinstance(other, list) and not isinstance(other[0], DataFrame):
+            other = DataFrame(other)
+            cols = self._data.to_pandas_index()
+            if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
+                other = other.reindex(columns=cols)
 
-        if is_list_like(other):
-            to_concat = [self, *other]
-        else:
-            to_concat = [self, other]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+        return super(DataFrame, self)._append(
+            other, ignore_index, verify_integrity, sort
+        )
 
     @annotate("DATAFRAME_PIVOT", color="green", domain="cudf_python")
     @copy_docstring(reshape.pivot)

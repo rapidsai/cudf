@@ -33,7 +33,6 @@ from cudf.api.types import (
     is_integer_dtype,
     is_interval_dtype,
     is_list_dtype,
-    is_list_like,
     is_scalar,
     is_struct_dtype,
 )
@@ -785,18 +784,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5    6
         dtype: int64
         """
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
-        if is_list_like(to_append):
-            to_concat = [self]
-            to_concat.extend(to_append)
-        else:
-            to_concat = [self, to_append]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index)
+        return super()._append(to_append, ignore_index, verify_integrity)
 
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
