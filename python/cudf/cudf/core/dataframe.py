@@ -1638,6 +1638,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return out
 
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+        if is_dict_like(dtype):
+            if len(set(dtype.keys()) - set(self._data.names)) > 0:
+                raise KeyError(
+                    "Only a column name can be used for the "
+                    "key in a dtype mappings argument."
+                )
+        else:
+            dtype = {cc: dtype for cc in self._data.names}
+        return super().astype(dtype, copy, errors, **kwargs)
+
     def _clean_renderable_dataframe(self, output):
         """
         This method takes in partial/preprocessed dataframe

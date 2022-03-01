@@ -33,6 +33,7 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_decimal_dtype,
     is_dict_like,
+    is_dtype_equal,
     is_scalar,
     issubdtype,
 )
@@ -493,6 +494,17 @@ class Frame:
             new_frame._index = None
 
         return new_frame
+
+    def astype(self, dtype, copy=False, **kwargs):
+        result = {}
+        for col_name, col in self._data.items():
+            dt = dtype.get(col_name, col.dtype)
+            if not is_dtype_equal(dt, col.dtype):
+                result[col_name] = col.astype(dt, copy=copy, **kwargs)
+            else:
+                result[col_name] = col.copy() if copy else col
+
+        return result
 
     @annotate("FRAME_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):

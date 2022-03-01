@@ -22,8 +22,6 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
     is_categorical_dtype,
-    is_dict_like,
-    is_dtype_equal,
     is_integer_dtype,
     is_list_like,
 )
@@ -1919,23 +1917,8 @@ class IndexedFrame(Frame):
                 FutureWarning,
             )
 
-        if not is_dict_like(dtype):
-            dtype = {cc: dtype for cc in self._data.names}
-        else:
-            if len(set(dtype.keys()) - set(self._data.names)) > 0:
-                raise KeyError(
-                    "Only a column name can be used for the "
-                    "key in a dtype mappings argument."
-                )
-
         try:
-            result = {}
-            for col_name, col in self._data.items():
-                dt = dtype.get(col_name, col.dtype)
-                if not is_dtype_equal(dt, col.dtype):
-                    result[col_name] = col.astype(dt, copy=copy, **kwargs)
-                else:
-                    result[col_name] = col.copy() if copy else col
+            data = super().astype(dtype, copy, **kwargs)
         except Exception as e:
             if errors == "raise":
                 raise e
@@ -1946,7 +1929,7 @@ class IndexedFrame(Frame):
                 warnings.warn(tb)
             return self
 
-        return self._from_data(result, index=self._index)
+        return self._from_data(data, index=self._index)
 
 
 def _check_duplicate_level_names(specified, level_names):

@@ -1678,11 +1678,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.Series(self._column.nullmask)
 
     def astype(self, dtype, copy=False, errors="raise", **kwargs):
-        if is_dict_like(dtype) and (len(dtype) > 1 or self.name not in dtype):
-            raise KeyError(
-                "Only the Series name can be used for "
-                "the key in Series dtype mappings."
-            )
+        if is_dict_like(dtype):
+            if len(dtype) > 1 or self.name not in dtype:
+                raise KeyError(
+                    "Only the Series name can be used for the key in Series "
+                    "dtype mappings."
+                )
+        else:
+            dtype = {self.name: dtype}
         return super().astype(dtype, copy, errors, **kwargs)
 
     def sort_index(self, axis=0, *args, **kwargs):

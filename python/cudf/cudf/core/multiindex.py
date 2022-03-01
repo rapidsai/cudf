@@ -18,11 +18,17 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
-from cudf.api.types import is_integer, is_list_like
+from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
-from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
+from cudf.core.index import (
+    BaseIndex,
+    _index_astype_docstring,
+    _lexsorted_equal_range,
+    as_index,
+)
+from cudf.utils.docutils import doc_apply
 from cudf.utils.utils import NotIterable, _maybe_indices_to_slice
 
 
@@ -168,6 +174,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 level_names=self._data.level_names,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
+
+    @doc_apply(_index_astype_docstring)
+    def astype(self, dtype, copy: bool = True):
+        if not is_object_dtype(dtype):
+            raise TypeError(
+                "Setting a MultiIndex dtype to anything other than object is "
+                "not supported"
+            )
+        return self
 
     def rename(self, names, inplace=False):
         """
