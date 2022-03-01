@@ -28,7 +28,6 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_dtype_equal,
     is_integer,
     is_integer_dtype,
     is_interval_dtype,
@@ -1678,111 +1677,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
-    def astype(self, dtype, copy=False, errors="raise"):
-        """
-        Cast the Series to the given dtype
-
-        Parameters
-        ----------
-
-        dtype : data type, or dict of column name -> data type
-            Use a numpy.dtype or Python type to cast Series object to
-            the same type. Alternatively, use {col: dtype, ...}, where col is a
-            series name and dtype is a numpy.dtype or Python type to cast to.
-        copy : bool, default False
-            Return a deep-copy when ``copy=True``. Note by default
-            ``copy=False`` setting is used and hence changes to
-            values then may propagate to other cudf objects.
-        errors : {'raise', 'ignore', 'warn'}, default 'raise'
-            Control raising of exceptions on invalid data for provided dtype.
-
-            - ``raise`` : allow exceptions to be raised
-            - ``ignore`` : suppress exceptions. On error return original
-              object.
-            - ``warn`` : prints last exceptions as warnings and
-              return original object.
-
-        Returns
-        -------
-        out : Series
-            Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
-            as ``self.dtype``.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2], dtype='int32')
-        >>> series
-        0    1
-        1    2
-        dtype: int32
-        >>> series.astype('int64')
-        0    1
-        1    2
-        dtype: int64
-
-        Convert to categorical type:
-
-        >>> series.astype('category')
-        0    1
-        1    2
-        dtype: category
-        Categories (2, int64): [1, 2]
-
-        Convert to ordered categorical type with custom ordering:
-
-        >>> cat_dtype = cudf.CategoricalDtype(categories=[2, 1], ordered=True)
-        >>> series.astype(cat_dtype)
-        0    1
-        1    2
-        dtype: category
-        Categories (2, int64): [2 < 1]
-
-        Note that using ``copy=False`` (enabled by default)
-        and changing data on a new Series will
-        propagate changes:
-
-        >>> s1 = cudf.Series([1, 2])
-        >>> s1
-        0    1
-        1    2
-        dtype: int64
-        >>> s2 = s1.astype('int64', copy=False)
-        >>> s2[0] = 10
-        >>> s1
-        0    10
-        1     2
-        dtype: int64
-        """
-        if errors not in ("ignore", "raise", "warn"):
-            raise ValueError("invalid error value specified")
-
-        if is_dict_like(dtype):
-            if len(dtype) > 1 or self.name not in dtype:
-                raise KeyError(
-                    "Only the Series name can be used for "
-                    "the key in Series dtype mappings."
-                )
-            dtype = dtype[self.name]
-
-        if is_dtype_equal(dtype, self.dtype):
-            return self.copy(deep=copy)
-        try:
-            data = self._column.astype(dtype)
-
-            return self._from_data({self.name: data}, index=self._index)
-
-        except Exception as e:
-            if errors == "raise":
-                raise e
-            elif errors == "warn":
-                import traceback
-
-                tb = traceback.format_exc()
-                warnings.warn(tb)
-            elif errors == "ignore":
-                pass
-            return self
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+        if is_dict_like(dtype) and (len(dtype) > 1 or self.name not in dtype):
+            raise KeyError(
+                "Only the Series name can be used for "
+                "the key in Series dtype mappings."
+            )
+        return super().astype(dtype, copy, errors, **kwargs)
 
     def sort_index(self, axis=0, *args, **kwargs):
         if axis not in (0, "index"):

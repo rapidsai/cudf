@@ -22,6 +22,8 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
     is_categorical_dtype,
+    is_dict_like,
+    is_dtype_equal,
     is_integer_dtype,
     is_list_like,
 )
@@ -1797,6 +1799,154 @@ class IndexedFrame(Frame):
             to_concat = [self, other]
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+        """Cast the object to the given dtype.
+
+        Parameters
+        ----------
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast entire DataFrame object to
+            the same type. Alternatively, use ``{col: dtype, ...}``, where col
+            is a column label and dtype is a numpy.dtype or Python type
+            to cast one or more of the DataFrame's columns to
+            column-specific types.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
+            -   **kwargs : extra arguments to pass on to the constructor
+
+        Returns
+        -------
+        DataFrame/Series
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [10, 20, 30], 'b': [1, 2, 3]})
+        >>> df
+            a  b
+        0  10  1
+        1  20  2
+        2  30  3
+        >>> df.dtypes
+        a    int64
+        b    int64
+        dtype: object
+
+        Cast all columns to `int32`:
+
+        >>> df.astype('int32').dtypes
+        a    int32
+        b    int32
+        dtype: object
+
+        Cast `a` to `float32` using a dictionary:
+
+        >>> df.astype({'a': 'float32'}).dtypes
+        a    float32
+        b      int64
+        dtype: object
+        >>> df.astype({'a': 'float32'})
+              a  b
+        0  10.0  1
+        1  20.0  2
+        2  30.0  3
+
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([1, 2], dtype='int32')
+        >>> series
+        0    1
+        1    2
+        dtype: int32
+        >>> series.astype('int64')
+        0    1
+        1    2
+        dtype: int64
+
+        Convert to categorical type:
+
+        >>> series.astype('category')
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [1, 2]
+
+        Convert to ordered categorical type with custom ordering:
+
+        >>> cat_dtype = cudf.CategoricalDtype(categories=[2, 1], ordered=True)
+        >>> series.astype(cat_dtype)
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [2 < 1]
+
+        Note that using ``copy=False`` (enabled by default)
+        and changing data on a new Series will
+        propagate changes:
+
+        >>> s1 = cudf.Series([1, 2])
+        >>> s1
+        0    1
+        1    2
+        dtype: int64
+        >>> s2 = s1.astype('int64', copy=False)
+        >>> s2[0] = 10
+        >>> s1
+        0    10
+        1     2
+        dtype: int64
+        """
+        if errors not in ("ignore", "warn", "raise"):
+            raise ValueError("invalid error value specified")
+        elif errors == "warn":
+            warnings.warn(
+                "Specifying errors='warn' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+            )
+
+        if not is_dict_like(dtype):
+            dtype = {cc: dtype for cc in self._data.names}
+        else:
+            if len(set(dtype.keys()) - set(self._data.names)) > 0:
+                raise KeyError(
+                    "Only a column name can be used for the "
+                    "key in a dtype mappings argument."
+                )
+
+        try:
+            result = {}
+            for col_name, col in self._data.items():
+                dt = dtype.get(col_name, col.dtype)
+                if not is_dtype_equal(dt, col.dtype):
+                    result[col_name] = col.astype(dt, copy=copy, **kwargs)
+                else:
+                    result[col_name] = col.copy() if copy else col
+        except Exception as e:
+            if errors == "raise":
+                raise e
+            elif errors == "warn":
+                import traceback
+
+                tb = traceback.format_exc()
+                warnings.warn(tb)
+            return self
+
+        return self._from_data(result, index=self._index)
 
 
 def _check_duplicate_level_names(specified, level_names):
