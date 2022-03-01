@@ -3005,13 +3005,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     auto const keys_indices =
         std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
 
-    auto result = cudf::drop_duplicates(
-        *input, keys_indices,
-        keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
-                     cudf::duplicate_keep_option::KEEP_LAST,
-        nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
-        nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER,
-        rmm::mr::get_current_device_resource());
+    std::vector<cudf::order> order(keys_indices.size(), cudf::order::ASCENDING);
+    std::vector<cudf::null_order> null_precedence(
+        keys_indices.size(), nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER);
+    auto const gather_map =
+        cudf::stable_sorted_order(input->select(keys_indices), order, null_precedence,
+                                  rmm::mr::get_current_device_resource());
+    auto const sorted_input =
+        cudf::gather(*input, gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK,
+                     rmm::mr::get_current_device_resource());
+
+    auto result = cudf::drop_duplicates(sorted_input->view(), keys_indices,
+                                        keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
+                                                     cudf::duplicate_keep_option::KEEP_LAST,
+                                        nulls_equal ? cudf::null_equality::EQUAL :
+                                                      cudf::null_equality::UNEQUAL,
+                                        rmm::mr::get_current_device_resource());
     return convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
