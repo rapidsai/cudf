@@ -1044,7 +1044,7 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read an Avro file.
-   * @param opts various avro parsing options.
+   * @param opts various Avro parsing options.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
    */
@@ -1055,7 +1055,7 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read Avro formatted data.
-   * @param buffer raw parquet formatted bytes.
+   * @param buffer raw Avro formatted bytes.
    * @return the data parsed as a table on the GPU.
    */
   public static Table readAvro(byte[] buffer) {
@@ -1063,9 +1063,9 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Read parquet formatted data.
-   * @param opts various parquet parsing options.
-   * @param buffer raw parquet formatted bytes.
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
    * @return the data parsed as a table on the GPU.
    */
   public static Table readAvro(AvroOptions opts, byte[] buffer) {
@@ -1094,7 +1094,7 @@ public final class Table implements AutoCloseable {
   /**
    * Read Avro formatted data.
    * @param opts various Avro parsing options.
-   * @param buffer raw parquet formatted bytes.
+   * @param buffer raw Avro formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
    * @return the data parsed as a table on the GPU.
