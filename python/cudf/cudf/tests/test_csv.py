@@ -1336,7 +1336,7 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
 
 @pytest.mark.parametrize(
     "np_dtype, gdf_dtype",
-    [("int_", "hex"), ("int32", "hex32"), ("int64", "hex64")],
+    [("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
 )
 def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
     # This tests values which cause an overflow warning that will become an
@@ -1358,7 +1358,6 @@ def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
 
     gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
 
-    np_dtype = getattr(np, np_dtype)
     expected = np.array(values, dtype=np_dtype)
     actual = gdf["hex_int"].to_numpy()
     np.testing.assert_array_equal(expected, actual)
