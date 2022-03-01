@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -23,6 +23,11 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] sorted_order(
+        table_view source_table,
+        vector[libcudf_types.order] column_order,
+        vector[libcudf_types.null_order] null_precedence) except +
+
+    cdef unique_ptr[column] stable_sorted_order(
         table_view source_table,
         vector[libcudf_types.order] column_order,
         vector[libcudf_types.null_order] null_precedence) except +
