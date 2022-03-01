@@ -114,6 +114,7 @@ std::pair<int64_t, int64_t> default_range()
 template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
 std::pair<T, T> default_range()
 {
+  // Limits need to be such that `upper - lower` does not overflow
   return {std::numeric_limits<T>::lowest() / 2, std::numeric_limits<T>::max() / 2};
 }
 }  // namespace
