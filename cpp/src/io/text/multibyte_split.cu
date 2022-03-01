@@ -405,8 +405,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                       return static_cast<int32_t>(offset - relevant_offset_first);
                     });
 
-  stream.synchronize();
-
   auto reader = source.create_reader();
   reader->skip_bytes(relevant_offset_first);
 

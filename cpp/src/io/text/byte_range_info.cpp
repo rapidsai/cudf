@@ -36,7 +36,7 @@ std::vector<byte_range_info> create_byte_range_infos_consecutive(int64_t total_b
   for (int64_t i = 0; i < range_count; i++) {
     auto offset = i * range_size;
     auto size   = std::min(range_size, total_bytes - offset);
-    ranges.push_back(byte_range_info{offset, size});
+    ranges.emplace_back(offset, size);
   }
 
   return ranges;
