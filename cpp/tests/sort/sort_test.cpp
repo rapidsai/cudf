@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -616,6 +616,7 @@ TYPED_TEST(Sort, MisMatchInColumnOrderSize)
   EXPECT_THROW(stable_sorted_order(input, column_order), logic_error);
   EXPECT_THROW(sort(input, column_order), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order), logic_error);
+  EXPECT_THROW(stable_sort_by_key(input, input, column_order), logic_error);
 }
 
 TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
@@ -634,6 +635,7 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
   EXPECT_THROW(stable_sorted_order(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order, null_precedence), logic_error);
+  EXPECT_THROW(stable_sort_by_key(input, input, column_order, null_precedence), logic_error);
 }
 
 TYPED_TEST(Sort, ZeroSizedColumns)
@@ -654,10 +656,10 @@ TYPED_TEST(Sort, ZeroSizedColumns)
   run_sort_test(input, expected, column_order);
 }
 
-struct SortByKey : public BaseFixture {
+struct SortByKeyCommon : public BaseFixture {
 };
 
-TEST_F(SortByKey, ValueKeysSizeMismatch)
+TEST_F(SortByKeyCommon, ValueKeysSizeMismatch)
 {
   using T = int64_t;
 
@@ -670,6 +672,7 @@ TEST_F(SortByKey, ValueKeysSizeMismatch)
   table_view keys{{key_col}};
 
   EXPECT_THROW(sort_by_key(values, keys), logic_error);
+  EXPECT_THROW(stable_sort_by_key(values, keys), logic_error);
 }
 
 template <typename T>
