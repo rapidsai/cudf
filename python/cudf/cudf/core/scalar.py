@@ -11,7 +11,6 @@ from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.index import BaseIndex
 from cudf.core.mixins import BinaryOperand
-from cudf.core.mixins.mixin_factory import AllOperations
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
@@ -59,7 +58,7 @@ class Scalar(BinaryOperand):
         The data type
     """
 
-    _VALID_BINARY_OPERATIONS = AllOperations
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, value, dtype=None):
 

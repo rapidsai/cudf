@@ -13,10 +13,6 @@ def _partialmethod(method, *args1, **kwargs1):
     return wrapper
 
 
-class AllOperations:
-    """Sentinel value to indicate that all supported operations are valid."""
-
-
 class Operation:
     """Descriptor used to define operations for delegating mixins.
 
@@ -225,11 +221,7 @@ def _create_delegating_mixin(
             valid_operations = set()
             for base_cls in cls.__mro__:
                 # Check for sentinel indicating that all operations are valid.
-                cls_valid_operations = getattr(base_cls, validity_attr, set())
-                if cls_valid_operations is AllOperations:
-                    valid_operations = supported_operations
-                    break
-                valid_operations |= cls_valid_operations
+                valid_operations |= getattr(base_cls, validity_attr, set())
 
             invalid_operations = valid_operations - supported_operations
             assert (

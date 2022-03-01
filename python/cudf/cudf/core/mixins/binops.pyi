@@ -1,6 +1,10 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+from typing import Set
+
 class BinaryOperand:
+    _SUPPORTED_BINARY_OPERATIONS: Set
+
     def __add__(self, other):
         ...
 
