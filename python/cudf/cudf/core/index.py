@@ -699,7 +699,7 @@ class RangeIndex(BaseIndex):
         )
 
     def repeat(self, repeats, axis=None):
-        return self._values.repeat(repeats, axis)
+        return self._as_int64().repeat(repeats, axis)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
