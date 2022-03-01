@@ -1547,7 +1547,7 @@ class BaseIndex(Serializable):
                     33, 33, 33, 33, 55, 55, 55, 55, 55],
                 dtype='int64')
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:
