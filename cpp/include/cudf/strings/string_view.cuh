@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/strings/detail/string.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.hpp>
 
 #ifndef __CUDA_ARCH__
