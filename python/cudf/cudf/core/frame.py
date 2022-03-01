@@ -1550,81 +1550,9 @@ class Frame:
 
         return self._from_data(data, index).astype(np.float64)
 
-    @annotate("FRAME_REPEAT", color="green", domain="cudf_python")
-    def repeat(self, repeats, axis=None):
-        """Repeats elements consecutively.
-
-        Returns a new object of caller type(DataFrame/Series/Index) where each
-        element of the current object is repeated consecutively a given
-        number of times.
-
-        Parameters
-        ----------
-        repeats : int, or array of ints
-            The number of repetitions for each element. This should
-            be a non-negative integer. Repeating 0 times will return
-            an empty object.
-
-        Returns
-        -------
-        Series/DataFrame/Index
-            A newly created object of same type as caller
-            with repeated elements.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': [10, 20, 30]})
-        >>> df
-           a   b
-        0  1  10
-        1  2  20
-        2  3  30
-        >>> df.repeat(3)
-           a   b
-        0  1  10
-        0  1  10
-        0  1  10
-        1  2  20
-        1  2  20
-        1  2  20
-        2  3  30
-        2  3  30
-        2  3  30
-
-        Repeat on Series
-
-        >>> s = cudf.Series([0, 2])
-        >>> s
-        0    0
-        1    2
-        dtype: int64
-        >>> s.repeat([3, 4])
-        0    0
-        0    0
-        0    0
-        1    2
-        1    2
-        1    2
-        1    2
-        dtype: int64
-        >>> s.repeat(2)
-        0    0
-        0    0
-        1    2
-        1    2
-        dtype: int64
-
-        Repeat on Index
-
-        >>> index = cudf.Index([10, 22, 33, 55])
-        >>> index
-        Int64Index([10, 22, 33, 55], dtype='int64')
-        >>> index.repeat(5)
-        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
-                    33, 33, 33, 33, 55, 55, 55, 55, 55],
-                dtype='int64')
-        """
+    def _repeat(
+        self, columns: List[ColumnBase], repeats, axis=None
+    ) -> List[ColumnBase]:
         if axis is not None:
             raise NotImplementedError(
                 "Only axis=`None` supported at this time."
@@ -1633,12 +1561,7 @@ class Frame:
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, repeats)
-        )
-
-        result._copy_type_metadata(self)
-        return result
+        return libcudf.filling.repeat(columns, repeats)
 
     @annotate("FRAME_SHIFT", color="green", domain="cudf_python")
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):

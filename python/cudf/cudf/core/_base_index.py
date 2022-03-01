@@ -1518,6 +1518,37 @@ class BaseIndex(Serializable):
             column_names=self._column_names,
         )
 
+    def repeat(self, repeats, axis=None):
+        """Repeat elements of a Index.
+
+        Returns a new Index where each element of the current Index is repeated
+        consecutively a given number of times.
+
+        Parameters
+        ----------
+        repeats : int, or array of ints
+            The number of repetitions for each element. This should
+            be a non-negative integer. Repeating 0 times will return
+            an empty object.
+
+        Returns
+        -------
+        Index
+            A newly created object of same type as caller with repeated
+            elements.
+
+        Examples
+        --------
+        >>> index = cudf.Index([10, 22, 33, 55])
+        >>> index
+        Int64Index([10, 22, 33, 55], dtype='int64')
+        >>> index.repeat(5)
+        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
+                    33, 33, 33, 33, 55, 55, 55, 55, 55],
+                dtype='int64')
+        """
+        raise NotImplementedError()
+
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:
             raise ValueError(f"Out of bound level: {levels}")

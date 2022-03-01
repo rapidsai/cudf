@@ -698,6 +698,9 @@ class RangeIndex(BaseIndex):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def repeat(self, repeats, axis=None):
+        return self._values.repeat(repeats, axis)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
@@ -1223,6 +1226,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             order=order,
             ascending=ascending,
             na_position=na_position,
+        )
+
+    def repeat(self, repeats, axis=None):
+        return self._from_columns_like_self(
+            self._repeat([*self._columns], repeats, axis), self._column_names
         )
 
 
