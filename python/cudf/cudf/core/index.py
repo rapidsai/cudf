@@ -341,6 +341,7 @@ class RangeIndex(BaseIndex):
 
         return as_index(self._values[index], name=self.name)
 
+    @annotate("RangeIndex_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if isinstance(other, RangeIndex):
             if (self._start, self._stop, self._step) == (
