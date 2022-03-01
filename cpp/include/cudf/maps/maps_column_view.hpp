@@ -24,6 +24,14 @@
 
 namespace cudf {
 
+/**
+ * @brief Given a column-view of LIST<STRUCT<K,V>>, an instance of this class
+ * provides an abstraction of a column of maps.
+ *
+ * Each list row is treated as a map of key->value, with possibly repeated keys.
+ * The list may be looked up by a scalar key, or by a column of keys, to
+ * retrieve the corresponding value.
+ */
 class maps_column_view {
  public:
   maps_column_view(lists_column_view const& lists_of_structs,
@@ -55,11 +63,40 @@ class maps_column_view {
    */
   lists_column_view values() const { return values_; }
 
+  /**
+   * @brief Map lookup by a column of keys.
+   *
+   * The lookup column must have as many rows as the map column,
+   * and must match the key-type of the map.
+   * A column of values is returned, with the same number of rows as the map column.
+   * If a key is repeated in a map row, the value corresponding to the last matching
+   * key is returned.
+   * If a lookup key is null or not found, the corresponding value is null.
+   *
+   * @param keys Column of keys to be looked up in each corresponding map row.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned column's device memory.
+   * @return std::unique_ptr<column> Column of values corresponding the value of the lookup key.
+   */
   std::unique_ptr<column> get_values_for(
     column_view const& keys,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
+  /**
+   * @brief Map lookup by a scalar key.
+   *
+   * The type of the lookup scalar must match the key-type of the map.
+   * A column of values is returned, with the same number of rows as the map column.
+   * If a key is repeated in a map row, the value corresponding to the last matching
+   * key is returned.
+   * If the lookup key is null or not found, the corresponding value is null.
+   *
+   * @param keys Column of keys to be looked up in each corresponding map row.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned column's device memory.
+   * @return std::unique_ptr<column>
+   */
   std::unique_ptr<column> get_values_for(
     scalar const& key,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
