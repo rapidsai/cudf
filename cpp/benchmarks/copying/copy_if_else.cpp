@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ static void BM_copy_if_else(benchmark::State& state, bool nulls)
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto input_type  = cudf::type_to_id<TypeParam>();
   auto bool_type   = cudf::type_id::BOOL8;
-  auto const input = create_random_table({input_type, input_type, bool_type}, 3, row_count{n_rows});
+  auto const input = create_random_table({input_type, input_type, bool_type}, row_count{n_rows});
 
   if (!nulls) {
     input->get_column(2).set_null_mask(rmm::device_buffer{}, 0);
