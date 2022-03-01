@@ -83,7 +83,6 @@ void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destinatio
 // algorithms are optimized for their respective platforms. You can still
 // compile and run any of them on any platform, but your performance with the
 // non-native version will be less than optimal.
-template <typename Key>
 struct MurmurHash3_32 {
   using result_type = hash_value_type;
 
@@ -115,7 +114,8 @@ struct MurmurHash3_32 {
   }
 
   // TODO Do we need this operator() and/or compute? Probably not both.
-  [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
+  template <typename T>
+  [[nodiscard]] result_type __device__ inline operator()(T const& key) const
   {
     return compute(key);
   }
@@ -187,17 +187,25 @@ struct MurmurHash3_32 {
 };
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(bool const& key) const
 {
   return this->compute(static_cast<uint8_t>(key));
 }
 
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
 template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::string_view const& key) const
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
   auto const len  = key.size_bytes();
@@ -205,64 +213,46 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline MurmurHash3_32<numeric::decimal32>::operator()(
-  numeric::decimal32 const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(numeric::decimal32 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<numeric::decimal64>::operator()(
-  numeric::decimal64 const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(numeric::decimal64 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<numeric::decimal128>::operator()(
-  numeric::decimal128 const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(numeric::decimal128 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::list_view>::operator()(
-  cudf::list_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::list_view const& key) const
 {
   cudf_assert(false && "List column hashing is not supported");
   return 0;
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
-  cudf::struct_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::struct_view const& key) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
 }
 
-template <typename Key>
 struct SparkMurmurHash3_32 {
   using result_type = hash_value_type;
 
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
   {
-    return (x << r) | (x >> (32 - r));
+    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
   }
 
   __device__ inline uint32_t fmix32(uint32_t h) const
@@ -275,7 +265,11 @@ struct SparkMurmurHash3_32 {
     return h;
   }
 
-  result_type __device__ inline operator()(Key const& key) const { return compute(key); }
+  template <typename T>
+  result_type __device__ inline operator()(T const& key) const
+  {
+    return compute(key);
+  }
 
   // compute wrapper for floating point types
   template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
@@ -352,52 +346,72 @@ struct SparkMurmurHash3_32 {
 };
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<bool>::operator()(bool const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(bool const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<int8_t>::operator()(int8_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(int8_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<uint8_t>::operator()(uint8_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(int16_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<int16_t>::operator()(int16_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(uint8_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
-  uint16_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(uint16_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
   numeric::decimal32 const& key) const
 {
   return this->compute<uint64_t>(key.value());
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal64>::operator()(
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
   numeric::decimal64 const& key) const
 {
   return this->compute<uint64_t>(key.value());
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::operator()(
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
   numeric::decimal128 const& key) const
 {
   // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
@@ -439,15 +453,14 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::list_view>::operator()(
-  cudf::list_view const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(cudf::list_view const& key) const
 {
   cudf_assert(false && "List column hashing is not supported");
   return 0;
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operator()(
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
   cudf::struct_view const& key) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
@@ -455,50 +468,23 @@ hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operat
 }
 
 /**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-/**
  * @brief  This hash function simply returns the value that is asked to be hash
  * reinterpreted as the result_type of the functor.
  */
-template <typename Key>
 struct IdentityHash {
   using result_type = hash_value_type;
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
-  template <typename return_type = result_type>
-  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
-    Key const& key) const
+  template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
+  constexpr result_type operator()(T const& key) const
   {
     cudf_assert(false && "IdentityHash does not support this data type");
     return 0;
   }
 
-  template <typename return_type = result_type>
-  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
-    Key const& key) const
+  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+  constexpr result_type operator()(T const& key) const
   {
     return static_cast<result_type>(key);
   }
@@ -507,5 +493,4 @@ struct IdentityHash {
   uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
-template <typename Key>
-using default_hash = MurmurHash3_32<Key>;
+using default_hash = MurmurHash3_32;

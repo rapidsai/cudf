@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ template <typename Key,
           typename size_type,
           Key unused_key,
           Element unused_element,
-          typename Hasher       = default_hash<Key>,
+          typename Hasher       = default_hash,
           typename Equality     = equal_to<Key>,
           typename Allocator    = managed_allocator<thrust::pair<Key, Element>>,
           bool count_collisions = false>

@@ -430,14 +430,14 @@ class row_lexicographic_comparator {
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <template <typename> class hash_function, typename Nullate>
+template <typename hash_function, typename Nullate>
 class element_hasher {
  public:
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
-    return hash_function<T>{}(col.element<T>(row_index));
+    return hash_function{}(col.element<T>(row_index));
   }
 
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
@@ -450,7 +450,7 @@ class element_hasher {
   Nullate has_nulls;
 };
 
-template <template <typename> class hash_function, typename Nullate>
+template <typename hash_function, typename Nullate>
 class element_hasher_with_seed {
  public:
   __device__ element_hasher_with_seed(Nullate has_nulls, uint32_t seed)
@@ -467,7 +467,7 @@ class element_hasher_with_seed {
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
-    return hash_function<T>{_seed}(col.element<T>(row_index));
+    return hash_function{_seed}(col.element<T>(row_index));
   }
 
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
@@ -489,7 +489,7 @@ class element_hasher_with_seed {
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <template <typename> class hash_function, typename Nullate>
+template <typename hash_function, typename Nullate>
 class row_hasher {
  public:
   row_hasher() = delete;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -444,7 +444,7 @@ struct copy_block_partitions_dispatcher {
 };
 
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
-template <template <typename> class hash_function, bool hash_has_nulls>
+template <typename hash_function, bool hash_has_nulls>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
@@ -711,7 +711,7 @@ struct dispatch_map_type {
 
 namespace detail {
 namespace local {
-template <template <typename> class hash_function>
+template <typename hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,7 @@ namespace detail {
 /*
  *  Device view of the unordered multiset
  */
-template <typename Element,
-          typename Hasher   = default_hash<Element>,
-          typename Equality = equal_to<Element>>
+template <typename Element, typename Hasher = default_hash, typename Equality = equal_to<Element>>
 class unordered_multiset_device_view {
  public:
   unordered_multiset_device_view(size_type hash_size,
@@ -66,9 +64,7 @@ class unordered_multiset_device_view {
 /*
  * Fixed size set on a device.
  */
-template <typename Element,
-          typename Hasher   = default_hash<Element>,
-          typename Equality = equal_to<Element>>
+template <typename Element, typename Hasher = default_hash, typename Equality = equal_to<Element>>
 class unordered_multiset {
  public:
   /**
