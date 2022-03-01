@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -36,16 +37,35 @@ class maps_column_view
         maps_column_view& operator=(maps_column_view &&) = default;
         ~maps_column_view() = default;
 
+        /**
+         * @brief Returns number of map rows in the column.
+         */
         size_type size() const
         {
           return keys_.size();
         }
 
-        lists_column_view keys() const;
-        lists_column_view values() const;
+        /**
+         * @brief Getter for keys as a list column.
+         *
+         * Note: Keys are not deduped. Repeated keys are returned in order.
+         */
+        lists_column_view keys() const { return keys_; }
+
+        /**
+         * @brief Getter for values as a list column.
+         *
+         * Note: Values for repeated keys are not dropped.
+         */
+        lists_column_view values() const { return values_; }
 
         std::unique_ptr<column> get_values_for(
             column_view const& keys, 
+            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+        std::unique_ptr<column> get_values_for(
+            scalar const& key,
             rmm::cuda_stream_view stream = rmm::cuda_stream_default,
             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 

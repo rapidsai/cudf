@@ -47,32 +47,46 @@ maps_column_view::maps_column_view(lists_column_view const& lists_of_structs, rm
     CUDF_EXPECTS(structs.type().id() == type_id::STRUCT, "maps_column_view input must have exactly 1 child (STRUCT) column.");
 }
 
-lists_column_view maps_column_view::keys() const
+template <typename KeyT>
+std::unique_ptr<column> get_values_for_impl(
+    maps_column_view const& maps_view,
+    KeyT const& lookup_keys,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
 {
-    return keys_;
-}
-
-lists_column_view maps_column_view::values() const
-{
-    return values_;
+  auto const keys_ = maps_view.keys();
+  auto const values_ = maps_view.values();
+  CUDF_EXPECTS(lookup_keys.type().id() == keys_.child().type().id(), 
+               "Lookup keys must have the same type as the keys of the map column.");
+  auto key_indices = lists::detail::index_of(keys_, lookup_keys, lists::duplicate_find_option::FIND_LAST, stream); 
+  auto constexpr absent_offset = size_type{-1};
+  auto constexpr nullity_offset = std::numeric_limits<size_type>::max();
+  thrust::replace(
+      rmm::exec_policy(stream), 
+      key_indices->mutable_view().template begin<size_type>(), 
+      key_indices->mutable_view().template end<size_type>(), 
+      absent_offset, 
+      nullity_offset);
+  return lists::detail::extract_list_element(values_, key_indices->view(), stream, mr);
 }
 
 std::unique_ptr<column> maps_column_view::get_values_for(
-    column_view const& keys,
+    column_view const& lookup_keys,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
 {
-    CUDF_EXPECTS(keys.type().id() == keys_.child().type().id(), 
-                 "Lookup keys must have the same type as the keys of the map column.");
-    CUDF_EXPECTS(keys.size() == size(), 
+    CUDF_EXPECTS(lookup_keys.size() == size(), 
                  "Lookup keys must have the same size as the map column.");
     
-    auto key_indices = lists::detail::index_of(keys_, keys, lists::duplicate_find_option::FIND_LAST, stream); 
+    return get_values_for_impl(*this, lookup_keys, stream, mr);
+}
 
-    auto constexpr absent_offset = size_type{-1};
-    auto constexpr nullity_offset = std::numeric_limits<size_type>::max();
-    thrust::replace(rmm::exec_policy(stream), key_indices->mutable_view().begin<size_type>(), key_indices->mutable_view().end<size_type>(), absent_offset, nullity_offset);
-    return lists::detail::extract_list_element(values_, key_indices->view(), stream, mr);
+std::unique_ptr<column> maps_column_view::get_values_for(
+    scalar const& lookup_key,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
+{
+    return get_values_for_impl(*this, lookup_key, stream, mr);
 }
 
 } // namespace cudf;
