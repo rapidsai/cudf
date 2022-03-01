@@ -15,15 +15,16 @@
  */
 #pragma once
 
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
 namespace lists {
 namespace detail {
 
 /**
- * @copydoc cudf::lists::extract_list_element(lists_column_view, size_type, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::lists::extract_list_element(lists_column_view, size_type,
+ * rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
@@ -32,7 +33,8 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc cudf::lists::extract_list_element(lists_column_view, column_view const&, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::lists::extract_list_element(lists_column_view, column_view const&,
+ * rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
@@ -40,6 +42,6 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr);
 
-}
-}
-} // namespace cudf;
+}  // namespace detail
+}  // namespace lists
+}  // namespace cudf

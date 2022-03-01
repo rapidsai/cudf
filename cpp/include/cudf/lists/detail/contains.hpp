@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/contains.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
 namespace lists {
@@ -50,6 +50,6 @@ std::unique_ptr<column> index_of(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-} // namespace detail;
-} // namespace lists;
-} // namespace cudf;
+}  // namespace detail
+}  // namespace lists
+}  // namespace cudf

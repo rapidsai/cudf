@@ -24,54 +24,49 @@
 
 namespace cudf {
 
-class maps_column_view
-{
-    public:
+class maps_column_view {
+ public:
+  maps_column_view(lists_column_view const& lists_of_structs,
+                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
-        maps_column_view(lists_column_view const& lists_of_structs, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+  // Rule of 5.
+  maps_column_view(maps_column_view const& maps_view) = default;
+  maps_column_view(maps_column_view&& maps_view)      = default;
+  maps_column_view& operator=(maps_column_view const&) = default;
+  maps_column_view& operator=(maps_column_view&&) = default;
+  ~maps_column_view()                             = default;
 
-        // Rule of 5.
-        maps_column_view(maps_column_view const& maps_view) = default;
-        maps_column_view(maps_column_view&& maps_view)      = default;
-        maps_column_view& operator=(maps_column_view const&) = default;
-        maps_column_view& operator=(maps_column_view &&) = default;
-        ~maps_column_view() = default;
+  /**
+   * @brief Returns number of map rows in the column.
+   */
+  size_type size() const { return keys_.size(); }
 
-        /**
-         * @brief Returns number of map rows in the column.
-         */
-        size_type size() const
-        {
-          return keys_.size();
-        }
+  /**
+   * @brief Getter for keys as a list column.
+   *
+   * Note: Keys are not deduped. Repeated keys are returned in order.
+   */
+  lists_column_view keys() const { return keys_; }
 
-        /**
-         * @brief Getter for keys as a list column.
-         *
-         * Note: Keys are not deduped. Repeated keys are returned in order.
-         */
-        lists_column_view keys() const { return keys_; }
+  /**
+   * @brief Getter for values as a list column.
+   *
+   * Note: Values for repeated keys are not dropped.
+   */
+  lists_column_view values() const { return values_; }
 
-        /**
-         * @brief Getter for values as a list column.
-         *
-         * Note: Values for repeated keys are not dropped.
-         */
-        lists_column_view values() const { return values_; }
+  std::unique_ptr<column> get_values_for(
+    column_view const& keys,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
-        std::unique_ptr<column> get_values_for(
-            column_view const& keys, 
-            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  std::unique_ptr<column> get_values_for(
+    scalar const& key,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
-        std::unique_ptr<column> get_values_for(
-            scalar const& key,
-            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
-
-    private:
-
-        lists_column_view keys_, values_;
+ private:
+  lists_column_view keys_, values_;
 };
 
-} // namespace cudf;
+}  // namespace cudf

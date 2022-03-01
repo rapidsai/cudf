@@ -258,12 +258,11 @@ namespace detail {
  *                                        rmm::cuda_stream_view,
  *                                        rmm::mr::device_memory_resource*)
  */
-std::unique_ptr<column> index_of(
-  cudf::lists_column_view const& lists,
-  cudf::scalar const& search_key,
-  duplicate_find_option find_option,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
+                                 cudf::scalar const& search_key,
+                                 duplicate_find_option find_option,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   return search_key.is_valid(stream)
            ? cudf::type_dispatcher(search_key.type(),
@@ -286,15 +285,14 @@ std::unique_ptr<column> index_of(
  * @copydoc cudf::lists::detail::index_of(cudf::lists_column_view const&,
  *                                        cudf::column_view const&,
  *                                        duplicate_find_option,
- *                                        rmm::cuda_stream_view, 
+ *                                        rmm::cuda_stream_view,
  *                                        rmm::mr::device_memory_resource*)
  */
-std::unique_ptr<column> index_of(
-  cudf::lists_column_view const& lists,
-  cudf::column_view const& search_keys,
-  duplicate_find_option find_option,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
+                                 cudf::column_view const& search_keys,
+                                 duplicate_find_option find_option,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
