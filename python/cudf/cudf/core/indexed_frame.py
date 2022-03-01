@@ -1782,7 +1782,7 @@ class IndexedFrame(Frame):
     def repeat(self, repeats, axis=None):
         """Repeats elements consecutively.
 
-        Returns a new object of caller type(DataFrame/Series/Index) where each
+        Returns a new object of caller type(DataFrame/Series) where each
         element of the current object is repeated consecutively a given
         number of times.
 
