@@ -15,6 +15,8 @@
  */
 
 #include <cudf/lists/contains.hpp>
+#include <cudf/lists/detail/contains.hpp>
+#include <cudf/lists/detail/extract.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/maps/maps_column_view.hpp>
@@ -55,17 +57,6 @@ lists_column_view maps_column_view::values() const
     return values_;
 }
 
-// TODO: Move to detail header.
-namespace lists::detail
-{
-std::unique_ptr<column> index_of(
-  cudf::lists_column_view const& lists,
-  cudf::column_view const& search_keys,
-  duplicate_find_option find_option,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-} // namespace lists::detail;
-
 std::unique_ptr<column> maps_column_view::get_values_for(
     column_view const& keys,
     rmm::cuda_stream_view stream,
@@ -81,8 +72,7 @@ std::unique_ptr<column> maps_column_view::get_values_for(
     auto constexpr absent_offset = size_type{-1};
     auto constexpr nullity_offset = std::numeric_limits<size_type>::max();
     thrust::replace(rmm::exec_policy(stream), key_indices->mutable_view().begin<size_type>(), key_indices->mutable_view().end<size_type>(), absent_offset, nullity_offset);
-    // TODO: Extract detail function to a header.
-    return cudf::lists::extract_list_element(values_, key_indices->view(), mr);
+    return lists::detail::extract_list_element(values_, key_indices->view(), stream, mr);
 }
 
 } // namespace cudf;

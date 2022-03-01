@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include "cudf/types.hpp"
-#include "rmm/mr/device/device_memory_resource.hpp"
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>

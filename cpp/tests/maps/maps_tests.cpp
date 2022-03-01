@@ -14,25 +14,31 @@
  * limitations under the License.
  */
 
-#include "cudf/column/column_factories.hpp"
-#include "cudf/maps/maps_column_view.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/maps/maps_column_view.hpp>
 
 namespace cudf::test
 {
 
+using namespace cudf::test::iterators;
 using structs = structs_column_wrapper;
 template <typename T> using fwcw = fixed_width_column_wrapper<T, int32_t>;
 template <typename T> using lists = lists_column_wrapper<T, int32_t>;
 using offsets = fwcw<cudf::size_type>;
 
+auto constexpr X = int32_t{0}; // Placeholder for null values.
+
 template <typename T> struct MapsTest : BaseFixture {};
 
 using MapsTestTypes = Concat<IntegralTypesNotBool, FloatingPointTypes, ChronoTypes>;
+
 
 TYPED_TEST_SUITE(MapsTest, MapsTestTypes);
 
@@ -90,8 +96,12 @@ TYPED_TEST(MapsTest, BasicLookup)
 
     auto const lists_view = list_binary_structs_column->view();
     auto const maps = cudf::maps_column_view{lists_view};
-    auto const lookup_result = maps.get_values_for(fwcw<T>{0, 0, 0, 0, 0, 0});
-    print(lookup_result->view());
+    {
+        auto const lookup_result_col_0 = maps.get_values_for(fwcw<T>{0, 0, 0, 0, 0, 0});
+        auto const expected = fwcw<T>{{0, 0, 4, 8, X, X}, nulls_at({4,5})};
+        CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lookup_result_col_0->view(), expected);
+        // auto const lookup_result_scalar_0 = maps.get_values_for(T{0});
+    }
 }
 
 
