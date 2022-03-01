@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,20 +61,41 @@ std::unique_ptr<column> serial_murmur_hash3_32(
  * http://www.boost.org/LICENSE_1_0.txt)
  */
 /**
+ * @brief  Combines two hash values into a new single hash value.
+ *
+ * Taken from the Boost hash_combine function
+ * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+ *
+ * @param lhs The first hash value.
+ * @param rhs The second hash value.
+ * @return Combined hash value.
+ */
+constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
+{
+  return lhs ^ (rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2));
+}
+
+/* Copyright 2005-2014 Daniel James.
+ *
+ * Use, modification and distribution is subject to the Boost Software
+ * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+ * http://www.boost.org/LICENSE_1_0.txt)
+ */
+/**
  * @brief Combines two hashed values into a single hashed value.
  *
  * Adapted from Boost hash_combine function, modified for 64-bit
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
  *
- * @param lhs The first hashed value
- * @param rhs The second hashed value
- * @return Combined hash value
+ * @param lhs The first hash value.
+ * @param rhs The second hash value.
+ * @return Combined hash value.
  */
 constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
-  lhs ^= rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2);
-  return lhs;
+  return lhs ^ (rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2));
 }
+
 }  // namespace detail
 }  // namespace cudf
 

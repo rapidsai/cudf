@@ -114,32 +114,6 @@ struct MurmurHash3_32 {
     return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
   // TODO Do we need this operator() and/or compute? Probably not both.
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
@@ -513,32 +487,6 @@ struct IdentityHash {
   using result_type = hash_value_type;
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
-
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
 
   template <typename return_type = result_type>
   constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
