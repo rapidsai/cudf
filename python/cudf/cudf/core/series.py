@@ -956,7 +956,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return sum(super().memory_usage(index, deep).values())
 
     def __array_function__(self, func, types, args, kwargs):
-        if "out" in kwargs or not all(issubclass(t, (Series,)) for t in types):
+        if "out" in kwargs or not all(issubclass(t, Series) for t in types):
             return NotImplemented
 
         try:
