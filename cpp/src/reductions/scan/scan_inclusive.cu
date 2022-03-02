@@ -225,7 +225,7 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy,
                                      rmm::cuda_stream_view stream,

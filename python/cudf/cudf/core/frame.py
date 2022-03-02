@@ -46,6 +46,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
+from cudf.core.mixins import BinaryOperand
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -54,7 +55,50 @@ from cudf.utils.dtypes import find_common_type, is_column_like
 T = TypeVar("T", bound="Frame")
 
 
-class Frame:
+# Mapping from ufuncs to the corresponding binary operators.
+_ufunc_binary_operations = {
+    # Arithmetic binary operations.
+    "add": "add",
+    "subtract": "sub",
+    "multiply": "mul",
+    "matmul": "matmul",
+    "divide": "truediv",
+    "true_divide": "truediv",
+    "floor_divide": "floordiv",
+    "power": "pow",
+    "float_power": "pow",
+    "remainder": "mod",
+    "mod": "mod",
+    "fmod": "mod",
+    # Bitwise binary operations.
+    "bitwise_and": "and",
+    "bitwise_or": "or",
+    "bitwise_xor": "xor",
+    # Comparison binary operators
+    "greater": "gt",
+    "greater_equal": "ge",
+    "less": "lt",
+    "less_equal": "le",
+    "not_equal": "ne",
+    "equal": "eq",
+}
+
+# These operators need to be mapped to their inverses when performing a
+# reflected ufunc operation because no reflected version of the operators
+# themselves exist. When these operators are invoked directly (not via
+# __array_ufunc__) Python takes care of calling the inverse operation.
+_ops_without_reflection = {
+    "gt": "lt",
+    "ge": "le",
+    "lt": "gt",
+    "le": "ge",
+    # ne and eq are symmetric, so they are their own inverse op
+    "ne": "ne",
+    "eq": "eq",
+}
+
+
+class Frame(BinaryOperand):
     """A collection of Column objects with an optional index.
 
     Parameters
@@ -70,6 +114,8 @@ class Frame:
     # attribute should be moved to IndexedFrame.
     _index: Optional[cudf.core.index.BaseIndex]
     _names: Optional[List]
+
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -360,7 +406,7 @@ class Frame:
                 "The deep parameter is ignored and is only included "
                 "for pandas compatibility."
             )
-        return {name: col.memory_usage() for name, col in self._data.items()}
+        return {name: col.memory_usage for name, col in self._data.items()}
 
     def __len__(self):
         return self._num_rows
@@ -2752,6 +2798,11 @@ class Frame:
                     0.8011526357338306, 0.8939966636005579],
                     dtype='float64')
         """
+        warnings.warn(
+            "sin is deprecated and will be removed. Use numpy.sin instead",
+            FutureWarning,
+        )
+
         return self._unaryop("sin")
 
     @annotate("FRAME_COS", color="green", domain="cudf_python")
@@ -2814,6 +2865,11 @@ class Frame:
                     -0.5984600690578581, -0.4480736161291701],
                     dtype='float64')
         """
+        warnings.warn(
+            "cos is deprecated and will be removed. Use numpy.cos instead",
+            FutureWarning,
+        )
+
         return self._unaryop("cos")
 
     @annotate("FRAME_TAN", color="green", domain="cudf_python")
@@ -2876,6 +2932,11 @@ class Frame:
                     -1.3386902103511544, -1.995200412208242],
                     dtype='float64')
         """
+        warnings.warn(
+            "tan is deprecated and will be removed. Use numpy.tan instead",
+            FutureWarning,
+        )
+
         return self._unaryop("tan")
 
     @annotate("FRAME_ASIN", color="green", domain="cudf_python")
@@ -2927,6 +2988,11 @@ class Frame:
                     1.5707963267948966, 0.3046926540153975],
                     dtype='float64')
         """
+        warnings.warn(
+            "asin is deprecated and will be removed in the future",
+            FutureWarning,
+        )
+
         return self._unaryop("asin")
 
     @annotate("FRAME_ACOS", color="green", domain="cudf_python")
@@ -2978,6 +3044,11 @@ class Frame:
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
+        warnings.warn(
+            "acos is deprecated and will be removed. Use numpy.acos instead",
+            FutureWarning,
+        )
+
         result = self.copy(deep=False)
         for col in result._data:
             min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
@@ -3047,6 +3118,11 @@ class Frame:
                                     0.2914567944778671],
                     dtype='float64')
         """
+        warnings.warn(
+            "atan is deprecated and will be removed. Use numpy.atan instead",
+            FutureWarning,
+        )
+
         return self._unaryop("atan")
 
     @annotate("FRAME_EXP", color="green", domain="cudf_python")
@@ -3110,6 +3186,11 @@ class Frame:
                       2.718281828459045, 1.0,  1.3498588075760032],
                     dtype='float64')
         """
+        warnings.warn(
+            "exp is deprecated and will be removed. Use numpy.exp instead",
+            FutureWarning,
+        )
+
         return self._unaryop("exp")
 
     @annotate("FRAME_LOG", color="green", domain="cudf_python")
@@ -3172,6 +3253,11 @@ class Frame:
         Float64Index([2.302585092994046, 2.3978952727983707,
                     6.214608098422191], dtype='float64')
         """
+        warnings.warn(
+            "log is deprecated and will be removed. Use numpy.log instead",
+            FutureWarning,
+        )
+
         return self._unaryop("log")
 
     @annotate("FRAME_SQRT", color="green", domain="cudf_python")
@@ -3228,6 +3314,11 @@ class Frame:
         >>> index.sqrt()
         Float64Index([nan, 10.0, 25.0], dtype='float64')
         """
+        warnings.warn(
+            "sqrt is deprecated and will be removed. Use numpy.sqrt instead",
+            FutureWarning,
+        )
+
         return self._unaryop("sqrt")
 
     @annotate("FRAME_ABS", color="green", domain="cudf_python")
@@ -3467,13 +3558,7 @@ class Frame:
         )
 
     def _binaryop(
-        self,
-        other: T,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        *args,
-        **kwargs,
+        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
     ) -> Frame:
         """Perform a binary operation between two frames.
 
@@ -3481,22 +3566,20 @@ class Frame:
         ----------
         other : Frame
             The second operand.
-        fn : str
+        op : str
             The operation to perform.
         fill_value : Any, default None
             The value to replace null values with. If ``None``, nulls are not
             filled before the operation.
-        reflect : bool, default False
-            If ``True``, swap the order of the operands. See
-            https://docs.python.org/3/reference/datamodel.html#object.__ror__
-            for more information on when this is necessary.
 
         Returns
         -------
         Frame
             A new instance containing the result of the operation.
         """
-        raise NotImplementedError
+        raise NotImplementedError(
+            f"Binary operations are not supported for {self.__class__}"
+        )
 
     @classmethod
     @annotate("FRAME_COLWISE_BINOP", color="green", domain="cudf_python")
@@ -3527,6 +3610,7 @@ class Frame:
             A dict of columns constructed from the result of performing the
             requested operation on the operands.
         """
+        fn = fn[2:-2]
 
         # Now actually perform the binop on the columns in left and right.
         output = {}
@@ -3658,6 +3742,84 @@ class Frame:
 
         return output
 
+    # For more detail on this function and how it should work, see
+    # https://numpy.org/doc/stable/reference/ufuncs.html
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # We don't currently support reduction, accumulation, etc. We also
+        # don't support any special kwargs or higher arity ufuncs than binary.
+        if method != "__call__" or kwargs or ufunc.nin > 2:
+            return NotImplemented
+
+        fname = ufunc.__name__
+        if fname in _ufunc_binary_operations:
+            reflect = self is not inputs[0]
+            other = inputs[0] if reflect else inputs[1]
+
+            op = _ufunc_binary_operations[fname]
+            if reflect and op in _ops_without_reflection:
+                op = _ops_without_reflection[op]
+                reflect = False
+            op = f"__{'r' if reflect else ''}{op}__"
+
+            # Float_power returns float irrespective of the input type.
+            if fname == "float_power":
+                return getattr(self, op)(other).astype(float)
+            return getattr(self, op)(other)
+
+        # Special handling for various unary operations.
+        if fname == "negative":
+            return self * -1
+        if fname == "positive":
+            return self.copy(deep=True)
+        if fname == "invert":
+            return ~self
+        if fname == "absolute":
+            return self.abs()
+        if fname == "fabs":
+            return self.abs().astype(np.float64)
+
+        # None is a sentinel used by subclasses to trigger cupy dispatch.
+        return None
+
+    def _apply_cupy_ufunc_to_operands(
+        self, ufunc, cupy_func, operands, **kwargs
+    ):
+        # Note: There are some operations that may be supported by libcudf but
+        # are not supported by pandas APIs. In particular, libcudf binary
+        # operations support logical and/or operations as well as
+        # trigonometric, but those operations are not defined on
+        # pd.Series/DataFrame. For now those operations will dispatch to cupy,
+        # but if ufuncs are ever a bottleneck we could add special handling to
+        # dispatch those (or any other) functions that we could implement
+        # without cupy.
+
+        mask = None
+        data = [{} for _ in range(ufunc.nout)]
+        for name, (left, right, _, _) in operands.items():
+            cupy_inputs = []
+            for inp in (left, right) if ufunc.nin == 2 else (left,):
+                if isinstance(inp, ColumnBase) and inp.has_nulls():
+                    new_mask = as_column(inp.nullmask)
+
+                    # TODO: This is a hackish way to perform a bitwise and
+                    # of bitmasks. Once we expose
+                    # cudf::detail::bitwise_and, then we can use that
+                    # instead.
+                    mask = new_mask if mask is None else (mask & new_mask)
+
+                    # Arbitrarily fill with zeros. For ufuncs, we assume
+                    # that the end result propagates nulls via a bitwise
+                    # and, so these elements are irrelevant.
+                    inp = inp.fillna(0)
+                cupy_inputs.append(cupy.asarray(inp))
+
+            cp_output = cupy_func(*cupy_inputs, **kwargs)
+            if ufunc.nout == 1:
+                cp_output = (cp_output,)
+            for i, out in enumerate(cp_output):
+                data[i][name] = as_column(out).set_mask(mask)
+        return data
+
     @annotate("FRAME_DOT", color="green", domain="cudf_python")
     def dot(self, other, reflect=False):
         """
@@ -3731,82 +3893,11 @@ class Frame:
             return cudf.DataFrame(result)
         return result.item()
 
-    # Binary arithmetic operations.
-    def __add__(self, other):
-        return self._binaryop(other, "add")
-
-    def __radd__(self, other):
-        return self._binaryop(other, "add", reflect=True)
-
-    def __sub__(self, other):
-        return self._binaryop(other, "sub")
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "sub", reflect=True)
-
     def __matmul__(self, other):
         return self.dot(other)
 
     def __rmatmul__(self, other):
         return self.dot(other, reflect=True)
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
-
-    def __rmul__(self, other):
-        return self._binaryop(other, "mul", reflect=True)
-
-    def __mod__(self, other):
-        return self._binaryop(other, "mod")
-
-    def __rmod__(self, other):
-        return self._binaryop(other, "mod", reflect=True)
-
-    def __pow__(self, other):
-        return self._binaryop(other, "pow")
-
-    def __rpow__(self, other):
-        return self._binaryop(other, "pow", reflect=True)
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "floordiv")
-
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "floordiv", reflect=True)
-
-    def __truediv__(self, other):
-        return self._binaryop(other, "truediv")
-
-    def __rtruediv__(self, other):
-        return self._binaryop(other, "truediv", reflect=True)
-
-    def __and__(self, other):
-        return self._binaryop(other, "and")
-
-    def __or__(self, other):
-        return self._binaryop(other, "or")
-
-    def __xor__(self, other):
-        return self._binaryop(other, "xor")
-
-    # Binary rich comparison operations.
-    def __eq__(self, other):
-        return self._binaryop(other, "eq")
-
-    def __ne__(self, other):
-        return self._binaryop(other, "ne")
-
-    def __lt__(self, other):
-        return self._binaryop(other, "lt")
-
-    def __le__(self, other):
-        return self._binaryop(other, "le")
-
-    def __gt__(self, other):
-        return self._binaryop(other, "gt")
-
-    def __ge__(self, other):
-        return self._binaryop(other, "ge")
 
     # Unary logical operators
     def __neg__(self):
@@ -5017,7 +5108,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "add", fill_value)
+        return self._binaryop(other, "__add__", fill_value)
 
     @annotate("FRAME_RADD", color="green", domain="cudf_python")
     def radd(self, other, axis, level=None, fill_value=None):
@@ -5097,7 +5188,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "add", fill_value, reflect=True)
+        return self._binaryop(other, "__radd__", fill_value)
 
     @annotate("FRAME_SUBTRACT", color="green", domain="cudf_python")
     def subtract(self, other, axis, level=None, fill_value=None):
@@ -5178,7 +5269,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "sub", fill_value)
+        return self._binaryop(other, "__sub__", fill_value)
 
     sub = subtract
 
@@ -5264,7 +5355,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "sub", fill_value, reflect=True)
+        return self._binaryop(other, "__rsub__", fill_value)
 
     @annotate("FRAME_MULTIPLY", color="green", domain="cudf_python")
     def multiply(self, other, axis, level=None, fill_value=None):
@@ -5347,7 +5438,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mul", fill_value)
+        return self._binaryop(other, "__mul__", fill_value)
 
     mul = multiply
 
@@ -5434,7 +5525,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mul", fill_value, reflect=True)
+        return self._binaryop(other, "__rmul__", fill_value)
 
     @annotate("FRAME_MOD", color="green", domain="cudf_python")
     def mod(self, other, axis, level=None, fill_value=None):
@@ -5505,7 +5596,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mod", fill_value)
+        return self._binaryop(other, "__mod__", fill_value)
 
     @annotate("FRAME_RMOD", color="green", domain="cudf_python")
     def rmod(self, other, axis, level=None, fill_value=None):
@@ -5588,7 +5679,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "mod", fill_value, reflect=True)
+        return self._binaryop(other, "__rmod__", fill_value)
 
     @annotate("FRAME_POW", color="green", domain="cudf_python")
     def pow(self, other, axis, level=None, fill_value=None):
@@ -5668,7 +5759,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "pow", fill_value)
+        return self._binaryop(other, "__pow__", fill_value)
 
     @annotate("FRAME_RPOW", color="green", domain="cudf_python")
     def rpow(self, other, axis, level=None, fill_value=None):
@@ -5748,7 +5839,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "pow", fill_value, reflect=True)
+        return self._binaryop(other, "__rpow__", fill_value)
 
     @annotate("FRAME_FLOORDIV", color="green", domain="cudf_python")
     def floordiv(self, other, axis, level=None, fill_value=None):
@@ -5828,7 +5919,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "floordiv", fill_value)
+        return self._binaryop(other, "__floordiv__", fill_value)
 
     @annotate("FRAME_RFLOORDIV", color="green", domain="cudf_python")
     def rfloordiv(self, other, axis, level=None, fill_value=None):
@@ -5925,7 +6016,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "floordiv", fill_value, reflect=True)
+        return self._binaryop(other, "__rfloordiv__", fill_value)
 
     @annotate("FRAME_TRUEDIV", color="green", domain="cudf_python")
     def truediv(self, other, axis, level=None, fill_value=None):
@@ -6010,7 +6101,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "truediv", fill_value)
+        return self._binaryop(other, "__truediv__", fill_value)
 
     # Alias for truediv
     div = truediv
@@ -6104,7 +6195,7 @@ class Frame:
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._binaryop(other, "truediv", fill_value, reflect=True)
+        return self._binaryop(other, "__rtruediv__", fill_value)
 
     # Alias for rtruediv
     rdiv = rtruediv
@@ -6182,7 +6273,7 @@ class Frame:
         dtype: bool
         """
         return self._binaryop(
-            other=other, fn="eq", fill_value=fill_value, can_reindex=True
+            other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_NE", color="green", domain="cudf_python")
@@ -6258,7 +6349,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="ne", fill_value=fill_value, can_reindex=True
+            other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_LT", color="green", domain="cudf_python")
@@ -6334,7 +6425,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="lt", fill_value=fill_value, can_reindex=True
+            other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_LE", color="green", domain="cudf_python")
@@ -6410,7 +6501,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="le", fill_value=fill_value, can_reindex=True
+            other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_GT", color="green", domain="cudf_python")
@@ -6486,7 +6577,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="gt", fill_value=fill_value, can_reindex=True
+            other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
 
     @annotate("FRAME_GE", color="green", domain="cudf_python")
@@ -6562,7 +6653,7 @@ class Frame:
         dtype: bool
         """  # noqa: E501
         return self._binaryop(
-            other=other, fn="ge", fill_value=fill_value, can_reindex=True
+            other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
     def nunique(self, method: builtins.str = "sort", dropna: bool = True):
@@ -6822,7 +6913,7 @@ def _drop_rows_by_labels(
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
-                columns=obj.columns,
+                columns=obj._data.to_pandas_index(),
             )
 
     else:

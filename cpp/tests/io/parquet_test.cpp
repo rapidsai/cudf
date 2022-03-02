@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -252,7 +252,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 

@@ -7,7 +7,6 @@ import warnings
 from functools import cached_property
 
 import numpy as np
-import pandas as pd
 from nvtx import annotate
 
 import cudf
@@ -17,6 +16,7 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
+from cudf.core.mixins import Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin
 
@@ -36,7 +36,23 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-class GroupBy(Serializable):
+class GroupBy(Serializable, Reducible):
+
+    _VALID_REDUCTIONS = {
+        "sum",
+        "prod",
+        "idxmin",
+        "idxmax",
+        "min",
+        "max",
+        "mean",
+        "median",
+        "nunique",
+        "first",
+        "last",
+        "var",
+        "std",
+    }
 
     _MAX_GROUPS_BEFORE_WARN = 100
 
@@ -296,6 +312,46 @@ class GroupBy(Serializable):
             result.index = cudf.core.index.RangeIndex(len(result))
 
         return result
+
+    def _reduce(
+        self,
+        op: str,
+        numeric_only: bool = False,
+        min_count: int = 0,
+        *args,
+        **kwargs,
+    ):
+        """Compute {op} of group values.
+
+        Parameters
+        ----------
+        numeric_only : bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data.
+        min_count : int, default 0
+            The required number of valid values to perform the operation. If
+            fewer than ``min_count`` non-NA values are present the result will
+            be NA.
+
+        Returns
+        -------
+        Series or DataFrame
+            Computed {op} of values within each group.
+
+        Notes
+        -----
+        Difference from pandas:
+            * Not supporting: numeric_only, min_count
+        """
+        if numeric_only:
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+        if min_count != 0:
+            raise NotImplementedError(
+                "min_count parameter is not implemented yet"
+            )
+        return self.agg(op)
 
     aggregate = agg
 
@@ -813,38 +869,6 @@ class GroupBy(Serializable):
         )
         return res
 
-    def sum(self):
-        """Compute the column-wise sum of the values in each group."""
-        return self.agg("sum")
-
-    def prod(self):
-        """Compute the column-wise product of the values in each group."""
-        return self.agg("prod")
-
-    def idxmin(self):
-        """Get the column-wise index of the minimum value in each group."""
-        return self.agg("idxmin")
-
-    def idxmax(self):
-        """Get the column-wise index of the maximum value in each group."""
-        return self.agg("idxmax")
-
-    def min(self):
-        """Get the column-wise minimum value in each group."""
-        return self.agg("min")
-
-    def max(self):
-        """Get the column-wise maximum value in each group."""
-        return self.agg("max")
-
-    def mean(self):
-        """Compute the column-wise mean of the values in each group."""
-        return self.agg("mean")
-
-    def median(self):
-        """Get the column-wise median of the values in each group."""
-        return self.agg("median")
-
     def corr(self, method="pearson", min_periods=1):
         """
         Compute pairwise correlation of columns, excluding NA/null values.
@@ -905,7 +929,7 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        _cols = self.grouping.values.columns.tolist()
+        _cols = self.grouping.values._data.to_pandas_index().tolist()
         len_cols = len(_cols)
 
         new_df_data = {}
@@ -1048,7 +1072,7 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs used in the covariance calculation
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values.columns.tolist()
+        column_names = self.grouping.values._column_names
         num_cols = len(column_names)
 
         column_pair_structs = {}
@@ -1178,10 +1202,6 @@ class GroupBy(Serializable):
 
         return self.agg(func)
 
-    def nunique(self):
-        """Compute the number of unique values in each column in each group."""
-        return self.agg("nunique")
-
     def collect(self):
         """Get a list of all the values for each column in each group."""
         return self.agg("collect")
@@ -1202,14 +1222,6 @@ class GroupBy(Serializable):
     def cummax(self):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
-
-    def first(self):
-        """Get the first non-null value in each group."""
-        return self.agg("first")
-
-    def last(self):
-        """Get the last non-null value in each group."""
-        return self.agg("last")
 
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.
@@ -1540,12 +1552,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
-    def nunique(self):
-        """
-        Return the number of unique values per group
-        """
-        return self.agg("nunique")
-
 
 class SeriesGroupBy(GroupBy):
     """
@@ -1616,11 +1622,8 @@ class SeriesGroupBy(GroupBy):
                 return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
-        if (
-            isinstance(result.columns, pd.MultiIndex)
-            and result.columns.nlevels > 1
-        ):
-            result.columns = result.columns.droplevel(0)
+        if result._data.nlevels > 1:
+            result.columns = result._data.to_pandas_index().droplevel(0)
 
         return result
 

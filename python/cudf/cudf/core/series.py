@@ -9,7 +9,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -39,6 +39,7 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -75,11 +76,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_scalar_type,
 )
-from cudf.utils.utils import (
-    get_appropriate_dispatched_func,
-    get_relevant_submodule,
-    to_cudf_compatible_scalar,
-)
+from cudf.utils.utils import to_cudf_compatible_scalar
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -435,7 +432,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 data = {}
 
-        if not isinstance(data, column.ColumnBase):
+        if not isinstance(data, ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         else:
             if dtype is not None:
@@ -444,7 +441,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
-        assert isinstance(data, column.ColumnBase)
+        assert isinstance(data, ColumnBase)
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
@@ -959,23 +956,59 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return sum(super().memory_usage(index, deep).values())
 
     def __array_function__(self, func, types, args, kwargs):
-        handled_types = [cudf.Series]
-        for t in types:
-            if t not in handled_types:
+        if "out" in kwargs or not all(issubclass(t, Series) for t in types):
+            return NotImplemented
+
+        try:
+            # Apply a Series method if one exists.
+            if cudf_func := getattr(Series, func.__name__, None):
+                return cudf_func(*args, **kwargs)
+
+            # Assume that cupy subpackages match numpy and search the
+            # corresponding cupy submodule based on the func's __module__.
+            numpy_submodule = func.__module__.split(".")[1:]
+            cupy_func = cupy
+            for name in (*numpy_submodule, func.__name__):
+                cupy_func = getattr(cupy_func, name, None)
+
+            # Handle case if cupy does not implement the function or just
+            # aliases the numpy function.
+            if not cupy_func or cupy_func is func:
                 return NotImplemented
 
-        cudf_submodule = get_relevant_submodule(func, cudf)
-        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
-        cupy_submodule = get_relevant_submodule(func, cupy)
+            # For now just fail on cases with mismatched indices. There is
+            # almost certainly no general solution for all array functions.
+            index = args[0].index
+            if not all(s.index.equals(index) for s in args):
+                return NotImplemented
+            out = cupy_func(*(s.values for s in args), **kwargs)
 
-        return get_appropriate_dispatched_func(
-            cudf_submodule,
-            cudf_ser_submodule,
-            cupy_submodule,
-            func,
-            args,
-            kwargs,
-        )
+            # Return (host) scalar values immediately.
+            if not isinstance(out, cupy.ndarray):
+                return out
+
+            # 0D array (scalar)
+            if out.ndim == 0:
+                return to_cudf_compatible_scalar(out)
+            # 1D array
+            elif (
+                # Only allow 1D arrays
+                ((out.ndim == 1) or (out.ndim == 2 and out.shape[1] == 1))
+                # If we have an index, it must be the same length as the
+                # output for cupy dispatching to be well-defined.
+                and len(index) == len(out)
+            ):
+                return Series(out, index=index)
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
+
+        return NotImplemented
 
     def map(self, arg, na_action=None) -> "Series":
         """
@@ -1206,7 +1239,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _prep_for_binop(
+    def _make_operands_and_index_for_binop(
         self,
         other: Any,
         fn: str,
@@ -1215,22 +1248,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+            Type[NotImplemented],
+        ],
+        Optional[BaseIndex],
+    ]:
         # Specialize binops to align indices.
-        if isinstance(other, SingleColumnFrame):
+        if isinstance(other, Series):
             if (
-                # TODO: The can_reindex logic also needs to be applied for
-                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and (
-                    isinstance(other, Series)
-                    # TODO: mypy doesn't like this line because the index
-                    # property is not defined on SingleColumnFrame (or Index,
-                    # for that matter). Ignoring is the easy solution for now,
-                    # a cleaner fix requires reworking the type hierarchy.
-                    and not self.index.equals(other.index)  # type: ignore
-                )
+                and not self.index.equals(other.index)
             ):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
@@ -1242,47 +1272,26 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
         return operands, lhs._index
 
-    def _binaryop(
-        self,
-        other: Frame,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        can_reindex: bool = False,
-        *args,
-        **kwargs,
-    ):
-        operands, out_index = self._prep_for_binop(
-            other, fn, fill_value, reflect, can_reindex
-        )
-        return (
-            self._from_data(
-                data=self._colwise_binop(operands, fn), index=out_index,
-            )
-            if operands is not NotImplemented
-            else NotImplemented
-        )
-
     def logical_and(self, other):
         warnings.warn(
             "Series.logical_and is deprecated and will be removed.",
             FutureWarning,
         )
-        return self._binaryop(other, "l_and").astype(np.bool_)
+        return self._binaryop(other, "__l_and__").astype(np.bool_)
 
     def remainder(self, other):
         warnings.warn(
             "Series.remainder is deprecated and will be removed.",
             FutureWarning,
         )
-        return self._binaryop(other, "mod")
+        return self._binaryop(other, "__mod__")
 
     def logical_or(self, other):
         warnings.warn(
             "Series.logical_or is deprecated and will be removed.",
             FutureWarning,
         )
-        return self._binaryop(other, "l_or").astype(np.bool_)
+        return self._binaryop(other, "__l_or__").astype(np.bool_)
 
     def logical_not(self):
         warnings.warn(
@@ -2539,7 +2548,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.cov(rhs._column)
+        try:
+            return lhs._column.cov(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform covariance with types {self.dtype}, "
+                f"{other.dtype}"
+            )
 
     def transpose(self):
         """Return the transpose, which is by definition self.
@@ -2575,7 +2590,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.corr(rhs._column)
+        try:
+            return lhs._column.corr(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
 
     def autocorr(self, lag=1):
         """Compute the lag-N autocorrelation. This method computes the Pearson

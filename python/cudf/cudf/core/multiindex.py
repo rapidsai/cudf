@@ -110,7 +110,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         levels = [cudf.Series(level) for level in levels]
 
-        if len(levels) != len(codes.columns):
+        if len(levels) != len(codes._data):
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
@@ -960,12 +960,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Verify if this is really necessary or if we can rely on
         # DataFrame._concat.
         if len(source_data) > 1:
-            colnames = source_data[0].columns
+            colnames = source_data[0]._data.to_pandas_index()
             for obj in source_data[1:]:
                 obj.columns = colnames
 
         source_data = cudf.DataFrame._concat(source_data)
-        names = [None for x in source_data.columns]
+        names = [None] * source_data._num_columns
         objs = list(filter(lambda o: o.names is not None, objs))
         for o in range(len(objs)):
             for i, name in enumerate(objs[o].names):
@@ -1415,7 +1415,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 usage += level.memory_usage(deep=deep)
         if self.codes:
             for col in self.codes._data.columns:
-                usage += col.memory_usage()
+                usage += col.memory_usage
         return usage
 
     def difference(self, other, sort=None):
@@ -1682,7 +1682,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         result_df = self_df.merge(other_df, on=col_names, how="outer")
         result_df = result_df.sort_values(
-            by=result_df.columns[self.nlevels :], ignore_index=True
+            by=result_df._data.to_pandas_index()[self.nlevels :],
+            ignore_index=True,
         )
 
         midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])

@@ -226,8 +226,7 @@ struct cast_numeric_scalar_fn {
  */
 template <typename Op>
 struct bool_result_element_dispatcher {
-  template <typename ElementType,
-            std::enable_if_t<std::is_arithmetic<ElementType>::value>* = nullptr>
+  template <typename ElementType, std::enable_if_t<std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -236,7 +235,7 @@ struct bool_result_element_dispatcher {
   }
 
   template <typename ElementType,
-            std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
+            std::enable_if_t<not std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
@@ -261,8 +260,7 @@ struct same_element_type_dispatcher {
     return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view>);
   }
 
-  template <typename IndexType,
-            typename std::enable_if_t<cudf::is_index_type<IndexType>()>* = nullptr>
+  template <typename IndexType, std::enable_if_t<cudf::is_index_type<IndexType>()>* = nullptr>
   std::unique_ptr<scalar> resolve_key(column_view const& keys,
                                       scalar const& keys_index,
                                       rmm::cuda_stream_view stream,
@@ -272,8 +270,7 @@ struct same_element_type_dispatcher {
     return cudf::detail::get_element(keys, index.value(stream), stream, mr);
   }
 
-  template <typename IndexType,
-            typename std::enable_if_t<!cudf::is_index_type<IndexType>()>* = nullptr>
+  template <typename IndexType, std::enable_if_t<!cudf::is_index_type<IndexType>()>* = nullptr>
   std::unique_ptr<scalar> resolve_key(column_view const&,
                                       scalar const&,
                                       rmm::cuda_stream_view,
@@ -354,7 +351,7 @@ struct element_type_dispatcher {
    * @brief Specialization for reducing floating-point column types to any output type.
    */
   template <typename ElementType,
-            typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
+            std::enable_if_t<std::is_floating_point_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
                                          rmm::cuda_stream_view stream,
@@ -376,8 +373,7 @@ struct element_type_dispatcher {
   /**
    * @brief Specialization for reducing integer column types to any output type.
    */
-  template <typename ElementType,
-            typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
+  template <typename ElementType, std::enable_if_t<std::is_integral_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
                                          rmm::cuda_stream_view stream,
@@ -406,8 +402,7 @@ struct element_type_dispatcher {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
-  template <typename ElementType,
-            typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
                                      rmm::cuda_stream_view stream,
@@ -424,8 +419,7 @@ struct element_type_dispatcher {
   /**
    * @brief Specialization for reducing fixed_point column types to fixed_point number
    */
-  template <typename ElementType,
-            typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
                                      rmm::cuda_stream_view stream,
@@ -437,8 +431,8 @@ struct element_type_dispatcher {
   }
 
   template <typename ElementType,
-            typename std::enable_if_t<not cudf::is_numeric<ElementType>() and
-                                      not cudf::is_fixed_point<ElementType>()>* = nullptr>
+            std::enable_if_t<not cudf::is_numeric<ElementType>() and
+                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      data_type const,
                                      rmm::cuda_stream_view,
