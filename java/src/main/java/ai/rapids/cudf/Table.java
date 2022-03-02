@@ -260,7 +260,7 @@ public final class Table implements AutoCloseable {
    * @param length             the length of the buffer to read from.
    */
   private static native long[] readAvro(String[] filterColumnNames, String filePath,
-                                           long address, long length) throws CudfException;
+                                        long address, long length) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -1031,8 +1031,6 @@ public final class Table implements AutoCloseable {
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
-
-
   /**
    * Read an Avro file using the default AvroOptions.
    * @param path the local file to read.
@@ -1050,7 +1048,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readAvro(AvroOptions opts, File path) {
     return new Table(readAvro(opts.getIncludeColumnNames(),
-            path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0));
   }
 
   /**
@@ -1106,9 +1104,8 @@ public final class Table implements AutoCloseable {
     len = len > 0 ? len : buffer.length - offset;
 
     return new Table(readAvro(opts.getIncludeColumnNames(),
-            null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len));
   }
-
 
   /**
    * Read a ORC file using the default ORCOptions.
