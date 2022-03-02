@@ -62,7 +62,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
@@ -1221,9 +1221,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
     def __delitem__(self, name):
-        """
-        Drop the given column by *name*.
-        """
         self._drop_column(name)
 
     @annotate("DATAFRAME_SLICE", color="blue", domain="cudf_python")
@@ -2689,187 +2686,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return df
 
         return self - self.shift(periods=periods)
-
-    @annotate("DATAFRAME_DROP", color="green", domain="cudf_python")
-    def drop(
-        self,
-        labels=None,
-        axis=0,
-        index=None,
-        columns=None,
-        level=None,
-        inplace=False,
-        errors="raise",
-    ):
-        """
-        Drop specified labels from rows or columns.
-
-        Remove rows or columns by specifying label names and corresponding
-        axis, or by specifying directly index or column names. When using a
-        multi-index, labels on different levels can be removed by specifying
-        the level.
-
-        Parameters
-        ----------
-        labels : single label or list-like
-            Index or column labels to drop.
-        axis : {0 or 'index', 1 or 'columns'}, default 0
-            Whether to drop labels from the index (0 or 'index') or
-            columns (1 or 'columns').
-        index : single label or list-like
-            Alternative to specifying axis (``labels, axis=0``
-            is equivalent to ``index=labels``).
-        columns : single label or list-like
-            Alternative to specifying axis (``labels, axis=1``
-            is equivalent to ``columns=labels``).
-        level : int or level name, optional
-            For MultiIndex, level from which the labels will be removed.
-        inplace : bool, default False
-            If False, return a copy. Otherwise, do operation
-            inplace and return None.
-        errors : {'ignore', 'raise'}, default 'raise'
-            If 'ignore', suppress error and only existing labels are
-            dropped.
-
-        Returns
-        -------
-        DataFrame
-            DataFrame without the removed index or column labels.
-
-        Raises
-        ------
-        KeyError
-            If any of the labels is not found in the selected axis.
-
-        See Also
-        --------
-        DataFrame.loc : Label-location based indexer for selection by label.
-        DataFrame.dropna : Return DataFrame with labels on given axis omitted
-            where (all or any) data are missing.
-        DataFrame.drop_duplicates : Return DataFrame with duplicate rows
-            removed, optionally only considering certain columns.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"A": [1, 2, 3, 4],
-        ...                      "B": [5, 6, 7, 8],
-        ...                      "C": [10, 11, 12, 13],
-        ...                      "D": [20, 30, 40, 50]})
-        >>> df
-           A  B   C   D
-        0  1  5  10  20
-        1  2  6  11  30
-        2  3  7  12  40
-        3  4  8  13  50
-
-        Drop columns
-
-        >>> df.drop(['B', 'C'], axis=1)
-           A   D
-        0  1  20
-        1  2  30
-        2  3  40
-        3  4  50
-        >>> df.drop(columns=['B', 'C'])
-           A   D
-        0  1  20
-        1  2  30
-        2  3  40
-        3  4  50
-
-        Drop a row by index
-
-        >>> df.drop([0, 1])
-           A  B   C   D
-        2  3  7  12  40
-        3  4  8  13  50
-
-        Drop columns and/or rows of MultiIndex DataFrame
-
-        >>> midx = cudf.MultiIndex(levels=[['lama', 'cow', 'falcon'],
-        ...                              ['speed', 'weight', 'length']],
-        ...                      codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2],
-        ...                             [0, 1, 2, 0, 1, 2, 0, 1, 2]])
-        >>> df = cudf.DataFrame(index=midx, columns=['big', 'small'],
-        ...                   data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
-        ...                         [250, 150], [1.5, 0.8], [320, 250],
-        ...                         [1, 0.8], [0.3, 0.2]])
-        >>> df
-                         big  small
-        lama   speed    45.0   30.0
-               weight  200.0  100.0
-               length    1.5    1.0
-        cow    speed    30.0   20.0
-               weight  250.0  150.0
-               length    1.5    0.8
-        falcon speed   320.0  250.0
-               weight    1.0    0.8
-               length    0.3    0.2
-        >>> df.drop(index='cow', columns='small')
-                         big
-        lama   speed    45.0
-               weight  200.0
-               length    1.5
-        falcon speed   320.0
-               weight    1.0
-               length    0.3
-        >>> df.drop(index='length', level=1)
-                         big  small
-        lama   speed    45.0   30.0
-               weight  200.0  100.0
-        cow    speed    30.0   20.0
-               weight  250.0  150.0
-        falcon speed   320.0  250.0
-               weight    1.0    0.8
-        """
-
-        if labels is not None:
-            if index is not None or columns is not None:
-                raise ValueError(
-                    "Cannot specify both 'labels' and 'index'/'columns'"
-                )
-            target = labels
-        elif index is not None:
-            target = index
-            axis = 0
-        elif columns is not None:
-            target = columns
-            axis = 1
-        else:
-            raise ValueError(
-                "Need to specify at least one of 'labels', "
-                "'index' or 'columns'"
-            )
-
-        if inplace:
-            out = self
-        else:
-            out = self.copy()
-
-        if axis in (1, "columns"):
-            target = _get_host_unique(target)
-
-            _drop_columns(out, target, errors)
-        elif axis in (0, "index"):
-            dropped = _drop_rows_by_labels(out, target, level, errors)
-
-            if columns is not None:
-                columns = _get_host_unique(columns)
-                _drop_columns(dropped, columns, errors)
-
-            out._data = dropped._data
-            out._index = dropped._index
-
-        if not inplace:
-            return out
-
-    @annotate("DATAFRAME_DROP_COLUMN", color="green", domain="cudf_python")
-    def _drop_column(self, name):
-        """Drop a column by *name*"""
-        if name not in self._data:
-            raise KeyError(f"column '{name}' does not exist")
-        del self._data[name]
 
     @annotate("DATAFRAME_DROP_DUPLICATES", color="green", domain="cudf_python")
     def drop_duplicates(
@@ -6609,26 +6425,6 @@ def _get_union_of_series_names(series_list):
         names_list = range(len(series_list))
 
     return names_list
-
-
-def _get_host_unique(array):
-    if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
-        return array.unique.to_pandas()
-    elif isinstance(array, (str, numbers.Number)):
-        return [array]
-    else:
-        return set(array)
-
-
-def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
-    for c in columns:
-        try:
-            df._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
 
 
 # Create a dictionary of the common, non-null columns

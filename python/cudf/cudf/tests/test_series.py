@@ -1109,7 +1109,7 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
         rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-        expected_error_message="Cannot specify both",
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(

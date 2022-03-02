@@ -54,7 +54,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
@@ -596,119 +596,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         inplace=False,
         errors="raise",
     ):
-        """
-        Return Series with specified index labels removed.
-
-        Remove elements of a Series based on specifying the index labels.
-        When using a multi-index, labels on different levels can be removed by
-        specifying the level.
-
-        Parameters
-        ----------
-        labels : single label or list-like
-            Index labels to drop.
-        axis : 0, default 0
-            Redundant for application on Series.
-        index : single label or list-like
-            Redundant for application on Series. But ``index`` can be used
-            instead of ``labels``
-        columns : single label or list-like
-            This parameter is ignored. Use ``index`` or ``labels`` to specify.
-        level : int or level name, optional
-            For MultiIndex, level from which the labels will be removed.
-        inplace : bool, default False
-            If False, return a copy. Otherwise, do operation
-            inplace and return None.
-        errors : {'ignore', 'raise'}, default 'raise'
-            If 'ignore', suppress error and only existing labels are
-            dropped.
-
-        Returns
-        -------
-        Series or None
-            Series with specified index labels removed or None if
-            ``inplace=True``
-
-        Raises
-        ------
-        KeyError
-            If any of the labels is not found in the selected axis and
-            ``error='raise'``
-
-        See Also
-        --------
-        Series.reindex
-            Return only specified index labels of Series
-        Series.dropna
-            Return series without null values
-        Series.drop_duplicates
-            Return series with duplicate values removed
-        cudf.DataFrame.drop
-            Drop specified labels from rows or columns in dataframe
-
-        Examples
-        --------
-        >>> s = cudf.Series([1,2,3], index=['x', 'y', 'z'])
-        >>> s
-        x    1
-        y    2
-        z    3
-        dtype: int64
-
-        Drop labels x and z
-
-        >>> s.drop(labels=['x', 'z'])
-        y    2
-        dtype: int64
-
-        Drop a label from the second level in MultiIndex Series.
-
-        >>> midx = cudf.MultiIndex.from_product([[0, 1, 2], ['x', 'y']])
-        >>> s = cudf.Series(range(6), index=midx)
-        >>> s
-        0  x    0
-           y    1
-        1  x    2
-           y    3
-        2  x    4
-           y    5
-        dtype: int64
-        >>> s.drop(labels='y', level=1)
-        0  x    0
-        1  x    2
-        2  x    4
-        Name: 2, dtype: int64
-        """
-        if labels is not None:
-            if index is not None or columns is not None:
-                raise ValueError(
-                    "Cannot specify both 'labels' and 'index'/'columns'"
-                )
-            if axis == 1:
-                raise ValueError("No axis named 1 for object type Series")
-            target = labels
-        elif index is not None:
-            target = index
-        elif columns is not None:
-            target = []  # Ignore parameter columns
-        else:
-            raise ValueError(
-                "Need to specify at least one of 'labels', "
-                "'index' or 'columns'"
-            )
-
-        if inplace:
-            out = self
-        else:
-            out = self.copy()
-
-        dropped = _drop_rows_by_labels(out, target, level, errors)
-
-        out._data = dropped._data
-        out._index = dropped._index
-
-        if not inplace:
-            return out
+        if axis == 1:
+            raise ValueError("No axis named 1 for object type Series")
+        # Ignore columns for Series
+        if columns is not None:
+            columns = []
+        return super().drop(
+            labels, axis, index, columns, level, inplace, errors
+        )
 
     def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.

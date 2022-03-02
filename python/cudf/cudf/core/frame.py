@@ -1350,6 +1350,13 @@ class Frame:
             inplace=inplace,
         )
 
+    @annotate("FRAME_DROP_COLUMN", color="green", domain="cudf_python")
+    def _drop_column(self, name):
+        """Drop a column by *name*"""
+        if name not in self._data:
+            raise KeyError(f"column '{name}' does not exist")
+        del self._data[name]
+
     @annotate("FRAME_DROPNA_COLUMNS", color="green", domain="cudf_python")
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
