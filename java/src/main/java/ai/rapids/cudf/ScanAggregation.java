@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -96,5 +96,12 @@ public final class ScanAggregation {
    */
   public static ScanAggregation denseRank() {
     return new ScanAggregation(Aggregation.denseRank());
+  }
+
+  /**
+   * Get the row's percent rank.
+   */
+  public static ScanAggregation percentRank() {
+    return new ScanAggregation(Aggregation.percentRank());
   }
 }

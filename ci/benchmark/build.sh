@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #########################################
 # cuDF GPU build and test script for CI #
 #########################################
@@ -37,7 +37,7 @@ export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='main'
+export DASK_DISTRIBUTED_GIT_TAG='2022.01.0'
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
@@ -98,11 +98,7 @@ conda list --show-channel-urls
 ################################################################################
 
 logger "Build libcudf..."
-if [[ "${BUILD_MODE}" == "pull-request" ]]; then
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests --ptds
-else
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests -l --ptds
-fi
+"$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests --ptds
 
 ################################################################################
 # BENCHMARK - Run and parse libcudf and cuDF benchmarks

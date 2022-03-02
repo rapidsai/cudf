@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ struct result_type_dispatcher {
   {
     // the operator `mean`, `var`, `std` only accepts
     // floating points as output dtype
-    return std::is_floating_point<ResultType>::value;
+    return std::is_floating_point_v<ResultType>;
   }
 
  public:
@@ -124,7 +124,7 @@ struct element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported_v()
   {
-    return std::is_arithmetic<ElementType>::value;
+    return std::is_arithmetic_v<ElementType>;
   }
 
  public:

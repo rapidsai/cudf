@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -2480,3 +2480,115 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
 
     if NA_idx is not None:
         assert idx[NA_idx] is cudf.NA
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(
+            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
+        ),
+        pd.Series([0, 15, 10], index=[0, None, 9]),
+        pd.Series(
+            range(25),
+            index=pd.date_range(
+                start="2019-01-01", end="2019-01-02", freq="H"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["this", "is"],
+        [0, 19, 13],
+        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
+    ],
+)
+def test_isin_index(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.index.isin(values)
+    expected = psr.index.isin(values)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
+        ),
+        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
+            names=("number", "color"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values,level,err",
+    [
+        (["red", "orange", "yellow"], "color", None),
+        (["red", "white", "yellow"], "color", None),
+        ([0, 1, 2, 10, 11, 15], "number", None),
+        ([0, 1, 2, 10, 11, 15], None, TypeError),
+        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
+        (pd.Index(["red", "white", "yellow"]), "color", None),
+        ([(1, "red"), (3, "red")], None, None),
+        (((1, "red"), (3, "red")), None, None),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3], ["red", "blue", "green"]],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    [1, 2, 3, 10, 100],
+                    ["red", "blue", "green", "pink", "white"],
+                ],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+    ],
+)
+def test_isin_multiindex(data, values, level, err):
+    pmdx = data
+    gmdx = cudf.from_pandas(data)
+
+    if err is None:
+        expected = pmdx.isin(values, level=level)
+        if isinstance(values, pd.MultiIndex):
+            values = cudf.from_pandas(values)
+        got = gmdx.isin(values, level=level)
+
+        assert_eq(got, expected)
+    else:
+        assert_exceptions_equal(
+            lfunc=pmdx.isin,
+            rfunc=gmdx.isin,
+            lfunc_args_and_kwargs=([values], {"level": level}),
+            rfunc_args_and_kwargs=([values], {"level": level}),
+            check_exception_type=False,
+            expected_error_message=re.escape(
+                "values need to be a Multi-Index or set/list-like tuple "
+                "squences  when `level=None`."
+            ),
+        )

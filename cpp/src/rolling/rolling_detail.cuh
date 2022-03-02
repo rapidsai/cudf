@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,14 +91,14 @@ struct DeviceRolling {
 
   // operations we do support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, typename std::enable_if_t<is_supported<T, O>()>* = nullptr)
+  DeviceRolling(size_type _min_periods, std::enable_if_t<is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
   }
 
   // operations we don't support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, typename std::enable_if_t<!is_supported<T, O>()>* = nullptr)
+  DeviceRolling(size_type _min_periods, std::enable_if_t<!is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -441,12 +441,12 @@ struct DeviceRollingLead {
     return cudf::is_fixed_width<T>();
   }
 
-  template <typename T = InputType, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<is_supported<T>()>* = nullptr>
   DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
   {
   }
 
-  template <typename T = InputType, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<!is_supported<T>()>* = nullptr>
   DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -497,12 +497,12 @@ struct DeviceRollingLag {
     return cudf::is_fixed_width<T>();
   }
 
-  template <typename T = InputType, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<is_supported<T>()>* = nullptr>
   DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
   {
   }
 
-  template <typename T = InputType, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<!is_supported<T>()>* = nullptr>
   DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");

@@ -364,18 +364,40 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     else:
         raise NotImplementedError()
 
+    try:
+        if isinstance(lhs_dtype, type(rhs_dtype)):
+            # SCENARIO 1: If `lhs_dtype` & `rhs_dtype` are same, then try to
+            # see if `precision` & `scale` can be fit into this type.
+            return lhs_dtype.__class__(precision=precision, scale=scale)
+        else:
+            # SCENARIO 2: If `lhs_dtype` & `rhs_dtype` are of different dtypes,
+            # then try to see if `precision` & `scale` can be fit into the type
+            # with greater MAX_PRECISION (i.e., the bigger dtype).
+            if lhs_dtype.MAX_PRECISION >= rhs_dtype.MAX_PRECISION:
+                return lhs_dtype.__class__(precision=precision, scale=scale)
+            else:
+                return rhs_dtype.__class__(precision=precision, scale=scale)
+    except ValueError:
+        # Call to _validate fails, which means we need
+        # to goto SCENARIO 3.
+        pass
+
+    # SCENARIO 3: If either of the above two scenarios fail, then get the
+    # MAX_PRECISION of `lhs_dtype` & `rhs_dtype` so that we can only check
+    # and return a dtype that is greater than or equal to input dtype that
+    # can fit `precision` & `scale`.
+    max_precision = max(lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION)
     for decimal_type in (
         cudf.Decimal32Dtype,
         cudf.Decimal64Dtype,
         cudf.Decimal128Dtype,
     ):
-        try:
-            min_decimal_type = decimal_type(precision=precision, scale=scale)
-        except ValueError:
-            # Call to _validate fails, which means we need
-            # to try the next dtype
-            pass
-        else:
-            return min_decimal_type
+        if decimal_type.MAX_PRECISION >= max_precision:
+            try:
+                return decimal_type(precision=precision, scale=scale)
+            except ValueError:
+                # Call to _validate fails, which means we need
+                # to try the next dtype
+                continue
 
     raise OverflowError("Maximum supported decimal type is Decimal128")

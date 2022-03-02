@@ -1,10 +1,11 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import math
 import pickle
 import warnings
+from functools import cached_property
 from numbers import Number
 from typing import (
     Any,
@@ -51,10 +52,11 @@ from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
+from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import cached_property, search_range
+from cudf.utils.utils import search_range
 
 T = TypeVar("T", bound="Frame")
 
@@ -121,7 +123,7 @@ def _index_from_columns(
     return _index_from_data(dict(zip(range(len(columns)), columns)), name=name)
 
 
-class RangeIndex(BaseIndex):
+class RangeIndex(BaseIndex, BinaryOperand):
     """
     Immutable Index implementing a monotonic integer range.
 
@@ -153,6 +155,8 @@ class RangeIndex(BaseIndex):
     >>> cudf.RangeIndex(range(1, 10, 1), name="a")
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
+
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     _range: range
 
@@ -519,6 +523,11 @@ class RangeIndex(BaseIndex):
         # that are not defined directly on RangeIndex.
         return Int64Index._from_data(self._data)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return self._as_int64().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
+
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
         # on the corresponding integer index if possible.
@@ -682,6 +691,7 @@ class RangeIndex(BaseIndex):
         return new_index
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
+        gather_map = cudf.core.column.as_column(gather_map)
         return Int64Index._from_columns(
             [self._values.take(gather_map, nullify, check_bounds)], [self.name]
         )
@@ -691,43 +701,16 @@ class RangeIndex(BaseIndex):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def _binaryop(self, other, op: str):
+        return self._as_int64()._binaryop(other, op=op)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
-for binop in (
-    "__add__",
-    "__radd__",
-    "__sub__",
-    "__rsub__",
-    "__mod__",
-    "__rmod__",
-    "__pow__",
-    "__rpow__",
-    "__floordiv__",
-    "__rfloordiv__",
-    "__truediv__",
-    "__rtruediv__",
-    "__and__",
-    "__or__",
-    "__xor__",
-    "__eq__",
-    "__ne__",
-    "__lt__",
-    "__le__",
-    "__gt__",
-    "__ge__",
-):
-    setattr(
-        RangeIndex,
-        binop,
-        lambda self, other, op=binop: getattr(self._as_int64(), op)(other),
-    )
-
-
 for unaop in ("__neg__", "__pos__", "__abs__"):
     setattr(
         RangeIndex,
-        binop,
+        unaop,
         lambda self, op=unaop: getattr(self._as_int64(), op)(),
     )
 
@@ -771,39 +754,58 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
-    @classmethod
-    def deserialize(cls, header, frames):
-        if "index_column" in header:
-            warnings.warn(
-                "Index objects serialized in cudf version "
-                "21.10 or older will no longer be deserializable "
-                "after version 21.12. Please load and resave any "
-                "pickles before upgrading to version 22.02.",
-                FutureWarning,
-            )
-            header["columns"] = [header.pop("index_column")]
-            header["column_names"] = pickle.dumps(
-                [pickle.loads(header["name"])]
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+
+        if ret is not None:
+            return ret
+
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cupy, ufunc.__name__)
+        if cupy_func:
+            if ufunc.nin == 2:
+                other = inputs[self is inputs[0]]
+                inputs = self._make_operands_for_binop(other)
+            else:
+                inputs = {
+                    name: (col, None, False, None)
+                    for name, col in self._data.items()
+                }
+
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
             )
 
-        return super().deserialize(header, frames)
+            out = [_index_from_data(out) for out in data]
+
+            # pandas returns numpy arrays when the outputs are boolean.
+            for i, o in enumerate(out):
+                # We explicitly _do not_ use isinstance here: we want only
+                # boolean GenericIndexes, not dtype-specific subclasses.
+                if type(o) is GenericIndex and o.dtype.kind == "b":
+                    out[i] = o.values
+
+            return out[0] if ufunc.nout == 1 else tuple(out)
+
+        return NotImplemented
 
     def _binaryop(
-        self,
-        other: T,
-        fn: str,
-        fill_value: Any = None,
-        reflect: bool = False,
-        *args,
-        **kwargs,
+        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
     ) -> SingleColumnFrame:
-        # Specialize binops to generate the appropriate output index type.
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
         operands = self._make_operands_for_binop(other, fill_value, reflect)
-        return (
-            _index_from_data(data=self._colwise_binop(operands, fn),)
-            if operands is not NotImplemented
-            else NotImplemented
-        )
+        if operands is NotImplemented:
+            return NotImplemented
+        ret = _index_from_data(self._colwise_binop(operands, op))
+
+        # pandas returns numpy arrays when the outputs are boolean. We
+        # explicitly _do not_ use isinstance here: we want only boolean
+        # GenericIndexes, not dtype-specific subclasses.
+        if type(ret) is GenericIndex and ret.dtype.kind == "b":
+            return ret.values
+        return ret
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -841,6 +843,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         result.name = name
         return result
+
+    def memory_usage(self, deep=False):
+        return sum(super().memory_usage(deep=deep).values())
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
@@ -2508,7 +2513,7 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}({self._values.to_array()},"
+            f"{self.__class__.__name__}({self._values.values_host},"
             f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
