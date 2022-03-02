@@ -1155,6 +1155,98 @@ class GroupBy(Serializable, Reducible):
 
         return res
 
+    def _cov_or_corr(self, min_periods=0, ddof=1):
+        """
+        internal function that calls to either corr() or cov()
+        for sort groupby computations
+
+        """
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs used in the covariance calculation
+        # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        column_names = self.grouping.values._column_names
+        num_cols = len(column_names)
+
+        column_pair_structs = {}
+        for x, y in itertools.combinations_with_replacement(column_names, 2):
+            # The number of output columns is the number of input columns
+            # squared. We directly call the struct column factory here to
+            # reduce overhead and avoid copying data. Since libcudf groupby
+            # maintains a cache of aggregation requests, reusing the same
+            # column also makes use of previously cached column means and
+            # reduces kernel costs.
+
+            # checks if input column names are string, raise a warning if
+            # not so and cast them to strings
+            if not (isinstance(x, str) and isinstance(y, str)):
+                warnings.warn(
+                    "DataFrame contains non-string column name(s). "
+                    "Struct columns require field names to be strings. "
+                    "Non-string column names will be cast to strings "
+                    "in the result's field names."
+                )
+                x, y = str(x), str(y)
+
+            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
+                names=(x, y),
+                children=(self.obj._data[x], self.obj._data[y]),
+                size=len(self.obj),
+            )
+
+        column_pair_groupby = cudf.DataFrame._from_data(
+            column_pair_structs
+        ).groupby(by=self.grouping.keys)
+
+        try:
+            gb_cov = column_pair_groupby.agg(
+                lambda x: x.cov(min_periods, ddof)
+            )
+        except RuntimeError as e:
+            if "Unsupported groupby reduction type-agg combination" in str(e):
+                raise TypeError(
+                    "Covariance accepts only numerical column-pairs"
+                )
+            raise
+
+        # ensure that column-pair labels are arranged in ascending order
+        cols_list = [
+            (y, x) if i > j else (x, y)
+            for j, y in enumerate(column_names)
+            for i, x in enumerate(column_names)
+        ]
+        cols_split = [
+            cols_list[i : i + num_cols]
+            for i in range(0, len(cols_list), num_cols)
+        ]
+
+        def combine_columns(gb_cov, ys):
+            list_of_columns = [gb_cov._data[y] for y in ys]
+            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
+            return interleave_columns(frame)
+
+        # interleave: combine the correlation results for each column-pair
+        # into a single column
+        res = cudf.DataFrame._from_data(
+            {
+                x: combine_columns(gb_cov, ys)
+                for ys, x in zip(cols_split, column_names)
+            }
+        )
+
+        # create a multiindex for the groupby correlated dataframe,
+        # to match pandas behavior
+        unsorted_idx = gb_cov.index.repeat(num_cols)
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
+        if len(gb_cov):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            sorted_idx._data[None] = as_column(
+                np.tile(column_names, len(gb_cov.index))
+            )
+        res.index = MultiIndex._from_data(sorted_idx._data)
+
+        return res
+
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -1807,7 +1899,3 @@ def _is_multi_agg(aggs):
     if is_list_like(aggs):
         return True
     return False
-
-
-def _cov_or_corr():
-    pass
