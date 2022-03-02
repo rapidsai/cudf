@@ -1342,11 +1342,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ):
             return NotImplemented
 
-        fname = func.__name__
-
         try:
-            cudf_func = getattr(self.__class__, fname, None)
-            if cudf_func:
+            if cudf_func := getattr(self.__class__, func.__name__, None):
                 out = cudf_func(*args, **kwargs)
                 # The dot product of two DataFrames returns an array in pandas.
                 if (

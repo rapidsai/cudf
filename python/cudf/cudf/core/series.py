@@ -959,13 +959,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if "out" in kwargs or not all(issubclass(t, (Series,)) for t in types):
             return NotImplemented
 
-        fname = func.__name__
-
         try:
             # Apply a Series method if one exists.
-            cudf_ser_func = getattr(Series, fname, None)
-            if cudf_ser_func:
-                return cudf_ser_func(*args, **kwargs)
+            if cudf_func := getattr(Series, func.__name__, None):
+                return cudf_func(*args, **kwargs)
 
             # Assume that cupy subpackages match numpy and search the
             # corresponding cupy submodule based on the func's __module__.
