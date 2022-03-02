@@ -62,7 +62,8 @@ std::unique_ptr<column> sorted_order2(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto comp = cudf::experimental::row_lex_operator(input, column_order, null_precedence, stream);
+  auto comp = cudf::experimental::lexicographic_comparison::self_comparator(
+    input, column_order, null_precedence, stream);
 
   thrust::sort(rmm::exec_policy(stream),
                mutable_indices_view.begin<size_type>(),

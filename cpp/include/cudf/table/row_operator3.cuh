@@ -30,6 +30,8 @@
 #include <thrust/transform_reduce.h>
 
 #include <limits>
+#include <memory>
+#include <utility>
 
 namespace cudf {
 namespace experimental {
@@ -38,6 +40,8 @@ template <cudf::type_id t>
 struct non_nested_id_to_type {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
+
+namespace lexicographic_comparison {
 
 /**
  * @brief Performs a relational comparison between two elements in two columns.
@@ -170,7 +174,7 @@ class element_relational_comparator {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class row_lexicographic_comparator {
+class device_row_comparator {
  public:
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -190,12 +194,12 @@ class row_lexicographic_comparator {
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
    */
-  row_lexicographic_comparator(Nullate has_nulls,
-                               table_device_view lhs,
-                               table_device_view rhs,
-                               int const* depth                  = nullptr,
-                               order const* column_order         = nullptr,
-                               null_order const* null_precedence = nullptr)
+  device_row_comparator(Nullate has_nulls,
+                        table_device_view lhs,
+                        table_device_view rhs,
+                        int const* depth                  = nullptr,
+                        order const* column_order         = nullptr,
+                        null_order const* null_precedence = nullptr)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
@@ -203,9 +207,6 @@ class row_lexicographic_comparator {
       _column_order{column_order},
       _null_precedence{null_precedence}
   {
-    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    // CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
-    //              "Attempted to compare elements of uncomparable types.");
   }
 
   /**
@@ -252,47 +253,63 @@ class row_lexicographic_comparator {
   int const* _depth;
 };  // class row_lexicographic_comparator
 
-struct row_lex_operator {
-  row_lex_operator(table_view const& lhs,
-                   table_view const& rhs,
-                   host_span<order const> column_order,
-                   host_span<null_order const> null_precedence,
-                   rmm::cuda_stream_view stream);
+struct preprocessed_table {
+  preprocessed_table(table_view const& table,
+                     host_span<order const> column_order,
+                     host_span<null_order const> null_precedence,
+                     rmm::cuda_stream_view stream);
 
-  row_lex_operator(table_view const& t,
-                   host_span<order const> column_order,
-                   host_span<null_order const> null_precedence,
-                   rmm::cuda_stream_view stream);
-
-  template <typename Nullate>
-  row_lexicographic_comparator<Nullate> device_comparator()
-  {
-    auto lhs = **d_lhs;
-    auto rhs = (d_rhs ? **d_rhs : **d_lhs);
-    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
-      return row_lexicographic_comparator(Nullate{any_nulls},
-                                          lhs,
-                                          rhs,
-                                          d_depths.data(),
-                                          d_column_order.data(),
-                                          d_null_precedence.data());
-    } else {
-      return row_lexicographic_comparator<Nullate>(
-        Nullate{}, lhs, rhs, d_depths.data(), d_column_order.data(), d_null_precedence.data());
-    }
-  }
+  operator table_device_view() { return **d_t; }
+  order const* column_order() { return d_column_order.data(); }
+  null_order const* null_precedence() { return d_null_precedence.data(); }
+  int const* depths() { return d_depths.data(); }
+  [[nodiscard]] bool has_nulls() const { return _has_nulls; }
 
  private:
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
-  std::unique_ptr<table_device_view_owner> d_lhs;
-  std::unique_ptr<table_device_view_owner> d_rhs;
+  std::unique_ptr<table_device_view_owner> d_t;
   rmm::device_uvector<order> d_column_order;
   rmm::device_uvector<null_order> d_null_precedence;
   rmm::device_uvector<size_type> d_depths;
-  bool any_nulls;
+  bool _has_nulls;
 };
 
+struct self_comparator {
+  self_comparator(table_view const& t,
+                  host_span<order const> column_order,
+                  host_span<null_order const> null_precedence,
+                  rmm::cuda_stream_view stream)
+    : d_t{std::make_shared<preprocessed_table>(t, column_order, null_precedence, stream)}
+  {
+  }
+
+  self_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
+
+  self_comparator(self_comparator const&) = delete;
+  self_comparator& operator=(self_comparator const&) = delete;
+
+  template <typename Nullate>
+  device_row_comparator<Nullate> device_comparator()
+  {
+    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
+      return device_row_comparator(Nullate{d_t->has_nulls()},
+                                   *d_t,
+                                   *d_t,
+                                   d_t->depths(),
+                                   d_t->column_order(),
+                                   d_t->null_precedence());
+    } else {
+      return device_row_comparator<Nullate>(
+        Nullate{}, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
+    }
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_t;
+};
+
+}  // namespace lexicographic_comparison
 }  // namespace experimental
 }  // namespace cudf
