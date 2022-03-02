@@ -1245,21 +1245,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             "Series.logical_and is deprecated and will be removed.",
             FutureWarning,
         )
-        return self._binaryop(other, "l_and").astype(np.bool_)
+        return self._binaryop(other, "__l_and__").astype(np.bool_)
 
     def remainder(self, other):
         warnings.warn(
             "Series.remainder is deprecated and will be removed.",
             FutureWarning,
         )
-        return self._binaryop(other, "mod")
+        return self._binaryop(other, "__mod__")
 
     def logical_or(self, other):
         warnings.warn(
             "Series.logical_or is deprecated and will be removed.",
             FutureWarning,
         )
-        return self._binaryop(other, "l_or").astype(np.bool_)
+        return self._binaryop(other, "__l_or__").astype(np.bool_)
 
     def logical_not(self):
         warnings.warn(
