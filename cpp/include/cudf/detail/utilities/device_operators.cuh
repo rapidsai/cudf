@@ -61,27 +61,26 @@ CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
  * @brief Binary `sum` operator
  */
 struct DeviceSum {
-  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs + rhs)
   {
     return lhs + rhs;
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{typename T::duration{0}};
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{0};
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support device operator identity");
@@ -93,13 +92,13 @@ struct DeviceSum {
  * @brief `count` operator - used in rolling windows
  */
 struct DeviceCount {
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline T operator()(const T& lhs, const T& rhs)
   {
     return T{DeviceCount{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline T operator()(const T&, const T& rhs)
   {
     return rhs + T{1};
@@ -123,10 +122,9 @@ struct DeviceMin {
     return numeric::detail::min(lhs, rhs);
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
-                              !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
+                             !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     // chrono types do not have std::numeric_limits specializations and should use T::max()
@@ -135,7 +133,7 @@ struct DeviceMin {
     return cuda::std::numeric_limits<T>::max();
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceMin identity");
@@ -143,13 +141,13 @@ struct DeviceMin {
   }
 
   // @brief identity specialized for string_view
-  template <typename T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
   CUDF_HOST_DEVICE inline static constexpr T identity()
   {
     return string_view::max();
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
   static constexpr T identity()
   {
     return static_cast<T>(T::max_value());
@@ -167,10 +165,9 @@ struct DeviceMax {
     return numeric::detail::max(lhs, rhs);
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
-                              !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
+                             !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     // chrono types do not have std::numeric_limits specializations and should use T::min()
@@ -179,20 +176,20 @@ struct DeviceMax {
     return cuda::std::numeric_limits<T>::lowest();
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceMax identity");
     return cuda::std::numeric_limits<T>::lowest();
   }
 
-  template <typename T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
   CUDF_HOST_DEVICE inline static constexpr T identity()
   {
     return string_view::min();
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
   static constexpr T identity()
   {
     return static_cast<T>(T::lowest_value());
@@ -203,19 +200,19 @@ struct DeviceMax {
  * @brief binary `product` operator
  */
 struct DeviceProduct {
-  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs * rhs)
   {
     return lhs * rhs;
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return T{1};
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceProduct identity");
@@ -227,7 +224,7 @@ struct DeviceProduct {
  * @brief binary `and` operator
  */
 struct DeviceAnd {
-  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs & rhs)
   {
     return (lhs & rhs);
@@ -238,7 +235,7 @@ struct DeviceAnd {
  * @brief binary `or` operator
  */
 struct DeviceOr {
-  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs | rhs)
   {
     return (lhs | rhs);
@@ -249,7 +246,7 @@ struct DeviceOr {
  * @brief binary `xor` operator
  */
 struct DeviceXor {
-  template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE inline auto operator()(const T& lhs, const T& rhs) -> decltype(lhs ^ rhs)
   {
     return (lhs ^ rhs);

@@ -69,6 +69,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
+from cudf.core.mixins import Reducible
 from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -86,7 +87,14 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-class ColumnBase(Column, Serializable, NotIterable):
+class ColumnBase(Column, Serializable, Reducible, NotIterable):
+    _VALID_REDUCTIONS = {
+        "any",
+        "all",
+        "max",
+        "min",
+    }
+
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
@@ -674,15 +682,9 @@ class ColumnBase(Column, Serializable, NotIterable):
         return concat_columns([self, as_column(other)])
 
     def quantile(
-        self,
-        q: Union[float, Sequence[float]],
-        interpolation: builtins.str,
-        exact: bool,
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
-
-    def median(self, skipna: bool = None) -> ScalarLike:
-        raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(
         self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
@@ -1162,53 +1164,23 @@ class ColumnBase(Column, Serializable, NotIterable):
             return libcudf.reduce.minmax(result_col)
         return result_col
 
-    def min(self, skipna: bool = None, dtype: Dtype = None):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("min", result_col, dtype=dtype)
-        return result_col
+    def _reduce(
+        self, op: str, skipna: bool = None, min_count: int = 0, *args, **kwargs
+    ) -> ScalarLike:
+        """Compute {op} of column values.
 
-    def max(self, skipna: bool = None, dtype: Dtype = None):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("max", result_col, dtype=dtype)
-        return result_col
-
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ):
-        raise TypeError(f"cannot perform sum with type {self.dtype}")
-
-    def product(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ):
-        raise TypeError(f"cannot perform product with type {self.dtype}")
-
-    def mean(self, skipna: bool = None, dtype: Dtype = None):
-        raise TypeError(f"cannot perform mean with type {self.dtype}")
-
-    def std(self, skipna: bool = None, ddof=1, dtype: Dtype = np.float64):
-        raise TypeError(f"cannot perform std with type {self.dtype}")
-
-    def var(self, skipna: bool = None, ddof=1, dtype: Dtype = np.float64):
-        raise TypeError(f"cannot perform var with type {self.dtype}")
-
-    def kurtosis(self, skipna: bool = None):
-        raise TypeError(f"cannot perform kurtosis with type {self.dtype}")
-
-    def skew(self, skipna: bool = None):
-        raise TypeError(f"cannot perform skew with type {self.dtype}")
-
-    def cov(self, other: ColumnBase):
-        raise TypeError(
-            f"cannot perform covarience with types {self.dtype}, "
-            f"{other.dtype}"
+        skipna : bool
+            Whether or not na values must be skipped.
+        min_count : int, default 0
+            The minimum number of entries for the reduction, otherwise the
+            reduction returns NaN.
+        """
+        preprocessed = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
         )
-
-    def corr(self, other: ColumnBase):
-        raise TypeError(
-            f"cannot perform corr with types {self.dtype}, {other.dtype}"
-        )
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+        return preprocessed
 
     @property
     def contains_na_entries(self) -> bool:

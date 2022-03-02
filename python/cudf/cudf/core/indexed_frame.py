@@ -1726,21 +1726,23 @@ class IndexedFrame(Frame):
     def _binaryop(
         self,
         other: Any,
-        fn: str,
+        op: str,
         fill_value: Any = None,
-        reflect: bool = False,
         can_reindex: bool = False,
         *args,
         **kwargs,
     ):
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
         operands, out_index = self._make_operands_and_index_for_binop(
-            other, fn, fill_value, reflect, can_reindex
+            other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
 
         return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            ColumnAccessor(type(self)._colwise_binop(operands, op)),
             index=out_index,
         )
 

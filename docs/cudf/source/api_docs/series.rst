@@ -44,7 +44,6 @@ Conversion
    Series.copy
    Series.to_list
    Series.__array__
-   Series.as_mask
    Series.scale
 
 
@@ -172,9 +171,7 @@ Reindexing / selection / label manipulation
    Series.reindex
    Series.rename
    Series.reset_index
-   Series.reverse
    Series.sample
-   Series.set_mask
    Series.take
    Series.tail
    Series.tile
@@ -210,15 +207,13 @@ Reshaping, sorting
    Series.repeat
    Series.transpose
 
-Combining / comparing / joining / merging / encoding
-----------------------------------------------------
+Combining / comparing / joining / merging
+-----------------------------------------
 .. autosummary::
    :toctree: api/
 
    Series.append
    Series.update
-   Series.label_encoding
-   Series.one_hot_encoding
 
 Numerical operations
 ~~~~~~~~~~~~~~~~~~~~
@@ -409,12 +404,10 @@ Serialization / IO / conversion
    :toctree: api/
 
    Series.to_arrow
-   Series.to_cupy
    Series.to_dlpack
    Series.to_frame
    Series.to_hdf
    Series.to_json
-   Series.to_numpy
    Series.to_pandas
    Series.to_string
    Series.from_arrow
