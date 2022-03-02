@@ -152,8 +152,18 @@ def drop_duplicates(columns: list,
         else null_equality.UNEQUAL
     )
 
-    cdef vector[order] column_order(cpp_keys.size(), order.ASCENDING)
-    cdef vector[null_order] null_precedence(cpp_keys.size(), null_order.BEFORE)
+    cdef vector[order] column_order = (
+        vector[order](
+            cpp_keys.size(),
+            order.ASCENDING
+        )
+    )
+    cdef vector[null_order] null_precedence = (
+        vector[null_order](
+            cpp_keys.size(),
+            null_order.BEFORE
+        )
+    )
 
     cdef unique_ptr[column] gather_map
     cdef unique_ptr[table] sorted_source_table
