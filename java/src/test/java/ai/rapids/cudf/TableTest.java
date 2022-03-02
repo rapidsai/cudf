@@ -666,7 +666,6 @@ public class TableTest extends CudfTestBase {
   void testReadAvroBuffer() throws IOException{
     AvroOptions opts = AvroOptions.builder()
         .includeColumn("bool_col")
-        .includeColumn("int_col")
         .includeColumn("timestamp_col")
         .build();
 
@@ -674,7 +673,6 @@ public class TableTest extends CudfTestBase {
     int bufferLen = buffer.length;
     try (Table expected = new Table.TestBuilder()
         .column(true, false, true, false, true, false, true, false)
-        .column(0, 1, 0, 1, 0, 1, 0, 1)
         .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
             1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
         .build();
