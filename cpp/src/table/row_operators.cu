@@ -45,7 +45,7 @@ auto struct_lex_verticalize(table_view input,
   std::vector<int> verticalized_col_depths;
   for (size_type col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
     auto const& col = table.column(col_idx);
-    if (is_nested(col.type())) {
+    if (col.type().id() == type_id::STRUCT) {
       // convert and insert
       std::vector<column_view> r_verticalized_columns;
       std::vector<int> r_verticalized_col_depths;
@@ -484,18 +484,21 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
       auto d_nullability = detail::make_device_uvector_async(nullability, stream);
       dremel_data.push_back(get_dremel_data(col, d_nullability, nullability, stream));
       max_def_levels.push_back(max_def_level);
+    } else {
+      max_def_levels.push_back(0);
     }
   }
 
   std::vector<size_type*> dremel_offsets;
   std::vector<uint8_t*> rep_levels;
   std::vector<uint8_t*> def_levels;
-  for (size_type c = 0; c < table.num_columns(); ++c) {
-    auto const& col = table.column(c);
+  size_type c = 0;
+  for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
       dremel_offsets.push_back(dremel_data[c].dremel_offsets.data());
       rep_levels.push_back(dremel_data[c].rep_level.data());
       def_levels.push_back(dremel_data[c].def_level.data());
+      ++c;
     } else {
       dremel_offsets.push_back(nullptr);
       rep_levels.push_back(nullptr);
@@ -515,11 +518,16 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
 
 void check_lex_compatibility(table_view const& input)
 {
-  // Basically check if there's any LIST hiding anywhere in the table
+  // Basically check if there's any LIST of STRUCT or STRUCT of LIST hiding anywhere in the table
   std::function<void(column_view const&)> check_column = [&](column_view const& c) {
-    CUDF_EXPECTS(c.type().id() != type_id::LIST,
-                 "Cannot lexicographic compare a table with a LIST column");
+    if (c.type().id() == type_id::LIST) {
+      CUDF_EXPECTS(c.child(lists_column_view::child_column_index).type().id() != type_id::STRUCT,
+                   "List of structs are not supported");
+    }
     for (int i = 0; i < c.num_children(); ++i) {
+      if (c.type().id() == type_id::STRUCT) {
+        CUDF_EXPECTS(c.child(i).type().id() != type_id::LIST, "Struct of Lists are not supported");
+      }
       check_column(c.child(i));
     }
   };
@@ -562,18 +570,19 @@ row_lex_operator::row_lex_operator(table_view const& t,
     d_max_def_levels(0, stream),
     any_nulls(has_nested_nulls(t))
 {
-  // check_lex_compatibility(t);
+  check_lex_compatibility(t);
+  auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
+    struct_lex_verticalize(t, column_order, null_precedence);
+
   std::tie(dremel_data, d_dremel_offsets, d_rep_levels, d_def_levels, d_max_def_levels) =
-    list_lex_preprocess(t, stream);
+    list_lex_preprocess(verticalized_lhs, stream);
 
-  // auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-  //   struct_lex_verticalize(t, column_order, null_precedence);
+  d_lhs =
+    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
 
-  d_lhs = std::make_unique<table_device_view_owner>(table_device_view::create(t, stream));
-
-  d_column_order    = detail::make_device_uvector_async(column_order, stream);
-  d_null_precedence = detail::make_device_uvector_async(null_precedence, stream);
-  // d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+  d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
+  d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
+  d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 }
 
 row_lex_operator::row_lex_operator(table_view const& lhs,
