@@ -8,6 +8,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/sort2.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -17,8 +18,6 @@
 
 struct NewRowOpTest : public cudf::test::BaseFixture {
 };
-
-#include <cudf/sort2.cuh>
 
 TEST_F(NewRowOpTest, BasicStructTwoChild)
 {
@@ -222,18 +221,17 @@ TEST_F(NewRowOpTest, List)
     {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
     {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
     {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},
     {{7, 8}, {}},
     lcw{lcw{}, lcw{}, lcw{}},
     lcw{lcw{}},
-    lcw{lcw{}},
-    lcw{lcw{}},
-    lcw{lcw{}, lcw{}, lcw{}},
-    lcw{lcw{}, lcw{}, lcw{}},
+    {lcw{10}},
+    lcw{},
   };
-  print(col);
 
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 0, 1, 2, 4, 7};
   auto result = cudf::detail::experimental::sorted_order2(cudf::table_view({col}));
-  cudf::test::print(result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

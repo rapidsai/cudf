@@ -228,8 +228,10 @@ class element_relational_comparator {
         auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence};
         thrust::tie(state, depth) =
           cudf::type_dispatcher<non_nested_id_to_type>(lcol.type(), comparator, m, n);
-        printf("t: %d, state: %d\n", threadIdx.x, state);
-        if (state != weak_ordering::EQUIVALENT) { return thrust::make_pair(state, depth); }
+        if (state != weak_ordering::EQUIVALENT) {
+          printf("t: %d, leaf, state: %d\n", threadIdx.x, state);
+          return thrust::make_pair(state, depth);
+        }
         ++m;
         ++n;
       }
