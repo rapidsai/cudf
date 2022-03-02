@@ -132,8 +132,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                                                        *device_table,
                                                        *device_table,
                                                        d_column_order.data(),
-                                                       d_null_precedence.data(),
-                                                       stream);
+                                                       d_null_precedence.data());
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),
                         mutable_indices_view.begin<size_type>(),

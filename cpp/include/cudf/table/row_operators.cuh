@@ -355,8 +355,9 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
+   * The caller should ensure the corresponding column types are comparable.
+   *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
    *
    * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
@@ -368,14 +369,12 @@ class row_lexicographic_comparator {
    * and indicates how null values compare to all other for every column. If
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
-   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   row_lexicographic_comparator(Nullate has_nulls,
                                table_device_view lhs,
                                table_device_view rhs,
                                order const* column_order         = nullptr,
-                               null_order const* null_precedence = nullptr,
-                               rmm::cuda_stream_view stream      = rmm::cuda_stream_default)
+                               null_order const* null_precedence = nullptr)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
@@ -383,8 +382,6 @@ class row_lexicographic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs, stream),
-                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,4 +96,36 @@ table_view scatter_columns(table_view const& source,
   return table_view{updated_columns};
 }
 
+namespace detail {
+namespace {
+struct is_relationally_comparable_functor {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return cudf::is_relationally_comparable<T, T>();
+  }
+};
+}  // namespace
+
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
+{
+  return std::all_of(thrust::counting_iterator<size_type>(0),
+                     thrust::counting_iterator<size_type>(lhs.num_columns()),
+                     [lhs, rhs](auto const i) {
+                       return lhs.column(i).type() == rhs.column(i).type() and
+                              type_dispatcher(lhs.column(i).type(),
+                                              is_relationally_comparable_functor{});
+                     });
+}
+
+// Explicit extern template instantiation for a table of immutable views
+extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
+                                                            table_view const& rhs);
+
+// Explicit extern template instantiation for a table of mutable views
+extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
+                                                                    mutable_table_view const& rhs);
+
+}  // namespace detail
 }  // namespace cudf

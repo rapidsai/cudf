@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,7 +201,7 @@ struct group_scan_functor<K,
                                   thrust::make_counting_iterator<size_type>(0),
                                   gather_map.begin(),
                                   thrust::equal_to{},
-                                  binop_generator.binop(stream));
+                                  binop_generator.binop());
 
     //
     // Gather the children elements of the prefix min/max struct elements first.

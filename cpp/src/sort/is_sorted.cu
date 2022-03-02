@@ -51,8 +51,7 @@ auto is_sorted(cudf::table_view const& in,
                                                  *d_input,
                                                  *d_input,
                                                  d_column_order.data(),
-                                                 d_null_precedence.data(),
-                                                 stream);
+                                                 d_null_precedence.data());
 
   auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator(0),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,7 +297,7 @@ struct same_element_type_dispatcher {
                                            thrust::make_counting_iterator(0),
                                            thrust::make_counting_iterator(input.size()),
                                            size_type{0},
-                                           binop_generator.binop(stream));
+                                           binop_generator.binop());
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
   }
