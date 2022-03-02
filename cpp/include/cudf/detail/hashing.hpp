@@ -61,9 +61,9 @@ std::unique_ptr<column> serial_murmur_hash3_32(
  * http://www.boost.org/LICENSE_1_0.txt)
  */
 /**
- * @brief  Combines two hash values into a new single hash value.
+ * @brief Combines two hash values into a single hash value.
  *
- * Taken from the Boost hash_combine function
+ * Taken from the Boost hash_combine function.
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
  *
  * @param lhs The first hash value
@@ -82,9 +82,9 @@ constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  * http://www.boost.org/LICENSE_1_0.txt)
  */
 /**
- * @brief Combines two hashed values into a single hashed value.
+ * @brief Combines two hash values into a single hash value.
  *
- * Adapted from Boost hash_combine function, modified for 64-bit
+ * Adapted from Boost hash_combine function and modified for 64-bit.
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
  *
  * @param lhs The first hash value
