@@ -1161,7 +1161,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg][:] = value
+                        self._data[arg] = utils.scalar_broadcast_to(
+                            value, len(self)
+                        )
                     else:
                         value = as_column(value)
                         self._data[arg] = value
