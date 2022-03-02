@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
 class BaseIndex(Serializable):
     """Base class for all cudf Index types."""
 
+    #
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
