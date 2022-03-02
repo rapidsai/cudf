@@ -54,6 +54,23 @@ struct StableSort : public BaseFixture {
 
 TYPED_TEST_SUITE(StableSort, TestTypes);
 
+TYPED_TEST(StableSort, MixedNullOrder)
+{
+  using T = TypeParam;
+  using R = int32_t;
+
+  fixed_width_column_wrapper<T> col1({0, 1, 1, 0, 0, 1, 0, 1}, {0, 1, 1, 1, 1, 1, 1, 1});
+  strings_column_wrapper col2({"2", "a", "b", "x", "k", "a", "x", "a"}, {1, 1, 1, 1, 0, 1, 1, 1});
+
+  fixed_width_column_wrapper<R> expected{{4, 3, 6, 1, 5, 7, 2, 0}};
+
+  auto got = stable_sorted_order(table_view({col1, col2}),
+                                 {order::ASCENDING, order::ASCENDING},
+                                 {null_order::AFTER, null_order::BEFORE});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+}
+
 TYPED_TEST(StableSort, WithNullMax)
 {
   using T = TypeParam;
