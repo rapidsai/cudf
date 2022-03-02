@@ -17,6 +17,8 @@ include(../../../../fetch_rapids.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
+include(rapids-cpm)
+rapids_cpm_init()
 
 # Use GPU_ARCHS if it is defined
 if(DEFINED GPU_ARCHS)
@@ -89,20 +91,7 @@ rapids_cmake_build_type("Release")
 # ##################################################################################################
 # * Thrust/CUB
 # ------------------------------------------------------------------------------------
-find_path(
-  THRUST_INCLUDE "thrust"
-  HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src" "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
-        "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "THRUST: THRUST_INCLUDE set to ${THRUST_INCLUDE}")
-
-find_path(
-  CUB_INCLUDE "cub" HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
-                          "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "CUB: CUB_INCLUDE set to ${CUB_INCLUDE}")
+include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_thrust.cmake)
 
 # ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
@@ -259,8 +248,7 @@ endif()
 
 target_include_directories(
   cudfjni
-  PUBLIC "${THRUST_INCLUDE}"
-         "${CUB_INCLUDE}"
+  PUBLIC cudf::Thrust
          "${LIBCUDACXX_INCLUDE}"
          "${CUDAToolkit_INCLUDE_DIRS}"
          "${NVCOMP_INCLUDE}"
