@@ -256,9 +256,8 @@ def _create_delegating_mixin(
     )
 
     setattr(OperationMixin, base_operation_name, _operation)
-    # This attribute is set in case lookup is convenient at a later point, but
-    # it is not strictly necessary since `supported_operations` is part of the
-    # closure associated with the class's creation.
+    # Making this attribute available makes it easy for subclasses to indicate
+    # that all supported operations for this mixin are valid.
     setattr(OperationMixin, supported_attr, supported_operations)
 
     return OperationMixin
