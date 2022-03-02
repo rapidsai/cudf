@@ -33,7 +33,7 @@ class Sort : public cudf::benchmark {
 };
 
 template <bool stable>
-static void BM_sort(benchmark::State& state, bool nulls)
+static void BM_struct_sort(benchmark::State& state, bool nulls)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
@@ -85,13 +85,44 @@ static void BM_sort(benchmark::State& state, bool nulls)
   }
 }
 
-#define SORT_BENCHMARK_DEFINE(name, stable, nulls)          \
-  BENCHMARK_TEMPLATE_DEFINE_F(Sort, name, stable)           \
-  (::benchmark::State & st) { BM_sort<stable>(st, nulls); } \
-  BENCHMARK_REGISTER_F(Sort, name)                          \
-    ->RangeMultiplier(8)                                    \
-    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                  \
-    ->UseManualTime()                                       \
+#define SORT_BENCHMARK_DEFINE(name, stable, nulls)                 \
+  BENCHMARK_TEMPLATE_DEFINE_F(Sort, name, stable)                  \
+  (::benchmark::State & st) { BM_struct_sort<stable>(st, nulls); } \
+  BENCHMARK_REGISTER_F(Sort, name)                                 \
+    ->RangeMultiplier(8)                                           \
+    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                         \
+    ->UseManualTime()                                              \
     ->Unit(benchmark::kMillisecond);
 
-SORT_BENCHMARK_DEFINE(unstable, false, true)
+// SORT_BENCHMARK_DEFINE(unstable, false, true)
+
+template <bool stable>
+static void BM_list_sort(benchmark::State& state, bool nulls)
+{
+  const size_t size{(size_t)state.range(0)};
+  const cudf::size_type depth{(cudf::size_type)state.range(1)};
+
+  data_profile table_profile;
+  table_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
+  table_profile.set_list_depth(depth);
+  table_profile.set_null_frequency(0);
+  auto const table =
+    create_random_table({cudf::type_id::LIST}, 1, table_size_bytes{size}, table_profile);
+
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+
+    auto result = cudf::detail::experimental::sorted_order2(*table);
+  }
+}
+
+#define LIST_SORT_BENCHMARK_DEFINE(name, stable, nulls)          \
+  BENCHMARK_TEMPLATE_DEFINE_F(Sort, name, stable)                \
+  (::benchmark::State & st) { BM_list_sort<stable>(st, nulls); } \
+  BENCHMARK_REGISTER_F(Sort, name)                               \
+    ->RangeMultiplier(256)                                       \
+    ->Ranges({{1 << 10, 1 << 27}, {1, 4}})                       \
+    ->UseManualTime()                                            \
+    ->Unit(benchmark::kMillisecond);
+
+LIST_SORT_BENCHMARK_DEFINE(list, false, true)
