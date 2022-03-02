@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ struct value_expression_result
     if constexpr (std::is_same_v<Element, T>) {
       _obj = result;
     } else {
-      cudf_assert(false && "Output type does not match container type.");
+      CUDF_UNREACHABLE("Output type does not match container type.");
     }
   }
 

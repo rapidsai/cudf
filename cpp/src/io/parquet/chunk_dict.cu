@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ struct map_insert_fn {
       auto equality_fn = equality_functor<T>{col};
       return map.insert(std::make_pair(i, i), hash_fn, equality_fn);
     } else {
-      cudf_assert(false && "Unsupported type to insert in map");
+      CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
     return false;
   }
@@ -86,7 +86,7 @@ struct map_find_fn {
       auto equality_fn = equality_functor<T>{col};
       return map.find(i, hash_fn, equality_fn);
     } else {
-      cudf_assert(false && "Unsupported type to insert in map");
+      CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
     return map.end();
   }
