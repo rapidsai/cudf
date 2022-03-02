@@ -231,14 +231,14 @@ hash_value_type __device__ inline MurmurHash3_32::operator()(numeric::decimal128
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::list_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::list_view const&) const
 {
   cudf_assert(false && "List column hashing is not supported");
   return 0;
 }
 
 template <>
-hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::struct_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32::operator()(cudf::struct_view const&) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
@@ -453,7 +453,7 @@ hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32::operator()(cudf::list_view const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(cudf::list_view const&) const
 {
   cudf_assert(false && "List column hashing is not supported");
   return 0;
@@ -461,7 +461,7 @@ hash_value_type __device__ inline SparkMurmurHash3_32::operator()(cudf::list_vie
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
-  cudf::struct_view const& key) const
+  cudf::struct_view const&) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
