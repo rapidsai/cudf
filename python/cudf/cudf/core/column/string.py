@@ -5154,7 +5154,7 @@ class StringColumn(column.ColumnBase):
             return super().to_arrow()
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0,
     ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count

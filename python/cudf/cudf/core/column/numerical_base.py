@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import numpy as np
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
 
 
@@ -23,59 +23,14 @@ class NumericalBaseColumn(ColumnBase):
     point, should be encoded here.
     """
 
-    def reduce(
-        self, op: str, skipna: bool = None, min_count: int = 0, **kwargs
-    ) -> ScalarLike:
-        """Perform a reduction operation.
-
-        op : str
-            The operation to perform.
-        skipna : bool
-            Whether or not na values must be
-        """
-        preprocessed = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
-        else:
-            return preprocessed
-
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarLike:
-        return self.reduce(
-            "sum", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def product(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarLike:
-        return self.reduce(
-            "product", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def mean(
-        self, skipna: bool = None, dtype: Dtype = np.float64
-    ) -> ScalarLike:
-        return self.reduce("mean", skipna=skipna, dtype=dtype)
-
-    def var(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> ScalarLike:
-        return self.reduce("var", skipna=skipna, dtype=dtype, ddof=ddof)
-
-    def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> ScalarLike:
-        return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
-
-    def sum_of_squares(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarLike:
-        return self.reduce(
-            "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
-        )
+    _VALID_REDUCTIONS = {
+        "sum",
+        "product",
+        "sum_of_squares",
+        "mean",
+        "var",
+        "std",
+    }
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
         return not skipna and self.has_nulls()
@@ -148,6 +103,25 @@ class NumericalBaseColumn(ColumnBase):
             )
         return result
 
+    def mean(self, skipna: bool = None, min_count: int = 0, dtype=np.float64):
+        return self._reduce(
+            "mean", skipna=skipna, min_count=min_count, dtype=dtype
+        )
+
+    def var(
+        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+    ):
+        return self._reduce(
+            "var", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+        )
+
+    def std(
+        self, skipna: bool = None, min_count: int = 0, dtype=np.float64, ddof=1
+    ):
+        return self._reduce(
+            "std", skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+        )
+
     def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
@@ -171,7 +145,7 @@ class NumericalBaseColumn(ColumnBase):
             self, quant, interpolation, sorted_indices, exact
         )
 
-    def cov(self, other: ColumnBase) -> float:
+    def cov(self, other: NumericalBaseColumn) -> float:
         if (
             len(self) == 0
             or len(other) == 0
@@ -183,7 +157,7 @@ class NumericalBaseColumn(ColumnBase):
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
-    def corr(self, other: ColumnBase) -> float:
+    def corr(self, other: NumericalBaseColumn) -> float:
         if len(self) == 0 or len(other) == 0:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
