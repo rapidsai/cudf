@@ -584,23 +584,6 @@ TYPED_TEST(Sort, WithStructColumnCombinationsWithoutNulls)
   run_sort_test(input, expected4, column_order2, {null_order::AFTER});
 }
 
-TYPED_TEST(Sort, Stable)
-{
-  using T = TypeParam;
-  using R = int32_t;
-
-  fixed_width_column_wrapper<T> col1({0, 1, 1, 0, 0, 1, 0, 1}, {0, 1, 1, 1, 1, 1, 1, 1});
-  strings_column_wrapper col2({"2", "a", "b", "x", "k", "a", "x", "a"}, {1, 1, 1, 1, 0, 1, 1, 1});
-
-  fixed_width_column_wrapper<R> expected{{4, 3, 6, 1, 5, 7, 2, 0}};
-
-  auto got = stable_sorted_order(table_view({col1, col2}),
-                                 {order::ASCENDING, order::ASCENDING},
-                                 {null_order::AFTER, null_order::BEFORE});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
-}
-
 TYPED_TEST(Sort, MisMatchInColumnOrderSize)
 {
   using T = TypeParam;
@@ -613,10 +596,8 @@ TYPED_TEST(Sort, MisMatchInColumnOrderSize)
   std::vector<order> column_order{order::ASCENDING, order::DESCENDING};
 
   EXPECT_THROW(sorted_order(input, column_order), logic_error);
-  EXPECT_THROW(stable_sorted_order(input, column_order), logic_error);
   EXPECT_THROW(sort(input, column_order), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order), logic_error);
-  EXPECT_THROW(stable_sort_by_key(input, input, column_order), logic_error);
 }
 
 TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
@@ -632,10 +613,8 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
   std::vector<null_order> null_precedence{null_order::AFTER, null_order::BEFORE};
 
   EXPECT_THROW(sorted_order(input, column_order, null_precedence), logic_error);
-  EXPECT_THROW(stable_sorted_order(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort(input, column_order, null_precedence), logic_error);
   EXPECT_THROW(sort_by_key(input, input, column_order, null_precedence), logic_error);
-  EXPECT_THROW(stable_sort_by_key(input, input, column_order, null_precedence), logic_error);
 }
 
 TYPED_TEST(Sort, ZeroSizedColumns)
@@ -656,10 +635,10 @@ TYPED_TEST(Sort, ZeroSizedColumns)
   run_sort_test(input, expected, column_order);
 }
 
-struct SortByKeyCommon : public BaseFixture {
+struct SortByKey : public BaseFixture {
 };
 
-TEST_F(SortByKeyCommon, ValueKeysSizeMismatch)
+TEST_F(SortByKey, ValueKeysSizeMismatch)
 {
   using T = int64_t;
 
@@ -672,7 +651,6 @@ TEST_F(SortByKeyCommon, ValueKeysSizeMismatch)
   table_view keys{{key_col}};
 
   EXPECT_THROW(sort_by_key(values, keys), logic_error);
-  EXPECT_THROW(stable_sort_by_key(values, keys), logic_error);
 }
 
 template <typename T>

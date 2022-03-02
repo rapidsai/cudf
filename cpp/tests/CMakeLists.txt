@@ -223,7 +223,12 @@ endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
-ConfigureTest(SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/rank_test.cpp)
+ConfigureTest(
+  SORT_TEST
+  sort/segmented_sort_tests.cpp
+  sort/sort_test.cpp
+  sort/stable_sort_tests.cpp
+  sort/rank_test.cpp)
 
 # ##################################################################################################
 # * copying tests ---------------------------------------------------------------------------------
