@@ -1807,3 +1807,7 @@ def _is_multi_agg(aggs):
     if is_list_like(aggs):
         return True
     return False
+
+
+def _cov_or_corr():
+    pass
