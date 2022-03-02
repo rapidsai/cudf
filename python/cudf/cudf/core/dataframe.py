@@ -5925,7 +5925,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-        column : str or tuple
+        column : str
             Column to explode.
         ignore_index : bool, default False
             If True, the resulting index will be labeled 0, 1, …, n - 1.
@@ -5959,11 +5959,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         if column not in self._column_names:
             raise KeyError(column)
-
-        if not is_list_dtype(self._data[column].dtype):
-            data = self._data.copy(deep=True)
-            idx = None if ignore_index else self._index.copy(deep=True)
-            return self.__class__._from_data(data, index=idx)
 
         return super()._explode(column, ignore_index)
 

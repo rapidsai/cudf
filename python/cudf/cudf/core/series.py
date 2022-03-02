@@ -3150,7 +3150,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Returns
         -------
-        DataFrame
+        Series
 
         Examples
         --------
@@ -3172,12 +3172,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3       5
         dtype: int64
         """
-        if not is_list_dtype(self._column.dtype):
-            data = self._data.copy(deep=True)
-            idx = None if ignore_index else self._index.copy(deep=True)
-            return self.__class__._from_data(data, index=idx)
-
-        return super()._explode(self._column_names[0], ignore_index)
+        return super()._explode(self.name, ignore_index)
 
     def pct_change(
         self, periods=1, fill_method="ffill", limit=None, freq=None
