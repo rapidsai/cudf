@@ -28,7 +28,7 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
   auto const column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  auto const source_table = create_sequence_table(
+  auto const source_table = create_random_table(
     {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{column_size});
 
   auto lhs          = cudf::column_view(source_table->get_column(0));
