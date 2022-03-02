@@ -25,10 +25,10 @@
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/io/avro.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/join.hpp>
@@ -1497,9 +1497,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(
-  JNIEnv *env, jclass, jobjectArray filter_col_names, 
-  jstring inputfilepath, jlong buffer, jlong buffer_length, jint unit) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(JNIEnv *env, jclass,
+                                                                jobjectArray filter_col_names,
+                                                                jstring inputfilepath, jlong buffer,
+                                                                jlong buffer_length, jint unit) {
 
   const bool read_buffer = (buffer != 0);
   if (!read_buffer) {
@@ -1526,10 +1527,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(
                                                       static_cast<std::size_t>(buffer_length)) :
                                 cudf::io::source_info(filename.get());
 
-    cudf::io::avro_reader_options opts =
-        cudf::io::avro_reader_options::builder(source)
-            .columns(n_filter_col_names.as_cpp_vector())
-            .build();
+    cudf::io::avro_reader_options opts = cudf::io::avro_reader_options::builder(source)
+                                             .columns(n_filter_col_names.as_cpp_vector())
+                                             .build();
     return convert_table_for_return(env, cudf::io::read_avro(opts).tbl);
   }
   CATCH_STD(env, NULL);
