@@ -1498,7 +1498,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(
-  JNIEnv *env, jclass, jobjectArray filter_col_names, jstring inputfilepath, jlong buffer, jlong buffer_length, jint unit) {
+  JNIEnv *env, jclass, jobjectArray filter_col_names, 
+  jstring inputfilepath, jlong buffer, jlong buffer_length, jint unit) {
 
   const bool read_buffer = (buffer != 0);
   if (!read_buffer) {

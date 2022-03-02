@@ -1098,7 +1098,7 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readAvro(AvroOptions opts, HostMemoryBuffer buffer,
-                                  long offset, long len) {
+                               long offset, long len) {
     assert offset >= 0 && offset < buffer.length;
     assert len <= buffer.length - offset;
     len = len > 0 ? len : buffer.length - offset;
