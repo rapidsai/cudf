@@ -459,7 +459,7 @@ class RangeIndex(BaseIndex):
             name=self.name,
         )
 
-    @property  # type: ignore
+    @property
     def is_unique(self):
         """
         Return if the index has unique values.
