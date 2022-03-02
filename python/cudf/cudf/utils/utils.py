@@ -24,12 +24,6 @@ mask_bitsize = mask_dtype.itemsize * 8
 
 
 _EQUALITY_OPS = {
-    "eq",
-    "ne",
-    "lt",
-    "gt",
-    "le",
-    "ge",
     "__eq__",
     "__ne__",
     "__lt__",
