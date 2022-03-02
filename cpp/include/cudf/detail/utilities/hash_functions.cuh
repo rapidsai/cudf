@@ -460,8 +460,7 @@ hash_value_type __device__ inline SparkMurmurHash3_32::operator()(cudf::list_vie
 }
 
 template <>
-hash_value_type __device__ inline SparkMurmurHash3_32::operator()(
-  cudf::struct_view const&) const
+hash_value_type __device__ inline SparkMurmurHash3_32::operator()(cudf::struct_view const&) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
