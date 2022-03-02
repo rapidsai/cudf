@@ -66,9 +66,9 @@ std::unique_ptr<column> serial_murmur_hash3_32(
  * Taken from the Boost hash_combine function
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
  *
- * @param lhs The first hash value.
- * @param rhs The second hash value.
- * @return Combined hash value.
+ * @param lhs The first hash value
+ * @param rhs The second hash value
+ * @return Combined hash value
  */
 constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
 {
@@ -87,9 +87,9 @@ constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  * Adapted from Boost hash_combine function, modified for 64-bit
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
  *
- * @param lhs The first hash value.
- * @param rhs The second hash value.
- * @return Combined hash value.
+ * @param lhs The first hash value
+ * @param rhs The second hash value
+ * @return Combined hash value
  */
 constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
