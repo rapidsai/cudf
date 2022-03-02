@@ -312,6 +312,54 @@ auto create_run_length_dist(cudf::size_type avg_run_len)
 }
 
 /**
+ * @brief Generate indices within range [0 , cardinality) repeating with average run length
+ * `avg_run_len`
+ *
+ * @param avg_run_len  Average run length of the generated indices
+ * @param cardinality  Range of the generated indices
+ * @param num_rows     Number of indices to generate
+ * @param engine       Random engine
+ * @return Generated indices of type `cudf::size_type`
+ */
+rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_type avg_run_len,
+                                                                    cudf::size_type cardinality,
+                                                                    cudf::size_type num_rows,
+                                                                    thrust::minstd_rand& engine)
+{
+  auto sample_dist = random_value_fn<cudf::size_type>{
+    distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
+  if (avg_run_len > 1) {
+    auto avglen_dist =
+      random_value_fn<int>{distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
+    auto approx_run_len = num_rows / avg_run_len + 1;
+    auto run_lens       = avglen_dist(engine, approx_run_len);
+    thrust::inclusive_scan(
+      thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
+    auto samples_indices = sample_dist(engine, approx_run_len + 1);
+    // This is gather.
+    auto avg_repeated_sample_indices = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [rb              = run_lens.begin(),
+       re              = run_lens.end(),
+       samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
+        auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
+        return samples_indices[sample_idx];
+      });
+    rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
+                                                                 rmm::cuda_stream_default);
+    thrust::copy(thrust::device,
+                 avg_repeated_sample_indices,
+                 avg_repeated_sample_indices + num_rows,
+                 repeated_sample_indices.begin());
+    return repeated_sample_indices;
+  } else {
+    // generate n samples. and gather.
+    auto samples_indices = sample_dist(engine, num_rows);
+    return samples_indices;
+  }
+}
+
+/**
  * @brief Creates a column with random content of type @ref T.
  *
  * @param profile Parameters for the random generator
@@ -346,54 +394,18 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     data      = value_dist(engine, num_rows);
     null_mask = valid_dist(engine, num_rows);
   } else {
-    auto sample_dist = random_value_fn<cudf::size_type>{
-      distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
-    auto avglen_dist =
-      random_value_fn<int>{distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
-    if (avg_run_len > 1) {
-      auto approx_run_len = num_rows / avg_run_len + 1;
-      auto run_lens       = avglen_dist(engine, approx_run_len);
-      thrust::inclusive_scan(
-        thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
-      auto samples_indices = sample_dist(engine, approx_run_len + 1);
-
-      data      = rmm::device_uvector<T>(num_rows, rmm::cuda_stream_default);
-      null_mask = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
-      // This is gather.
-      auto avg_repeated_sample_indices = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0),
-        [rb              = run_lens.begin(),
-         re              = run_lens.end(),
-         samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
-          auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
-          return samples_indices[sample_idx];
-        });
-      thrust::gather(thrust::device,
-                     avg_repeated_sample_indices,
-                     avg_repeated_sample_indices + num_rows,
-                     samples.begin(),
-                     data.begin());
-      thrust::gather(thrust::device,
-                     avg_repeated_sample_indices,
-                     avg_repeated_sample_indices + num_rows,
-                     samples_null_mask.begin(),
-                     null_mask.begin());
-    } else {
-      // generate n samples. and gather.
-      auto samples_indices = sample_dist(engine, num_rows);
-      data                 = rmm::device_uvector<T>(num_rows, rmm::cuda_stream_default);
-      null_mask            = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
-      thrust::gather(thrust::device,
-                     samples_indices.begin(),
-                     samples_indices.end(),
-                     samples.begin(),
-                     data.begin());
-      thrust::gather(thrust::device,
-                     samples_indices.begin(),
-                     samples_indices.end(),
-                     samples_null_mask.begin(),
-                     null_mask.begin());
-    }
+    // generate n samples. and gather.
+    auto sample_indices =
+      sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
+    data      = rmm::device_uvector<T>(num_rows, rmm::cuda_stream_default);
+    null_mask = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
+    thrust::gather(
+      thrust::device, sample_indices.begin(), sample_indices.end(), samples.begin(), data.begin());
+    thrust::gather(thrust::device,
+                   sample_indices.begin(),
+                   sample_indices.end(),
+                   samples_null_mask.begin(),
+                   null_mask.begin());
   }
 
   auto [result_bitmask, null_count] =
@@ -508,40 +520,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
   if (cardinality == 0) {
     return sample_strings;
   } else {
-    auto sample_dist = random_value_fn<cudf::size_type>{
-      distribution_params<cudf::size_type>{distribution_id::UNIFORM, 0, cardinality - 1}};
-    auto sample_indices = [&]() {
-      if (avg_run_len > 1) {
-        auto avglen_dist = random_value_fn<int>{
-          distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
-        auto approx_run_len = num_rows / avg_run_len + 1;
-        auto run_lens       = avglen_dist(engine, approx_run_len);
-        thrust::inclusive_scan(
-          thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
-        auto samples_indices             = sample_dist(engine, approx_run_len + 1);
-        auto avg_repeated_sample_indices = thrust::make_transform_iterator(
-          thrust::make_counting_iterator(0),
-          [rb              = run_lens.begin(),
-           re              = run_lens.end(),
-           samples_indices = samples_indices.begin()] __device__(cudf::size_type i) {
-            auto sample_idx = thrust::upper_bound(thrust::seq, rb, re, i) - rb;
-            return samples_indices[sample_idx];
-          });
-        rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
-                                                                     rmm::cuda_stream_default);
-        thrust::copy(thrust::device,
-                     avg_repeated_sample_indices,
-                     avg_repeated_sample_indices + num_rows,
-                     repeated_sample_indices.begin());
-        return repeated_sample_indices;
-      } else {
-        auto samples_indices = sample_dist(engine, num_rows);
-        return samples_indices;
-      }
-    }();
-    // auto [free_b, total_b] =
-    // rmm::mr::get_current_device_resource()->get_mem_info(rmm::cuda_stream_default); std::cout <<
-    // "free= " << free_b << " used= " << total_b - free_b << " total= " << total_b << "\n"; gather
+    auto sample_indices =
+      sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
     auto str_table =
       cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
                            sample_indices,
