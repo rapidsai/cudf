@@ -215,4 +215,25 @@ TEST_F(NewRowOpTest, SampleStructTest)
   cudf::test::expect_columns_equal(result1->view(), result2->view());
 }
 
+TEST_F(NewRowOpTest, List)
+{
+  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
+  lcw col{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},
+    {{7, 8}, {}},
+    lcw{lcw{}, lcw{}, lcw{}},
+    lcw{lcw{}},
+    lcw{lcw{}},
+    lcw{lcw{}},
+    lcw{lcw{}, lcw{}, lcw{}},
+    lcw{lcw{}, lcw{}, lcw{}},
+  };
+  print(col);
+
+  auto result = cudf::detail::experimental::sorted_order2(cudf::table_view({col}));
+  cudf::test::print(result->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
