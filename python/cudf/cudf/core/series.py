@@ -9,7 +9,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -39,6 +39,7 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -75,11 +76,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_scalar_type,
 )
-from cudf.utils.utils import (
-    get_appropriate_dispatched_func,
-    get_relevant_submodule,
-    to_cudf_compatible_scalar,
-)
+from cudf.utils.utils import to_cudf_compatible_scalar
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -167,7 +164,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame._index.nlevels
-                and not any((isinstance(x, slice) for x in arg))
+                and not any(isinstance(x, slice) for x in arg)
             ):
                 result = result.iloc[0]
             return result
@@ -408,7 +405,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
         elif isinstance(data, ColumnAccessor):
-            name, data = data.names[0], data.columns[0]
+            raise TypeError(
+                "Use cudf.Series._from_data for constructing a Series from "
+                "ColumnAccessor"
+            )
 
         if isinstance(data, Series):
             index = data._index if index is None else index
@@ -432,7 +432,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 data = {}
 
-        if not isinstance(data, column.ColumnBase):
+        if not isinstance(data, ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         else:
             if dtype is not None:
@@ -441,7 +441,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
-        assert isinstance(data, column.ColumnBase)
+        assert isinstance(data, ColumnBase)
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
@@ -579,7 +579,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         new_data = super()._get_columns_by_label(labels, downcast)
 
         return (
-            self.__class__(data=new_data, index=self.index)
+            self.__class__._from_data(data=new_data, index=self.index)
             if len(new_data) > 0
             else self.__class__(dtype=self.dtype, name=self.name)
         )
@@ -953,79 +953,62 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.DataFrame({col: self._column}, index=self.index)
 
     def memory_usage(self, index=True, deep=False):
-        """
-        Return the memory usage of the Series.
-
-        The memory usage can optionally include the contribution of
-        the index and of elements of `object` dtype.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the Series index.
-        deep : bool, default False
-            If True, introspect the data deeply by interrogating
-            `object` dtypes for system-level memory consumption, and include
-            it in the returned value.
-
-        Returns
-        -------
-        int
-            Bytes of memory consumed.
-
-        See Also
-        --------
-        cudf.DataFrame.memory_usage : Bytes consumed by
-            a DataFrame.
-
-        Examples
-        --------
-        >>> s = cudf.Series(range(3), index=['a','b','c'])
-        >>> s.memory_usage()
-        43
-
-        Not including the index gives the size of the rest of the data, which
-        is necessarily smaller:
-
-        >>> s.memory_usage(index=False)
-        24
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        n = self._column.memory_usage()
-        if index:
-            n += self._index.memory_usage()
-        return n
-
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__":
-            return get_appropriate_dispatched_func(
-                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
-            )
-        else:
-            return NotImplemented
+        return sum(super().memory_usage(index, deep).values())
 
     def __array_function__(self, func, types, args, kwargs):
-        handled_types = [cudf.Series]
-        for t in types:
-            if t not in handled_types:
+        if "out" in kwargs or not all(issubclass(t, Series) for t in types):
+            return NotImplemented
+
+        try:
+            # Apply a Series method if one exists.
+            if cudf_func := getattr(Series, func.__name__, None):
+                return cudf_func(*args, **kwargs)
+
+            # Assume that cupy subpackages match numpy and search the
+            # corresponding cupy submodule based on the func's __module__.
+            numpy_submodule = func.__module__.split(".")[1:]
+            cupy_func = cupy
+            for name in (*numpy_submodule, func.__name__):
+                cupy_func = getattr(cupy_func, name, None)
+
+            # Handle case if cupy does not implement the function or just
+            # aliases the numpy function.
+            if not cupy_func or cupy_func is func:
                 return NotImplemented
 
-        cudf_submodule = get_relevant_submodule(func, cudf)
-        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
-        cupy_submodule = get_relevant_submodule(func, cupy)
+            # For now just fail on cases with mismatched indices. There is
+            # almost certainly no general solution for all array functions.
+            index = args[0].index
+            if not all(s.index.equals(index) for s in args):
+                return NotImplemented
+            out = cupy_func(*(s.values for s in args), **kwargs)
 
-        return get_appropriate_dispatched_func(
-            cudf_submodule,
-            cudf_ser_submodule,
-            cupy_submodule,
-            func,
-            args,
-            kwargs,
-        )
+            # Return (host) scalar values immediately.
+            if not isinstance(out, cupy.ndarray):
+                return out
+
+            # 0D array (scalar)
+            if out.ndim == 0:
+                return to_cudf_compatible_scalar(out)
+            # 1D array
+            elif (
+                # Only allow 1D arrays
+                ((out.ndim == 1) or (out.ndim == 2 and out.shape[1] == 1))
+                # If we have an index, it must be the same length as the
+                # output for cupy dispatching to be well-defined.
+                and len(index) == len(out)
+            ):
+                return Series(out, index=index)
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
+
+        return NotImplemented
 
     def map(self, arg, na_action=None) -> "Series":
         """
@@ -1256,31 +1239,28 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _binaryop(
+    def _make_operands_and_index_for_binop(
         self,
-        other: Frame,
+        other: Any,
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+            Type[NotImplemented],
+        ],
+        Optional[BaseIndex],
+    ]:
         # Specialize binops to align indices.
-        if isinstance(other, SingleColumnFrame):
+        if isinstance(other, Series):
             if (
-                # TODO: The can_reindex logic also needs to be applied for
-                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and (
-                    isinstance(other, Series)
-                    # TODO: mypy doesn't like this line because the index
-                    # property is not defined on SingleColumnFrame (or Index,
-                    # for that matter). Ignoring is the easy solution for now,
-                    # a cleaner fix requires reworking the type hierarchy.
-                    and not self.index.equals(other.index)  # type: ignore
-                )
+                and not self.index.equals(other.index)
             ):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
@@ -1290,24 +1270,34 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lhs = self
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
-        return (
-            lhs._from_data(
-                data=lhs._colwise_binop(operands, fn), index=lhs._index,
-            )
-            if operands is not NotImplemented
-            else NotImplemented
-        )
+        return operands, lhs._index
 
     def logical_and(self, other):
-        return self._binaryop(other, "l_and").astype(np.bool_)
+        warnings.warn(
+            "Series.logical_and is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._binaryop(other, "__l_and__").astype(np.bool_)
 
     def remainder(self, other):
-        return self._binaryop(other, "mod")
+        warnings.warn(
+            "Series.remainder is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._binaryop(other, "__mod__")
 
     def logical_or(self, other):
-        return self._binaryop(other, "l_or").astype(np.bool_)
+        warnings.warn(
+            "Series.logical_or is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._binaryop(other, "__l_or__").astype(np.bool_)
 
     def logical_not(self):
+        warnings.warn(
+            "Series.logical_not is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
@@ -1824,10 +1814,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._from_data(
-                {self.name: (data.copy(deep=True) if copy else data)},
-                index=self._index,
-            )
+            return self._from_data({self.name: data}, index=self._index)
 
         except Exception as e:
             if errors == "raise":
@@ -2561,7 +2548,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.cov(rhs._column)
+        try:
+            return lhs._column.cov(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform covariance with types {self.dtype}, "
+                f"{other.dtype}"
+            )
 
     def transpose(self):
         """Return the transpose, which is by definition self.
@@ -2597,7 +2590,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.corr(rhs._column)
+        try:
+            return lhs._column.corr(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
 
     def autocorr(self, lag=1):
         """Compute the lag-N autocorrelation. This method computes the Pearson
@@ -2680,14 +2678,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: bool
         """
 
+        # Even though only list-like objects are supposed to be passed, only
+        # scalars throw errors. Other types (like dicts) just transparently
+        # return False (see the implementation of ColumnBase.isin).
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        return Series(
-            self._column.isin(values), index=self.index, name=self.name
+        return Series._from_data(
+            {self.name: self._column.isin(values)}, index=self.index
         )
 
     def unique(self):
@@ -2721,42 +2722,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         res = self._column.unique()
         return Series(res, name=self.name)
-
-    def nunique(self, method="sort", dropna=True):
-        """Returns the number of unique values of the Series: approximate version,
-        and exact version to be moved to libcudf
-
-        Excludes NA values by default.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NA values in the count.
-
-        Returns
-        -------
-        int
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 3, 5, 7, 7])
-        >>> s
-        0    1
-        1    3
-        2    5
-        3    7
-        4    7
-        dtype: int64
-        >>> s.nunique()
-        4
-        """
-        if method != "sort":
-            msg = "non sort based distinct_count() not implemented yet"
-            raise NotImplementedError(msg)
-        if self.null_count == len(self):
-            return 0
-        return self._column.distinct_count(method, dropna)
 
     def value_counts(
         self,
@@ -2969,7 +2934,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return percentiles
 
         def _format_percentile_names(percentiles):
-            return ["{0}%".format(int(x * 100)) for x in percentiles]
+            return [f"{int(x * 100)}%" for x in percentiles]
 
         def _format_stats_values(stats_data):
             return map(lambda x: round(x, 6), stats_data)
@@ -3071,7 +3036,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                         .to_numpy(na_value=np.nan),
                     )
                 ),
-                "max": str(pd.Timestamp((self.max()))),
+                "max": str(pd.Timestamp(self.max())),
             }
 
             return Series(
@@ -3327,6 +3292,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
+        warnings.warn(
+            "Series.merge is deprecated and will be removed in a future "
+            "release. Use cudf.merge instead.",
+            FutureWarning,
+        )
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
@@ -3359,14 +3329,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return result
 
     def add_prefix(self, prefix):
-        result = self.copy(deep=True)
-        result.index = prefix + self.index.astype(str)
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=prefix + self.index.astype(str),
+        )
 
     def add_suffix(self, suffix):
-        result = self.copy(deep=True)
-        result.index = self.index.astype(str) + suffix
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=self.index.astype(str) + suffix,
+        )
 
     def keys(self):
         """
@@ -3550,7 +3522,7 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class DatetimeProperties(object):
+class DatetimeProperties:
     """
     Accessor object for datetimelike properties of the Series values.
 
@@ -3908,8 +3880,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates belong to a leap year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-02-01', end='2013-02-01', freq='1Y'))
@@ -3966,7 +3938,7 @@ class DatetimeProperties(object):
         Integer indicating which quarter the date belongs to.
 
         Examples
-        -------
+        --------
         >>> import cudf
         >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
         ...     dtype="datetime64[ms]")
@@ -4042,8 +4014,8 @@ class DatetimeProperties(object):
         Series
         Integers representing the number of days in month
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-01', end='2001-08-01', freq='1M'))
@@ -4093,8 +4065,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the last day of the month.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-26', end='2000-09-03', freq='1D'))
@@ -4139,8 +4111,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the begining of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4185,8 +4157,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the end of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4233,8 +4205,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the first day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
@@ -4267,8 +4239,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the last day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> dates = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
@@ -4492,7 +4464,7 @@ class DatetimeProperties(object):
         )
 
 
-class TimedeltaProperties(object):
+class TimedeltaProperties:
     """
     Accessor object for timedeltalike properties of the Series values.
 

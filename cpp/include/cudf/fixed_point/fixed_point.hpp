@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ constexpr inline auto is_supported_representation_type()
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
-  return cuda::std::is_integral<T>() || cuda::std::is_floating_point<T>::value;
+  return cuda::std::is_integral<T>() || cuda::std::is_floating_point_v<T>;
 }
 
 // Helper functions for `fixed_point` type
@@ -265,7 +265,7 @@ class fixed_point {
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename cuda::std::enable_if_t<cuda::std::is_floating_point<U>::value>* = nullptr>
+            typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<U>>* = nullptr>
   explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
@@ -277,8 +277,7 @@ class fixed_point {
    * @tparam U The integral type that is being explicitly converted to
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
-  template <typename U,
-            typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  template <typename U, typename cuda::std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   explicit constexpr operator U() const
   {
     // Cast to the larger of the two types (of U and Rep) before converting to Rep because in
@@ -387,9 +386,9 @@ class fixed_point {
   /**
    * @brief operator + (for adding two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are added <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are added
+   * If `_scale`s are equal, `_value`s are added.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are added.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -402,9 +401,9 @@ class fixed_point {
   /**
    * @brief operator - (for subtracting two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are subtracted <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are subtracted
+   * If `_scale`s are equal, `_value`s are subtracted.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are subtracted.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -417,7 +416,7 @@ class fixed_point {
   /**
    * @brief operator * (for multiplying two `fixed_point` numbers)
    *
-   * `_scale`s are added and `_value`s are multiplied
+   * `_scale`s are added and `_value`s are multiplied.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -430,7 +429,7 @@ class fixed_point {
   /**
    * @brief operator / (for dividing two `fixed_point` numbers)
    *
-   * `_scale`s are subtracted and `_value`s are divided
+   * `_scale`s are subtracted and `_value`s are divided.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -441,11 +440,26 @@ class fixed_point {
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
+   * @brief operator % (for computing the modulo operation of two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, the modulus is computed directly.
+   * If `_scale`s are not equal, the number with larger `_scale` is shifted to the
+   * smaller `_scale`, and then the modulus is computed.
+   *
+   * @tparam Rep1 Representation type of number being modulo-ed to `this`
+   * @tparam Rad1 Radix (base) type of number being modulo-ed to `this`
+   * @return The resulting `fixed_point` number
+   */
+  template <typename Rep1, Radix Rad1>
+  CUDF_HOST_DEVICE inline friend fixed_point<Rep1, Rad1> operator%(
+    fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
+
+  /**
    * @brief operator == (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -458,9 +472,9 @@ class fixed_point {
   /**
    * @brief operator != (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -473,9 +487,9 @@ class fixed_point {
   /**
    * @brief operator <= (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -488,9 +502,9 @@ class fixed_point {
   /**
    * @brief operator >= (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -503,9 +517,9 @@ class fixed_point {
   /**
    * @brief operator < (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -518,9 +532,9 @@ class fixed_point {
   /**
    * @brief operator > (for comparing two `fixed_point` numbers)
    *
-   * If `_scale`s are equal, `_value`s are compared <br>
-   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-   * greater `_scale`, and then `_value`s are compared
+   * If `_scale`s are equal, `_value`s are compared.
+   * If `_scale`s are not equal, the number with the larger `_scale` is shifted to the
+   * smaller `_scale`, and then the `_value`s are compared.
    *
    * @tparam Rep1 Representation type of number being added to `this`
    * @tparam Rad1 Radix (base) type of number being added to `this`
@@ -534,7 +548,7 @@ class fixed_point {
    * @brief Method for creating a `fixed_point` number with a new `scale`
    *
    * The `fixed_point` number returned will have the same value, underlying representation and
-   * radix as `this`, the only thing changed is the scale
+   * radix as `this`, the only thing changed is the scale.
    *
    * @param scale The `scale` of the returned `fixed_point` number
    * @return `fixed_point` number with a new `scale`
@@ -748,6 +762,16 @@ CUDF_HOST_DEVICE inline bool operator>(fixed_point<Rep1, Rad1> const& lhs,
 {
   auto const scale = std::min(lhs._scale, rhs._scale);
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
+}
+
+// MODULO OPERATION
+template <typename Rep1, Radix Rad1>
+CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1> const& lhs,
+                                                          fixed_point<Rep1, Rad1> const& rhs)
+{
+  auto const scale     = std::min(lhs._scale, rhs._scale);
+  auto const remainder = lhs.rescaled(scale)._value % rhs.rescaled(scale)._value;
+  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
 }
 
 using decimal32  = fixed_point<int32_t, Radix::BASE_10>;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
@@ -41,7 +42,7 @@ struct Functor {
 };
 
 template <class Float, FunctorType ft>
-struct Functor<Float, ft, typename std::enable_if_t<std::is_floating_point<Float>::value>> {
+struct Functor<Float, ft, std::enable_if_t<std::is_floating_point_v<Float>>> {
   static __device__ Float f(Float x)
   {
     if (ft == BANDWIDTH_BOUND) {
@@ -170,21 +171,18 @@ void launch_kernel(cudf::mutable_table_view input, T** d_ptr, int work_per_threa
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
 void type_dispatcher_benchmark(::benchmark::State& state)
 {
-  const auto source_size = static_cast<cudf::size_type>(state.range(1));
-
-  const auto n_cols = static_cast<cudf::size_type>(state.range(0));
-
+  const auto n_cols          = static_cast<cudf::size_type>(state.range(0));
+  const auto source_size     = static_cast<cudf::size_type>(state.range(1));
   const auto work_per_thread = static_cast<cudf::size_type>(state.range(2));
 
-  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto init = cudf::make_fixed_width_scalar<TypeParam>(static_cast<TypeParam>(0));
 
-  std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
+  std::vector<std::unique_ptr<cudf::column>> source_column_wrappers;
   std::vector<cudf::mutable_column_view> source_columns;
 
   for (int i = 0; i < n_cols; ++i) {
-    source_column_wrappers.push_back(
-      cudf::test::fixed_width_column_wrapper<TypeParam>(data, data + source_size));
-    source_columns.push_back(source_column_wrappers[i]);
+    source_column_wrappers.push_back(cudf::sequence(source_size, *init));
+    source_columns.push_back(*source_column_wrappers[i]);
   }
   cudf::mutable_table_view source_table{source_columns};
 

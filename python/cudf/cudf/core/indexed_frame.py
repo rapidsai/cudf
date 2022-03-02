@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -6,7 +6,8 @@ from __future__ import annotations
 import operator
 import warnings
 from collections import Counter, abc
-from typing import Callable, Type, TypeVar
+from functools import cached_property
+from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -24,13 +25,11 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
 )
-from cudf.core.column import arange, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
-from cudf.utils.utils import cached_property
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -59,15 +58,14 @@ doc_reset_index_template = """
 
 
 def _indices_from_labels(obj, labels):
-    from cudf.core.column import column
 
     if not isinstance(labels, cudf.MultiIndex):
-        labels = column.as_column(labels)
+        labels = cudf.core.column.as_column(labels)
 
         if is_categorical_dtype(obj.index):
             labels = labels.astype("category")
             codes = labels.codes.astype(obj.index._values.codes.dtype)
-            labels = column.build_categorical_column(
+            labels = cudf.core.column.build_categorical_column(
                 categories=labels.dtype.categories,
                 codes=codes,
                 ordered=labels.dtype.ordered,
@@ -78,8 +76,12 @@ def _indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": arange(len(labels))}, index=labels)
-    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
+    lhs = cudf.DataFrame(
+        {"__": cudf.core.column.arange(len(labels))}, index=labels
+    )
+    rhs = cudf.DataFrame(
+        {"_": cudf.core.column.arange(len(obj))}, index=obj.index
+    )
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -256,8 +258,6 @@ class IndexedFrame(Frame):
 
         Selecting rows and column by position.
 
-        Examples
-        --------
         >>> df = cudf.DataFrame({'a': range(20),
         ...                      'b': range(20),
         ...                      'c': range(20)})
@@ -334,7 +334,7 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+        axis : {0 or 'index', 1 or 'columns'}, default 0
             The axis along which to sort. The value 0 identifies the rows,
             and 1 identifies the columns.
         level : int or level name or list of ints or list of level names
@@ -346,7 +346,7 @@ class IndexedFrame(Frame):
             If True, perform operation in-place.
         kind : sorting method such as `quick sort` and others.
             Not yet supported.
-        na_position : {‘first’, ‘last’}, default ‘last’
+        na_position : {'first', 'last'}, default 'last'
             Puts NaNs at the beginning if first; last puts NaNs at the end.
         sort_remaining : bool, default True
             Not yet supported
@@ -444,12 +444,11 @@ class IndexedFrame(Frame):
                 out = self._gather(inds)
                 # TODO: frame factory function should handle multilevel column
                 # names
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out._set_column_names_like(self)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -459,12 +458,11 @@ class IndexedFrame(Frame):
                     ascending=ascending, na_position=na_position
                 )
                 out = self._gather(inds)
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out._set_column_names_like(self)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
@@ -472,6 +470,68 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def memory_usage(self, index=True, deep=False):
+        """Return the memory usage of an object.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        Series or scalar
+            For DataFrame, a Series whose index is the original column names
+            and whose values is the memory usage of each column in bytes. For a
+            Series the total memory usage.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> dtypes = ['int64', 'float64', 'object', 'bool']
+        >>> data = dict([(t, np.ones(shape=5000).astype(t))
+        ...              for t in dtypes])
+        >>> df = cudf.DataFrame(data)
+        >>> df.head()
+           int64  float64  object  bool
+        0      1      1.0     1.0  True
+        1      1      1.0     1.0  True
+        2      1      1.0     1.0  True
+        3      1      1.0     1.0  True
+        4      1      1.0     1.0  True
+        >>> df.memory_usage(index=False)
+        int64      40000
+        float64    40000
+        object     40000
+        bool        5000
+        dtype: int64
+
+        Use a Categorical for efficient storage of an object-dtype column with
+        many repeated values.
+
+        >>> df['object'].astype('category').memory_usage(deep=True)
+        5008
+
+        **Series**
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        43
+
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+
+        >>> s.memory_usage(index=False)
+        24
+        """
+        usage = super().memory_usage(deep=deep)
+        if index:
+            usage["Index"] = self.index.memory_usage()
+        return usage
 
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
@@ -796,7 +856,7 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = as_column(ans_col)
+        col = cudf.core.column.as_column(ans_col)
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
         result = cudf.Series._from_data({None: col}, self._index)
 
@@ -876,10 +936,11 @@ class IndexedFrame(Frame):
             ),
             keep_index=not ignore_index,
         )
-        if isinstance(self, cudf.core.dataframe.DataFrame) and isinstance(
-            self.columns, pd.core.indexes.multi.MultiIndex
+        if (
+            isinstance(self, cudf.core.dataframe.DataFrame)
+            and self._data.multiindex
         ):
-            out.columns = self.columns
+            out.columns = self._data.to_pandas_index()
         return out
 
     def _n_largest_or_smallest(self, largest, n, columns, keep):
@@ -938,9 +999,9 @@ class IndexedFrame(Frame):
         # to recover ordering after index alignment.
         sort_col_id = str(uuid4())
         if how == "left":
-            lhs[sort_col_id] = arange(len(lhs))
+            lhs[sort_col_id] = cudf.core.column.arange(len(lhs))
         elif how == "right":
-            rhs[sort_col_id] = arange(len(rhs))
+            rhs[sort_col_id] = cudf.core.column.arange(len(rhs))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
@@ -1632,6 +1693,92 @@ class IndexedFrame(Frame):
             side="right",
             slice_func=lambda i: self.iloc[i:],
         )
+
+    def _binaryop(
+        self,
+        other: Any,
+        op: str,
+        fill_value: Any = None,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
+        operands, out_index = self._make_operands_and_index_for_binop(
+            other, op, fill_value, reflect, can_reindex
+        )
+        if operands is NotImplemented:
+            return NotImplemented
+
+        return self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, op)),
+            index=out_index,
+        )
+
+    def _make_operands_and_index_for_binop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ) -> Tuple[
+        Union[
+            Dict[
+                Optional[str],
+                Tuple[cudf.core.column.ColumnBase, Any, bool, Any],
+            ],
+            Type[NotImplemented],
+        ],
+        Optional[cudf.BaseIndex],
+    ]:
+        raise NotImplementedError(
+            "Binary operations are not supported for {self.__class__}"
+        )
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+        fname = ufunc.__name__
+
+        if ret is not None:
+            # pandas bitwise operations return bools if indexes are misaligned.
+            if "bitwise" in fname:
+                reflect = self is not inputs[0]
+                other = inputs[0] if reflect else inputs[1]
+                if isinstance(other, self.__class__) and not self.index.equals(
+                    other.index
+                ):
+                    ret = ret.astype(bool)
+            return ret
+
+        # Attempt to dispatch all other functions to cupy.
+        cupy_func = getattr(cp, fname)
+        if cupy_func:
+            if ufunc.nin == 2:
+                other = inputs[self is inputs[0]]
+                inputs, index = self._make_operands_and_index_for_binop(
+                    other, fname
+                )
+            else:
+                # This works for Index too
+                inputs = {
+                    name: (col, None, False, None)
+                    for name, col in self._data.items()
+                }
+                index = self._index
+
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
+            )
+
+            out = tuple(self._from_data(out, index=index) for out in data)
+            return out[0] if ufunc.nout == 1 else out
+
+        return NotImplemented
 
 
 def _check_duplicate_level_names(specified, level_names):

@@ -46,8 +46,8 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);
   table_data_profile.set_avg_run_length(run_length);
-  auto const tbl =
-    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+  auto const tbl = create_random_table(
+    cycle_dtypes(data_types, num_cols), table_size_bytes{data_size}, table_data_profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
@@ -62,6 +62,7 @@ void BM_orc_write_varying_inout(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 void BM_orc_write_varying_options(benchmark::State& state)
@@ -82,7 +83,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
                                              int32_t(cudf::type_id::STRING),
                                              int32_t(cudf::type_id::LIST)});
 
-  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
@@ -98,6 +99,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 #define ORC_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                               \
