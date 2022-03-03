@@ -5892,7 +5892,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             other = other.reindex(combined_columns, copy=False).to_frame().T
             if not current_cols.equals(combined_columns):
                 self = self.reindex(columns=combined_columns)
-        elif isinstance(other, list) and not isinstance(other[0], DataFrame):
+        elif (
+            isinstance(other, list)
+            and other
+            and not isinstance(other[0], DataFrame)
+        ):
             other = DataFrame(other)
             cols = self._data.to_pandas_index()
             if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
