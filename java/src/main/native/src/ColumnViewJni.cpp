@@ -33,6 +33,7 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
+#include <cudf/maps/maps_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
@@ -1335,9 +1336,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
   JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_lookup(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
+    auto const maps_view = cudf::maps_column_view{*cv};
+    return release_as_jlong(maps_view.get_values_for(*ss_key));
   }
   CATCH_STD(env, 0);
 }

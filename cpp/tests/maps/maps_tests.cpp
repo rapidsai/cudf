@@ -118,15 +118,17 @@ cudf::column_view slice_off_ends(cudf::column_view const& col)
   return col.size() >= 2 ? cudf::slice(col, {1, col.size() - 1}).front() : col;
 }
 
+struct MapsTest : BaseFixture {};
+
 template <typename T>
-struct MapsTest : BaseFixture {
+struct MapsTypedTest : MapsTest {
 };
 
 using MapsTestTypes = Concat<IntegralTypesNotBool, FloatingPointTypes, ChronoTypes>;
 
-TYPED_TEST_SUITE(MapsTest, MapsTestTypes);
+TYPED_TEST_SUITE(MapsTypedTest, MapsTestTypes);
 
-TYPED_TEST(MapsTest, Construction)
+TYPED_TEST(MapsTypedTest, Construction)
 {
   using T                        = TypeParam;
   using list                     = lists<T>;
@@ -164,7 +166,7 @@ TYPED_TEST(MapsTest, Construction)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced_maps.values().parent(), sliced_expected_values);
 }
 
-TYPED_TEST(MapsTest, Lookup)
+TYPED_TEST(MapsTypedTest, Lookup)
 {
   using T = TypeParam;
 
