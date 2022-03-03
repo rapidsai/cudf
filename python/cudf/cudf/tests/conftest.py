@@ -34,12 +34,15 @@ def sample_n_frac(request):
     return n, frac
 
 
-def _random_state_tuple(seed_or_state_ctor):
-    def shape_checker(expected, got):
-        assert expected.shape == got.shape
+def shape_checker(expected, got):
+    assert expected.shape == got.shape
 
-    def exact_checker(expected, got):
-        assert_eq(expected, got)
+
+def exact_checker(expected, got):
+    assert_eq(expected, got)
+
+
+def _random_state_tuple(seed_or_state_ctor):
 
     if seed_or_state_ctor is None:
         return None, None, shape_checker
