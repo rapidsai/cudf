@@ -353,12 +353,38 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 for i, col in enumerate(columns_df._column_names):
                     self._frame[col].loc[key[0]] = value_cols[i]
             else:
-                for col in columns_df._column_names:
-                    # self._frame[col].loc[key[0]] =
-                    # value[columns_df.columns.get_loc(col)]
-                    self._frame[col].loc[key[0]] = value[
-                        columns_df._column_names.index(col)
-                    ]
+
+                if isinstance(value, cudf.DataFrame):
+                    if value.shape != self._frame.loc[key[0]].shape:
+                        raise ValueError(
+                            f"shape mismatch: value array of shape"
+                            f"{value.shape} could not be broadcast"
+                            f"to indexing result of shape"
+                            f"{self._frame.loc[key[0]].shape}"
+                        )
+                    for col in self._frame._column_names:
+                        if col in value:
+                            # breakpoint()
+                            self._frame._data[col][key[0]] = value.iloc[
+                                :, columns_df._column_names.index(col)
+                            ]
+                        else:
+                            self._frame._data[col][key[0]] = cudf.NA
+
+                else:
+                    value = np.array(value).T
+                    value = value.reshape((-1, value.shape[0]))
+                    if value.shape != self._frame.loc[key[0]].shape:
+                        raise ValueError(
+                            f"shape mismatch: value array of shape"
+                            f"{value.shape} could not be broadcast"
+                            f"to indexing result of shape"
+                            f"{self._frame.loc[key[0]].shape}"
+                        )
+                    for col in columns_df._column_names:
+                        self._frame._data[col][key[0]] = value[
+                            :, columns_df._column_names.index(col)
+                        ]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
