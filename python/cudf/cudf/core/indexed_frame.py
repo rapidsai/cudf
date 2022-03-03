@@ -8,7 +8,7 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Any, Callable, MutableMapping, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, List, MutableMapping, Optional, Tuple, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -26,6 +26,7 @@ from cudf.api.types import (
     is_list_dtype,
     is_list_like,
 )
+from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
@@ -191,6 +192,56 @@ class IndexedFrame(Frame):
         out = super()._from_data(data, *args, **kwargs)
         out._index = RangeIndex(out._data.nrows) if index is None else index
         return out
+
+    @classmethod
+    @annotate("FRAME_FROM_COLUMNS", color="green", domain="cudf_python")
+    def _from_columns(
+        cls,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` object from a list of columns.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        data_columns = columns
+
+        n_index_columns = len(index_names) if index_names else 0
+        index_columns = columns[:n_index_columns]
+        data_columns = columns[n_index_columns:]
+
+        out = super()._from_columns(data_columns, column_names)
+
+        if index_names is not None:
+            out._index = cudf.core.index._index_from_columns(index_columns)
+            if isinstance(out._index, cudf.MultiIndex):
+                out._index.names = index_names
+            else:
+                assert len(index_names) == 1
+                out._index.name = index_names[0]
+
+        return out
+
+    @annotate(
+        "FRAME_FROM_COLUMNS_LIKE_SELF", color="green", domain="cudf_python"
+    )
+    def _from_columns_like_self(
+        self,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` from a list of columns with metadata from self.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        frame = self.__class__._from_columns(
+            columns, column_names, index_names
+        )
+        return frame._copy_type_metadata(self, include_index=bool(index_names))
 
     @property
     def index(self):
