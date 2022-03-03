@@ -118,7 +118,8 @@ cudf::column_view slice_off_ends(cudf::column_view const& col)
   return col.size() >= 2 ? cudf::slice(col, {1, col.size() - 1}).front() : col;
 }
 
-struct MapsTest : BaseFixture {};
+struct MapsTest : BaseFixture {
+};
 
 template <typename T>
 struct MapsTypedTest : MapsTest {
