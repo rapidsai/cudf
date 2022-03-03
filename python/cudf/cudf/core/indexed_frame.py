@@ -1820,11 +1820,9 @@ class IndexedFrame(Frame):
             lib = np
         else:
             # Construct random state if `random_state` parameter is None or a
-            # seed. By default, cupy random state is used to sample from rows
-            # and numpy is used to sample from columns. In general, cuDF
-            # assumes the number of columns is much smaller than the number of
-            # rows, thus using numpy random states can avoid kernel launching
-            # overhead on creating a small gather map.
+            # seed. By default, cupy random state is used to sample rows
+            # and numpy is used to sample columns. This is because row data
+            # is stored on device, and the column objects are stored on host.
             lib = cp if axis == 0 else np
             random_state = lib.random.RandomState(seed=random_state)
 
