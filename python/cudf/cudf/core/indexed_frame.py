@@ -1869,7 +1869,7 @@ class IndexedFrame(Frame):
             )
         except NotImplementedError as e:
             raise NotImplementedError(
-                "Unsupported arguments for gather map generation."
+                "Random sampling with cupy does not support these inputs."
             ) from e
 
         return self._gather(
