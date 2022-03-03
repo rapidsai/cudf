@@ -176,6 +176,11 @@ class IndexedFrame(Frame):
         )
 
     @property
+    def _num_rows(self) -> int:
+        # Important to use the index because the data may be empty.
+        return len(self._index)
+
+    @property
     def index(self):
         """Get the labels for the rows."""
         return self._index
