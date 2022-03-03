@@ -8,7 +8,7 @@ import pickle
 from collections.abc import Sequence
 from functools import cached_property
 from numbers import Integral
-from typing import Any, List, MutableMapping, Optional, Tuple, Union
+from typing import Any, List, MutableMapping, Tuple, Union
 
 import cupy
 import numpy as np
@@ -278,14 +278,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
-        name: Any = None,
-    ) -> MultiIndex:
-        assert index is None
-        obj = cls.from_frame(cudf.DataFrame._from_data(data))
+    def _from_data(cls, data: MutableMapping, name: Any = None,) -> MultiIndex:
+        obj = cls.from_frame(cudf.DataFrame._from_data(data=data))
         if name is not None:
             obj.name = name
         return obj

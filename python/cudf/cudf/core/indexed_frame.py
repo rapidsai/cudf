@@ -8,7 +8,7 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, MutableMapping, Dict, Optional, Tuple, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -179,6 +179,18 @@ class IndexedFrame(Frame):
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
         return len(self._index)
+
+    @classmethod
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
+        *args,
+        **kwargs,
+    ):
+        out = super()._from_data(data, *args, **kwargs)
+        out._index = RangeIndex(out._data.nrows) if index is None else index
+        return out
 
     @property
     def index(self):
@@ -1067,7 +1079,9 @@ class IndexedFrame(Frame):
             result = result.sort_values(sort_col_id)
             del result[sort_col_id]
 
-        result = self.__class__._from_data(result._data, index=result.index)
+        result = self.__class__._from_data(
+            data=result._data, index=result.index
+        )
         result._data.multiindex = self._data.multiindex
         result._data._level_names = self._data._level_names
         result.index.names = self.index.names

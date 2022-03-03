@@ -181,13 +181,9 @@ class Frame(BinaryOperand, Scannable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
-    ):
+    def _from_data(cls, data: MutableMapping, *args, **kwargs):
         obj = cls.__new__(cls)
-        Frame.__init__(obj, data, index)
+        Frame.__init__(obj, data)
         return obj
 
     @classmethod
@@ -1320,10 +1316,13 @@ class Frame(BinaryOperand, Scannable):
             else:
                 filled_data[col_name] = col.copy(deep=True)
 
-        return self._mimic_inplace(
-            self._from_data(data=filled_data, index=self._index),
-            inplace=inplace,
+        ret = self._mimic_inplace(
+            self._from_data(data=filled_data), inplace=inplace,
         )
+        # TODO: Split this logic into the IndexedFrame class.
+        if isinstance(ret, cudf.core.indexed_frame.IndexedFrame):
+            ret._index = self._index
+        return ret
 
     @_cudf_nvtx_annotate
     def _drop_column(self, name):

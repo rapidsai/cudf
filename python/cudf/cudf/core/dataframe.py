@@ -612,7 +612,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 new_df = self._from_arrays(data, index=index, columns=columns)
 
             self._data = new_df._data
-            self.index = new_df._index
+            self._index = new_df._index
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
             if len(arr_interface["descr"]) == 1:
@@ -621,7 +621,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
-            self.index = new_df._index
+            self._index = new_df._index
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
@@ -632,7 +632,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     new_df = DataFrame(data=data, index=index)
 
                     self._data = new_df._data
-                    self.index = new_df._index
+                    self._index = new_df._index
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -650,6 +650,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     data, index=index, columns=columns, nan_as_null=nan_as_null
                 )
 
+        if self._data.nrows > 0 and self._data.nrows != len(self._index):
+            raise ValueError(
+                f"Shape of passed values is {self.shape}, indices imply "
+                f"({len(self._index)}, {self._num_columns})"
+            )
         if dtype:
             self._data = self.astype(dtype)._data
 
@@ -855,10 +860,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
         columns: Any = None,
+        *args,
+        **kwargs,
     ) -> DataFrame:
-        out = super()._from_data(data, index)
-        if index is None:
-            out.index = RangeIndex(out._data.nrows)
+        out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
         return out

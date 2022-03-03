@@ -113,7 +113,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
             index_class_type = IntervalIndex
     else:
         index_class_type = cudf.MultiIndex
-    return index_class_type._from_data(data, None, name)
+    return index_class_type._from_data(data, name)
 
 
 def _index_from_columns(
@@ -838,7 +838,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         return NotImplemented
 
+    @classmethod
     @_cudf_nvtx_annotate
+    def _from_data(
+        cls, data: MutableMapping, name: Any = None, *args, **kwargs
+    ) -> GenericIndex:
+        out = super()._from_data(data=data)
+        if name is not None:
+            out.name = name
+        return out
+
     def _binaryop(
         self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
     ) -> SingleColumnFrame:

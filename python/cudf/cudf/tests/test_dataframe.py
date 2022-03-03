@@ -1565,18 +1565,10 @@ def test_dataframe_cupy_wrong_dimensions():
 def test_dataframe_cupy_array_wrong_index():
     d_ary = cupy.empty((2, 3), dtype=np.int32)
 
-    with pytest.raises(
-        ValueError,
-        match="Length mismatch: Expected axis has 2 elements, "
-        "new values have 1 elements",
-    ):
+    with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(
-        ValueError,
-        match="Length mismatch: Expected axis has 2 elements, "
-        "new values have 1 elements",
-    ):
+    with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index="a")
 
 
