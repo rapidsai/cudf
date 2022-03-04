@@ -713,19 +713,21 @@ class IndexedFrame(Frame):
         )
 
     def _split(self, splits, keep_index=True):
+        columns_splitted = libcudf.copying.columns_split(
+            [
+                *(self._index._data.columns if keep_index else []),
+                *self._columns,
+            ],
+            splits,
+        )
+
         return [
             self._from_columns_like_self(
-                libcudf.copying.columns_split(
-                    [
-                        *(self._index._data.columns if keep_index else []),
-                        *self._columns,
-                    ],
-                    splits,
-                )[split_idx],
+                columns_splitted[i],
                 self._column_names,
                 self._index.names if keep_index else None,
             )
-            for split_idx in range(len(splits) + 1)
+            for i in range(len(splits) + 1)
         ]
 
     def add_prefix(self, prefix):
