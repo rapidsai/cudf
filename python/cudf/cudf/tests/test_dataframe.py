@@ -7200,7 +7200,9 @@ def test_sample_axis_0(
     )
     df = cudf.DataFrame.from_pandas(pdf)
 
-    pd_weights, gd_weights = make_weights_axis_0(len(pdf))
+    pd_weights, gd_weights = make_weights_axis_0(
+        len(pdf), isinstance(gd_random_state, np.random.RandomState)
+    )
     if (
         not replace
         and not isinstance(gd_random_state, np.random.RandomState)
@@ -7289,7 +7291,10 @@ def test_oversample_without_replace(n, frac, axis):
 @pytest.mark.parametrize("random_state", [None, cp.random.RandomState(42)])
 def test_sample_unsupported_arguments(random_state):
     df = cudf.DataFrame({"float": [0.05, 0.2, 0.3, 0.2, 0.25]})
-    with pytest.raises(NotImplementedError, match="Unsupported argument"):
+    with pytest.raises(
+        NotImplementedError,
+        match="Random sampling with cupy does not support these inputs.",
+    ):
         df.sample(
             n=2, replace=False, random_state=random_state, weights=[1] * 5
         )

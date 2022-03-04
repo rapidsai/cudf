@@ -96,21 +96,20 @@ def random_state_tuple_axis_0(request):
 
 
 @pytest.fixture(params=[None, "builtin_list", "ndarray"])
-def make_weights_axis_0(request, random_state_tuple_axis_0):
+def make_weights_axis_0(request):
     """Specific to `test_sample*_axis_0` tests.
     Only testing weights array that matches type with random state.
     """
-    _, gd_random_state, _ = random_state_tuple_axis_0
 
     if request.param is None:
-        return lambda _: (None, None)
+        return lambda *_: (None, None)
     elif request.param == "builtin-list":
-        return lambda size: ([1] * size, [1] * size)
+        return lambda size, _: ([1] * size, [1] * size)
     else:
 
-        def wrapped(size):
+        def wrapped(size, numpy_weights_for_cudf):
             # Uniform distribution, non-normalized
-            if isinstance(gd_random_state, np.random.RandomState):
+            if numpy_weights_for_cudf:
                 return np.ones(size), np.ones(size)
             else:
                 return np.ones(size), cp.ones(size)
