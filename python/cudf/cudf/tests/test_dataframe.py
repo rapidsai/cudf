@@ -7240,10 +7240,9 @@ def test_sample_axis_0(
 def test_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
 
-    expected = df.sample(
-        1024, replace=replace, random_state=random_state_lib(10)
-    )
-    out = df.sample(1024, replace=replace, random_state=random_state_lib(10))
+    n = 1024
+    expected = df.sample(n, replace=replace, random_state=random_state_lib(10))
+    out = df.sample(n, replace=replace, random_state=random_state_lib(10))
 
     assert_eq(expected, out)
 
