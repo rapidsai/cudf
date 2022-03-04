@@ -1300,7 +1300,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             stop = stop + num_rows
         stride = 1 if stride is None else stride
 
-        if start > stop and stride == 1:
+        if (stop - start) * stride <= 0:
             return self._empty_like(keep_index=True)
 
         start = len(self) if start > num_rows else start
