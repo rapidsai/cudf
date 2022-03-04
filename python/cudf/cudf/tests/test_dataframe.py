@@ -7184,21 +7184,27 @@ def test_sample_axis_1(
     checker(expected, got)
 
 
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5],
+                "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+                "int": [1, 3, 5, 4, 2],
+            },
+        ),
+        pd.Series([1, 2, 3, 4, 5]),
+    ],
+)
 @pytest.mark.parametrize("replace", [True, False])
 def test_sample_axis_0(
-    sample_n_frac, replace, random_state_tuple_axis_0, make_weights_axis_0
+    pdf, sample_n_frac, replace, random_state_tuple_axis_0, make_weights_axis_0
 ):
     n, frac = sample_n_frac
     pd_random_state, gd_random_state, checker = random_state_tuple_axis_0
 
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5],
-            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
-            "int": [1, 3, 5, 4, 2],
-        },
-    )
-    df = cudf.DataFrame.from_pandas(pdf)
+    df = cudf.from_pandas(pdf)
 
     pd_weights, gd_weights = make_weights_axis_0(
         len(pdf), isinstance(gd_random_state, np.random.RandomState)

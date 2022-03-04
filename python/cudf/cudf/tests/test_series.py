@@ -1590,44 +1590,6 @@ def test_fill_new_category():
     gs[0:1] = "d"
 
 
-@pytest.mark.parametrize("replace", [True, False])
-def test_sample(
-    sample_n_frac, replace, random_state_tuple_axis_0, make_weights_axis_0
-):
-    n, frac = sample_n_frac
-    pd_random_state, gd_random_state, checker = random_state_tuple_axis_0
-    psr = pd.Series([1, 2, 3, 4, 5])
-    sr = cudf.Series.from_pandas(psr)
-
-    pd_weights, gd_weights = make_weights_axis_0(len(psr))
-    if (
-        not replace
-        and not isinstance(gd_random_state, np.random.RandomState)
-        and gd_weights is not None
-    ):
-        pytest.skip(
-            "`cupy.random.RandomState` doesn't support weighted sampling "
-            "without replacement."
-        )
-
-    expected = psr.sample(
-        n=n,
-        frac=frac,
-        replace=replace,
-        weights=pd_weights,
-        random_state=pd_random_state,
-    )
-
-    got = sr.sample(
-        n=n,
-        frac=frac,
-        replace=replace,
-        weights=gd_weights,
-        random_state=gd_random_state,
-    )
-    checker(expected, got)
-
-
 @pytest.mark.parametrize(
     "data",
     [
