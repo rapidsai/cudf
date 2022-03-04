@@ -42,7 +42,7 @@ struct Functor {
 };
 
 template <class Float, FunctorType ft>
-struct Functor<Float, ft, typename std::enable_if_t<std::is_floating_point_v<Float>>> {
+struct Functor<Float, ft, std::enable_if_t<std::is_floating_point_v<Float>>> {
   static __device__ Float f(Float x)
   {
     if (ft == BANDWIDTH_BOUND) {

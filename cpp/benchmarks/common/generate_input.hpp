@@ -128,9 +128,7 @@ struct distribution_params;
  * @brief Numeric values are parameterized with a distribution type and bounds of the same type.
  */
 template <typename T>
-struct distribution_params<
-  T,
-  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
+struct distribution_params<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   distribution_id id;
   T lower_bound;
   T upper_bound;
@@ -140,7 +138,7 @@ struct distribution_params<
  * @brief Booleans are parameterized with the probability of getting `true` value.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, bool>>> {
   double probability_true;
 };
 
@@ -148,7 +146,7 @@ struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, bool>>
  * @brief Timestamps and durations are parameterized with a distribution type and int64_t bounds.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+struct distribution_params<T, std::enable_if_t<cudf::is_chrono<T>()>> {
   distribution_id id;
   int64_t lower_bound;
   int64_t upper_bound;
@@ -158,7 +156,7 @@ struct distribution_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  * @brief Strings are parameterized by the distribution of their length, as an integral value.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   distribution_params<uint32_t> length_params;
 };
 
@@ -167,7 +165,7 @@ struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::
  * the element type.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
   cudf::type_id element_type;
   distribution_params<uint32_t> length_params;
   cudf::size_type max_depth;
@@ -175,7 +173,7 @@ struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::
 
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
 /**
@@ -225,8 +223,7 @@ class data_profile {
 
  public:
   template <typename T,
-            typename std::enable_if_t<!std::is_same_v<T, bool> && cuda::std::is_integral_v<T>, T>* =
-              nullptr>
+            std::enable_if_t<!std::is_same_v<T, bool> && cuda::std::is_integral_v<T>, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -239,7 +236,7 @@ class data_profile {
     }
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = float_params.find(cudf::type_to_id<T>());
@@ -258,7 +255,7 @@ class data_profile {
     return distribution_params<T>{bool_probability};
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -284,7 +281,7 @@ class data_profile {
     return list_dist_desc;
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   distribution_params<typename T::rep> get_distribution_params() const
   {
     using rep = typename T::rep;
@@ -307,7 +304,7 @@ class data_profile {
   // discrete distributions (integers, strings, lists). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
+            std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
@@ -331,7 +328,7 @@ class data_profile {
   // have continuous distributions (floating point types). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
+            std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,

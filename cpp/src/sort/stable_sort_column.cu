@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ struct column_stable_sorted_order_fn {
    * @param indices Output sorted indices
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   void faster_stable_sort(column_view const& input,
                           mutable_column_view& indices,
                           rmm::cuda_stream_view stream)
@@ -38,7 +38,7 @@ struct column_stable_sorted_order_fn {
     thrust::stable_sort_by_key(
       rmm::exec_policy(stream), d_col.begin<T>(), d_col.end<T>(), indices.begin<size_type>());
   }
-  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   void faster_stable_sort(column_view const&, mutable_column_view&, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Only fixed-width types are suitable for faster stable sorting");
@@ -55,8 +55,7 @@ struct column_stable_sorted_order_fn {
    * @param null_precedence How null rows are to be ordered
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  template <typename T,
-            typename std::enable_if_t<cudf::is_relationally_comparable<T, T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_relationally_comparable<T, T>()>* = nullptr>
   void operator()(column_view const& input,
                   mutable_column_view& indices,
                   bool ascending,
@@ -74,8 +73,7 @@ struct column_stable_sorted_order_fn {
       faster_stable_sort<T>(input, indices, stream);
     }
   }
-  template <typename T,
-            typename std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>* = nullptr>
   void operator()(column_view const&, mutable_column_view&, bool, null_order, rmm::cuda_stream_view)
   {
     CUDF_FAIL("Column type must be relationally comparable");
