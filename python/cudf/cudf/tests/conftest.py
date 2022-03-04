@@ -42,22 +42,12 @@ def exact_checker(expected, got):
     assert_eq(expected, got)
 
 
-def _random_state_tuple(seed_or_state_ctor):
-
-    if seed_or_state_ctor is None:
-        return None, None, shape_checker
-    elif isinstance(seed_or_state_ctor, int):
-        return seed_or_state_ctor, seed_or_state_ctor, shape_checker
-    elif seed_or_state_ctor == np.random.RandomState:
-        return seed_or_state_ctor(42), seed_or_state_ctor(42), exact_checker
-    elif seed_or_state_ctor == cp.random.RandomState:
-        return np.random.RandomState(42), seed_or_state_ctor(42), shape_checker
-
-    assert False, "No random state is specialized beyond the above types."
-
-
 @pytest.fixture(
-    params=[None, 42, np.random.RandomState],
+    params=[
+        (None, None, shape_checker),
+        (42, 42, shape_checker),
+        (np.random.RandomState(42), np.random.RandomState(42), exact_checker),
+    ],
     ids=["None", "IntSeed", "NumpyRandomState"],
 )
 def random_state_tuple_axis_1(request):
@@ -75,11 +65,16 @@ def random_state_tuple_axis_1(request):
     Each column above stands for one valid parameter combination and check.
     """
 
-    return _random_state_tuple(request.param)
+    return request.param
 
 
 @pytest.fixture(
-    params=[None, 42, np.random.RandomState, cp.random.RandomState],
+    params=[
+        (None, None, shape_checker),
+        (42, 42, shape_checker),
+        (np.random.RandomState(42), np.random.RandomState(42), exact_checker),
+        (np.random.RandomState(42), cp.random.RandomState(42), shape_checker),
+    ],
     ids=["None", "IntSeed", "NumpyRandomState", "CupyRandomState"],
 )
 def random_state_tuple_axis_0(request):
@@ -97,7 +92,7 @@ def random_state_tuple_axis_0(request):
     Each column above stands for one valid parameter combination and check.
     """
 
-    return _random_state_tuple(request.param)
+    return request.param
 
 
 @pytest.fixture(params=[None, "builtin_list", "ndarray"])
