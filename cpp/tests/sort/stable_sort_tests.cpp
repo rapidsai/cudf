@@ -20,14 +20,12 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <type_traits>
 #include <vector>
 
 namespace cudf {
@@ -43,10 +41,8 @@ void run_stable_sort_test(table_view input,
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
 }
 
-using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-                                     cudf::test::FloatingPointTypes,
-                                     cudf::test::DurationTypes,
-                                     cudf::test::TimestampTypes>;
+using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integers, floats and bool
+                                     cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
 struct StableSort : public BaseFixture {

@@ -20,14 +20,12 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <type_traits>
 #include <vector>
 
 namespace cudf {
@@ -50,10 +48,8 @@ void run_sort_test(table_view input,
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
 }
 
-using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-                                     cudf::test::FloatingPointTypes,
-                                     cudf::test::DurationTypes,
-                                     cudf::test::TimestampTypes>;
+using TestTypes = cudf::test::Concat<cudf::test::NumericTypes,  // include integers, floats and bool
+                                     cudf::test::ChronoTypes>;  // include timestamps and durations
 
 template <typename T>
 struct Sort : public BaseFixture {
@@ -555,7 +551,12 @@ TYPED_TEST(Sort, WithStructColumnCombinationsWithoutNulls)
   std::vector<order> column_order{order::DESCENDING};
 
   // desc_nulls_first
-  fixed_width_column_wrapper<int32_t> expected1{{3, 5, 6, 7, 2, 4, 1, 0}};
+  auto const expected1 = []() {
+    if constexpr (std::is_same_v<T, bool>) {
+      return fixed_width_column_wrapper<int32_t>{{3, 5, 6, 7, 1, 2, 4, 0}};
+    }
+    return fixed_width_column_wrapper<int32_t>{{3, 5, 6, 7, 2, 4, 1, 0}};
+  }();
   auto got = sorted_order(input, column_order, {null_order::AFTER});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, got->view());
   // Run test for sort and sort_by_key
@@ -577,7 +578,12 @@ TYPED_TEST(Sort, WithStructColumnCombinationsWithoutNulls)
   run_sort_test(input, expected3, column_order2, {null_order::BEFORE});
 
   // asce_nulls_last
-  fixed_width_column_wrapper<int32_t> expected4{{0, 1, 2, 4, 7, 6, 3, 5}};
+  auto const expected4 = []() {
+    if constexpr (std::is_same_v<T, bool>) {
+      return fixed_width_column_wrapper<int32_t>{{0, 2, 4, 1, 7, 6, 3, 5}};
+    }
+    return fixed_width_column_wrapper<int32_t>{{0, 1, 2, 4, 7, 6, 3, 5}};
+  }();
   got = sorted_order(input, column_order2, {null_order::AFTER});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected4, got->view());
   // Run test for sort and sort_by_key
