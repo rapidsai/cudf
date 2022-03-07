@@ -404,10 +404,12 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
     return indices
 
 
-def cudf_annotate(func, color="rapids", domain="cudf_python"):
+def cudf_nvtx_annotate(func, color="rapids", domain="cudf_python"):
     return annotate(message=func.__qualname__, color=color, domain=domain)(
         func
     )
 
 
-dask_cudf_annotate = partial(cudf_annotate, domain="dask_cudf_python")
+dask_cudf_nvtx_annotate = partial(
+    cudf_nvtx_annotate, domain="dask_cudf_python"
+)

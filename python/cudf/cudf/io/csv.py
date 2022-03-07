@@ -8,10 +8,10 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
-from cudf.utils.utils import cudf_annotate
+from cudf.utils.utils import cudf_nvtx_annotate
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -106,7 +106,7 @@ def read_csv(
     )
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 @ioutils.doc_to_csv()
 def to_csv(
     df,

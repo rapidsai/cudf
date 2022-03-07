@@ -29,7 +29,7 @@ from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
-from cudf.utils.utils import cudf_annotate
+from cudf.utils.utils import cudf_nvtx_annotate
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -317,7 +317,7 @@ class IndexedFrame(Frame):
         """
         return self._iloc_indexer_type(self)
 
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def sort_index(
         self,
         axis=0,
@@ -817,7 +817,7 @@ class IndexedFrame(Frame):
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
 
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def _apply(self, func, kernel_getter, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
         if kwargs:
@@ -1694,7 +1694,7 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def sample(
         self,
         n=None,

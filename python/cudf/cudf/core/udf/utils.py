@@ -18,7 +18,7 @@ from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.utils import cudf_annotate
+from cudf.utils.utils import cudf_nvtx_annotate
 
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
@@ -30,7 +30,7 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -167,7 +167,7 @@ def _generate_cache_key(frame, func: Callable):
     )
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _compile_or_get(frame, func, args, kernel_getter=None):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a

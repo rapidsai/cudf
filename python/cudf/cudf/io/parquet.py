@@ -14,10 +14,10 @@ from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
-from cudf.utils.utils import cudf_annotate
+from cudf.utils.utils import cudf_nvtx_annotate
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _write_parquet(
     df,
     paths,
@@ -75,7 +75,7 @@ def _write_parquet(
 
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
-@cudf_annotate
+@cudf_nvtx_annotate
 def write_to_dataset(
     df,
     root_path,
@@ -164,7 +164,7 @@ def write_to_dataset(
 
 
 @ioutils.doc_read_parquet_metadata()
-@cudf_annotate
+@cudf_nvtx_annotate
 def read_parquet_metadata(path):
     """{docstring}"""
 
@@ -177,7 +177,7 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _process_dataset(
     paths, fs, filters=None, row_groups=None, categorical_partitions=True,
 ):
@@ -313,7 +313,7 @@ def _process_dataset(
 
 
 @ioutils.doc_read_parquet()
-@cudf_annotate
+@cudf_nvtx_annotate
 def read_parquet(
     filepath_or_buffer,
     engine="cudf",
@@ -441,7 +441,7 @@ def read_parquet(
     )
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _parquet_to_frame(
     paths_or_buffers,
     *args,
@@ -509,7 +509,7 @@ def _parquet_to_frame(
     )
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _read_parquet(
     filepaths_or_buffers,
     engine,
@@ -543,7 +543,7 @@ def _read_parquet(
 
 
 @ioutils.doc_to_parquet()
-@cudf_annotate
+@cudf_nvtx_annotate
 def to_parquet(
     df,
     path,
@@ -655,7 +655,7 @@ def _generate_filename():
     return uuid4().hex + ".parquet"
 
 
-@cudf_annotate
+@cudf_nvtx_annotate
 def _get_partitioned(
     df,
     root_path,
@@ -699,7 +699,7 @@ ParquetWriter = libparquet.ParquetWriter
 
 
 class ParquetDatasetWriter:
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def __init__(
         self,
         path,
@@ -776,7 +776,7 @@ class ParquetDatasetWriter:
         self.path_cw_map: Dict[str, int] = {}
         self.filename = None
 
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
@@ -833,7 +833,7 @@ class ParquetDatasetWriter:
         self.path_cw_map.update({k: new_cw_idx for k in new_paths})
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def close(self, return_metadata=False):
         """
         Close all open files and optionally return footer metadata as a binary

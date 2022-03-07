@@ -17,7 +17,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
 from cudf.core.mixins import Reducible
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import GetAttrGetItemMixin, cudf_annotate
+from cudf.utils.utils import GetAttrGetItemMixin, cudf_nvtx_annotate
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -193,7 +193,7 @@ class GroupBy(Serializable, Reducible):
     def _groupby(self):
         return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
 
-    @cudf_annotate
+    @cudf_nvtx_annotate
     def agg(self, func):
         """
         Apply aggregation(s) to the groups.
