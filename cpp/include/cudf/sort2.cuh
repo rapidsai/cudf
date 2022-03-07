@@ -16,24 +16,9 @@
 
 #pragma once
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operator2.cuh>
-#include <cudf/table/row_operator3.cuh>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
-
-#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
