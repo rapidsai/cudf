@@ -1,17 +1,17 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
-from nvtx import annotate
 from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
+from cudf.utils.utils import cudf_annotate
 
 
-@annotate("READ_CSV", color="purple", domain="cudf_python")
+@cudf_annotate
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -106,7 +106,7 @@ def read_csv(
     )
 
 
-@annotate("WRITE_CSV", color="purple", domain="cudf_python")
+@cudf_annotate
 @ioutils.doc_to_csv()
 def to_csv(
     df,

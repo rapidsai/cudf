@@ -6,7 +6,6 @@ from typing import Set
 
 import numpy as np
 import pandas as pd
-from nvtx import annotate
 
 from dask.base import tokenize
 from dask.dataframe.core import (
@@ -20,6 +19,7 @@ from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
 import cudf
+from cudf.utils.utils import dask_cudf_annotate
 
 SUPPORTED_AGGS = (
     "count",
@@ -36,19 +36,13 @@ SUPPORTED_AGGS = (
 
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
-    @annotate(
-        "CudfDataFrameGroupBy_INIT", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def __init__(self, *args, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
-    @annotate(
-        "CudfDataFrameGroupBy_GETITEM",
-        color="green",
-        domain="dask_cudf_python",
-    )
+    @dask_cudf_annotate
     def __getitem__(self, key):
         if isinstance(key, list):
             g = CudfDataFrameGroupBy(
@@ -62,9 +56,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
-    @annotate(
-        "CudfDataFrameGroupBy_MEAN", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -78,11 +70,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             as_index=self.as_index,
         )
 
-    @annotate(
-        "CudfDataFrameGroupBy_COLLECT",
-        color="green",
-        domain="dask_cudf_python",
-    )
+    @dask_cudf_annotate
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -96,11 +84,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             as_index=self.as_index,
         )
 
-    @annotate(
-        "CudfDataFrameGroupBy_AGGREGATE",
-        color="green",
-        domain="dask_cudf_python",
-    )
+    @dask_cudf_annotate
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
@@ -140,17 +124,13 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
 
 class CudfSeriesGroupBy(SeriesGroupBy):
-    @annotate(
-        "CudfSeriesGroupBy_INIT", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def __init__(self, *args, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
-    @annotate(
-        "CudfSeriesGroupBy_MEAN", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -164,9 +144,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
-    @annotate(
-        "CudfSeriesGroupBy_STD", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def std(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -180,9 +158,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
-    @annotate(
-        "CudfSeriesGroupBy_VAR", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def var(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -196,9 +172,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
-    @annotate(
-        "CudfSeriesGroupBy_COLLECT", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -212,9 +186,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
-    @annotate(
-        "CudfSeriesGroupBy_AGGREGATE", color="green", domain="dask_cudf_python"
-    )
+    @dask_cudf_annotate
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
@@ -245,7 +217,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )
 
 
-@annotate("groupby_agg", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def groupby_agg(
     ddf,
     gb_cols,
@@ -412,7 +384,7 @@ def groupby_agg(
     return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
-@annotate("_redirect_aggs", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def _redirect_aggs(arg):
     """Redirect aggregations to their corresponding name in cuDF"""
     redirects = {
@@ -439,7 +411,7 @@ def _redirect_aggs(arg):
     return redirects.get(arg, arg)
 
 
-@annotate("_is_supported", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def _is_supported(arg, supported: set):
     """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
@@ -465,7 +437,7 @@ def _make_name(*args, sep="_"):
     return sep.join(_args)
 
 
-@annotate("_groupby_partition_agg", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def _groupby_partition_agg(
     df, gb_cols, aggs, columns, split_out, dropna, sort, sep
 ):
@@ -523,7 +495,7 @@ def _groupby_partition_agg(
     return output
 
 
-@annotate("_tree_node_agg", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     """Node in groupby-aggregation reduction tree.
 
@@ -558,7 +530,7 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     return gb
 
 
-@annotate("_var_agg", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     """Calculate variance (given count, sum, and sum-squared columns)."""
 
@@ -580,7 +552,7 @@ def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     return var
 
 
-@annotate("_finalize_gb_agg", color="green", domain="dask_cudf_python")
+@dask_cudf_annotate
 def _finalize_gb_agg(
     gb,
     gb_cols,

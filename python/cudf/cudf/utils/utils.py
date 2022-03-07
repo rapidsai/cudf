@@ -4,11 +4,13 @@ import decimal
 import functools
 import os
 import traceback
+from functools import partial
 from typing import FrozenSet, Set, Union
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import rmm
 
@@ -400,3 +402,12 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
     if (indices == cp.arange(start, stop, step)).all():
         return slice(start, stop, step)
     return indices
+
+
+def cudf_annotate(func, color="rapids", domain="cudf_python"):
+    return annotate(message=func.__qualname__, color=color, domain=domain)(
+        func
+    )
+
+
+dask_cudf_annotate = partial(cudf_annotate, domain="dask_cudf_python")
