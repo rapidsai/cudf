@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -217,6 +217,8 @@ struct whitespace_token_reader_fn {
   }
 };
 
+}  // namespace
+
 // The output is one list item per string
 template <typename TokenCounter, typename TokenReader>
 std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
@@ -287,27 +289,6 @@ std::unique_ptr<column> split_record(
                            mr);
   }
 }
-}  // namespace
-
-std::unique_ptr<column> split_record(strings_column_view const& strings,
-                                     string_scalar const& delimiter,
-                                     size_type maxsplit,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-{
-  return split_record<detail::Dir::FORWARD>(
-    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
-                                      string_scalar const& delimiter,
-                                      size_type maxsplit,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
-{
-  return split_record<detail::Dir::BACKWARD>(
-    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
-}
 
 }  // namespace detail
 
@@ -319,7 +300,8 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record(strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::split_record<detail::Dir::FORWARD>(
+    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
@@ -328,7 +310,8 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_record(strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::split_record<detail::Dir::BACKWARD>(
+    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

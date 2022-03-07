@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <hash/hash_allocator.cuh>
-
 #include <nvtext/bpe_tokenize.hpp>
+
+#include <hash/hash_allocator.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>

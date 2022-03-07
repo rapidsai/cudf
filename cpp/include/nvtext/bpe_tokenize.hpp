@@ -66,10 +66,10 @@ struct bpe_merge_pairs {
  * @endcode
  *
  * The pairs are expected to be ordered in the file by their rank
- * relative to each other. A pair will be is in priority over
+ * relative to each other. A pair earlier in the file has priority over
  * any pairs below it.
  *
- * @param filename_merges Local file path of pairs encoded in UTF-8
+ * @param filename_merges Local file path of pairs encoded in UTF-8.
  * @param mr Memory resource to allocate any returned objects.
  */
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
@@ -80,7 +80,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  * @brief Byte pair encode the input strings.
  *
  * This will split each string on whitespace, perform the encoding,
- * and then build the output using the given `separator`.
+ * and then build the output column using the given `separator`.
  *
  * The encoding algorithm rebuilds each string by matching substrings
  * in the `merge_pairs` table and iteratively removing the minimum ranked pair
@@ -91,7 +91,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  * mps = load_merges_file("merges.txt")
  * input = ["test sentence", "thisis test"]
  * result = byte_pair_encoding(input, mps)
- * result is now ["test sent tence", "this is test"]
+ * result is now ["test sent ence", "this is test"]
  * @endcode
  *
  * @throw cudf::logic_error if `merge_pairs` is empty

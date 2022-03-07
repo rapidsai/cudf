@@ -83,7 +83,7 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
   if (line.substr(0, version.size()).compare(version) == 0) { std::getline(merges_file, line); }
 
   // This is a text file delimited only by CR/LF.
-  // Look into using the CSV reader to load the strings column instead.
+  // TODO: Look into using the CSV reader to load the strings column instead.
   while (!line.empty()) {
     chars.insert(chars.end(), std::cbegin(line), std::cend(line));
     offsets.push_back(offsets.back() + line.length());
@@ -100,10 +100,12 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::strings_column_view const& input, rmm::cuda_stream_view stream)
 {
+  // Ensure capacity is at least (size*10/7) as documented here:
+  // https://github.com/NVIDIA/cuCollections/blob/6ec8b6dcdeceea07ab4456d32461a05c18864411/include/cuco/static_map.cuh#L179-L182
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
-    static_cast<size_t>(input.size() * 2),  // ensure capacity is at least (size*10/7)
-    std::numeric_limits<hash_value_type>::max(),
-    -1,  // empty-value is not used
+    static_cast<size_t>(input.size() * 2),        // capacity is 2x;
+    std::numeric_limits<hash_value_type>::max(),  // empty key;
+    -1,                                           // empty value is not used
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
