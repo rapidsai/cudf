@@ -38,7 +38,7 @@ namespace {
  * scalar
  */
 struct scalar_as_column_view {
-  using return_type = typename std::pair<decltype(column_view{}), std::unique_ptr<column>>;
+  using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
   template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
   return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {

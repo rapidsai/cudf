@@ -318,19 +318,24 @@ class element_relational_comparator {
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param has_nulls Indicates if either input column contains nulls.
    * @param null_precedence Indicates how null values are ordered with other values
+   * @param nan_result Default set to EQUIVALENT, which will produce results consitent with `nan ==
+   * nan` and `nan > non_nan`. If not equivalent, it specifies what value should be returned if
+   * either element is nan.
    */
-  __host__ __device__ element_relational_comparator(Nullate has_nulls,
-                                                    column_device_view lhs,
-                                                    column_device_view rhs,
-                                                    null_order null_precedence)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}
+  __host__ __device__
+  element_relational_comparator(Nullate has_nulls,
+                                column_device_view lhs,
+                                column_device_view rhs,
+                                null_order null_precedence,
+                                weak_ordering nan_result = weak_ordering::EQUIVALENT)
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}, nan_result{nan_result}
   {
   }
 
   __host__ __device__ element_relational_comparator(Nullate has_nulls,
                                                     column_device_view lhs,
                                                     column_device_view rhs)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nan_result{weak_ordering::EQUIVALENT}
   {
   }
 
@@ -355,44 +360,17 @@ class element_relational_comparator {
         return null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }
-
-    return relational_compare(lhs.element<Element>(lhs_element_index),
-                              rhs.element<Element>(rhs_element_index));
-  }
-
-  /**
-   * @brief Performs a relational comparison between the specified elements
-   *
-   * @param lhs_element_index The index of the first element
-   * @param rhs_element_index The index of the second element
-   * @param nan_result specifies what value should be returned if either element is `nan`
-   * @return Indicates the relationship between the elements in
-   * the `lhs` and `rhs` columns.
-   */
-  template <typename Element,
-            std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index,
-                                      weak_ordering nan_result) const noexcept
-  {
-    if (nulls) {
-      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
-
-      if (lhs_is_null or rhs_is_null) {  // at least one is null
-        return null_compare(lhs_is_null, rhs_is_null, null_precedence);
-      }
-    }
-
-    return relational_compare(
-      lhs.element<Element>(lhs_element_index), rhs.element<Element>(rhs_element_index), nan_result);
+    return nan_result == weak_ordering::EQUIVALENT
+             ? relational_compare(lhs.element<Element>(lhs_element_index),
+                                  rhs.element<Element>(rhs_element_index))
+             : relational_compare(lhs.element<Element>(lhs_element_index),
+                                  rhs.element<Element>(rhs_element_index),
+                                  nan_result);
   }
 
   template <typename Element,
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index,
-                                      weak_ordering nan_result = weak_ordering::LESS)
+  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
     return weak_ordering::LESS;
@@ -403,6 +381,7 @@ class element_relational_comparator {
   column_device_view rhs;
   Nullate nulls;
   null_order null_precedence{};
+  weak_ordering nan_result;
 };
 
 /**
@@ -477,15 +456,16 @@ class row_lexicographic_comparator {
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
       auto comparator =
-        element_relational_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence};
+        NanConfig
+          ? element_relational_comparator{_nulls,
+                                          _lhs.column(i),
+                                          _rhs.column(i),
+                                          null_precedence,
+                                          ascending ? weak_ordering::GREATER : weak_ordering::LESS}
+          : element_relational_comparator{
+              _nulls, _lhs.column(i), _rhs.column(i), null_precedence, weak_ordering::EQUIVALENT};
       weak_ordering state =
-        NanConfig && is_floating_point(_lhs.column(i).type())
-          ? cudf::type_dispatcher(_lhs.column(i).type(),
-                                  comparator,
-                                  lhs_index,
-                                  rhs_index,
-                                  ascending ? weak_ordering::GREATER : weak_ordering::LESS)
-          : cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 

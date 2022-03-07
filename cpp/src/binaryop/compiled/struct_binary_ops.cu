@@ -46,18 +46,9 @@ void struct_compare(mutable_column_view& out,
 }
 }  //  namespace binops::compiled::detail
 
-#define INSTANTIATE_STRUCT_COMPARE(comp_op)                        \
-  template void binops::compiled::detail::struct_compare<comp_op>( \
-    mutable_column_view&, comp_op, bool, bool, bool, rmm::cuda_stream_view);
-
+#define INSTANTIATE_STRUCT_COMPARE(...)                                \
+  template void binops::compiled::detail::struct_compare<__VA_ARGS__>( \
+    mutable_column_view&, __VA_ARGS__, bool, bool, bool, rmm::cuda_stream_view);
 INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<nullate::DYNAMIC>);
-// INSTANTIATE_STRUCT_COMPARE does not work with the optional template argument
-template void
-binops::compiled::detail::struct_compare<row_lexicographic_comparator<nullate::DYNAMIC, true>>(
-  mutable_column_view&,
-  row_lexicographic_comparator<nullate::DYNAMIC, true>,
-  bool,
-  bool,
-  bool,
-  rmm::cuda_stream_view);
+INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<nullate::DYNAMIC, true>);
 }  //  namespace cudf

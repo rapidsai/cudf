@@ -29,6 +29,8 @@ void dispatch_equality_op(mutable_column_view& out,
                           binary_operator op,
                           rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
+               "Unsupported operator for these types");
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
     auto const nullability =
       structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
@@ -54,8 +56,6 @@ void dispatch_equality_op(mutable_column_view& out,
         is_rhs_scalar,
         op == binary_operator::NOT_EQUAL,
         stream);
-    else
-      CUDF_FAIL("Unsupported operator for these types");
   } else {
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
     auto outd         = mutable_column_device_view::create(out, stream);
