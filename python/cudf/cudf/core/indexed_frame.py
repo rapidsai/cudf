@@ -8,7 +8,18 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Any, Callable, Dict, List, MutableMapping, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 from uuid import uuid4
 
 import cupy as cp
