@@ -237,7 +237,6 @@ TEST_F(RollingStructTest, NoNullStructsMinMaxCount)
 
   auto const input_before_sliced = [] {
     auto constexpr dont_care{0};
-    // input_original needs to be static so it will not be destroyed.
     auto child1 = strings_col{"1dont_care",
                               "1dont_care",
                               "@dont_care",
