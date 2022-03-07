@@ -204,7 +204,7 @@ struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_vi
     }
 
     bool output_is_valid = (count >= min_periods);
-    // Use the setinel value (i.e., -1) for the output will help identify null elements while
+    // Use the sentinel value (i.e., -1) for the output will help identify null elements while
     // gathering for Min and Max.
     output.element<OutputType>(current_index) = output_is_valid ? val_index : default_output;
 
@@ -243,7 +243,7 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
                                    [&input](size_type idx) { return input.is_valid_nocheck(idx); })
                 : end_index - start_index;
 
-    // Use the setinel value (i.e., -1) for the output will help identify null elements while
+    // Use the sentinel value (i.e., -1) for the output will help identify null elements while
     // gathering for Min and Max.
     output.element<OutputType>(current_index) =
       (valid_count >= min_periods) ? thrust::reduce(thrust::seq,
@@ -1080,44 +1080,39 @@ struct rolling_window_launcher {
     auto const do_rolling = [&](auto const& device_op) {
       auto output = make_fixed_width_column(
         target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
-      auto valid_count = size_type{0};
 
-      {
-        auto const d_inp_ptr         = column_device_view::create(input, stream);
-        auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
-        auto const d_out_ptr = mutable_column_device_view::create(output->mutable_view(), stream);
-        auto d_valid_count   = rmm::device_scalar<size_type>{0, stream};
+      auto const d_inp_ptr         = column_device_view::create(input, stream);
+      auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
+      auto const d_out_ptr = mutable_column_device_view::create(output->mutable_view(), stream);
+      auto d_valid_count   = rmm::device_scalar<size_type>{0, stream};
 
-        auto constexpr block_size = 256;
-        auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
-        using OutType             = device_storage_type_t<target_type_t<InputType, op>>;
+      auto constexpr block_size = 256;
+      auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
+      using OutType             = device_storage_type_t<target_type_t<InputType, op>>;
 
-        if (input.has_nulls()) {
-          gpu_rolling<OutType, block_size, true>
-            <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
-                                                                 *d_default_out_ptr,
-                                                                 *d_out_ptr,
-                                                                 d_valid_count.data(),
-                                                                 device_op,
-                                                                 preceding_window_begin,
-                                                                 following_window_begin);
-        } else {
-          gpu_rolling<OutType, block_size, false>
-            <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
-                                                                 *d_default_out_ptr,
-                                                                 *d_out_ptr,
-                                                                 d_valid_count.data(),
-                                                                 device_op,
-                                                                 preceding_window_begin,
-                                                                 following_window_begin);
-        }
-        valid_count = d_valid_count.value(stream);
-
-        // Check the stream for debugging.
-        CHECK_CUDA(stream.value());
+      if (input.has_nulls()) {
+        gpu_rolling<OutType, block_size, true>
+          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
+                                                               *d_default_out_ptr,
+                                                               *d_out_ptr,
+                                                               d_valid_count.data(),
+                                                               device_op,
+                                                               preceding_window_begin,
+                                                               following_window_begin);
+      } else {
+        gpu_rolling<OutType, block_size, false>
+          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
+                                                               *d_default_out_ptr,
+                                                               *d_out_ptr,
+                                                               d_valid_count.data(),
+                                                               device_op,
+                                                               preceding_window_begin,
+                                                               following_window_begin);
       }
 
+      auto const valid_count = d_valid_count.value(stream);
       output->set_null_count(output->size() - valid_count);
+
       return output;
     };  // end do_rolling
 
