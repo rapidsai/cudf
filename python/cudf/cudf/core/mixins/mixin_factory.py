@@ -86,14 +86,18 @@ def _should_define_operation(cls, operation, base_operation_name):
     # At this point we know that the class has the operation defined but it
     # also overrides the base operation. Since this function is called before
     # the operation is defined on the current class, we know that it inherited
-    # the operation from a parent. We therefore have two possibilities:
+    # the operation from a parent. We therefore have three possibilities:
     # 1. A parent class manually defined the operation. That override takes
     #    precedence even if the current class defined the base operation.
     # 2. A parent class has an auto-generated operation, i.e. it is of type
     #    Operation and was created by OperationMixin.__init_subclass__. The
     #    current class must override it so that its base operation is used
     #    rather than the parent's base operation.
+    # 3. The method is defined for all classes, i.e. it is a method of object.
     for base_cls in cls.__mro__:
+        # We always override methods defined for object.
+        if base_cls is object:
+            return True
         # The first attribute in the MRO is the one that will be used.
         if operation in base_cls.__dict__:
             return isinstance(base_cls.__dict__[operation], Operation)
@@ -216,6 +220,7 @@ def _create_delegating_mixin(
             # Only add the valid set of operations for a particular class.
             valid_operations = set()
             for base_cls in cls.__mro__:
+                # Check for sentinel indicating that all operations are valid.
                 valid_operations |= getattr(base_cls, validity_attr, set())
 
             invalid_operations = valid_operations - supported_operations
@@ -251,9 +256,8 @@ def _create_delegating_mixin(
     )
 
     setattr(OperationMixin, base_operation_name, _operation)
-    # This attribute is set in case lookup is convenient at a later point, but
-    # it is not strictly necessary since `supported_operations` is part of the
-    # closure associated with the class's creation.
+    # Making this attribute available makes it easy for subclasses to indicate
+    # that all supported operations for this mixin are valid.
     setattr(OperationMixin, supported_attr, supported_operations)
 
     return OperationMixin
