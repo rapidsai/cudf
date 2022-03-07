@@ -344,6 +344,8 @@ def assert_column_memory_eq(
     """
     assert lhs.base_data_ptr == rhs.base_data_ptr
     assert lhs.base_mask_ptr == rhs.base_mask_ptr
+    assert lhs.base_size == rhs.base_size
+    assert lhs.offset == rhs.offset
     assert lhs.size == rhs.size
     assert len(lhs.base_children) == len(rhs.base_children)
     for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
