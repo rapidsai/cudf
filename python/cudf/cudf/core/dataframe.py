@@ -36,6 +36,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
+from cudf._typing import ColumnLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -1161,7 +1162,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg][:] = value
+                        self._data[arg] = utils.scalar_broadcast_to(
+                            value, len(self)
+                        )
                     else:
                         value = as_column(value)
                         self._data[arg] = value
@@ -6319,6 +6322,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis parameter is not supported yet.")
 
         return cudf.Series(super().nunique(method="sort", dropna=dropna))
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        if replace:
+            # Since cuDF does not support multiple columns with same name,
+            # sample with replace=True at axis 1 is unsupported.
+            raise NotImplementedError(
+                "Sample is not supported for axis 1/`columns` when"
+                "`replace=True`."
+            )
+
+        sampled_column_labels = random_state.choice(
+            self._column_names, size=n, replace=False, p=weights
+        )
+
+        result = self._get_columns_by_label(sampled_column_labels)
+        if ignore_index:
+            result.reset_index(drop=True)
+
+        return result
 
 
 def from_dataframe(df, allow_copy=False):
