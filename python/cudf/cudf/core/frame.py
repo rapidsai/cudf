@@ -33,6 +33,7 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_decimal_dtype,
     is_dict_like,
+    is_dtype_equal,
     is_scalar,
     issubdtype,
 )
@@ -497,6 +498,17 @@ class Frame(BinaryOperand):
 
         return new_frame
 
+    def astype(self, dtype, copy=False, **kwargs):
+        result = {}
+        for col_name, col in self._data.items():
+            dt = dtype.get(col_name, col.dtype)
+            if not is_dtype_equal(dt, col.dtype):
+                result[col_name] = col.astype(dt, copy=copy, **kwargs)
+            else:
+                result[col_name] = col.copy() if copy else col
+
+        return result
+
     @annotate("FRAME_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
         """
@@ -579,30 +591,6 @@ class Frame(BinaryOperand):
             return other._index is None
         else:
             return self._index.equals(other._index)
-
-    @annotate("FRAME_EXPLODE", color="green", domain="cudf_python")
-    def _explode(self, explode_column: Any, ignore_index: bool):
-        """Helper function for `explode` in `Series` and `Dataframe`, explodes
-        a specified nested column. Other columns' corresponding rows are
-        duplicated. If ignore_index is set, the original index is not exploded
-        and will be replaced with a `RangeIndex`.
-        """
-        explode_column_num = self._column_names.index(explode_column)
-        if not ignore_index and self._index is not None:
-            explode_column_num += self._index.nlevels
-
-        res = self.__class__._from_data(  # type: ignore
-            *libcudf.lists.explode_outer(
-                self, explode_column_num, ignore_index
-            )
-        )
-
-        res._data.multiindex = self._data.multiindex
-        res._data._level_names = self._data._level_names
-
-        if not ignore_index and self._index is not None:
-            res.index.names = self._index.names
-        return res
 
     @annotate(
         "FRAME_GET_COLUMNS_BY_LABEL", color="green", domain="cudf_python"
@@ -1340,6 +1328,13 @@ class Frame(BinaryOperand):
             self._from_data(data=filled_data, index=self._index),
             inplace=inplace,
         )
+
+    @annotate("FRAME_DROP_COLUMN", color="green", domain="cudf_python")
+    def _drop_column(self, name):
+        """Drop a column by *name*"""
+        if name not in self._data:
+            raise KeyError(f"column '{name}' does not exist")
+        del self._data[name]
 
     @annotate("FRAME_DROPNA_COLUMNS", color="green", domain="cudf_python")
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
