@@ -200,9 +200,9 @@ class device_row_comparator {
   device_row_comparator(Nullate has_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
-                        int const* depth                  = nullptr,
-                        order const* column_order         = nullptr,
-                        null_order const* null_precedence = nullptr)
+                        std::optional<device_span<int const>> depth                  = std::nullopt,
+                        std::optional<device_span<order const>> column_order         = std::nullopt,
+                        std::optional<device_span<null_order const>> null_precedence = std::nullopt)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
@@ -225,13 +225,14 @@ class device_row_comparator {
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      int depth = _depth == nullptr ? std::numeric_limits<int>::max() : _depth[i];
+      int depth = _depth.has_value() ? _depth.value()[i] : std::numeric_limits<int>::max();
       if (depth > last_null_depth) { continue; }
 
-      bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
+      bool ascending =
+        _column_order.has_value() ? _column_order.value()[i] == order::ASCENDING : true;
 
       null_order null_precedence =
-        _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
+        _null_precedence.has_value() ? _null_precedence.value()[i] : null_order::BEFORE;
 
       auto comparator = element_relational_comparator{
         _nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
@@ -251,9 +252,9 @@ class device_row_comparator {
   table_device_view _lhs;
   table_device_view _rhs;
   Nullate _nulls{};
-  null_order const* _null_precedence{};
-  order const* _column_order{};
-  int const* _depth;
+  std::optional<device_span<int const>> _depth;
+  std::optional<device_span<order const>> _column_order;
+  std::optional<device_span<null_order const>> _null_precedence;
 };  // class row_lexicographic_comparator
 
 struct preprocessed_table {
@@ -263,9 +264,25 @@ struct preprocessed_table {
                      rmm::cuda_stream_view stream);
 
   operator table_device_view() { return **d_t; }
-  order const* column_order() { return d_column_order.data(); }
-  null_order const* null_precedence() { return d_null_precedence.data(); }
-  int const* depths() { return d_depths.data(); }
+
+  [[nodiscard]] std::optional<device_span<order const>> column_order() const
+  {
+    return d_column_order.size() ? std::optional<device_span<order const>>(d_column_order)
+                                 : std::nullopt;
+  }
+
+  [[nodiscard]] std::optional<device_span<null_order const>> null_precedence() const
+  {
+    return d_null_precedence.size()
+             ? std::optional<device_span<null_order const>>(d_null_precedence)
+             : std::nullopt;
+  }
+
+  [[nodiscard]] std::optional<device_span<int const>> depths() const
+  {
+    return d_depths.size() ? std::optional<device_span<int const>>(d_depths) : std::nullopt;
+  }
+
   [[nodiscard]] bool has_nulls() const { return _has_nulls; }
 
  private:
