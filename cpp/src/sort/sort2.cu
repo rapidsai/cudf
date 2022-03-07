@@ -67,7 +67,7 @@ std::unique_ptr<column> sorted_order2(table_view input,
   thrust::sort(rmm::exec_policy(stream),
                mutable_indices_view.begin<size_type>(),
                mutable_indices_view.end<size_type>(),
-               comp.device_comparator<nullate::DYNAMIC>());
+               comp.device_comparator());
   // protection for temporary owning comparison object
   stream.synchronize();
 

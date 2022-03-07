@@ -89,6 +89,7 @@ auto struct_lex_verticalize(table_view table,
       }
     } else {
       verticalized_columns.push_back(col);
+      verticalized_col_depths.push_back(0);
     }
   }
   return std::make_tuple(table_view(verticalized_columns),

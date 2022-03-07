@@ -227,7 +227,7 @@ class device_row_comparator {
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      int depth = _depth.has_value() ? _depth.value()[i] : std::numeric_limits<int>::max();
+      int depth = _depth.has_value() ? _depth.value()[i] : std::numeric_limits<int>::min();
       if (depth > last_null_depth) { continue; }
 
       bool ascending =
@@ -310,10 +310,7 @@ class self_comparator {
 
   self_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
-  self_comparator(self_comparator const&) = delete;
-  self_comparator& operator=(self_comparator const&) = delete;
-
-  template <typename Nullate>
+  template <typename Nullate = nullate::DYNAMIC>
   device_row_comparator<Nullate> device_comparator()
   {
     if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
