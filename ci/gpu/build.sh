@@ -240,7 +240,7 @@ fi
 ################################################################################
 
 cd "$WORKSPACE/python/cudf/cudf"
-# It is essential to cd into $WORKSPACE/python/cudf/cudf as `pytest-xdist` + `codecov` seem to work on at this directory level in CI.
+# It is essential to cd into $WORKSPACE/python/cudf/cudf as `pytest-xdist` + `codecov` seem to work only at this directory level.
 gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
