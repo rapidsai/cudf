@@ -28,12 +28,10 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_dtype_equal,
     is_integer,
     is_integer_dtype,
     is_interval_dtype,
     is_list_dtype,
-    is_list_like,
     is_scalar,
     is_struct_dtype,
 )
@@ -56,7 +54,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
@@ -608,119 +606,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         inplace=False,
         errors="raise",
     ):
-        """
-        Return Series with specified index labels removed.
-
-        Remove elements of a Series based on specifying the index labels.
-        When using a multi-index, labels on different levels can be removed by
-        specifying the level.
-
-        Parameters
-        ----------
-        labels : single label or list-like
-            Index labels to drop.
-        axis : 0, default 0
-            Redundant for application on Series.
-        index : single label or list-like
-            Redundant for application on Series. But ``index`` can be used
-            instead of ``labels``
-        columns : single label or list-like
-            This parameter is ignored. Use ``index`` or ``labels`` to specify.
-        level : int or level name, optional
-            For MultiIndex, level from which the labels will be removed.
-        inplace : bool, default False
-            If False, return a copy. Otherwise, do operation
-            inplace and return None.
-        errors : {'ignore', 'raise'}, default 'raise'
-            If 'ignore', suppress error and only existing labels are
-            dropped.
-
-        Returns
-        -------
-        Series or None
-            Series with specified index labels removed or None if
-            ``inplace=True``
-
-        Raises
-        ------
-        KeyError
-            If any of the labels is not found in the selected axis and
-            ``error='raise'``
-
-        See Also
-        --------
-        Series.reindex
-            Return only specified index labels of Series
-        Series.dropna
-            Return series without null values
-        Series.drop_duplicates
-            Return series with duplicate values removed
-        cudf.DataFrame.drop
-            Drop specified labels from rows or columns in dataframe
-
-        Examples
-        --------
-        >>> s = cudf.Series([1,2,3], index=['x', 'y', 'z'])
-        >>> s
-        x    1
-        y    2
-        z    3
-        dtype: int64
-
-        Drop labels x and z
-
-        >>> s.drop(labels=['x', 'z'])
-        y    2
-        dtype: int64
-
-        Drop a label from the second level in MultiIndex Series.
-
-        >>> midx = cudf.MultiIndex.from_product([[0, 1, 2], ['x', 'y']])
-        >>> s = cudf.Series(range(6), index=midx)
-        >>> s
-        0  x    0
-           y    1
-        1  x    2
-           y    3
-        2  x    4
-           y    5
-        dtype: int64
-        >>> s.drop(labels='y', level=1)
-        0  x    0
-        1  x    2
-        2  x    4
-        Name: 2, dtype: int64
-        """
-        if labels is not None:
-            if index is not None or columns is not None:
-                raise ValueError(
-                    "Cannot specify both 'labels' and 'index'/'columns'"
-                )
-            if axis == 1:
-                raise ValueError("No axis named 1 for object type Series")
-            target = labels
-        elif index is not None:
-            target = index
-        elif columns is not None:
-            target = []  # Ignore parameter columns
-        else:
-            raise ValueError(
-                "Need to specify at least one of 'labels', "
-                "'index' or 'columns'"
-            )
-
-        if inplace:
-            out = self
-        else:
-            out = self.copy()
-
-        dropped = _drop_rows_by_labels(out, target, level, errors)
-
-        out._data = dropped._data
-        out._index = dropped._index
-
-        if not inplace:
-            return out
+        if axis == 1:
+            raise ValueError("No axis named 1 for object type Series")
+        # Ignore columns for Series
+        if columns is not None:
+            columns = []
+        return super().drop(
+            labels, axis, index, columns, level, inplace, errors
+        )
 
     @cudf_nvtx_annotate
     def append(self, to_append, ignore_index=False, verify_integrity=False):
@@ -796,18 +689,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5    6
         dtype: int64
         """
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
-        if is_list_like(to_append):
-            to_concat = [self]
-            to_concat.extend(to_append)
-        else:
-            to_concat = [self, to_append]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index)
+        return super()._append(to_append, ignore_index, verify_integrity)
 
     @cudf_nvtx_annotate
     def reindex(self, index=None, copy=True):
@@ -1768,111 +1650,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.Series(self._column.nullmask)
 
     @cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, errors="raise"):
-        """
-        Cast the Series to the given dtype
-
-        Parameters
-        ----------
-
-        dtype : data type, or dict of column name -> data type
-            Use a numpy.dtype or Python type to cast Series object to
-            the same type. Alternatively, use {col: dtype, ...}, where col is a
-            series name and dtype is a numpy.dtype or Python type to cast to.
-        copy : bool, default False
-            Return a deep-copy when ``copy=True``. Note by default
-            ``copy=False`` setting is used and hence changes to
-            values then may propagate to other cudf objects.
-        errors : {'raise', 'ignore', 'warn'}, default 'raise'
-            Control raising of exceptions on invalid data for provided dtype.
-
-            - ``raise`` : allow exceptions to be raised
-            - ``ignore`` : suppress exceptions. On error return original
-              object.
-            - ``warn`` : prints last exceptions as warnings and
-              return original object.
-
-        Returns
-        -------
-        out : Series
-            Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
-            as ``self.dtype``.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2], dtype='int32')
-        >>> series
-        0    1
-        1    2
-        dtype: int32
-        >>> series.astype('int64')
-        0    1
-        1    2
-        dtype: int64
-
-        Convert to categorical type:
-
-        >>> series.astype('category')
-        0    1
-        1    2
-        dtype: category
-        Categories (2, int64): [1, 2]
-
-        Convert to ordered categorical type with custom ordering:
-
-        >>> cat_dtype = cudf.CategoricalDtype(categories=[2, 1], ordered=True)
-        >>> series.astype(cat_dtype)
-        0    1
-        1    2
-        dtype: category
-        Categories (2, int64): [2 < 1]
-
-        Note that using ``copy=False`` (enabled by default)
-        and changing data on a new Series will
-        propagate changes:
-
-        >>> s1 = cudf.Series([1, 2])
-        >>> s1
-        0    1
-        1    2
-        dtype: int64
-        >>> s2 = s1.astype('int64', copy=False)
-        >>> s2[0] = 10
-        >>> s1
-        0    10
-        1     2
-        dtype: int64
-        """
-        if errors not in ("ignore", "raise", "warn"):
-            raise ValueError("invalid error value specified")
-
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
-                    "Only the Series name can be used for "
-                    "the key in Series dtype mappings."
+                    "Only the Series name can be used for the key in Series "
+                    "dtype mappings."
                 )
-            dtype = dtype[self.name]
-
-        if is_dtype_equal(dtype, self.dtype):
-            return self.copy(deep=copy)
-        try:
-            data = self._column.astype(dtype)
-
-            return self._from_data({self.name: data}, index=self._index)
-
-        except Exception as e:
-            if errors == "raise":
-                raise e
-            elif errors == "warn":
-                import traceback
-
-                tb = traceback.format_exc()
-                warnings.warn(tb)
-            elif errors == "ignore":
-                pass
-            return self
+        else:
+            dtype = {self.name: dtype}
+        return super().astype(dtype, copy, errors, **kwargs)
 
     @cudf_nvtx_annotate
     def sort_index(self, axis=0, *args, **kwargs):
@@ -3472,7 +3259,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Returns
         -------
-        DataFrame
+        Series
 
         Examples
         --------
@@ -3494,12 +3281,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3       5
         dtype: int64
         """
-        if not is_list_dtype(self._column.dtype):
-            data = self._data.copy(deep=True)
-            idx = None if ignore_index else self._index.copy(deep=True)
-            return self.__class__._from_data(data, index=idx)
-
-        return super()._explode(self._column_names[0], ignore_index)
+        return super()._explode(self.name, ignore_index)
 
     @cudf_nvtx_annotate
     def pct_change(

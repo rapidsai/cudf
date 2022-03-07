@@ -32,10 +32,11 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
     is_categorical_dtype,
+    is_dtype_equal,
     is_interval_dtype,
     is_string_dtype,
 )
-from cudf.core._base_index import BaseIndex
+from cudf.core._base_index import BaseIndex, _index_astype_docstring
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -53,7 +54,7 @@ from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
 from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.utils.docutils import copy_docstring
+from cudf.utils.docutils import copy_docstring, doc_apply
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cudf_nvtx_annotate, search_range
 
@@ -310,6 +311,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return RangeIndex(
             start=self._start, stop=self._stop, step=self._step, name=name
         )
+
+    @cudf_nvtx_annotate
+    @doc_apply(_index_astype_docstring)
+    def astype(self, dtype, copy: bool = True):
+        if is_dtype_equal(dtype, np.int64):
+            return self
+        return self._as_int64().astype(dtype, copy=copy)
 
     @cudf_nvtx_annotate
     def drop_duplicates(self, keep="first"):
@@ -945,6 +953,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         col = self._values.astype(dtype)
         return _index_from_data({name: col.copy(True) if deep else col})
+
+    @cudf_nvtx_annotate
+    @doc_apply(_index_astype_docstring)
+    def astype(self, dtype, copy: bool = True):
+        return _index_from_data(super().astype({self.name: dtype}, copy))
 
     @cudf_nvtx_annotate
     def get_loc(self, key, method=None, tolerance=None):
