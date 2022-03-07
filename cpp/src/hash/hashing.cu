@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
 
 }  // namespace
 
-template <typename hash_function>
+template <template <typename> class hash_function>
 std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                                                uint32_t seed,
                                                rmm::cuda_stream_view stream,

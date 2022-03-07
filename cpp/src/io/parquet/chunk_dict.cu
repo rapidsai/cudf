@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ struct equality_functor {
 template <typename T>
 struct hash_functor {
   column_device_view const& col;
-  __device__ auto operator()(size_type idx) { return MurmurHash3_32{}(col.element<T>(idx)); }
+  __device__ auto operator()(size_type idx) { return MurmurHash3_32<T>{}(col.element<T>(idx)); }
 };
 
 struct map_insert_fn {
