@@ -848,7 +848,7 @@ cdef GroupbyScanAggregation make_groupby_scan_aggregation(op, kwargs=None):
           to specify aggregations that take arguments, e.g.,
           `lambda x: x.quantile(0.5)`.
         * Is a user defined aggregation function that operates on
-          group values. In this case, the output dtype must be
+          grouped, scannable values. In this case, the output dtype must be
           specified in the `kwargs` dictionary.
     \*\*kwargs : dict, optional
         Any keyword arguments to be passed to the op.

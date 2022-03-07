@@ -471,8 +471,9 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
 
   double var   = calc_var(v, v.size());
   double std   = std::sqrt(var);
-  auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(/*ddof =*/1);
-  auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(/*ddof =*/1);
+  auto const ddof = 1;
+  auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
+  auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(ddof);
 
   this->reduction_test(col, var, true, var_agg, cudf::data_type(cudf::type_id::FLOAT64));
   this->reduction_test(col, std, true, std_agg, cudf::data_type(cudf::type_id::FLOAT64));
@@ -530,7 +531,7 @@ TYPED_TEST(ReductionMultiStepErrorCheck, DISABLED_ErrorHandling)
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
 
-  bool is_input_accpetable = this->ret_non_arithmetic;
+  bool is_input_acceptable = this->ret_non_arithmetic;
 
   std::vector<cudf::data_type> dtypes(static_cast<int32_t>(cudf::type_id::NUM_TYPE_IDS) + 1);
   int i = 0;
@@ -545,9 +546,10 @@ TYPED_TEST(ReductionMultiStepErrorCheck, DISABLED_ErrorHandling)
   };
 
   auto evaluate = [&](cudf::data_type dtype) mutable {
-    bool expect_succeed = is_input_accpetable & is_supported_outdtype(dtype);
-    auto var_agg        = cudf::make_variance_aggregation<reduce_aggregation>(/*ddof = 1*/);
-    auto std_agg        = cudf::make_std_aggregation<reduce_aggregation>(/*ddof = 1*/);
+    bool expect_succeed = is_input_acceptable & is_supported_outdtype(dtype);
+    auto const ddof = 1;
+    auto var_agg        = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
+    auto std_agg        = cudf::make_std_aggregation<reduce_aggregation>(ddof);
     this->reduction_error_check(
       col, expect_succeed, cudf::make_mean_aggregation<reduce_aggregation>(), dtype);
     this->reduction_error_check(col, expect_succeed, var_agg, dtype);
