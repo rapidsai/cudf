@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -380,7 +380,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   struct index_element_fn {
     template <typename IndexType,
-              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned<IndexType>::value)>
+              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>)>
     __device__ size_type operator()(column_device_view const& indices, size_type index)
     {
       return static_cast<size_type>(indices.element<IndexType>(index));
@@ -388,8 +388,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
     template <typename IndexType,
               typename... Args,
-              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and
-                                 std::is_unsigned<IndexType>::value))>
+              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
       cudf_assert(false and "dictionary indices must be an unsigned integral type");

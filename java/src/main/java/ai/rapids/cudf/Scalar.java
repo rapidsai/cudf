@@ -261,15 +261,22 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
     }
     DType dt = DType.fromJavaBigDecimal(value);
+    return fromDecimal(value.unscaledValue(), dt);
+  }
+
+  public static Scalar fromDecimal(BigInteger unscaledValue, DType dt) {
+    if (unscaledValue == null) {
+      return Scalar.fromNull(dt);
+    }
     long handle;
     if (dt.typeId == DType.DTypeEnum.DECIMAL32) {
-      handle = makeDecimal32Scalar(value.unscaledValue().intValueExact(), -value.scale(), true);
+      handle = makeDecimal32Scalar(unscaledValue.intValueExact(), dt.getScale(), true);
     } else if (dt.typeId == DType.DTypeEnum.DECIMAL64) {
-      handle = makeDecimal64Scalar(value.unscaledValue().longValueExact(), -value.scale(), true);
+      handle = makeDecimal64Scalar(unscaledValue.longValueExact(), dt.getScale(), true);
     } else {
-      byte[] unscaledValueBytes = value.unscaledValue().toByteArray();
+      byte[] unscaledValueBytes = unscaledValue.toByteArray();
       byte[] finalBytes =  convertDecimal128FromJavaToCudf(unscaledValueBytes);
-      handle = makeDecimal128Scalar(finalBytes, -value.scale(), true);
+      handle = makeDecimal128Scalar(finalBytes, dt.getScale(), true);
     }
     return new Scalar(dt, handle);
   }

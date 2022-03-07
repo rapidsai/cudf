@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ namespace {
 std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 {
   std::unique_ptr<cudf::table> result =
-    create_random_table({cudf::type_id::FLOAT32}, 1, row_count{static_cast<cudf::size_type>(rows)});
+    create_random_table({cudf::type_id::FLOAT32}, row_count{static_cast<cudf::size_type>(rows)});
   return cudf::strings::from_floats(result->release().front()->view());
 }
 

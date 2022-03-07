@@ -9,11 +9,12 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set, Union
+from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
@@ -39,6 +40,7 @@ from cudf.api.types import (
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import (
+    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -75,11 +77,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_scalar_type,
 )
-from cudf.utils.utils import (
-    get_appropriate_dispatched_func,
-    get_relevant_submodule,
-    to_cudf_compatible_scalar,
-)
+from cudf.utils.utils import to_cudf_compatible_scalar
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -98,6 +96,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
     For integer-location based selection.
     """
 
+    @annotate("SERIESILOC_GETITEM", color="green", domain="cudf_python")
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             arg = list(arg)
@@ -113,6 +112,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
             {self._frame.name: data}, index=cudf.Index(self._frame.index[arg]),
         )
 
+    @annotate("SERIESILOC_SETITEM", color="green", domain="cudf_python")
     def __setitem__(self, key, value):
         from cudf.core.column import column
 
@@ -156,6 +156,7 @@ class _SeriesLocIndexer(_FrameIndexer):
     Label-based selection
     """
 
+    @annotate("SERIESLOC_GETITEM", color="green", domain="cudf_python")
     def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
@@ -167,7 +168,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame._index.nlevels
-                and not any((isinstance(x, slice) for x in arg))
+                and not any(isinstance(x, slice) for x in arg)
             ):
                 result = result.iloc[0]
             return result
@@ -178,6 +179,7 @@ class _SeriesLocIndexer(_FrameIndexer):
 
         return self._frame.iloc[arg]
 
+    @annotate("SERIESLOC_SETITEM", color="green", domain="cudf_python")
     def __setitem__(self, key, value):
         try:
             key = self._loc_to_iloc(key)
@@ -301,6 +303,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.DataFrame
 
     @classmethod
+    @annotate("SERIES_FROM_CATEGORICAL", color="green", domain="cudf_python")
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
 
@@ -341,6 +344,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series(data=col)
 
     @classmethod
+    @annotate("SERIES_FROM_MASKED_ARRAY", color="green", domain="cudf_python")
     def from_masked_array(cls, data, mask, null_count=None):
         """Create a Series with null-mask.
         This is equivalent to:
@@ -389,6 +393,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         col = column.as_column(data).set_mask(mask)
         return cls(data=col)
 
+    @annotate("SERIES_INIT", color="green", domain="cudf_python")
     def __init__(
         self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
     ):
@@ -408,7 +413,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
         elif isinstance(data, ColumnAccessor):
-            name, data = data.names[0], data.columns[0]
+            raise TypeError(
+                "Use cudf.Series._from_data for constructing a Series from "
+                "ColumnAccessor"
+            )
 
         if isinstance(data, Series):
             index = data._index if index is None else index
@@ -432,7 +440,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 data = {}
 
-        if not isinstance(data, column.ColumnBase):
+        if not isinstance(data, ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
         else:
             if dtype is not None:
@@ -441,12 +449,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
-        assert isinstance(data, column.ColumnBase)
+        assert isinstance(data, ColumnBase)
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
 
     @classmethod
+    @annotate("SERIES_FROM_DATA", color="green", domain="cudf_python")
     def _from_data(
         cls,
         data: MutableMapping,
@@ -461,10 +470,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             out._index = RangeIndex(out._data.nrows)
         return out
 
+    @annotate("SERIES_CONTAINS", color="green", domain="cudf_python")
     def __contains__(self, item):
         return item in self._index
 
     @classmethod
+    @annotate("SERIES_FROM_PANDAS", color="green", domain="cudf_python")
     def from_pandas(cls, s, nan_as_null=None):
         """
         Convert from a Pandas Series.
@@ -505,7 +516,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return cls(s, nan_as_null=nan_as_null)
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT", color="green", domain="cudf_python")
     def dt(self):
         """
         Accessor object for datetime-like properties of the Series values.
@@ -546,6 +558,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
+    @annotate("SERIES_SERIALIZE", color="green", domain="cudf_python")
     def serialize(self):
         header, frames = super().serialize()
 
@@ -558,6 +571,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return header, frames
 
     @classmethod
+    @annotate("SERIES_DESERIALIZE", color="green", domain="cudf_python")
     def deserialize(cls, header, frames):
         index_nframes = header["index_frame_count"]
         obj = super().deserialize(
@@ -579,11 +593,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         new_data = super()._get_columns_by_label(labels, downcast)
 
         return (
-            self.__class__(data=new_data, index=self.index)
+            self.__class__._from_data(data=new_data, index=self.index)
             if len(new_data) > 0
             else self.__class__(dtype=self.dtype, name=self.name)
         )
 
+    @annotate("SERIES_DROP", color="green", domain="cudf_python")
     def drop(
         self,
         labels=None,
@@ -708,6 +723,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if not inplace:
             return out
 
+    @annotate("SERIES_APPEND", color="green", domain="cudf_python")
     def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
@@ -794,6 +810,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return cudf.concat(to_concat, ignore_index=ignore_index)
 
+    @annotate("SERIES_REINDEX", color="green", domain="cudf_python")
     def reindex(self, index=None, copy=True):
         """Return a Series that conforms to a new index
 
@@ -829,6 +846,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
+    @annotate("SERIES_RESET_INDEX", color="green", domain="cudf_python")
     @docutils.doc_apply(
         doc_reset_index_template.format(
             klass="Series",
@@ -910,6 +928,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             inplace=inplace,
         )
 
+    @annotate("SERIES_TO_FRAME", color="green", domain="cudf_python")
     def to_frame(self, name=None):
         """Convert Series into a DataFrame
 
@@ -952,81 +971,67 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return cudf.DataFrame({col: self._column}, index=self.index)
 
+    @annotate("SERIES_MEMORY_USAGE", color="green", domain="cudf_python")
     def memory_usage(self, index=True, deep=False):
-        """
-        Return the memory usage of the Series.
+        return sum(super().memory_usage(index, deep).values())
 
-        The memory usage can optionally include the contribution of
-        the index and of elements of `object` dtype.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the Series index.
-        deep : bool, default False
-            If True, introspect the data deeply by interrogating
-            `object` dtypes for system-level memory consumption, and include
-            it in the returned value.
-
-        Returns
-        -------
-        int
-            Bytes of memory consumed.
-
-        See Also
-        --------
-        cudf.DataFrame.memory_usage : Bytes consumed by
-            a DataFrame.
-
-        Examples
-        --------
-        >>> s = cudf.Series(range(3), index=['a','b','c'])
-        >>> s.memory_usage()
-        43
-
-        Not including the index gives the size of the rest of the data, which
-        is necessarily smaller:
-
-        >>> s.memory_usage(index=False)
-        24
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        n = self._column.memory_usage()
-        if index:
-            n += self._index.memory_usage()
-        return n
-
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__":
-            return get_appropriate_dispatched_func(
-                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
-            )
-        else:
+    @annotate("SERIES_ARRAY_FUNCTION", color="green", domain="cudf_python")
+    def __array_function__(self, func, types, args, kwargs):
+        if "out" in kwargs or not all(issubclass(t, Series) for t in types):
             return NotImplemented
 
-    def __array_function__(self, func, types, args, kwargs):
-        handled_types = [cudf.Series]
-        for t in types:
-            if t not in handled_types:
+        try:
+            # Apply a Series method if one exists.
+            if cudf_func := getattr(Series, func.__name__, None):
+                return cudf_func(*args, **kwargs)
+
+            # Assume that cupy subpackages match numpy and search the
+            # corresponding cupy submodule based on the func's __module__.
+            numpy_submodule = func.__module__.split(".")[1:]
+            cupy_func = cupy
+            for name in (*numpy_submodule, func.__name__):
+                cupy_func = getattr(cupy_func, name, None)
+
+            # Handle case if cupy does not implement the function or just
+            # aliases the numpy function.
+            if not cupy_func or cupy_func is func:
                 return NotImplemented
 
-        cudf_submodule = get_relevant_submodule(func, cudf)
-        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
-        cupy_submodule = get_relevant_submodule(func, cupy)
+            # For now just fail on cases with mismatched indices. There is
+            # almost certainly no general solution for all array functions.
+            index = args[0].index
+            if not all(s.index.equals(index) for s in args):
+                return NotImplemented
+            out = cupy_func(*(s.values for s in args), **kwargs)
 
-        return get_appropriate_dispatched_func(
-            cudf_submodule,
-            cudf_ser_submodule,
-            cupy_submodule,
-            func,
-            args,
-            kwargs,
-        )
+            # Return (host) scalar values immediately.
+            if not isinstance(out, cupy.ndarray):
+                return out
 
+            # 0D array (scalar)
+            if out.ndim == 0:
+                return to_cudf_compatible_scalar(out)
+            # 1D array
+            elif (
+                # Only allow 1D arrays
+                ((out.ndim == 1) or (out.ndim == 2 and out.shape[1] == 1))
+                # If we have an index, it must be the same length as the
+                # output for cupy dispatching to be well-defined.
+                and len(index) == len(out)
+            ):
+                return Series(out, index=index)
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
+
+        return NotImplemented
+
+    @annotate("SERIES_MAP", color="green", domain="cudf_python")
     def map(self, arg, na_action=None) -> "Series":
         """
         Map values of Series according to input correspondence.
@@ -1128,6 +1133,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result = self.applymap(arg)
         return result
 
+    @annotate("SERIES_GETITEM", color="green", domain="cudf_python")
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
@@ -1138,6 +1144,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     items = SingleColumnFrame.__iter__
 
+    @annotate("SERIES_SETITEM", color="green", domain="cudf_python")
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             self.iloc[key] = value
@@ -1256,31 +1263,28 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    def _binaryop(
+    def _make_operands_and_index_for_binop(
         self,
-        other: Frame,
+        other: Any,
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
         *args,
         **kwargs,
-    ):
+    ) -> Tuple[
+        Union[
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+            Type[NotImplemented],
+        ],
+        Optional[BaseIndex],
+    ]:
         # Specialize binops to align indices.
-        if isinstance(other, SingleColumnFrame):
+        if isinstance(other, Series):
             if (
-                # TODO: The can_reindex logic also needs to be applied for
-                # DataFrame (the methods that need it just don't exist yet).
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
-                and (
-                    isinstance(other, Series)
-                    # TODO: mypy doesn't like this line because the index
-                    # property is not defined on SingleColumnFrame (or Index,
-                    # for that matter). Ignoring is the easy solution for now,
-                    # a cleaner fix requires reworking the type hierarchy.
-                    and not self.index.equals(other.index)  # type: ignore
-                )
+                and not self.index.equals(other.index)
             ):
                 raise ValueError(
                     "Can only compare identically-labeled Series objects"
@@ -1290,52 +1294,72 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             lhs = self
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
-        return (
-            lhs._from_data(
-                data=lhs._colwise_binop(operands, fn), index=lhs._index,
-            )
-            if operands is not NotImplemented
-            else NotImplemented
-        )
+        return operands, lhs._index
 
+    @annotate("SERIES_LOGICAL_AND", color="green", domain="cudf_python")
     def logical_and(self, other):
-        return self._binaryop(other, "l_and").astype(np.bool_)
+        warnings.warn(
+            "Series.logical_and is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._binaryop(other, "__l_and__").astype(np.bool_)
 
+    @annotate("SERIES_REMAINDER", color="green", domain="cudf_python")
     def remainder(self, other):
-        return self._binaryop(other, "mod")
+        warnings.warn(
+            "Series.remainder is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._binaryop(other, "__mod__")
 
+    @annotate("SERIES_LOGICAL_OR", color="green", domain="cudf_python")
     def logical_or(self, other):
-        return self._binaryop(other, "l_or").astype(np.bool_)
+        warnings.warn(
+            "Series.logical_or is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._binaryop(other, "__l_or__").astype(np.bool_)
 
+    @annotate("SERIES_LOGICAL_NOT", color="green", domain="cudf_python")
     def logical_not(self):
+        warnings.warn(
+            "Series.logical_not is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
+    @annotate("SERIES_CAT", color="green", domain="cudf_python")
     def cat(self):
         return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods)  # type: ignore
     @property
+    @annotate("SERIES_STR", color="green", domain="cudf_python")
     def str(self):
         return StringMethods(parent=self)
 
     @copy_docstring(ListMethods)  # type: ignore
     @property
+    @annotate("SERIES_LIST", color="green", domain="cudf_python")
     def list(self):
         return ListMethods(parent=self)
 
     @copy_docstring(StructMethods)  # type: ignore
     @property
+    @annotate("SERIES_STRUCT", color="green", domain="cudf_python")
     def struct(self):
         return StructMethods(parent=self)
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DTYPE", color="green", domain="cudf_python")
     def dtype(self):
         """dtype of the Series"""
         return self._column.dtype
 
     @classmethod
+    @annotate("SERIES_CONCAT", color="green", domain="cudf_python")
     def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
@@ -1405,22 +1429,26 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return cls(data=col, index=index, name=name)
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_VALID_COUNT", color="green", domain="cudf_python")
     def valid_count(self):
         """Number of non-null values"""
         return self._column.valid_count
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_NULL_COUNT", color="green", domain="cudf_python")
     def null_count(self):
         """Number of null values"""
         return self._column.null_count
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_NULLABLE", color="green", domain="cudf_python")
     def nullable(self):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.nullable
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_HAS_NULLS", color="green", domain="cudf_python")
     def has_nulls(self):
         """
         Indicator whether Series contains null values.
@@ -1449,13 +1477,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._column.has_nulls()
 
+    @annotate("SERIES_DROPNA", color="green", domain="cudf_python")
     def dropna(self, axis=0, inplace=False, how=None):
         """
         Return a Series with null values removed.
 
         Parameters
         ----------
-        axis : {0 or ‘index’}, default 0
+        axis : {0 or 'index'}, default 0
             There is only one axis to drop values from.
         inplace : bool, default False
             If True, do operation inplace and return None.
@@ -1528,6 +1557,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    @annotate("SERIES_DROP_DUPLICATES", color="green", domain="cudf_python")
     def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
         Return Series with duplicate values removed.
@@ -1563,9 +1593,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Name: animal, dtype: object
 
         With the `keep` parameter, the selection behaviour of duplicated
-        values can be changed. The value ‘first’ keeps the first
+        values can be changed. The value 'first' keeps the first
         occurrence for each set of duplicated entries.
-        The default value of keep is ‘first’. Note that order of
+        The default value of keep is 'first'. Note that order of
         the rows being returned is not guaranteed
         to be sorted.
 
@@ -1576,7 +1606,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         0      lama
         Name: animal, dtype: object
 
-        The value ‘last’ for parameter `keep` keeps the last occurrence
+        The value 'last' for parameter `keep` keeps the last occurrence
         for each set of duplicated entries.
 
         >>> s.drop_duplicates(keep='last')
@@ -1601,6 +1631,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    @annotate("SERIES_FILLNA", color="green", domain="cudf_python")
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
@@ -1624,6 +1655,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
 
+    @annotate("SERIES_ALL", color="green", domain="cudf_python")
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
@@ -1631,6 +1663,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         return super().all(axis, skipna, level, **kwargs)
 
+    @annotate("SERIES_ANY", color="green", domain="cudf_python")
     def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
             raise NotImplementedError(
@@ -1638,6 +1671,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         return super().any(axis, skipna, level, **kwargs)
 
+    @annotate("SERIES_TO_PANDAS", color="green", domain="cudf_python")
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """
         Convert to a Pandas Series.
@@ -1701,7 +1735,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         s.name = self.name
         return s
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DATA", color="green", domain="cudf_python")
     def data(self):
         """The gpu buffer for the data
 
@@ -1727,11 +1762,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """  # noqa: E501
         return self._column.data
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_NULLMASK", color="green", domain="cudf_python")
     def nullmask(self):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
+    @annotate("SERIES_ASTYPE", color="green", domain="cudf_python")
     def astype(self, dtype, copy=False, errors="raise"):
         """
         Cast the Series to the given dtype
@@ -1824,10 +1861,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         try:
             data = self._column.astype(dtype)
 
-            return self._from_data(
-                {self.name: (data.copy(deep=True) if copy else data)},
-                index=self._index,
-            )
+            return self._from_data({self.name: data}, index=self._index)
 
         except Exception as e:
             if errors == "raise":
@@ -1841,11 +1875,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 pass
             return self
 
+    @annotate("SERIES_SORT_INDEX", color="green", domain="cudf_python")
     def sort_index(self, axis=0, *args, **kwargs):
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
         return super().sort_index(axis=axis, *args, **kwargs)
 
+    @annotate("SERIES_SORT_VALUES", color="green", domain="cudf_python")
     def sort_values(
         self,
         axis=0,
@@ -1900,6 +1936,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ignore_index=ignore_index,
         )
 
+    @annotate("SERIES_NLARGEST", color="green", domain="cudf_python")
     def nlargest(self, n=5, keep="first"):
         """Returns a new Series of the *n* largest element.
 
@@ -1962,6 +1999,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._n_largest_or_smallest(True, n, [self.name], keep)
 
+    @annotate("SERIES_NSMALLEST", color="green", domain="cudf_python")
     def nsmallest(self, n=5, keep="first"):
         """
         Returns a new Series of the *n* smallest element.
@@ -2037,6 +2075,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._n_largest_or_smallest(False, n, [self.name], keep)
 
+    @annotate("SERIES_ARGSORT", color="green", domain="cudf_python")
     def argsort(
         self,
         axis=0,
@@ -2059,6 +2098,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         obj.name = self.name
         return obj
 
+    @annotate("SERIES_REPLACE", color="green", domain="cudf_python")
     def replace(self, to_replace=None, value=None, *args, **kwargs):
         if is_dict_like(to_replace) and value is not None:
             raise ValueError(
@@ -2068,6 +2108,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return super().replace(to_replace, value, *args, **kwargs)
 
+    @annotate("SERIES_UPDATE", color="green", domain="cudf_python")
     def update(self, other):
         """
         Modify Series in place using values from passed Series.
@@ -2172,6 +2213,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         self.mask(mask, other, inplace=True)
 
+    @annotate("SERIES_LABEL_ENCODING", color="green", domain="cudf_python")
     def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
         # Private implementation of deprecated public label_encoding method
         def _return_sentinel_series():
@@ -2215,6 +2257,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return codes
 
     # UDF related
+    @annotate("SERIES_APPLY", color="green", domain="cudf_python")
     def apply(self, func, convert_dtype=True, args=(), **kwargs):
         """
         Apply a scalar function to the values of a Series.
@@ -2303,6 +2346,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             raise ValueError("Series.apply only supports convert_dtype=True")
         return self._apply(func, _get_scalar_kernel, *args, **kwargs)
 
+    @annotate("SERIES_APPLY_MAP", color="green", domain="cudf_python")
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
 
@@ -2418,6 +2462,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     #
     # Stats
     #
+    @annotate("SERIES_COUNT", color="green", domain="cudf_python")
     def count(self, level=None, **kwargs):
         """
         Return number of non-NA/null observations in the Series
@@ -2444,6 +2489,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self.valid_count
 
+    @annotate("SERIES_MODE", color="green", domain="cudf_python")
     def mode(self, dropna=True):
         """
         Return the mode(s) of the dataset.
@@ -2512,6 +2558,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return Series(val_counts.index.sort_values(), name=self.name)
 
+    @annotate("SERIES_ROUND", color="green", domain="cudf_python")
     def round(self, decimals=0, how="half_even"):
         if not is_integer(decimals):
             raise ValueError(
@@ -2520,6 +2567,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         decimals = int(decimals)
         return super().round(decimals, how)
 
+    @annotate("SERIES_COV", color="green", domain="cudf_python")
     def cov(self, other, min_periods=None):
         """
         Compute covariance with Series, excluding missing values.
@@ -2561,8 +2609,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.cov(rhs._column)
+        try:
+            return lhs._column.cov(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform covariance with types {self.dtype}, "
+                f"{other.dtype}"
+            )
 
+    @annotate("SERIES_TRANSPOSE", color="green", domain="cudf_python")
     def transpose(self):
         """Return the transpose, which is by definition self.
         """
@@ -2571,6 +2626,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     T = property(transpose, doc=transpose.__doc__)
 
+    @annotate("SERIES_CORR", color="green", domain="cudf_python")
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
@@ -2597,8 +2653,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.corr(rhs._column)
+        try:
+            return lhs._column.corr(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
 
+    @annotate("SERIES_AUTOCORR", color="green", domain="cudf_python")
     def autocorr(self, lag=1):
         """Compute the lag-N autocorrelation. This method computes the Pearson
         correlation between the Series and its shifted self.
@@ -2624,6 +2686,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.corr(self.shift(lag))
 
+    @annotate("SERIES_ISIN", color="green", domain="cudf_python")
     def isin(self, values):
         """Check whether values are contained in Series.
 
@@ -2680,16 +2743,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: bool
         """
 
+        # Even though only list-like objects are supposed to be passed, only
+        # scalars throw errors. Other types (like dicts) just transparently
+        # return False (see the implementation of ColumnBase.isin).
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        return Series(
-            self._column.isin(values), index=self.index, name=self.name
+        return Series._from_data(
+            {self.name: self._column.isin(values)}, index=self.index
         )
 
+    @annotate("SERIES_UNIQUE", color="green", domain="cudf_python")
     def unique(self):
         """
         Returns unique values of this Series.
@@ -2722,42 +2789,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         res = self._column.unique()
         return Series(res, name=self.name)
 
-    def nunique(self, method="sort", dropna=True):
-        """Returns the number of unique values of the Series: approximate version,
-        and exact version to be moved to libcudf
-
-        Excludes NA values by default.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NA values in the count.
-
-        Returns
-        -------
-        int
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 3, 5, 7, 7])
-        >>> s
-        0    1
-        1    3
-        2    5
-        3    7
-        4    7
-        dtype: int64
-        >>> s.nunique()
-        4
-        """
-        if method != "sort":
-            msg = "non sort based distinct_count() not implemented yet"
-            raise NotImplementedError(msg)
-        if self.null_count == len(self):
-            return 0
-        return super().nunique(method, dropna)
-
+    @annotate("SERIES_VALUE_COUNTS", color="green", domain="cudf_python")
     def value_counts(
         self,
         normalize=False,
@@ -2880,6 +2912,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res / float(res._column.sum())
         return res
 
+    @annotate("SERIES_QUANTILE", color="green", domain="cudf_python")
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):
@@ -2944,6 +2977,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series(result, index=index, name=self.name)
 
     @docutils.doc_describe()
+    @annotate("SERIES_DESCRIBE", color="green", domain="cudf_python")
     def describe(
         self,
         percentiles=None,
@@ -2969,7 +3003,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return percentiles
 
         def _format_percentile_names(percentiles):
-            return ["{0}%".format(int(x * 100)) for x in percentiles]
+            return [f"{int(x * 100)}%" for x in percentiles]
 
         def _format_stats_values(stats_data):
             return map(lambda x: round(x, 6), stats_data)
@@ -3071,7 +3105,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                         .to_numpy(na_value=np.nan),
                     )
                 ),
-                "max": str(pd.Timestamp((self.max()))),
+                "max": str(pd.Timestamp(self.max())),
             }
 
             return Series(
@@ -3099,6 +3133,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             return _describe_categorical(self)
 
+    @annotate("SERIES_DIGITIZE", color="green", domain="cudf_python")
     def digitize(self, bins, right=False):
         """Return the indices of the bins to which each value in series belongs.
 
@@ -3134,6 +3169,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             cudf.core.column.numerical.digitize(self._column, bins, right)
         )
 
+    @annotate("SERIES_DIFF", color="green", domain="cudf_python")
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
@@ -3222,6 +3258,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series(output_col, name=self.name, index=self.index)
 
     @copy_docstring(SeriesGroupBy)
+    @annotate("SERIES_GROUPBY", color="green", domain="cudf_python")
     def groupby(
         self,
         by=None,
@@ -3267,6 +3304,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         )
 
+    @annotate("SERIES_RENAME", color="green", domain="cudf_python")
     def rename(self, index=None, copy=True):
         """
         Alter Series name
@@ -3312,6 +3350,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 
+    @annotate("SERIES_MERGE", color="green", domain="cudf_python")
     def merge(
         self,
         other,
@@ -3327,6 +3366,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
+        warnings.warn(
+            "Series.merge is deprecated and will be removed in a future "
+            "release. Use cudf.merge instead.",
+            FutureWarning,
+        )
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
@@ -3358,16 +3402,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return result
 
+    @annotate("SERIES_ADD_PREFIX", color="green", domain="cudf_python")
     def add_prefix(self, prefix):
-        result = self.copy(deep=True)
-        result.index = prefix + self.index.astype(str)
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=prefix + self.index.astype(str),
+        )
 
+    @annotate("SERIES_ADD_SUFFIX", color="green", domain="cudf_python")
     def add_suffix(self, suffix):
-        result = self.copy(deep=True)
-        result.index = self.index.astype(str) + suffix
-        return result
+        return Series._from_data(
+            data=self._data.copy(deep=True),
+            index=self.index.astype(str) + suffix,
+        )
 
+    @annotate("SERIES_KEYS", color="green", domain="cudf_python")
     def keys(self):
         """
         Return alias for index.
@@ -3411,6 +3460,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self.index
 
+    @annotate("SERIES_EXPLODE", color="green", domain="cudf_python")
     def explode(self, ignore_index=False):
         """
         Transform each element of a list-like to a row, replicating index
@@ -3452,6 +3502,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return super()._explode(self._column_names[0], ignore_index)
 
+    @annotate("SERIES_PCT_CHANGE", color="green", domain="cudf_python")
     def pct_change(
         self, periods=1, fill_method="ffill", limit=None, freq=None
     ):
@@ -3550,7 +3601,7 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class DatetimeProperties(object):
+class DatetimeProperties:
     """
     Accessor object for datetimelike properties of the Series values.
 
@@ -3603,7 +3654,8 @@ class DatetimeProperties(object):
     def __init__(self, series):
         self.series = series
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_YEAR", color="green", domain="cudf_python")
     def year(self):
         """
         The year of the datetime.
@@ -3627,7 +3679,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("year")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_MONTH", color="green", domain="cudf_python")
     def month(self):
         """
         The month as January=1, December=12.
@@ -3651,7 +3704,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("month")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_DAY", color="green", domain="cudf_python")
     def day(self):
         """
         The day of the datetime.
@@ -3675,7 +3729,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("day")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_HOUR", color="green", domain="cudf_python")
     def hour(self):
         """
         The hours of the datetime.
@@ -3699,7 +3754,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("hour")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_MINUTE", color="green", domain="cudf_python")
     def minute(self):
         """
         The minutes of the datetime.
@@ -3723,7 +3779,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("minute")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_SECOND", color="green", domain="cudf_python")
     def second(self):
         """
         The seconds of the datetime.
@@ -3747,7 +3804,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("second")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_WEEKDAY", color="green", domain="cudf_python")
     def weekday(self):
         """
         The day of the week with Monday=0, Sunday=6.
@@ -3783,7 +3841,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("weekday")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_DAYOFWEEK", color="green", domain="cudf_python")
     def dayofweek(self):
         """
         The day of the week with Monday=0, Sunday=6.
@@ -3819,7 +3878,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("weekday")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_DAYOFYEAR", color="green", domain="cudf_python")
     def dayofyear(self):
         """
         The day of the year, from 1-365 in non-leap years and
@@ -3856,7 +3916,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("day_of_year")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_DAY_OF_YEAR", color="green", domain="cudf_python")
     def day_of_year(self):
         """
         The day of the year, from 1-365 in non-leap years and
@@ -3893,7 +3954,8 @@ class DatetimeProperties(object):
         """
         return self._get_dt_field("day_of_year")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_IS_LEAP_YEAR", color="green", domain="cudf_python")
     def is_leap_year(self):
         """
         Boolean indicator if the date belongs to a leap year.
@@ -3908,8 +3970,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates belong to a leap year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-02-01', end='2013-02-01', freq='1Y'))
@@ -3951,7 +4013,8 @@ class DatetimeProperties(object):
             name=self.series.name,
         )
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_QUARTER", color="green", domain="cudf_python")
     def quarter(self):
         """
         Integer indicator for which quarter of the year the date belongs in.
@@ -3966,7 +4029,7 @@ class DatetimeProperties(object):
         Integer indicating which quarter the date belongs to.
 
         Examples
-        -------
+        --------
         >>> import cudf
         >>> s = cudf.Series(["2020-05-31 08:00:00","1999-12-31 18:40:00"],
         ...     dtype="datetime64[ms]")
@@ -3982,6 +4045,7 @@ class DatetimeProperties(object):
             {None: res}, index=self.series._index, name=self.series.name,
         )
 
+    @annotate("SERIES_DT_ISOCALENDAR", color="green", domain="cudf_python")
     def isocalendar(self):
         """
         Returns a DataFrame with the year, week, and day
@@ -4025,14 +4089,16 @@ class DatetimeProperties(object):
         """
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_IS_MONTH_START", color="green", domain="cudf_python")
     def is_month_start(self):
         """
         Booleans indicating if dates are the first day of the month.
         """
         return (self.day == 1).fillna(False)
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_DAYS_IN_MONTH", color="green", domain="cudf_python")
     def days_in_month(self):
         """
         Get the total number of days in the month that the date falls on.
@@ -4042,8 +4108,8 @@ class DatetimeProperties(object):
         Series
         Integers representing the number of days in month
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-01', end='2001-08-01', freq='1M'))
@@ -4083,7 +4149,8 @@ class DatetimeProperties(object):
             name=self.series.name,
         )
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_IS_MONTH_END", color="green", domain="cudf_python")
     def is_month_end(self):
         """
         Boolean indicator if the date is the last day of the month.
@@ -4093,8 +4160,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the last day of the month.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-08-26', end='2000-09-03', freq='1D'))
@@ -4129,7 +4196,10 @@ class DatetimeProperties(object):
         )
         return (self.day == last_day.dt.day).fillna(False)
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SERIES_DT_IS_EQUARTER_START", color="green", domain="cudf_python"
+    )
     def is_quarter_start(self):
         """
         Boolean indicator if the date is the first day of a quarter.
@@ -4139,8 +4209,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the begining of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4175,7 +4245,8 @@ class DatetimeProperties(object):
             {None: result}, index=self.series._index, name=self.series.name,
         )
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_IS_QUARTER_END", color="green", domain="cudf_python")
     def is_quarter_end(self):
         """
         Boolean indicator if the date is the last day of a quarter.
@@ -4185,8 +4256,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the end of a quarter
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(
         ...     pd.date_range(start='2000-09-26', end='2000-10-03', freq='1D'))
@@ -4223,7 +4294,8 @@ class DatetimeProperties(object):
             {None: result}, index=self.series._index, name=self.series.name,
         )
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_IS_YEAR_START", color="green", domain="cudf_python")
     def is_year_start(self):
         """
         Boolean indicator if the date is the first day of the year.
@@ -4233,8 +4305,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the first day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> s = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
@@ -4257,7 +4329,8 @@ class DatetimeProperties(object):
             name=self.series.name,
         )
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_DT_IS_YEAR_END", color="green", domain="cudf_python")
     def is_year_end(self):
         """
         Boolean indicator if the date is the last day of the year.
@@ -4267,8 +4340,8 @@ class DatetimeProperties(object):
         Series
         Booleans indicating if dates are the last day of the year.
 
-        Example
-        -------
+        Examples
+        --------
         >>> import pandas as pd, cudf
         >>> dates = cudf.Series(pd.date_range("2017-12-30", periods=3))
         >>> dates
@@ -4293,12 +4366,14 @@ class DatetimeProperties(object):
             {None: result}, index=self.series._index, name=self.series.name,
         )
 
+    @annotate("SERIES_DT_GET_DT_FIELD", color="green", domain="cudf_python")
     def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
 
+    @annotate("SERIES_DT_CEIL", color="green", domain="cudf_python")
     def ceil(self, freq):
         """
         Perform ceil operation on the data to the specified freq.
@@ -4335,6 +4410,7 @@ class DatetimeProperties(object):
             data={self.series.name: out_column}, index=self.series._index
         )
 
+    @annotate("SERIES_DT_FLOOR", color="green", domain="cudf_python")
     def floor(self, freq):
         """
         Perform floor operation on the data to the specified freq.
@@ -4371,6 +4447,7 @@ class DatetimeProperties(object):
             data={self.series.name: out_column}, index=self.series._index
         )
 
+    @annotate("SERIES_DT_ROUND", color="green", domain="cudf_python")
     def round(self, freq):
         """
         Perform round operation on the data to the specified freq.
@@ -4410,6 +4487,7 @@ class DatetimeProperties(object):
             data={self.series.name: out_column}, index=self.series._index
         )
 
+    @annotate("SERIES_DT_STRFTIME", color="green", domain="cudf_python")
     def strftime(self, date_format, *args, **kwargs):
         """
         Convert to Series using specified ``date_format``.
@@ -4492,7 +4570,7 @@ class DatetimeProperties(object):
         )
 
 
-class TimedeltaProperties(object):
+class TimedeltaProperties:
     """
     Accessor object for timedeltalike properties of the Series values.
 
@@ -4563,7 +4641,8 @@ class TimedeltaProperties(object):
     def __init__(self, series):
         self.series = series
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_TD_DAYS", color="green", domain="cudf_python")
     def days(self):
         """
         Number of days.
@@ -4594,7 +4673,8 @@ class TimedeltaProperties(object):
         """
         return self._get_td_field("days")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_TD_SECONDS", color="green", domain="cudf_python")
     def seconds(self):
         """
         Number of seconds (>= 0 and less than 1 day).
@@ -4632,7 +4712,8 @@ class TimedeltaProperties(object):
         """
         return self._get_td_field("seconds")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_TD_MICROSECONDS", color="green", domain="cudf_python")
     def microseconds(self):
         """
         Number of microseconds (>= 0 and less than 1 second).
@@ -4663,7 +4744,8 @@ class TimedeltaProperties(object):
         """
         return self._get_td_field("microseconds")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_TD_NANOSECONDS", color="green", domain="cudf_python")
     def nanoseconds(self):
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
@@ -4694,7 +4776,8 @@ class TimedeltaProperties(object):
         """
         return self._get_td_field("nanoseconds")
 
-    @property
+    @property  # type: ignore
+    @annotate("SERIES_TD_COMPONENTS", color="green", domain="cudf_python")
     def components(self):
         """
         Return a Dataframe of the components of the Timedeltas.
@@ -4723,6 +4806,7 @@ class TimedeltaProperties(object):
         """  # noqa: E501
         return self.series._column.components(index=self.series._index)
 
+    @annotate("SERIES_TD_GET_TD_FIELD", color="green", domain="cudf_python")
     def _get_td_field(self, field):
         out_column = getattr(self.series._column, field)
         return Series(
@@ -4730,6 +4814,7 @@ class TimedeltaProperties(object):
         )
 
 
+@annotate("SERIES__ALIGN_INDICES", color="green", domain="cudf_python")
 def _align_indices(series_list, how="outer", allow_non_unique=False):
     """
     Internal util to align the indices of a list of Series objects
@@ -4797,6 +4882,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     return result
 
 
+@annotate("CUDF_ISCLOSE", color="green", domain="cudf_python")
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """Returns a boolean array where two arrays are equal within a tolerance.
 

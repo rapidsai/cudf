@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,9 +99,8 @@ TYPED_TEST(UnaryMathOpsTest, ABS)
   std::vector<T> h_input_v(colSize);
   std::vector<T> h_expect_v(colSize);
 
-  std::iota(std::begin(h_input_v),
-            std::end(h_input_v),
-            std::is_unsigned<T>::value ? colSize : -1 * colSize);
+  std::iota(
+    std::begin(h_input_v), std::end(h_input_v), std::is_unsigned_v<T> ? colSize : -1 * colSize);
 
   std::transform(std::cbegin(h_input_v), std::cend(h_input_v), std::begin(h_expect_v), [](auto e) {
     return cudf::util::absolute_value(e);

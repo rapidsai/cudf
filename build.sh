@@ -18,7 +18,7 @@ ARGS=$*
 REPODIR=$(cd $(dirname $0); pwd)
 
 VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l] [--cmake-args=\\\"<args>\\\"]
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
@@ -32,7 +32,6 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    -v                            - verbose build mode
    -g                            - build for debug
    -n                            - no install step
-   -l                            - build legacy tests
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --show_depr_warn              - show cmake deprecation warnings
@@ -169,6 +168,10 @@ if hasArg clean; then
         rmdir ${bd} || true
     fi
     done
+
+    # Cleaning up python artifacts
+    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so$)"  | xargs rm -rf
+
 fi
 
 
@@ -185,12 +188,9 @@ if buildAll || hasArg libcudf; then
     fi
 
     # get the current count before the compile starts
-    FILES_IN_CCACHE=""
-    if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v ccache)" ]]; then
-        FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
-        echo "$FILES_IN_CCACHE"
-        # zero the ccache statistics
-        ccache -z
+    if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
+        # zero the sccache statistics
+        sccache --zero-stats
     fi
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
@@ -216,11 +216,12 @@ if buildAll || hasArg libcudf; then
         echo "Formatting build metrics"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         MSG="<p>"
-        # get some ccache stats after the compile
-        if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v ccache)" ]]; then
-           MSG="${MSG}<br/>$FILES_IN_CCACHE"
-           HIT_RATE=$(ccache -s | grep "cache hit rate")
-           MSG="${MSG}<br/>${HIT_RATE}"
+        # get some sccache stats after the compile
+        if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
+           COMPILE_REQUESTS=$(sccache -s | grep "Compile requests \+ [0-9]\+$" | awk '{ print $NF }')
+           CACHE_HITS=$(sccache -s | grep "Cache hits \+ [0-9]\+$" | awk '{ print $NF }')
+           HIT_RATE=$(echo - | awk "{printf \"%.2f\n\", $CACHE_HITS / $COMPILE_REQUESTS * 100}")
+           MSG="${MSG}<br/>cache hit rate ${HIT_RATE} %"
         fi
         MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
         MSG="${MSG}<br/>parallel build time: $compile_total seconds"

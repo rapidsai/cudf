@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ using corresponding_operator_t = typename corresponding_operator<k>::type;
 template <aggregation::Kind k>
 constexpr bool has_corresponding_operator()
 {
-  return !std::is_same<typename corresponding_operator<k>::type, void>::value;
+  return !std::is_same_v<typename corresponding_operator<k>::type, void>;
 }
 
 template <typename Source,
@@ -602,7 +602,7 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
+  std::enable_if_t<not std::is_same_v<corresponding_operator_t<k>, void>, T>
   identity_from_operator()
   {
     using DeviceType = device_storage_type_t<T>;
@@ -610,8 +610,7 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<std::is_same<corresponding_operator_t<k>, void>::value, T>
-  identity_from_operator()
+  std::enable_if_t<std::is_same_v<corresponding_operator_t<k>, void>, T> identity_from_operator()
   {
     CUDF_FAIL("Unable to get identity/sentinel from device operator");
   }
