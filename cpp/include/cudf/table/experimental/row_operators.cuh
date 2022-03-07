@@ -178,7 +178,8 @@ class element_relational_comparator {
  */
 template <typename Nullate>
 class device_row_comparator {
- public:
+  friend class self_comparator;
+
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -212,6 +213,7 @@ class device_row_comparator {
   {
   }
 
+ public:
   /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
@@ -296,7 +298,8 @@ struct preprocessed_table {
   bool _has_nulls;
 };
 
-struct self_comparator {
+class self_comparator {
+ public:
   self_comparator(table_view const& t,
                   host_span<order const> column_order,
                   host_span<null_order const> null_precedence,
