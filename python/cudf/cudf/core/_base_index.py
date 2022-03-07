@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -1519,6 +1520,27 @@ class BaseIndex(Serializable):
             [],
             ["index" if self.name is None else self.name],
             [],
+        )
+
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        ignore_index=False,
+    ):
+        warnings.warn(
+            "Index.sample is deprecated and will be removed.", FutureWarning,
+        )
+        return cudf.core.index._index_from_data(
+            self.to_frame()
+            .sample(
+                n, frac, replace, weights, random_state, axis, ignore_index
+            )
+            ._data
         )
 
 

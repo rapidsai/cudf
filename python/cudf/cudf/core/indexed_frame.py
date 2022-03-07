@@ -1717,24 +1717,222 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        ignore_index=False,
+    ):
+        """Return a random sample of items from an axis of object.
+
+        If reproducible results are required, a random number generator may be
+        provided via the `random_state` parameter. This function will always
+        produce the same sample given an identical `random_state`.
+
+        Notes
+        -----
+        When sampling from ``axis=0/'index'``, ``random_state`` can be either
+        a numpy random state (``numpy.random.RandomState``) or a cupy random
+        state (``cupy.random.RandomState``). When a numpy random state is
+        used, the output is guaranteed to match the output of the corresponding
+        pandas method call, but generating the sample may be slow. If exact
+        pandas equivalence is not required, using a cupy random state will
+        achieve better performance, especially when sampling large number of
+        items. It's advised to use the matching `ndarray` type to the random
+        state for the `weights` array.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of items from axis to return. Cannot be used with `frac`.
+            Default = 1 if frac = None.
+        frac : float, optional
+            Fraction of axis items to return. Cannot be used with n.
+        replace : bool, default False
+            Allow or disallow sampling of the same row more than once.
+            `replace == True` is not supported for axis = 1/"columns".
+            `replace == False` is not supported for axis = 0/"index" given
+            `random_state` is `None` or a cupy random state, and `weights` is
+            specified.
+        weights : ndarray-like, optional
+            Default `None` for uniform probability distribution over rows to
+            sample from. If `ndarray` is passed, the length of `weights` should
+            equal to the number of rows to sample from, and will be normalized
+            to have a sum of 1. Unlike pandas, index alignment is not currently
+            not performed.
+        random_state : int, numpy/cupy RandomState, or None, default None
+            If None, default cupy random state is chosen.
+            If int, the seed for the default cupy random state.
+            If RandomState, rows-to-sample are generated from the RandomState.
+        axis : {0 or `index`, 1 or `columns`, None}, default None
+            Axis to sample. Accepts axis number or name.
+            Default is stat axis for given data type
+            (0 for Series and DataFrames). Series doesn't support axis=1.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        Series or DataFrame
+            A new object of same type as caller containing n items
+            randomly sampled from the caller object.
+
+        Examples
+        --------
+        >>> import cudf as cudf
+        >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
+        >>> df.sample(3)
+           a
+        1  2
+        3  4
+        0  1
+
+        >>> sr = cudf.Series([1, 2, 3, 4, 5])
+        >>> sr.sample(10, replace=True)
+        1    4
+        3    1
+        2    4
+        0    5
+        0    1
+        4    5
+        4    1
+        0    2
+        0    3
+        3    2
+        dtype: int64
+
+        >>> df = cudf.DataFrame(
+        ...     {"a": [1, 2], "b": [2, 3], "c": [3, 4], "d": [4, 5]}
+        ... )
+        >>> df.sample(2, axis=1)
+           a  c
+        0  1  3
+        1  2  4
+        """
+        axis = self._get_axis_from_axis_arg(axis)
+        size = self.shape[axis]
+
+        # Compute `n` from parameter `frac`.
+        if frac is None:
+            n = 1 if n is None else n
+        else:
+            if frac > 1 and not replace:
+                raise ValueError(
+                    "Replace has to be set to `True` when upsampling the "
+                    "population `frac` > 1."
+                )
+            if n is not None:
+                raise ValueError(
+                    "Please enter a value for `frac` OR `n`, not both."
+                )
+            n = int(round(size * frac))
+
+        if n > 0 and size == 0:
+            raise ValueError(
+                "Cannot take a sample larger than 0 when axis is empty."
+            )
+
+        if isinstance(random_state, cp.random.RandomState):
+            lib = cp
+        elif isinstance(random_state, np.random.RandomState):
+            lib = np
+        else:
+            # Construct random state if `random_state` parameter is None or a
+            # seed. By default, cupy random state is used to sample rows
+            # and numpy is used to sample columns. This is because row data
+            # is stored on device, and the column objects are stored on host.
+            lib = cp if axis == 0 else np
+            random_state = lib.random.RandomState(seed=random_state)
+
+        # Normalize `weights` array.
+        if weights is not None:
+            if isinstance(weights, str):
+                raise NotImplementedError(
+                    "Weights specified by string is unsupported yet."
+                )
+
+            if size != len(weights):
+                raise ValueError(
+                    "Weights and axis to be sampled must be of same length."
+                )
+
+            weights = lib.asarray(weights)
+            weights = weights / weights.sum()
+
+        if axis == 0:
+            return self._sample_axis_0(
+                n, weights, replace, random_state, ignore_index
+            )
+        else:
+            if isinstance(random_state, cp.random.RandomState):
+                raise ValueError(
+                    "Sampling from `axis=1`/`columns` with cupy random state"
+                    "isn't supported."
+                )
+            return self._sample_axis_1(
+                n, weights, replace, random_state, ignore_index
+            )
+
+    def _sample_axis_0(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: Union[np.random.RandomState, cp.random.RandomState],
+        ignore_index: bool,
+    ):
+        try:
+            gather_map_array = random_state.choice(
+                len(self), size=n, replace=replace, p=weights
+            )
+        except NotImplementedError as e:
+            raise NotImplementedError(
+                "Random sampling with cupy does not support these inputs."
+            ) from e
+
+        return self._gather(
+            cudf.core.column.as_column(gather_map_array),
+            keep_index=not ignore_index,
+            check_bounds=False,
+        )
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        raise NotImplementedError(
+            f"Sampling from axis 1 is not implemented for {self.__class__}."
+        )
+
     def _binaryop(
         self,
         other: Any,
-        fn: str,
+        op: str,
         fill_value: Any = None,
-        reflect: bool = False,
         can_reindex: bool = False,
         *args,
         **kwargs,
     ):
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
         operands, out_index = self._make_operands_and_index_for_binop(
-            other, fn, fill_value, reflect, can_reindex
+            other, op, fill_value, reflect, can_reindex
         )
         if operands is NotImplemented:
             return NotImplemented
 
         return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            ColumnAccessor(type(self)._colwise_binop(operands, op)),
             index=out_index,
         )
 
@@ -1841,7 +2039,7 @@ class IndexedFrame(Frame):
                 object.
             -   ``warn`` : prints last exceptions as warnings and
                 return original object.
-            -   **kwargs : extra arguments to pass on to the constructor
+        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
