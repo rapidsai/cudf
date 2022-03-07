@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,8 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
-namespace groupby {
 namespace detail {
+namespace tdigest {
 
 using namespace cudf::tdigest;
 
@@ -1010,6 +1010,6 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                           mr);
 }
 
+}  // namespace tdigest
 }  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

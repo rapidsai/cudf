@@ -265,7 +265,6 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
-  src/groupby/sort/group_tdigest.cu
   src/groupby/sort/sort_helper.cu
   src/hash/hashing.cu
   src/hash/md5_hash.cu
@@ -356,7 +355,8 @@ add_library(
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
   src/quantiles/tdigest/tdigest.cu
-  src/quantiles/tdigest/tdigest_column_view.cpp
+  src/quantiles/tdigest/tdigest_aggregation.cu
+  src/quantiles/tdigest/tdigest_column_view.cpp  
   src/quantiles/quantile.cu
   src/quantiles/quantiles.cu
   src/reductions/all.cu

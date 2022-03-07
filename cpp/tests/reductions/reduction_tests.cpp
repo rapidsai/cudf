@@ -469,11 +469,11 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
-  double var   = calc_var(v, v.size());
-  double std   = std::sqrt(var);
+  double var      = calc_var(v, v.size());
+  double std      = std::sqrt(var);
   auto const ddof = 1;
-  auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
-  auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(ddof);
+  auto var_agg    = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
+  auto std_agg    = cudf::make_std_aggregation<reduce_aggregation>(ddof);
 
   this->reduction_test(col, var, true, var_agg, cudf::data_type(cudf::type_id::FLOAT64));
   this->reduction_test(col, std, true, std_agg, cudf::data_type(cudf::type_id::FLOAT64));
@@ -547,7 +547,7 @@ TYPED_TEST(ReductionMultiStepErrorCheck, DISABLED_ErrorHandling)
 
   auto evaluate = [&](cudf::data_type dtype) mutable {
     bool expect_succeed = is_input_acceptable & is_supported_outdtype(dtype);
-    auto const ddof = 1;
+    auto const ddof     = 1;
     auto var_agg        = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
     auto std_agg        = cudf::make_std_aggregation<reduce_aggregation>(ddof);
     this->reduction_error_check(
