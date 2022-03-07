@@ -1600,6 +1600,7 @@ def test_index_sample_basic(n, frac, replace):
                     "random_state": random_state,
                 },
             ),
+            compare_error_message=False,
         )
     else:
         gout = gindex.sample(
@@ -1668,6 +1669,8 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
+        if axis == 1 and n is None and frac is None:
+            pout = pout.iloc[:, 0]
         assert pout.shape == gout.shape
 
 
