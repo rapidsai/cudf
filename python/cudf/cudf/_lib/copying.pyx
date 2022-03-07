@@ -656,32 +656,6 @@ def get_element(Column input_column, size_type index):
     )
 
 
-def sample(input, size_type n,
-           bool replace, int64_t seed, bool keep_index=True):
-    cdef table_view tbl_view = table_view_from_table(input, not keep_index)
-    cdef cpp_copying.sample_with_replacement replacement
-
-    if replace:
-        replacement = cpp_copying.sample_with_replacement.TRUE
-    else:
-        replacement = cpp_copying.sample_with_replacement.FALSE
-
-    cdef unique_ptr[table] c_output
-    with nogil:
-        c_output = move(
-            cpp_copying.sample(tbl_view, n, replacement, seed)
-        )
-
-    return data_from_unique_ptr(
-        move(c_output),
-        column_names=input._column_names,
-        index_names=(
-            None if keep_index is False
-            else input._index_names
-        )
-    )
-
-
 def segmented_gather(Column source_column, Column gather_map):
     cdef shared_ptr[lists_column_view] source_LCV = (
         make_shared[lists_column_view](source_column.view())
