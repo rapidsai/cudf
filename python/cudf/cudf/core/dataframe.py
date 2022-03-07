@@ -5158,7 +5158,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis == 0:
             return super()._scan(op, axis=axis, *args, **kwargs)
         elif axis == 1:
-            return self._apply_cupy_method_axis_1(f"cum{op}", **kwargs)
+            return self._apply_cupy_method_axis_1(op, **kwargs)
 
     @annotate("DATAFRAME_MODE", color="green", domain="cudf_python")
     def mode(self, axis=0, numeric_only=False, dropna=True):
