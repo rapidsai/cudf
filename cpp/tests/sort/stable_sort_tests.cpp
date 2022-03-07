@@ -232,5 +232,42 @@ TEST_F(StableSortByKey, ValueKeysSizeMismatch)
   EXPECT_THROW(stable_sort_by_key(values, keys), logic_error);
 }
 
+template <typename T>
+struct StableSortFixedPoint : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+TYPED_TEST_SUITE(StableSortFixedPoint, cudf::test::FixedPointTypes);
+
+TYPED_TEST(StableSortFixedPoint, FixedPointSortedOrderGather)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const ZERO  = decimalXX{0, scale_type{0}};
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const input_vec  = std::vector<decimalXX>{THREE, TWO, ONE, ZERO, FOUR, THREE};
+  auto const index_vec  = std::vector<cudf::size_type>{3, 2, 1, 0, 5, 4};
+  auto const sorted_vec = std::vector<decimalXX>{ZERO, ONE, TWO, THREE, THREE, FOUR};
+
+  auto const input_col  = wrapper<decimalXX>(input_vec.begin(), input_vec.end());
+  auto const index_col  = wrapper<cudf::size_type>(index_vec.begin(), index_vec.end());
+  auto const sorted_col = wrapper<decimalXX>(sorted_vec.begin(), sorted_vec.end());
+
+  auto const sorted_table = cudf::table_view{{sorted_col}};
+  auto const input_table  = cudf::table_view{{input_col}};
+
+  auto const indices = cudf::sorted_order(input_table);
+  auto const sorted  = cudf::gather(input_table, indices->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(index_col, indices->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
+}
+
 }  // namespace test
 }  // namespace cudf
