@@ -192,18 +192,6 @@ hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& k
   return this->compute(static_cast<uint8_t>(key));
 }
 
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
 template <>
 hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
 {
@@ -214,6 +202,15 @@ template <>
 hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
 {
   return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
@@ -260,9 +257,9 @@ struct SparkMurmurHash3_32 {
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
   {
-    return (x << r) | (x >> (32 - r));
+    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
   }
 
   __device__ inline uint32_t fmix32(uint32_t h) const
@@ -383,6 +380,27 @@ hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
 }
 
 template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
+}
+
+template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
@@ -452,30 +470,6 @@ hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operat
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
-}
-
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
 }
 
 /**
