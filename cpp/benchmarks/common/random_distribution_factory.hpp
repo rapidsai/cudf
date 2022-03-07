@@ -113,43 +113,9 @@ struct abs_value_generator : value_generator<T, Generator> {
 template <typename T>
 using distribution_fn = std::function<rmm::device_uvector<T>(thrust::minstd_rand&, size_t)>;
 
-template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
-distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper_bound)
-{
-  switch (did) {
-    case distribution_id::NORMAL:
-      return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
-               thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        thrust::tabulate(thrust::device,
-                         result.begin(),
-                         result.end(),
-                         value_generator{lower_bound, upper_bound, engine, dist});
-        return result;
-      };
-    case distribution_id::UNIFORM:
-      return [dist = make_uniform_dist(lower_bound, upper_bound)](
-               thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        thrust::tabulate(
-          thrust::device, result.begin(), result.end(), value_generator{T{0}, T{0}, engine, dist});
-        return result;
-      };
-    case distribution_id::GEOMETRIC:
-      return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
-               thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        thrust::tabulate(thrust::device,
-                         result.begin(),
-                         result.end(),
-                         abs_value_generator{lower_bound, upper_bound, engine, dist});
-        return result;
-      };
-    default: CUDF_FAIL("Unsupported probability distribution");
-  }
-}
-
-template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
+template <
+  typename T,
+  std::enable_if_t<cuda::std::is_integral_v<T> or cuda::std::is_floating_point_v<T>, T>* = nullptr>
 distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T upper_bound)
 {
   switch (dist_id) {
@@ -160,7 +126,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
         thrust::tabulate(thrust::device,
                          result.begin(),
                          result.end(),
-                         value_generator{upper_bound, lower_bound, engine, dist});
+                         value_generator{lower_bound, upper_bound, engine, dist});
         return result;
       };
     case distribution_id::UNIFORM:

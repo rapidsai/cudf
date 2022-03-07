@@ -19,7 +19,6 @@
 #include <map>
 
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 /**
