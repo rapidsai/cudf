@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -40,14 +41,6 @@ class BaseIndex(Serializable):
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
-
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
-        else:
-            return NotImplemented
 
     @cached_property
     def _values(self) -> ColumnBase:
@@ -957,7 +950,9 @@ class BaseIndex(Serializable):
         self_df["order"] = self_df.index
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
-        res = res.sort_values(by=res.columns[1:], ignore_index=True)
+        res = res.sort_values(
+            by=res._data.to_pandas_index()[1:], ignore_index=True
+        )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
         if sort is None and len(other):
@@ -1532,6 +1527,27 @@ class BaseIndex(Serializable):
             [],
             ["index" if self.name is None else self.name],
             [],
+        )
+
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        ignore_index=False,
+    ):
+        warnings.warn(
+            "Index.sample is deprecated and will be removed.", FutureWarning,
+        )
+        return cudf.core.index._index_from_data(
+            self.to_frame()
+            .sample(
+                n, frac, replace, weights, random_state, axis, ignore_index
+            )
+            ._data
         )
 
 

@@ -7,7 +7,7 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Callable, Type, TypeVar
+from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar, Union
 from uuid import uuid4
 
 import cupy as cp
@@ -444,12 +444,11 @@ class IndexedFrame(Frame):
                 out = self._gather(inds)
                 # TODO: frame factory function should handle multilevel column
                 # names
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out._set_column_names_like(self)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -459,12 +458,11 @@ class IndexedFrame(Frame):
                     ascending=ascending, na_position=na_position
                 )
                 out = self._gather(inds)
-                if isinstance(
-                    self, cudf.core.dataframe.DataFrame
-                ) and isinstance(
-                    self.columns, pd.core.indexes.multi.MultiIndex
+                if (
+                    isinstance(self, cudf.core.dataframe.DataFrame)
+                    and self._data.multiindex
                 ):
-                    out.columns = self.columns
+                    out._set_column_names_like(self)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
@@ -938,10 +936,11 @@ class IndexedFrame(Frame):
             ),
             keep_index=not ignore_index,
         )
-        if isinstance(self, cudf.core.dataframe.DataFrame) and isinstance(
-            self.columns, pd.core.indexes.multi.MultiIndex
+        if (
+            isinstance(self, cudf.core.dataframe.DataFrame)
+            and self._data.multiindex
         ):
-            out.columns = self.columns
+            out.columns = self._data.to_pandas_index()
         return out
 
     def _n_largest_or_smallest(self, largest, n, columns, keep):
@@ -1695,150 +1694,284 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
-    # For more detail on this function and how it should work, see
-    # https://numpy.org/doc/stable/reference/ufuncs.html
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        # We don't currently support reduction, accumulation, etc. We also
-        # don't support any special kwargs or higher arity ufuncs than binary.
-        if method != "__call__" or kwargs or ufunc.nin > 2:
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        ignore_index=False,
+    ):
+        """Return a random sample of items from an axis of object.
+
+        If reproducible results are required, a random number generator may be
+        provided via the `random_state` parameter. This function will always
+        produce the same sample given an identical `random_state`.
+
+        Notes
+        -----
+        When sampling from ``axis=0/'index'``, ``random_state`` can be either
+        a numpy random state (``numpy.random.RandomState``) or a cupy random
+        state (``cupy.random.RandomState``). When a numpy random state is
+        used, the output is guaranteed to match the output of the corresponding
+        pandas method call, but generating the sample may be slow. If exact
+        pandas equivalence is not required, using a cupy random state will
+        achieve better performance, especially when sampling large number of
+        items. It's advised to use the matching `ndarray` type to the random
+        state for the `weights` array.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of items from axis to return. Cannot be used with `frac`.
+            Default = 1 if frac = None.
+        frac : float, optional
+            Fraction of axis items to return. Cannot be used with n.
+        replace : bool, default False
+            Allow or disallow sampling of the same row more than once.
+            `replace == True` is not supported for axis = 1/"columns".
+            `replace == False` is not supported for axis = 0/"index" given
+            `random_state` is `None` or a cupy random state, and `weights` is
+            specified.
+        weights : ndarray-like, optional
+            Default `None` for uniform probability distribution over rows to
+            sample from. If `ndarray` is passed, the length of `weights` should
+            equal to the number of rows to sample from, and will be normalized
+            to have a sum of 1. Unlike pandas, index alignment is not currently
+            not performed.
+        random_state : int, numpy/cupy RandomState, or None, default None
+            If None, default cupy random state is chosen.
+            If int, the seed for the default cupy random state.
+            If RandomState, rows-to-sample are generated from the RandomState.
+        axis : {0 or `index`, 1 or `columns`, None}, default None
+            Axis to sample. Accepts axis number or name.
+            Default is stat axis for given data type
+            (0 for Series and DataFrames). Series doesn't support axis=1.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        Series or DataFrame
+            A new object of same type as caller containing n items
+            randomly sampled from the caller object.
+
+        Examples
+        --------
+        >>> import cudf as cudf
+        >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
+        >>> df.sample(3)
+           a
+        1  2
+        3  4
+        0  1
+
+        >>> sr = cudf.Series([1, 2, 3, 4, 5])
+        >>> sr.sample(10, replace=True)
+        1    4
+        3    1
+        2    4
+        0    5
+        0    1
+        4    5
+        4    1
+        0    2
+        0    3
+        3    2
+        dtype: int64
+
+        >>> df = cudf.DataFrame(
+        ...     {"a": [1, 2], "b": [2, 3], "c": [3, 4], "d": [4, 5]}
+        ... )
+        >>> df.sample(2, axis=1)
+           a  c
+        0  1  3
+        1  2  4
+        """
+        axis = self._get_axis_from_axis_arg(axis)
+        size = self.shape[axis]
+
+        # Compute `n` from parameter `frac`.
+        if frac is None:
+            n = 1 if n is None else n
+        else:
+            if frac > 1 and not replace:
+                raise ValueError(
+                    "Replace has to be set to `True` when upsampling the "
+                    "population `frac` > 1."
+                )
+            if n is not None:
+                raise ValueError(
+                    "Please enter a value for `frac` OR `n`, not both."
+                )
+            n = int(round(size * frac))
+
+        if n > 0 and size == 0:
+            raise ValueError(
+                "Cannot take a sample larger than 0 when axis is empty."
+            )
+
+        if isinstance(random_state, cp.random.RandomState):
+            lib = cp
+        elif isinstance(random_state, np.random.RandomState):
+            lib = np
+        else:
+            # Construct random state if `random_state` parameter is None or a
+            # seed. By default, cupy random state is used to sample rows
+            # and numpy is used to sample columns. This is because row data
+            # is stored on device, and the column objects are stored on host.
+            lib = cp if axis == 0 else np
+            random_state = lib.random.RandomState(seed=random_state)
+
+        # Normalize `weights` array.
+        if weights is not None:
+            if isinstance(weights, str):
+                raise NotImplementedError(
+                    "Weights specified by string is unsupported yet."
+                )
+
+            if size != len(weights):
+                raise ValueError(
+                    "Weights and axis to be sampled must be of same length."
+                )
+
+            weights = lib.asarray(weights)
+            weights = weights / weights.sum()
+
+        if axis == 0:
+            return self._sample_axis_0(
+                n, weights, replace, random_state, ignore_index
+            )
+        else:
+            if isinstance(random_state, cp.random.RandomState):
+                raise ValueError(
+                    "Sampling from `axis=1`/`columns` with cupy random state"
+                    "isn't supported."
+                )
+            return self._sample_axis_1(
+                n, weights, replace, random_state, ignore_index
+            )
+
+    def _sample_axis_0(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: Union[np.random.RandomState, cp.random.RandomState],
+        ignore_index: bool,
+    ):
+        try:
+            gather_map_array = random_state.choice(
+                len(self), size=n, replace=replace, p=weights
+            )
+        except NotImplementedError as e:
+            raise NotImplementedError(
+                "Random sampling with cupy does not support these inputs."
+            ) from e
+
+        return self._gather(
+            cudf.core.column.as_column(gather_map_array),
+            keep_index=not ignore_index,
+            check_bounds=False,
+        )
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        raise NotImplementedError(
+            f"Sampling from axis 1 is not implemented for {self.__class__}."
+        )
+
+    def _binaryop(
+        self,
+        other: Any,
+        op: str,
+        fill_value: Any = None,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ):
+        reflect = self._is_reflected_op(op)
+        if reflect:
+            op = op[:2] + op[3:]
+        operands, out_index = self._make_operands_and_index_for_binop(
+            other, op, fill_value, reflect, can_reindex
+        )
+        if operands is NotImplemented:
             return NotImplemented
 
-        # Binary operations
-        binary_operations = {
-            # Arithmetic binary operations.
-            "add": "add",
-            "subtract": "sub",
-            "multiply": "mul",
-            "matmul": "matmul",
-            "divide": "truediv",
-            "true_divide": "truediv",
-            "floor_divide": "floordiv",
-            "power": "pow",
-            "float_power": "pow",
-            "remainder": "mod",
-            "mod": "mod",
-            "fmod": "mod",
-            # Bitwise binary operations.
-            "bitwise_and": "and",
-            "bitwise_or": "or",
-            "bitwise_xor": "xor",
-            # Comparison binary operators
-            "greater": "gt",
-            "greater_equal": "ge",
-            "less": "lt",
-            "less_equal": "le",
-            "not_equal": "ne",
-            "equal": "eq",
-        }
+        return self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, op)),
+            index=out_index,
+        )
 
-        # First look for methods of the class.
+    def _make_operands_and_index_for_binop(
+        self,
+        other: Any,
+        fn: str,
+        fill_value: Any = None,
+        reflect: bool = False,
+        can_reindex: bool = False,
+        *args,
+        **kwargs,
+    ) -> Tuple[
+        Union[
+            Dict[
+                Optional[str],
+                Tuple[cudf.core.column.ColumnBase, Any, bool, Any],
+            ],
+            Type[NotImplemented],
+        ],
+        Optional[cudf.BaseIndex],
+    ]:
+        raise NotImplementedError(
+            "Binary operations are not supported for {self.__class__}"
+        )
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        ret = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
         fname = ufunc.__name__
-        if fname in binary_operations:
-            reflect = self is not inputs[0]
-            other = inputs[0] if reflect else inputs[1]
 
-            # These operators need to be mapped to their inverses when
-            # performing a reflected operation because no reflected version of
-            # the operators themselves exist.
-            ops_without_reflection = {
-                "gt": "lt",
-                "ge": "le",
-                "lt": "gt",
-                "le": "ge",
-                # ne and eq are symmetric, so they are their own inverse op
-                "ne": "ne",
-                "eq": "eq",
-            }
-
-            op = binary_operations[fname]
-            if reflect and op in ops_without_reflection:
-                op = ops_without_reflection[op]
-                reflect = False
-            op = f"__{'r' if reflect else ''}{op}__"
-
+        if ret is not None:
             # pandas bitwise operations return bools if indexes are misaligned.
-            if (
-                "bitwise" in fname
-                and isinstance(other, IndexedFrame)
-                and not self.index.equals(other.index)
-            ):
-                return getattr(self, op)(other).astype(bool)
-            # Float_power returns float irrespective of the input type.
-            if fname == "float_power":
-                return getattr(self, op)(other).astype(float)
-            return getattr(self, op)(other)
-
-        # Special handling for unary operations.
-        if fname == "negative":
-            return self * -1
-        if fname == "positive":
-            return self.copy(deep=True)
-        if fname == "invert":
-            return ~self
-        if fname == "absolute":
-            return self.abs()
-        if fname == "fabs":
-            return self.abs().astype(np.float64)
-
-        # Note: There are some operations that may be supported by libcudf but
-        # are not supported by pandas APIs. In particular, libcudf binary
-        # operations support logical and/or operations, but those operations
-        # are not defined on pd.Series/DataFrame. For now those operations will
-        # dispatch to cupy, but if ufuncs are ever a bottleneck we could add
-        # special handling to dispatch those (or any other) functions that we
-        # could implement without cupy.
+            if "bitwise" in fname:
+                reflect = self is not inputs[0]
+                other = inputs[0] if reflect else inputs[1]
+                if isinstance(other, self.__class__) and not self.index.equals(
+                    other.index
+                ):
+                    ret = ret.astype(bool)
+            return ret
 
         # Attempt to dispatch all other functions to cupy.
         cupy_func = getattr(cp, fname)
         if cupy_func:
-            # Indices must be aligned before converting to arrays.
             if ufunc.nin == 2:
                 other = inputs[self is inputs[0]]
-                inputs, index = self._prep_for_binop(other, fname)
+                inputs, index = self._make_operands_and_index_for_binop(
+                    other, fname
+                )
             else:
+                # This works for Index too
                 inputs = {
                     name: (col, None, False, None)
                     for name, col in self._data.items()
                 }
                 index = self._index
 
-            mask = None
-            data = [{} for _ in range(ufunc.nout)]
-            for name, (left, right, _, _) in inputs.items():
-                cupy_inputs = []
-                # TODO: I'm jumping through multiple hoops to get the unary
-                # behavior to match up with the binary. I should see if there
-                # are better patterns to employ here.
-                for inp in (left, right) if ufunc.nin == 2 else (left,):
-                    if (
-                        isinstance(inp, cudf.core.column.ColumnBase)
-                        and inp.has_nulls()
-                    ):
-                        new_mask = cudf.core.column.as_column(inp.nullmask)
-
-                        # TODO: This is a hackish way to perform a bitwise and
-                        # of bitmasks. Once we expose
-                        # cudf::detail::bitwise_and, then we can use that
-                        # instead.
-                        mask = new_mask if mask is None else (mask & new_mask)
-
-                        # Arbitrarily fill with zeros. For ufuncs, we assume
-                        # that the end result propagates nulls via a bitwise
-                        # and, so these elements are irrelevant.
-                        inp = inp.fillna(0)
-                    cupy_inputs.append(cp.asarray(inp))
-
-                cp_output = cupy_func(*cupy_inputs, **kwargs)
-                if ufunc.nout == 1:
-                    cp_output = (cp_output,)
-                for i, out in enumerate(cp_output):
-                    data[i][name] = cudf.core.column.as_column(out).set_mask(
-                        mask
-                    )
-
-            out = tuple(
-                self.__class__._from_data(out, index=index) for out in data
+            data = self._apply_cupy_ufunc_to_operands(
+                ufunc, cupy_func, inputs, **kwargs
             )
+
+            out = tuple(self._from_data(out, index=index) for out in data)
             return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented

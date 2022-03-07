@@ -11,6 +11,7 @@ import textwrap
 from copy import copy
 
 import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -3342,14 +3343,6 @@ def test_select_dtype_datetime_with_frequency():
     )
 
 
-def test_array_ufunc():
-    gdf = cudf.DataFrame({"x": [2, 3, 4.0], "y": [9.0, 2.5, 1.1]})
-    pdf = gdf.to_pandas()
-
-    assert_eq(np.sqrt(gdf), np.sqrt(pdf))
-    assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
-
-
 def test_dataframe_describe_exclude():
     np.random.seed(12)
     data_length = 10000
@@ -5195,8 +5188,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.categories.memory_usage()
-        + gdf.B._column.codes.memory_usage()
+        gdf.B._column.categories.memory_usage
+        + gdf.B._column.codes.memory_usage
     )
 
     # Check cat column
@@ -5209,8 +5202,7 @@ def test_memory_usage_cat():
 def test_memory_usage_list():
     df = cudf.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
     expected = (
-        df.A._column.offsets.memory_usage()
-        + df.A._column.elements.memory_usage()
+        df.A._column.offsets.memory_usage + df.A._column.elements.memory_usage
     )
     assert expected == df.A.memory_usage()
 
@@ -7152,120 +7144,165 @@ def test_cudf_arrow_array_error():
         sr.__arrow_array__()
 
 
-@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
-@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-@pytest.mark.parametrize("axis", [0, 1])
-def test_dataframe_sample_basic(n, frac, replace, axis):
-    # as we currently don't support column with same name
-    if axis == 1 and replace:
-        return
+@pytest.mark.parametrize(
+    "make_weights_axis_1",
+    [lambda _: None, lambda s: [1] * s, lambda s: np.ones(s)],
+)
+def test_sample_axis_1(
+    sample_n_frac, random_state_tuple_axis_1, make_weights_axis_1
+):
+    n, frac = sample_n_frac
+    pd_random_state, gd_random_state, checker = random_state_tuple_axis_1
+
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, 5],
             "float": [0.05, 0.2, 0.3, 0.2, 0.25],
             "int": [1, 3, 5, 4, 2],
         },
-        index=[1, 2, 3, 4, 5],
     )
     df = cudf.DataFrame.from_pandas(pdf)
-    random_state = 0
 
-    try:
-        pout = pdf.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=random_state,
-            axis=axis,
+    weights = make_weights_axis_1(len(pdf.columns))
+
+    expected = pdf.sample(
+        n=n,
+        frac=frac,
+        replace=False,
+        random_state=pd_random_state,
+        weights=weights,
+        axis=1,
+    )
+    got = df.sample(
+        n=n,
+        frac=frac,
+        replace=False,
+        random_state=gd_random_state,
+        weights=weights,
+        axis=1,
+    )
+    checker(expected, got)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5],
+                "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+                "int": [1, 3, 5, 4, 2],
+            },
+        ),
+        pd.Series([1, 2, 3, 4, 5]),
+    ],
+)
+@pytest.mark.parametrize("replace", [True, False])
+def test_sample_axis_0(
+    pdf, sample_n_frac, replace, random_state_tuple_axis_0, make_weights_axis_0
+):
+    n, frac = sample_n_frac
+    pd_random_state, gd_random_state, checker = random_state_tuple_axis_0
+
+    df = cudf.from_pandas(pdf)
+
+    pd_weights, gd_weights = make_weights_axis_0(
+        len(pdf), isinstance(gd_random_state, np.random.RandomState)
+    )
+    if (
+        not replace
+        and not isinstance(gd_random_state, np.random.RandomState)
+        and gd_weights is not None
+    ):
+        pytest.skip(
+            "`cupy.random.RandomState` doesn't support weighted sampling "
+            "without replacement."
         )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=pdf.sample,
-            rfunc=df.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                    "axis": axis,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                    "axis": axis,
-                },
-            ),
-        )
-    else:
-        gout = df.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=random_state,
-            axis=axis,
-        )
-        assert pout.shape == gout.shape
+
+    expected = pdf.sample(
+        n=n,
+        frac=frac,
+        replace=replace,
+        random_state=pd_random_state,
+        weights=pd_weights,
+        axis=0,
+    )
+
+    got = df.sample(
+        n=n,
+        frac=frac,
+        replace=replace,
+        random_state=gd_random_state,
+        weights=gd_weights,
+        axis=0,
+    )
+    checker(expected, got)
 
 
 @pytest.mark.parametrize("replace", [True, False])
-@pytest.mark.parametrize("random_state", [1, np.random.mtrand.RandomState(10)])
-def test_dataframe_reproducibility(replace, random_state):
+@pytest.mark.parametrize(
+    "random_state_lib", [cp.random.RandomState, np.random.RandomState]
+)
+def test_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
 
-    expected = df.sample(1024, replace=replace, random_state=random_state)
-    out = df.sample(1024, replace=replace, random_state=random_state)
+    n = 1024
+    expected = df.sample(n, replace=replace, random_state=random_state_lib(10))
+    out = df.sample(n, replace=replace, random_state=random_state_lib(10))
 
     assert_eq(expected, out)
 
 
-@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
-@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-def test_series_sample_basic(n, frac, replace):
-    psr = pd.Series([1, 2, 3, 4, 5])
-    sr = cudf.Series.from_pandas(psr)
-    random_state = 0
+@pytest.mark.parametrize("axis", [0, 1])
+def test_sample_invalid_n_frac_combo(axis):
+    n, frac = 2, 0.5
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
+            "int": [1, 3, 5, 4, 2],
+        },
+    )
+    df = cudf.DataFrame.from_pandas(pdf)
 
-    try:
-        pout = psr.sample(
-            n=n, frac=frac, replace=replace, random_state=random_state
+    assert_exceptions_equal(
+        lfunc=pdf.sample,
+        rfunc=df.sample,
+        lfunc_args_and_kwargs=([], {"n": n, "frac": frac, "axis": axis}),
+        rfunc_args_and_kwargs=([], {"n": n, "frac": frac, "axis": axis}),
+    )
+
+
+@pytest.mark.parametrize("n, frac", [(100, None), (None, 3)])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_oversample_without_replace(n, frac, axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
+    df = cudf.DataFrame.from_pandas(pdf)
+
+    assert_exceptions_equal(
+        lfunc=pdf.sample,
+        rfunc=df.sample,
+        lfunc_args_and_kwargs=(
+            [],
+            {"n": n, "frac": frac, "axis": axis, "replace": False},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"n": n, "frac": frac, "axis": axis, "replace": False},
+        ),
+    )
+
+
+@pytest.mark.parametrize("random_state", [None, cp.random.RandomState(42)])
+def test_sample_unsupported_arguments(random_state):
+    df = cudf.DataFrame({"float": [0.05, 0.2, 0.3, 0.2, 0.25]})
+    with pytest.raises(
+        NotImplementedError,
+        match="Random sampling with cupy does not support these inputs.",
+    ):
+        df.sample(
+            n=2, replace=False, random_state=random_state, weights=[1] * 5
         )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=psr.sample,
-            rfunc=sr.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                },
-            ),
-        )
-    else:
-        gout = sr.sample(
-            n=n, frac=frac, replace=replace, random_state=random_state
-        )
-        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize(
