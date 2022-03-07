@@ -69,7 +69,7 @@ class element_relational_comparator {
                                                     column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence,
-                                                    int depth = std::numeric_limits<int>::max())
+                                                    int depth = 0)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}, depth{depth}
   {
   }
@@ -125,7 +125,6 @@ class element_relational_comparator {
                                                             size_type rhs_element_index)
   {
     weak_ordering state{weak_ordering::EQUIVALENT};
-    int last_null_depth;
 
     column_device_view lcol = lhs;
     column_device_view rcol = rhs;
@@ -134,9 +133,8 @@ class element_relational_comparator {
       bool const rhs_is_null{rcol.is_null(rhs_element_index)};
 
       if (lhs_is_null or rhs_is_null) {  // atleast one is null
-        state           = null_compare(lhs_is_null, rhs_is_null, null_precedence);
-        last_null_depth = depth;
-        return cuda::std::make_pair(state, last_null_depth);
+        state = null_compare(lhs_is_null, rhs_is_null, null_precedence);
+        return cuda::std::make_pair(state, depth);
       }
 
       lcol = lcol.children()[0];
@@ -144,13 +142,9 @@ class element_relational_comparator {
       ++depth;
     }
 
-    if (state == weak_ordering::EQUIVALENT) {
-      auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence};
-      cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher<non_nested_id_to_type>(
-        lcol.type(), comparator, lhs_element_index, rhs_element_index);
-    }
-
-    return cuda::std::make_pair(state, last_null_depth);
+    auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence, depth};
+    return cudf::type_dispatcher<non_nested_id_to_type>(
+      lcol.type(), comparator, lhs_element_index, rhs_element_index);
   }
 
  private:
@@ -158,7 +152,7 @@ class element_relational_comparator {
   column_device_view rhs;
   Nullate nulls;
   null_order null_precedence{};
-  int depth{std::numeric_limits<int>::max()};
+  int depth{};
 };
 
 /**
@@ -227,7 +221,7 @@ class device_row_comparator {
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      int depth = _depth.has_value() ? _depth.value()[i] : std::numeric_limits<int>::min();
+      int depth = _depth.has_value() ? _depth.value()[i] : 0;
       if (depth > last_null_depth) { continue; }
 
       bool ascending =
