@@ -40,6 +40,7 @@
 #include <cub/block/block_scan.cuh>
 
 #include <memory>
+#include <optional>
 
 namespace {
 
