@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include "backref_re.cuh"
 
+#include <strings/regex/dispatcher.hpp>
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
@@ -95,27 +96,54 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
   return {rtn, backrefs};
 }
 
+template <typename Iterator>
+struct replace_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  std::unique_ptr<column> operator()(strings_column_view const& input,
+                                     string_view const& d_repl_template,
+                                     Iterator backrefs_begin,
+                                     Iterator backrefs_end,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    auto const d_strings = column_device_view::create(input.parent(), stream);
+
+    auto children = make_strings_children(
+      backrefs_fn<Iterator, stack_size>{
+        *d_strings, d_prog, d_repl_template, backrefs_begin, backrefs_end},
+      input.size(),
+      stream,
+      mr);
+
+    return make_strings_column(input.size(),
+                               std::move(children.first),
+                               std::move(children.second),
+                               input.null_count(),
+                               cudf::detail::copy_bitmask(input.parent(), stream, mr));
+  }
+};
+
 }  // namespace
 
 //
 std::unique_ptr<column> replace_with_backrefs(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::string const& pattern,
   std::string const& replacement,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
-  auto d_strings = column_device_view::create(strings.parent(), stream);
   // compile regex into device object
   auto d_prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), strings.size(), stream);
-  auto const regex_insts = d_prog->insts_counts();
+    reprog_device::create(pattern, flags, get_character_flags_table(), input.size(), stream);
 
   // parse the repl string for back-ref indicators
   auto const parse_result = parse_backrefs(replacement);
@@ -125,45 +153,14 @@ std::unique_ptr<column> replace_with_backrefs(
   string_view const d_repl_template = repl_scalar.value();
 
   using BackRefIterator = decltype(backrefs.begin());
-
-  // create child columns
-  auto [offsets, chars] = [&] {
-    if (regex_insts <= RX_SMALL_INSTS) {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    } else if (regex_insts <= RX_MEDIUM_INSTS) {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_MEDIUM>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    } else if (regex_insts <= RX_LARGE_INSTS) {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_LARGE>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    } else {
-      return make_strings_children(
-        backrefs_fn<BackRefIterator, RX_STACK_ANY>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-        strings.size(),
-        stream,
-        mr);
-    }
-  }();
-
-  return make_strings_column(strings.size(),
-                             std::move(offsets),
-                             std::move(chars),
-                             strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
+  return regex_dispatcher(*d_prog,
+                          replace_dispatch_fn<BackRefIterator>{*d_prog},
+                          input,
+                          d_repl_template,
+                          backrefs.begin(),
+                          backrefs.end(),
+                          stream,
+                          mr);
 }
 
 }  // namespace detail
