@@ -30,11 +30,11 @@ namespace text {
  */
 class byte_range_info {
  private:
-  int64_t _offset;
-  int64_t _size;
+  int64_t _offset = 0;
+  int64_t _size   = 0;
 
  public:
-  constexpr byte_range_info() noexcept : _offset(0), _size(0) {}
+  constexpr byte_range_info() noexcept = default;
   constexpr byte_range_info(int64_t offset, int64_t size) : _offset(offset), _size(size)
   {
     CUDF_EXPECTS(offset >= 0, "offset must be non-negative");

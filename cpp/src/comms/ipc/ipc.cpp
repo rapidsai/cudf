@@ -12,7 +12,7 @@ arrow::Result<std::unique_ptr<arrow::ipc::Message>> CudaMessageReader::ReadNextM
     host_schema_reader_ = nullptr;
     if (message.ok() && *message != nullptr) { return message; }
   }
-  return std::move(arrow::ipc::ReadMessage(stream_, arrow::default_memory_pool()));
+  return arrow::ipc::ReadMessage(stream_, arrow::default_memory_pool());
 }
 
 std::unique_ptr<arrow::ipc::MessageReader> CudaMessageReader::Open(

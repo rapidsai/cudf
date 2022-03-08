@@ -61,7 +61,7 @@ struct dictionary_wrapper {
   // conversion operator
   CUDF_HOST_DEVICE inline explicit operator value_type() const { return _value; }
   // simple accessor
-  CUDF_HOST_DEVICE inline value_type value() const { return _value; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline value_type value() const { return _value; }
 
   static CUDF_HOST_DEVICE inline constexpr value_type max_value()
   {

@@ -248,8 +248,7 @@ def print_result(passed, stdout, file, errors):
 
 def run_clang_tidy(cmd, args):
     command, is_cuda = get_tidy_args(cmd, args)
-    header_path_any = os.path.join(os.path.basename(args.root), "cpp", ".*")
-    header_filter = "-header-filter='.*%s[.](cuh|h|hpp)$'" % header_path_any
+    header_filter = "-header-filter='.*cudf/cpp/(include|src|test)/.*'"
     # print(header_path_any)
     # print(header_filter)
     # breakpoint()
@@ -316,6 +315,23 @@ def copy_lock(init_lock):
     global lock
     lock = init_lock
 
+# mostly used for debugging purposes
+def run_sequential(args, all_files):
+    status = True
+    # actual tidy checker
+    for cmd in all_files:
+        # skip files that we don't want to look at
+        if args.ignore_compiled is not None and \
+           re.search(args.ignore_compiled, cmd["file"]) is not None:
+            continue
+        if args.select_compiled is not None and \
+           re.search(args.select_compiled, cmd["file"]) is None:
+            continue
+        passed, stdout, file = run_clang_tidy(cmd, args)
+        print_result(passed, stdout, file)
+        if not passed:
+            status = False
+    return status
 
 def run_parallel(args, all_files):
     init_lock = LockContext(mp.Lock())

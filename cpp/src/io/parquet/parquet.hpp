@@ -349,7 +349,7 @@ static inline int CountLeadingZeros32(uint32_t value)
  */
 class CompactProtocolReader {
  protected:
-  static const uint8_t g_list2struct[16];
+  static const std::array<uint8_t, 16> g_list2struct;
 
  public:
   explicit CompactProtocolReader(const uint8_t* base = nullptr, size_t len = 0) { init(base, len); }

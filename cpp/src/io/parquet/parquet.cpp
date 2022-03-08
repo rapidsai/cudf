@@ -20,22 +20,22 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
-                                                          1,
-                                                          2,
-                                                          ST_FLD_BYTE,
-                                                          ST_FLD_DOUBLE,
-                                                          5,
-                                                          ST_FLD_I16,
-                                                          7,
-                                                          ST_FLD_I32,
-                                                          9,
-                                                          ST_FLD_I64,
-                                                          ST_FLD_BINARY,
-                                                          ST_FLD_STRUCT,
-                                                          ST_FLD_MAP,
-                                                          ST_FLD_SET,
-                                                          ST_FLD_LIST};
+const std::array<uint8_t, 16> CompactProtocolReader::g_list2struct = {0,
+                                                                      1,
+                                                                      2,
+                                                                      ST_FLD_BYTE,
+                                                                      ST_FLD_DOUBLE,
+                                                                      5,
+                                                                      ST_FLD_I16,
+                                                                      7,
+                                                                      ST_FLD_I32,
+                                                                      9,
+                                                                      ST_FLD_I64,
+                                                                      ST_FLD_BINARY,
+                                                                      ST_FLD_STRUCT,
+                                                                      ST_FLD_MAP,
+                                                                      ST_FLD_SET,
+                                                                      ST_FLD_LIST};
 
 /**
  * @brief Skips the number of bytes according to the specified struct type

@@ -28,6 +28,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Forward declarations
@@ -101,7 +102,7 @@ enum statistics_freq {
 struct column_name_info {
   std::string name;
   std::vector<column_name_info> children;
-  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info(std::string _name) : name(std::move(_name)) {}
   column_name_info() = default;
 };
 
@@ -155,11 +156,11 @@ struct source_info {
 
   source_info() = default;
 
-  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::vector<std::string> file_paths) : _filepaths(std::move(file_paths)) {}
   explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
 
-  explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
+  explicit source_info(std::vector<host_buffer> host_buffers)
+    : _type(io_type::HOST_BUFFER), _buffers(std::move(host_buffers))
   {
   }
   explicit source_info(const char* host_data, size_t size)
@@ -167,8 +168,8 @@ struct source_info {
   {
   }
 
-  explicit source_info(std::vector<cudf::io::datasource*> const& sources)
-    : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
+  explicit source_info(std::vector<cudf::io::datasource*> sources)
+    : _type(io_type::USER_IMPLEMENTED), _user_sources(std::move(sources))
   {
   }
   explicit source_info(cudf::io::datasource* source)
