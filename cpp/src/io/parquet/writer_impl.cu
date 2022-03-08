@@ -445,7 +445,6 @@ struct leaf_schema_fn {
     col_schema.logical_type.isset.TIME            = true;
     col_schema.logical_type.TIME.unit.isset.NANOS = true;
     col_schema.stats_dtype                        = statistics_dtype::dtype_int64;
-    // col_schema.ts_scale       = -1000;  // negative value indicates division by absolute value
   }
 
   template <typename T>
