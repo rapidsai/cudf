@@ -16,7 +16,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.typing import MaskedType, NAType, string_view, _len_string_view, _string_view_startswith, _string_view_endswith
+from cudf.core.udf.typing import MaskedType, NAType, string_view, _len_string_view, _string_view_startswith, _string_view_endswith, _string_view_find, _string_view_rfind
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -480,6 +480,63 @@ def masked_stringview_endswith(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_endswith,
+        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
+        (st_ptr, tgt_ptr)
+    )
+    return result
+
+def call_string_view_find(st, tgt):
+    return _string_view_find(st, tgt)
+
+
+@cuda_lower("MaskedType.find", MaskedType(string_view), MaskedType(string_view))
+def masked_stringview_find(context, builder, sig, args):
+    retty = sig.return_type
+    maskedty = sig.args[0]
+    
+    st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
+    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+
+    strty = st.value.type
+
+    st_ptr = builder.alloca(strty)
+    tgt_ptr = builder.alloca(strty)
+
+    builder.store(st.value, st_ptr)
+    builder.store(tgt.value, tgt_ptr)
+
+    result = context.compile_internal(
+        builder,
+        call_string_view_find,
+        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
+        (st_ptr, tgt_ptr)
+    )
+    return result
+
+
+def call_string_view_rfind(st, tgt):
+    return _string_view_rfind(st, tgt)
+
+
+@cuda_lower("MaskedType.rfind", MaskedType(string_view), MaskedType(string_view))
+def masked_stringview_rfind(context, builder, sig, args):
+    retty = sig.return_type
+    maskedty = sig.args[0]
+    
+    st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
+    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+
+    strty = st.value.type
+
+    st_ptr = builder.alloca(strty)
+    tgt_ptr = builder.alloca(strty)
+
+    builder.store(st.value, st_ptr)
+    builder.store(tgt.value, tgt_ptr)
+
+    result = context.compile_internal(
+        builder,
+        call_string_view_rfind,
         nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
         (st_ptr, tgt_ptr)
     )

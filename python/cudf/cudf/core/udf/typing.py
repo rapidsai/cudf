@@ -442,6 +442,19 @@ class MaskedStringEndsWith(AbstractTemplate):
     def generic(self, args, kws):
         return nb_signature(types.boolean, MaskedType(string_view), recvr=self.this)
 
+
+class MaskedStringFind(AbstractTemplate):
+    key = "MaskedType.find"
+
+    def generic(self, args, kws):
+        return nb_signature(types.int32, MaskedType(string_view), recvr=self.this)
+
+class MaskedStringRFind(AbstractTemplate):
+    key = "MaskedType.rfind"
+
+    def generic(self, args, kws):
+        return nb_signature(types.int32, MaskedType(string_view), recvr=self.this)
+
 @cuda_decl_registry.register_attr
 class MaskedStringAttrs(AttributeTemplate):
     key = MaskedType(string_view)
@@ -452,6 +465,14 @@ class MaskedStringAttrs(AttributeTemplate):
     def resolve_endswith(self, mod):
         return types.BoundFunction(MaskedStringEndsWith, MaskedType(string_view))
 
+    def resolve_find(self, mod):
+        return types.BoundFunction(MaskedStringFind, MaskedType(string_view))
+
+    def resolve_rfind(self, mod):
+        return types.BoundFunction(MaskedStringFind, MaskedType(string_view))
+
 _len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
 _string_view_startswith = cuda.declare_device("startswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
 _string_view_endswith = cuda.declare_device("endswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
+_string_view_find = cuda.declare_device("find", types.int32(types.CPointer(string_view), types.CPointer(string_view)))
+_string_view_rfind = cuda.declare_device("rfind", types.int32(types.CPointer(string_view), types.CPointer(string_view)))
