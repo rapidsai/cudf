@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,20 +88,6 @@ struct trie_device_view {
    * otherwise zero.
    */
   constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
-
-  /**
-   * @brief returns the longest matching state of any state in the multistate.
-   */
-  template <uint32_t N>
-  constexpr uint8_t get_match_length(multistate const& states)
-  {
-    int8_t val = 0;
-    for (uint8_t i = 0; i < states.size(); i++) {
-      auto match_length = get_match_length(states.get_tail(i));
-      if (match_length > val) { val = match_length; }
-    }
-    return val;
-  }
 
  private:
   constexpr void transition_enqueue_all(  //
