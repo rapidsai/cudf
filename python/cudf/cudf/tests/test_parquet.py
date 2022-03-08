@@ -154,12 +154,12 @@ def build_pdf(num_columns, day_resolution_timestamps):
     return test_pdf
 
 
-@pytest.fixture(params=[0, 1, 10, 10000])
+@pytest.fixture(params=[0, 1, 10000])
 def pdf(request):
     return build_pdf(request, False)
 
 
-@pytest.fixture(params=[0, 1, 10, 10000])
+@pytest.fixture(params=[0, 1, 10000])
 def pdf_day_timestamps(request):
     return build_pdf(request, True)
 
