@@ -643,15 +643,6 @@ class Frame(BinaryOperand, Scannable):
 
         return self._data[None].copy(deep=False)
 
-    @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
-    def _empty_like(self, keep_index=True):
-        result = self.__class__._from_data(
-            *libcudf.copying.table_empty_like(self, keep_index)
-        )
-
-        result._copy_type_metadata(self, include_index=keep_index)
-        return result
-
     @property
     def values(self):
         """
@@ -3353,11 +3344,19 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @annotate("FRAME_SPLIT", color="green", domain="cudf_python")
-    def _split(self, splits, keep_index=True):
-        results = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-        return [self.__class__._from_data(*result) for result in results]
+    def _split(self, splits):
+        """Split a frame with split points in ``splits``. Returns a list of
+        Frames of length `len(splits) + 1`.
+        """
+        return [
+            self._from_columns_like_self(
+                libcudf.copying.columns_split([*self._data.columns], splits)[
+                    split_idx
+                ],
+                self._column_names,
+            )
+            for split_idx in range(len(splits) + 1)
+        ]
 
     @annotate("FRAME_ENCODE", color="green", domain="cudf_python")
     def _encode(self):
