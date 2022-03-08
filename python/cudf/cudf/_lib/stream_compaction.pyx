@@ -167,6 +167,9 @@ def drop_duplicates(columns: list,
     cdef unique_ptr[table] c_result
 
     with nogil:
+        # cudf::drop_duplicates works like std::unique thus does NOT match
+        # the behavior of pandas.DataFrame.drop_duplicates. Users need to
+        # stable sort the input first and then drop.
         sorted_source_table = move(
             cpp_stable_sort_by_key(
                 source_table_view,

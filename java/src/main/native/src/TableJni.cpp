@@ -3044,6 +3044,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     auto const keys_indices =
         std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
 
+    // cudf::drop_duplicates works like std::unique thus does NOT match the behavior of
+    // pandas.DataFrame.drop_duplicates. Users need to stable sort the input first and then drop.
     std::vector<cudf::order> order(keys_indices.size(), cudf::order::ASCENDING);
     std::vector<cudf::null_order> null_precedence(
         keys_indices.size(), nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER);
