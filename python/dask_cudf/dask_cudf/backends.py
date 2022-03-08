@@ -381,11 +381,11 @@ def sizeof_cudf_dataframe(df):
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
 
-# Define "cudf" backend engine to be registered with Dask
-try:
-    from dask.utils import DaskBackendEntrypoint
-    from dask.dataframe.backends import PandasBackendEntrypoint
 
+try:
+    # Define "cudf" backend engine to be registered with Dask
+    from dask.dataframe.backends import PandasBackendEntrypoint
+    from dask.utils import DaskBackendEntrypoint
 
     class CudfBackendEntrypoint(DaskBackendEntrypoint):
         @cached_property
@@ -400,19 +400,21 @@ try:
             return ddf
 
         def make_timeseries(self, *args, df_backend=None, **kwargs):
-            return self.fallback.make_timeseries(*args, df_backend="cudf", **kwargs)
+            return self.fallback.make_timeseries(
+                *args, df_backend="cudf", **kwargs
+            )
 
         def read_parquet(self, *args, engine=None, **kwargs):
             from .io.parquet import CudfEngine
 
             return self.fallback.read_parquet(
-                *args,
-                engine=CudfEngine,
-                **kwargs,
+                *args, engine=CudfEngine, **kwargs,
             )
 
         def read_json(self, *args, engine=None, **kwargs):
-            return self.fallback.read_json(*args, engine=cudf.read_json, **kwargs)
+            return self.fallback.read_json(
+                *args, engine=cudf.read_json, **kwargs
+            )
 
         def read_orc(self, *args, **kwargs):
             from .io import read_orc
@@ -426,11 +428,7 @@ try:
             blocksize = kwargs.pop("blocksize", "default")
             if chunksize is None and blocksize != "default":
                 chunksize = blocksize
-            return read_csv(
-                *args,
-                chunksize=chunksize,
-                **kwargs,
-            )
+            return read_csv(*args, chunksize=chunksize, **kwargs,)
 
         def from_pandas(self, *args, **kwargs):
             ddf = self.fallback.from_pandas(*args, **kwargs)
@@ -447,6 +445,7 @@ try:
             elif isinstance(ddf._meta, pd.Series):
                 return ddf.map_partitions(cudf.Series.from_pandas)
             return ddf
+
 
 except ImportError:
     pass
