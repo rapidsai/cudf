@@ -1553,6 +1553,9 @@ class BaseIndex(Serializable):
             [],
         )
 
+    def _split(self, splits):
+        raise NotImplementedError
+
     def sample(
         self,
         n=None,

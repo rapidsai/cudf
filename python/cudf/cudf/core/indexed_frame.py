@@ -722,6 +722,37 @@ class IndexedFrame(Frame):
             self._index.names if not ignore_index else None,
         )
 
+    @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
+    def _empty_like(self, keep_index=True):
+        return self._from_columns_like_self(
+            libcudf.copying.columns_empty_like(
+                [
+                    *(self._index._data.columns if keep_index else ()),
+                    *self._columns,
+                ]
+            ),
+            self._column_names,
+            self._index.names if keep_index else None,
+        )
+
+    def _split(self, splits, keep_index=True):
+        columns_split = libcudf.copying.columns_split(
+            [
+                *(self._index._data.columns if keep_index else []),
+                *self._columns,
+            ],
+            splits,
+        )
+
+        return [
+            self._from_columns_like_self(
+                columns_split[i],
+                self._column_names,
+                self._index.names if keep_index else None,
+            )
+            for i in range(len(splits) + 1)
+        ]
+
     def add_prefix(self, prefix):
         """
         Prefix labels with string `prefix`.

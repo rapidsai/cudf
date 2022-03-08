@@ -766,6 +766,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def repeat(self, repeats, axis=None):
         return self._as_int64().repeat(repeats, axis)
 
+    def _split(self, splits):
+        return Int64Index._from_columns(
+            [self._values.columns_split(splits)], [self.name]
+        )
+
     def _binaryop(self, other, op: str):
         return self._as_int64()._binaryop(other, op=op)
 
