@@ -3047,12 +3047,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     std::vector<cudf::order> order(keys_indices.size(), cudf::order::ASCENDING);
     std::vector<cudf::null_order> null_precedence(
         keys_indices.size(), nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER);
-    auto const gather_map =
-        cudf::stable_sorted_order(input->select(keys_indices), order, null_precedence,
-                                  rmm::mr::get_current_device_resource());
     auto const sorted_input =
-        cudf::gather(*input, gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK,
-                     rmm::mr::get_current_device_resource());
+        cudf::stable_sort_by_key(*input, input->select(keys_indices), order, null_precedence);
 
     auto result = cudf::drop_duplicates(sorted_input->view(), keys_indices,
                                         keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
