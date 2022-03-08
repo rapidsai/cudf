@@ -49,7 +49,7 @@ class MultimapTest : public cudf::test::BaseFixture {
                                   size_type,
                                   std::numeric_limits<key_type>::max(),
                                   std::numeric_limits<value_type>::max(),
-                                  cudf::default_hash<key_type>,
+                                  cudf::detail::default_hash<key_type>,
                                   equal_to<key_type>,
                                   default_allocator<thrust::pair<key_type, value_type>>>;
 

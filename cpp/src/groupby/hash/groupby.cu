@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -424,17 +424,19 @@ auto create_hash_map(table_device_view const& d_keys,
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
 
-  using map_type = concurrent_unordered_map<size_type,
-                                            size_type,
-                                            row_hasher<default_hash, nullate::DYNAMIC>,
-                                            row_equality_comparator<nullate::DYNAMIC>>;
+  using map_type =
+    concurrent_unordered_map<size_type,
+                             size_type,
+                             row_hasher<cudf::detail::default_hash, nullate::DYNAMIC>,
+                             row_equality_comparator<nullate::DYNAMIC>>;
 
   using allocator_type = typename map_type::allocator_type;
 
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
 
-  row_hasher<default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls}, d_keys};
+  row_hasher<cudf::detail::default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls},
+                                                                  d_keys};
   row_equality_comparator rows_equal{
     nullate::DYNAMIC{keys_have_nulls}, d_keys, d_keys, null_keys_are_equal};
 

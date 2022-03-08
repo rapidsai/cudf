@@ -52,7 +52,7 @@ template <typename Key,
           typename size_type,
           Key unused_key,
           Element unused_element,
-          typename Hasher       = cudf::default_hash<Key>,
+          typename Hasher       = cudf::detail::default_hash<Key>,
           typename Equality     = equal_to<Key>,
           typename Allocator    = managed_allocator<thrust::pair<Key, Element>>,
           bool count_collisions = false>
