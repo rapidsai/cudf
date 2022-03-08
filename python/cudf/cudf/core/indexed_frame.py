@@ -2063,7 +2063,7 @@ class IndexedFrame(Frame):
         """
         return self._from_columns_like_self(
             Frame._repeat(
-                [*self._index._data.columns, *self._columns], repeats
+                [*self._index._data.columns, *self._columns], repeats, axis
             ),
             self._column_names,
             self._index_names,
