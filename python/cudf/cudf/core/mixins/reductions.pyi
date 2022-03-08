@@ -1,8 +1,10 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from __future__ import annotations
+from typing import Set
 
 class Reducible:
+    _SUPPORTED_REDUCTIONS: Set
+
     def sum(self):
         ...
 

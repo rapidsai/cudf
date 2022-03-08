@@ -1337,41 +1337,31 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("DATAFRAME_ARRAY_FUNCTION", color="blue", domain="cudf_python")
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_df_module = DataFrame
-        cudf_series_module = Series
-
-        for submodule in func.__module__.split(".")[1:]:
-            # point cudf to the correct submodule
-            if hasattr(cudf_df_module, submodule):
-                cudf_df_module = getattr(cudf_df_module, submodule)
-            else:
-                return NotImplemented
-
-        fname = func.__name__
-
-        handled_types = [cudf_df_module, cudf_series_module]
-
-        for t in types:
-            if t not in handled_types:
-                return NotImplemented
-
-        if hasattr(cudf_df_module, fname):
-            cudf_func = getattr(cudf_df_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
-                return NotImplemented
-            # numpy returns an array from the dot product of two dataframes
-            elif (
-                func is np.dot
-                and isinstance(args[0], (DataFrame, pd.DataFrame))
-                and isinstance(args[1], (DataFrame, pd.DataFrame))
-            ):
-                return cudf_func(*args, **kwargs).values
-            else:
-                return cudf_func(*args, **kwargs)
-        else:
+        if "out" in kwargs or not all(
+            issubclass(t, (Series, DataFrame)) for t in types
+        ):
             return NotImplemented
+
+        try:
+            if cudf_func := getattr(self.__class__, func.__name__, None):
+                out = cudf_func(*args, **kwargs)
+                # The dot product of two DataFrames returns an array in pandas.
+                if (
+                    func is np.dot
+                    and isinstance(args[0], (DataFrame, pd.DataFrame))
+                    and isinstance(args[1], (DataFrame, pd.DataFrame))
+                ):
+                    return out.values
+                return out
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
+        return NotImplemented
 
     # The _get_numeric_data method is necessary for dask compatibility.
     @annotate("DATAFRAME_GET_NUMERIC_DATA", color="blue", domain="cudf_python")
