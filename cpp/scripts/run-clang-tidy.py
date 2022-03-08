@@ -284,14 +284,6 @@ def parse_results(results):
     return all(r[0] for r in results), [s for r in results for s in r[1]]
 
 
-def print_result(passed, stdout, file):
-    status_str = "PASSED" if passed else "FAILED"
-    print(f"{SEPARATOR} File:{file} {status_str} {SEPARATOR}")
-    if stdout:
-        print(stdout)
-        print(f"{SEPARATOR} File:{file} ENDS {SEPARATOR}")
-
-
 def print_results():
     global results
     status = True
@@ -350,7 +342,7 @@ def main():
     # Attempt to making sure that we run this script from root of repo always
     if not os.path.exists(".git"):
         raise Exception("This needs to always be run from the root of repo")
-    all_files = list_all_cmds(args.cdb)
+    all_files = get_all_commands(args.cdb)
     # ensure that we use only the real paths
     for cmd in all_files:
         cmd["file"] = os.path.realpath(os.path.expanduser(cmd["file"]))
