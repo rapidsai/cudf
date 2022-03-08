@@ -282,13 +282,10 @@ template <typename T>
 inline void CompactProtocolFieldWriter::field_struct(int field, const T& val)
 {
   put_field_header(field, current_field_value, ST_FLD_STRUCT);
-  // write the struct if it's not empty
   if constexpr (not std::is_empty_v<T>) {
-    writer.write(val);
-  }
-  // Otherwise, add a stop field
-  else {
-    put_byte(0);
+    writer.write(val);  // write the struct if it's not empty
+  } else {
+    put_byte(0);  // otherwise, add a stop field
   }
   current_field_value = field;
 }
