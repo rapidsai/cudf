@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include "cudf/lists/lists_column_view.hpp"
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -278,7 +279,7 @@ std::unique_ptr<scalar> collect_list(
  * @return merged list as scalar
  */
 std::unique_ptr<scalar> merge_lists(
-  column_view const& col,
+  lists_column_view const& col,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -312,7 +313,7 @@ std::unique_ptr<scalar> collect_set(
  * @return collected list with unique elements as scalar
  */
 std::unique_ptr<scalar> merge_sets(
-  column_view const& col,
+  lists_column_view const& col,
   null_equality nulls_equal,
   nan_equality nans_equal,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

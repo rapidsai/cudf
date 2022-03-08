@@ -57,13 +57,11 @@ std::unique_ptr<scalar> collect_list(column_view const& col,
   }
 }
 
-std::unique_ptr<scalar> merge_lists(column_view const& col,
+std::unique_ptr<scalar> merge_lists(lists_column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(col.type().id() == type_id::LIST,
-               "input column of merge_lists must be a list column");
-  auto flatten_col = lists_column_view(col).get_sliced_child(stream);
+  auto flatten_col = col.get_sliced_child(stream);
   return make_list_scalar(flatten_col, stream, mr);
 }
 
@@ -79,15 +77,13 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
   return drop_duplicates(*ls, nulls_equal, nans_equal, stream, mr);
 }
 
-std::unique_ptr<scalar> merge_sets(column_view const& col,
+std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    null_equality nulls_equal,
                                    nan_equality nans_equal,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(col.type().id() == type_id::LIST,
-               "input column of merge_lists must be a list column");
-  auto flatten_col = lists_column_view(col).get_sliced_child(stream);
+  auto flatten_col = col.get_sliced_child(stream);
   auto scalar      = std::make_unique<list_scalar>(flatten_col, true, stream, mr);
   return drop_duplicates(*scalar, nulls_equal, nans_equal, stream, mr);
 }
