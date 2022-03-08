@@ -169,6 +169,9 @@ class MaskedType(types.Type):
     def startswith(self, other):
         pass
 
+    def endswith(self, other):
+        pass
+
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
 @typeof_impl.register(api.Masked)
@@ -406,9 +409,6 @@ class MaskedStringViewLength(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(args[0].value_type, StringView):
             return nb_signature(types.int32, args[0])
 
-_len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
-_string_view_startswith = cuda.declare_device("startswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
-
 @cuda_decl_registry.register_global(len)
 class StringLiteralLength(AbstractTemplate):
     """
@@ -435,9 +435,23 @@ class MaskedStringStartsWith(AbstractTemplate):
     def generic(self, args, kws):
         return nb_signature(types.boolean, MaskedType(string_view), recvr=self.this)
 
+
+class MaskedStringEndsWith(AbstractTemplate):
+    key = "MaskedType.endswith"
+
+    def generic(self, args, kws):
+        return nb_signature(types.boolean, MaskedType(string_view), recvr=self.this)
+
 @cuda_decl_registry.register_attr
 class MaskedStringAttrs(AttributeTemplate):
     key = MaskedType(string_view)
 
     def resolve_startswith(self, mod):
         return types.BoundFunction(MaskedStringStartsWith, MaskedType(string_view))
+
+    def resolve_endswith(self, mod):
+        return types.BoundFunction(MaskedStringEndsWith, MaskedType(string_view))
+
+_len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
+_string_view_startswith = cuda.declare_device("startswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
+_string_view_endswith = cuda.declare_device("endswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
