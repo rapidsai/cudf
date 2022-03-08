@@ -33,19 +33,27 @@ namespace cudf {
 namespace detail {
 
 /**
+ * Normalization of floating point NaNs, passthrough for all other values.
+ */
+template <typename T>
+T __device__ inline normalize_nans(T const& key)
+{
+  if constexpr (cudf::is_floating_point<T>()) {
+    if (std::isnan(key)) { return std::numeric_limits<T>::quiet_NaN(); }
+  }
+  return key;
+}
+
+/**
  * Normalization of floating point NaNs and zeros, passthrough for all other values.
  */
 template <typename T>
 T __device__ inline normalize_nans_and_zeros(T const& key)
 {
   if constexpr (cudf::is_floating_point<T>()) {
-    if (std::isnan(key)) {
-      return std::numeric_limits<T>::quiet_NaN();
-    } else if (key == T{0.0}) {
-      return T{0.0};
-    }
+    if (key == T{0.0}) { return T{0.0}; }
   }
-  return key;
+  return normalize_nans(key);
 }
 
 /**
@@ -117,21 +125,7 @@ struct MurmurHash3_32 {
   // TODO Do we need this operator() and/or compute? Probably not both.
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
-    return compute(key);
-  }
-
-  // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  hash_value_type __device__ inline compute_floating_point(T const& key) const
-  {
-    if (key == T{0.0}) {
-      return compute(T{0.0});
-    } else if (std::isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      return compute(nan);
-    } else {
-      return compute(key);
-    }
+    return compute(detail::normalize_nans_and_zeros(key));
   }
 
   template <typename T>
@@ -274,18 +268,6 @@ struct SparkMurmurHash3_32 {
 
   result_type __device__ inline operator()(Key const& key) const { return compute(key); }
 
-  // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
-  hash_value_type __device__ inline compute_floating_point(T const& key) const
-  {
-    if (std::isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      return compute(nan);
-    } else {
-      return compute(key);
-    }
-  }
-
   template <typename T>
   result_type __device__ inline compute(T const& key) const
   {
@@ -382,13 +364,13 @@ hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
 {
-  return this->compute_floating_point(key);
+  return compute<float>(detail::normalize_nans(key));
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
 {
-  return this->compute_floating_point(key);
+  return compute<double>(detail::normalize_nans(key));
 }
 
 template <>
