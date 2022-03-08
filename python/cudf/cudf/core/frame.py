@@ -29,11 +29,12 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
+    is_integer_dtype,
     is_scalar,
-    issubdtype,
 )
 from cudf.core.column import (
     ColumnBase,
@@ -3507,20 +3508,15 @@ class Frame(BinaryOperand, Scannable):
                 if right_column is None:
                     raise TypeError(err_msg.format(type(None)))
 
-                try:
-                    left_is_bool = issubdtype(left_column.dtype, np.bool_)
-                    right_is_bool = issubdtype(right_column.dtype, np.bool_)
-                except TypeError:
-                    raise TypeError(err_msg.format(type(right_column)))
+                left_is_bool = is_bool_dtype(left_column)
+                right_is_bool = is_bool_dtype(right_column)
+                left_is_int = is_integer_dtype(left_column)
+                right_is_int = is_integer_dtype(right_column)
 
                 coerce_to_bool = left_is_bool or right_is_bool
 
-                if not (
-                    (left_is_bool or issubdtype(left_column.dtype, np.integer))
-                    and (
-                        right_is_bool
-                        or issubdtype(right_column.dtype, np.integer)
-                    )
+                if not (left_is_bool or left_is_int) and (
+                    right_is_bool or right_is_int
                 ):
                     raise TypeError(
                         err_msg.format(right_column.dtype.type.__name__)
