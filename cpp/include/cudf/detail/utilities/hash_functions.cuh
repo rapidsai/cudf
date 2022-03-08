@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
@@ -89,9 +90,9 @@ struct MurmurHash3_32 {
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
   {
-    return (x << r) | (x >> (32 - r));
+    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
   }
 
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
@@ -113,32 +114,6 @@ struct MurmurHash3_32 {
     return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  [[nodiscard]] __device__ inline result_type hash_combine(result_type lhs, result_type rhs)
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
   // TODO Do we need this operator() and/or compute? Probably not both.
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
@@ -146,7 +121,7 @@ struct MurmurHash3_32 {
   }
 
   // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
@@ -217,18 +192,6 @@ hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& k
   return this->compute(static_cast<uint8_t>(key));
 }
 
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
 template <>
 hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
 {
@@ -239,6 +202,15 @@ template <>
 hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
 {
   return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
@@ -285,9 +257,9 @@ struct SparkMurmurHash3_32 {
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
   {
-    return (x << r) | (x >> (32 - r));
+    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
   }
 
   __device__ inline uint32_t fmix32(uint32_t h) const
@@ -303,7 +275,7 @@ struct SparkMurmurHash3_32 {
   result_type __device__ inline operator()(Key const& key) const { return compute(key); }
 
   // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
     if (std::isnan(key)) {
@@ -408,6 +380,27 @@ hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
 }
 
 template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
+}
+
+template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
@@ -480,30 +473,6 @@ hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operat
 }
 
 /**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-/**
  * @brief  This hash function simply returns the value that is asked to be hash
  * reinterpreted as the result_type of the functor.
  */
@@ -513,34 +482,8 @@ struct IdentityHash {
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<!std::is_arithmetic<Key>::value, return_type> operator()(
+  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
     cudf_assert(false && "IdentityHash does not support this data type");
@@ -548,7 +491,7 @@ struct IdentityHash {
   }
 
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<std::is_arithmetic<Key>::value, return_type> operator()(
+  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
     return static_cast<result_type>(key);

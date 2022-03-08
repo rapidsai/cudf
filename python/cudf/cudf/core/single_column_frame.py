@@ -4,11 +4,21 @@
 from __future__ import annotations
 
 import builtins
-from typing import Any, Dict, MutableMapping, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import cudf
 from cudf._typing import Dtype
@@ -33,6 +43,7 @@ class SingleColumnFrame(Frame, NotIterable):
         "index": 0,
     }
 
+    @annotate("SINGLECOLUMNFRAME_REDUCE", color="green", domain="cudf_python")
     def _reduce(
         self, op, axis=None, level=None, numeric_only=None, **kwargs,
     ):
@@ -46,8 +57,12 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(
                 "numeric_only parameter is not implemented yet"
             )
-        return getattr(self._column, op)(**kwargs)
+        try:
+            return getattr(self._column, op)(**kwargs)
+        except AttributeError:
+            raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
+    @annotate("SINGLECOLUMNFRAME_SCAN", color="green", domain="cudf_python")
     def _scan(self, op, axis=None, *args, **kwargs):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
@@ -55,6 +70,9 @@ class SingleColumnFrame(Frame, NotIterable):
         return super()._scan(op, axis=axis, *args, **kwargs)
 
     @classmethod
+    @annotate(
+        "SINGLECOLUMNFRAME_FROM_DATA", color="green", domain="cudf_python"
+    )
     def _from_data(
         cls,
         data: MutableMapping,
@@ -67,21 +85,27 @@ class SingleColumnFrame(Frame, NotIterable):
             out.name = name
         return out
 
-    @property
+    @property  # type: ignore
+    @annotate("SINGLECOLUMNFRAME_NAME", color="green", domain="cudf_python")
     def name(self):
         """Get the name of this object."""
         return next(iter(self._data.names))
 
-    @name.setter
+    @name.setter  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_NAME_SETTER", color="green", domain="cudf_python"
+    )
     def name(self, value):
         self._data[value] = self._data.pop(self.name)
 
-    @property
+    @property  # type: ignore
+    @annotate("SINGLECOLUMNFRAME_NDIM", color="green", domain="cudf_python")
     def ndim(self):
         """Get the dimensionality (always 1 for single-columned frames)."""
         return 1
 
-    @property
+    @property  # type: ignore
+    @annotate("SINGLECOLUMNFRAME_SHAPE", color="green", domain="cudf_python")
     def shape(self):
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
@@ -92,26 +116,38 @@ class SingleColumnFrame(Frame, NotIterable):
             "a.empty, a.bool(), a.item(), a.any() or a.all()."
         )
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_NUM_COLUMNS", color="green", domain="cudf_python"
+    )
     def _num_columns(self):
         return 1
 
-    @property
+    @property  # type: ignore
+    @annotate("SINGLECOLUMNFRAME_COLUMN", color="green", domain="cudf_python")
     def _column(self):
         return self._data[self.name]
 
-    @_column.setter
+    @_column.setter  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_COLUMN_SETTER", color="green", domain="cudf_python"
+    )
     def _column(self, value):
         self._data[self.name] = value
 
-    @property
+    @property  # type: ignore
+    @annotate("SINGLECOLUMNFRAME_VALUES", color="green", domain="cudf_python")
     def values(self):  # noqa: D102
         return self._column.values
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_VALUES_HOST", color="green", domain="cudf_python"
+    )
     def values_host(self):  # noqa: D102
         return self._column.values_host
 
+    @annotate("SINGLECOLUMNFRAME_TO_CUPY", color="green", domain="cudf_python")
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -120,6 +156,9 @@ class SingleColumnFrame(Frame, NotIterable):
     ) -> cupy.ndarray:  # noqa: D102
         return super().to_cupy(dtype, copy, na_value).flatten()
 
+    @annotate(
+        "SINGLECOLUMNFRAME_TO_NUMPY", color="green", domain="cudf_python"
+    )
     def to_numpy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -139,6 +178,9 @@ class SingleColumnFrame(Frame, NotIterable):
     to_list = tolist
 
     @classmethod
+    @annotate(
+        "SINGLECOLUMNFRAME_FROM_ARROW", color="green", domain="cudf_python"
+    )
     def from_arrow(cls, array):
         """Create from PyArrow Array/ChunkedArray.
 
@@ -169,6 +211,9 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return cls(ColumnBase.from_arrow(array))
 
+    @annotate(
+        "SINGLECOLUMNFRAME_TO_ARROW", color="green", domain="cudf_python"
+    )
     def to_arrow(self):
         """
         Convert to a PyArrow Array.
@@ -199,7 +244,10 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_IS_UNIQUE", color="green", domain="cudf_python"
+    )
     def is_unique(self):
         """Return boolean if values in the object are unique.
 
@@ -209,7 +257,10 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_unique
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_IS_MONOTONIC", color="green", domain="cudf_python"
+    )
     def is_monotonic(self):
         """Return boolean if values in the object are monotonically increasing.
 
@@ -221,7 +272,12 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self.is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_IS_MONOTONIC_INCREASING",
+        color="green",
+        domain="cudf_python",
+    )
     def is_monotonic_increasing(self):
         """Return boolean if values in the object are monotonically increasing.
 
@@ -231,7 +287,12 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_IS_MONOTONIC_DECREASING",
+        color="green",
+        domain="cudf_python",
+    )
     def is_monotonic_decreasing(self):
         """Return boolean if values in the object are monotonically decreasing.
 
@@ -241,10 +302,18 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_decreasing
 
-    @property
+    @property  # type: ignore
+    @annotate(
+        "SINGLECOLUMNFRAME_CUDA_ARRAY_INTERFACE",
+        color="green",
+        domain="cudf_python",
+    )
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
+    @annotate(
+        "SINGLECOLUMNFRAME_FACTORIZE", color="green", domain="cudf_python"
+    )
     def factorize(self, na_sentinel=-1):
         """Encode the input values as integer labels.
 
@@ -272,6 +341,11 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
+    @annotate(
+        "SINGLECOLUMNFRAME_MAKE_OPERANDS_FOR_BINOP",
+        color="green",
+        domain="cudf_python",
+    )
     def _make_operands_for_binop(
         self,
         other: Any,
@@ -279,7 +353,10 @@ class SingleColumnFrame(Frame, NotIterable):
         reflect: bool = False,
         *args,
         **kwargs,
-    ) -> Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]:
+    ) -> Union[
+        Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
+        Type[NotImplemented],
+    ]:
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters
@@ -322,6 +399,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
         return {result_name: (self._column, other, reflect, fill_value)}
 
+    @annotate("SINGLECOLUMNFRAME_NUNIQUE", color="green", domain="cudf_python")
     def nunique(self, method: builtins.str = "sort", dropna: bool = True):
         """
         Return count of unique values for the column.
