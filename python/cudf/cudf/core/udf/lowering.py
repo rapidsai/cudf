@@ -3,12 +3,13 @@ import operator
 from llvmlite import ir
 from numba.core import cgutils
 from numba.core.typing import signature as nb_signature
+from numba.cuda.cudadrv import nvvm
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
 )
 from numba.extending import lower_builtin, types
-from numba.cuda.cudadrv import nvvm
+
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -16,7 +17,16 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
-from cudf.core.udf.typing import MaskedType, NAType, string_view, _len_string_view, _string_view_startswith, _string_view_endswith, _string_view_find, _string_view_rfind
+from cudf.core.udf.typing import (
+    MaskedType,
+    NAType,
+    _len_string_view,
+    _string_view_endswith,
+    _string_view_find,
+    _string_view_rfind,
+    _string_view_startswith,
+    string_view,
+)
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -367,9 +377,11 @@ def lower_constant_masked(context, builder, ty, val):
     masked.valid = context.get_constant(types.boolean, val.valid)
     return masked._getvalue()
 
+
 # String function implementations
 def call_len_string_view(st):
     return _len_string_view(st)
+
 
 @cuda_lower(len, MaskedType(types.pyobject))
 def string_view_len_impl(context, builder, sig, args):
@@ -386,23 +398,27 @@ def string_view_len_impl(context, builder, sig, args):
 
     # store
     builder.store(masked_str.value, arg)
-    
+
     result = context.compile_internal(
         builder,
         call_len_string_view,
         nb_signature(retty, types.CPointer(string_view)),
-        (arg,)
+        (arg,),
     )
-    
+
     return result
 
-#@cuda_lower(len, types.literal('abcde'))
-#def string_literal_len_impl(context, builder, sig, args):
+
+# @cuda_lower(len, types.literal('abcde'))
+# def string_literal_len_impl(context, builder, sig, args):
 #    # todo- should be able to compile out the length of literals...
 #    pass
 
+
 @cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)
-def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val):
+def cast_stringliteral_to_masked_stringview(
+    context, builder, fromty, toty, val
+):
     """
     cast a literal to a Masked(string_view)
     """
@@ -411,14 +427,18 @@ def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val)
 
     # set the empty strview data pointer to point to the literal value
     s = context.insert_const_string(builder.module, fromty.literal_value)
-    str_view.data = context.insert_addrspace_conv(builder, s, nvvm.ADDRSPACE_CONSTANT)
-    str_view.length = context.get_constant(types.int32, len(fromty.literal_value))
-    str_view.bytes = context.get_constant(types.int32, len(fromty.literal_value.encode('UTF-8')))
+    str_view.data = context.insert_addrspace_conv(
+        builder, s, nvvm.ADDRSPACE_CONSTANT
+    )
+    str_view.length = context.get_constant(
+        types.int32, len(fromty.literal_value)
+    )
+    str_view.bytes = context.get_constant(
+        types.int32, len(fromty.literal_value.encode("UTF-8"))
+    )
 
     # create an empty MaskedType
-    to_return = cgutils.create_struct_proxy(toty)(
-        context, builder
-    )
+    to_return = cgutils.create_struct_proxy(toty)(context, builder)
 
     # make it valid
     to_return.valid = context.get_constant(types.boolean, 1)
@@ -432,13 +452,18 @@ def cast_stringliteral_to_masked_stringview(context, builder, fromty, toty, val)
 def call_string_view_startswith(st, tgt):
     return _string_view_startswith(st, tgt)
 
-@cuda_lower("MaskedType.startswith", MaskedType(string_view), MaskedType(string_view))
+
+@cuda_lower(
+    "MaskedType.startswith", MaskedType(string_view), MaskedType(string_view)
+)
 def masked_stringview_startswith(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
-    
+
     st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
-    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+    tgt = cgutils.create_struct_proxy(maskedty)(
+        context, builder, value=args[1]
+    )
 
     strty = st.value.type
 
@@ -451,8 +476,10 @@ def masked_stringview_startswith(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_startswith,
-        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
-        (st_ptr, tgt_ptr)
+        nb_signature(
+            retty, types.CPointer(string_view), types.CPointer(string_view)
+        ),
+        (st_ptr, tgt_ptr),
     )
     return result
 
@@ -461,13 +488,17 @@ def call_string_view_endswith(st, tgt):
     return _string_view_endswith(st, tgt)
 
 
-@cuda_lower("MaskedType.endswith", MaskedType(string_view), MaskedType(string_view))
+@cuda_lower(
+    "MaskedType.endswith", MaskedType(string_view), MaskedType(string_view)
+)
 def masked_stringview_endswith(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
-    
+
     st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
-    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+    tgt = cgutils.create_struct_proxy(maskedty)(
+        context, builder, value=args[1]
+    )
 
     strty = st.value.type
 
@@ -480,22 +511,29 @@ def masked_stringview_endswith(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_endswith,
-        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
-        (st_ptr, tgt_ptr)
+        nb_signature(
+            retty, types.CPointer(string_view), types.CPointer(string_view)
+        ),
+        (st_ptr, tgt_ptr),
     )
     return result
+
 
 def call_string_view_find(st, tgt):
     return _string_view_find(st, tgt)
 
 
-@cuda_lower("MaskedType.find", MaskedType(string_view), MaskedType(string_view))
+@cuda_lower(
+    "MaskedType.find", MaskedType(string_view), MaskedType(string_view)
+)
 def masked_stringview_find(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
-    
+
     st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
-    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+    tgt = cgutils.create_struct_proxy(maskedty)(
+        context, builder, value=args[1]
+    )
 
     strty = st.value.type
 
@@ -508,8 +546,10 @@ def masked_stringview_find(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_find,
-        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
-        (st_ptr, tgt_ptr)
+        nb_signature(
+            retty, types.CPointer(string_view), types.CPointer(string_view)
+        ),
+        (st_ptr, tgt_ptr),
     )
     return result
 
@@ -518,13 +558,17 @@ def call_string_view_rfind(st, tgt):
     return _string_view_rfind(st, tgt)
 
 
-@cuda_lower("MaskedType.rfind", MaskedType(string_view), MaskedType(string_view))
+@cuda_lower(
+    "MaskedType.rfind", MaskedType(string_view), MaskedType(string_view)
+)
 def masked_stringview_rfind(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
-    
+
     st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
-    tgt = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[1])
+    tgt = cgutils.create_struct_proxy(maskedty)(
+        context, builder, value=args[1]
+    )
 
     strty = st.value.type
 
@@ -537,7 +581,9 @@ def masked_stringview_rfind(context, builder, sig, args):
     result = context.compile_internal(
         builder,
         call_string_view_rfind,
-        nb_signature(retty, types.CPointer(string_view), types.CPointer(string_view)),
-        (st_ptr, tgt_ptr)
+        nb_signature(
+            retty, types.CPointer(string_view), types.CPointer(string_view)
+        ),
+        (st_ptr, tgt_ptr),
     )
     return result

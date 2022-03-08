@@ -1,6 +1,6 @@
 import operator
-from numba import cuda
-from numba import types
+
+from numba import cuda, types
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -17,6 +17,7 @@ from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
+from cudf.core.buffer import Buffer, StringViewBuffer
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -25,30 +26,30 @@ from cudf.core.udf._ops import (
     unary_ops,
 )
 
-from cudf.core.buffer import Buffer, StringViewBuffer
-
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
     types.Boolean,
     types.NPDatetime,
     types.NPTimedelta,
-    types.PyObject
+    types.PyObject,
 )
 
 from numba.extending import type_callable
 
 
-
 # String object definitions
 class StringView(types.Type):
     def __init__(self):
-         super().__init__(name="string_view")
+        super().__init__(name="string_view")
+
 
 string_view = StringView()
+
 
 @typeof_impl.register(StringView)
 def typeof_stringview(val, c):
     return string_view
+
 
 @register_model(StringView)
 class stringview_model(models.StructModel):
@@ -59,12 +60,13 @@ class stringview_model(models.StructModel):
         #  size_type _bytes{};           ///< Number of bytes in _data for this string
         #  mutable size_type _length{};  ///< Number of characters in this string (computed)
         members = (
-            ('data', types.CPointer(types.char)),
-            ('bytes', types.int32),
-            ('length', types.int32),
+            ("data", types.CPointer(types.char)),
+            ("bytes", types.int32),
+            ("length", types.int32),
         )
         super().__init__(dmm, fe_type, members)
-        
+
+
 class StrViewArgHandler:
     def prepare_args(self, ty, val, **kwargs):
         if isinstance(val, StringViewBuffer):
@@ -171,6 +173,7 @@ class MaskedType(types.Type):
 
     def endswith(self, other):
         pass
+
 
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
@@ -405,9 +408,13 @@ class MaskedStringViewLength(AbstractTemplate):
     """
     provide the length of a cudf::string_view like struct
     """
+
     def generic(self, args, kws):
-        if isinstance(args[0], MaskedType) and isinstance(args[0].value_type, StringView):
+        if isinstance(args[0], MaskedType) and isinstance(
+            args[0].value_type, StringView
+        ):
             return nb_signature(types.int32, args[0])
+
 
 @cuda_decl_registry.register_global(len)
 class StringLiteralLength(AbstractTemplate):
@@ -415,6 +422,7 @@ class StringLiteralLength(AbstractTemplate):
     provide the length of a python string literal by first
     converting to a cudf::string_view first
     """
+
     def generic(self, args, kws):
         if isinstance(args[0], types.StringLiteral) and len(args) == 1:
             return nb_signature(types.int32, args[0])
@@ -429,41 +437,56 @@ for binary_op in arith_ops + bitwise_ops + comparison_ops:
 for unary_op in unary_ops:
     cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
 
+
 class MaskedStringStartsWith(AbstractTemplate):
     key = "MaskedType.startswith"
 
     def generic(self, args, kws):
-        return nb_signature(types.boolean, MaskedType(string_view), recvr=self.this)
+        return nb_signature(
+            types.boolean, MaskedType(string_view), recvr=self.this
+        )
 
 
 class MaskedStringEndsWith(AbstractTemplate):
     key = "MaskedType.endswith"
 
     def generic(self, args, kws):
-        return nb_signature(types.boolean, MaskedType(string_view), recvr=self.this)
+        return nb_signature(
+            types.boolean, MaskedType(string_view), recvr=self.this
+        )
 
 
 class MaskedStringFind(AbstractTemplate):
     key = "MaskedType.find"
 
     def generic(self, args, kws):
-        return nb_signature(types.int32, MaskedType(string_view), recvr=self.this)
+        return nb_signature(
+            types.int32, MaskedType(string_view), recvr=self.this
+        )
+
 
 class MaskedStringRFind(AbstractTemplate):
     key = "MaskedType.rfind"
 
     def generic(self, args, kws):
-        return nb_signature(types.int32, MaskedType(string_view), recvr=self.this)
+        return nb_signature(
+            types.int32, MaskedType(string_view), recvr=self.this
+        )
+
 
 @cuda_decl_registry.register_attr
 class MaskedStringAttrs(AttributeTemplate):
     key = MaskedType(string_view)
 
     def resolve_startswith(self, mod):
-        return types.BoundFunction(MaskedStringStartsWith, MaskedType(string_view))
+        return types.BoundFunction(
+            MaskedStringStartsWith, MaskedType(string_view)
+        )
 
     def resolve_endswith(self, mod):
-        return types.BoundFunction(MaskedStringEndsWith, MaskedType(string_view))
+        return types.BoundFunction(
+            MaskedStringEndsWith, MaskedType(string_view)
+        )
 
     def resolve_find(self, mod):
         return types.BoundFunction(MaskedStringFind, MaskedType(string_view))
@@ -471,8 +494,23 @@ class MaskedStringAttrs(AttributeTemplate):
     def resolve_rfind(self, mod):
         return types.BoundFunction(MaskedStringRFind, MaskedType(string_view))
 
-_len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
-_string_view_startswith = cuda.declare_device("startswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
-_string_view_endswith = cuda.declare_device("endswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
-_string_view_find = cuda.declare_device("find", types.int32(types.CPointer(string_view), types.CPointer(string_view)))
-_string_view_rfind = cuda.declare_device("rfind", types.int32(types.CPointer(string_view), types.CPointer(string_view)))
+
+_len_string_view = cuda.declare_device(
+    "len_2", types.int32(types.CPointer(string_view))
+)
+_string_view_startswith = cuda.declare_device(
+    "startswith",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+_string_view_endswith = cuda.declare_device(
+    "endswith",
+    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+)
+_string_view_find = cuda.declare_device(
+    "find",
+    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+)
+_string_view_rfind = cuda.declare_device(
+    "rfind",
+    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+)
