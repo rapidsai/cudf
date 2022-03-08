@@ -3179,9 +3179,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector getMapKeyExistence(Scalar key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    assert key != null : "target string may not be null";
-    assert key.getType().equals(DType.STRING) : "target must be a string scalar";
-
+    assert key != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(key.getType());
     return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
   }
 
