@@ -3151,17 +3151,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(urlEncode(getNativeView()));
   }
 
-  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
-   * for all the values in the struct that match the key, null otherwise.
-   * @param key the String scalar to lookup in the column
-   * @return a string column of values or nulls based on the lookup result
+  private static void assertIsSupportedMapKeyType(DType keyType) {
+    boolean isSupportedKeyType = 
+      !keyType.equals(DType.EMPTY) && !keyType.equals(DType.LIST) && !keyType.equals(DType.STRUCT);
+    assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
+  }
+
+  /** 
+   * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
+   * where each row in the output column is the Y value corresponding to the X key.
+   * If the key is not found, the corresponding output value is null.
+   * @param key the scalar key to lookup in the column
+   * @return a column of values or nulls based on the lookup result
    */
   public final ColumnVector getMapValue(Scalar key) {
-
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    assert key != null : "target string may not be null";
-    assert key.getType().equals(DType.STRING) : "target string must be a string scalar";
-
+    assert key != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(key.getType());
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 

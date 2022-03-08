@@ -5833,7 +5833,21 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testGetMapValue() {
+  void testGetMapValueForInteger() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 2)));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 3)));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(5, 4)));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+        new HostColumnVector.BasicType(true, DType.INT32)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
+         ColumnVector res = cv.getMapValue(Scalar.fromInt(1));
+         ColumnVector expected = ColumnVector.fromBoxedInts(2, 3, null)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testGetMapValueForStrings() {
     List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
     List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
     List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
