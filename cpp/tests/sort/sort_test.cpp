@@ -654,6 +654,20 @@ TYPED_TEST(Sort, ZeroSizedColumns)
   run_sort_test(input, expected, column_order);
 }
 
+TYPED_TEST(Sort, WithListColumn)
+{
+  using T = int;
+  lists_column_wrapper<T> lc{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort(table_view({lc})),
+                            "Cannot lexicographic compare a table with a LIST column");
+
+  std::vector<std::unique_ptr<cudf::column>> child_cols;
+  child_cols.push_back(lc.release());
+  structs_column_wrapper sc{std::move(child_cols), {1, 0, 1}};
+  CUDF_EXPECT_THROW_MESSAGE(cudf::sort(table_view({sc})),
+                            "Cannot lexicographic compare a table with a LIST column");
+}
+
 struct SortByKey : public BaseFixture {
 };
 

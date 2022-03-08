@@ -21,6 +21,8 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <jit/type.hpp>
+
 namespace cudf {
 namespace experimental {
 
@@ -103,12 +105,26 @@ auto struct_lex_verticalize(table_view table,
                          std::move(verticalized_col_depths));
 }
 
+struct is_relationally_comparable_functor {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return cudf::is_relationally_comparable<T, T>();
+  }
+};
+
 void check_lex_compatibility(table_view const& input)
 {
   // Basically check if there's any LIST hiding anywhere in the table
   std::function<void(column_view const&)> check_column = [&](column_view const& c) {
     CUDF_EXPECTS(c.type().id() != type_id::LIST,
                  "Cannot lexicographic compare a table with a LIST column");
+    if (not is_nested(c.type())) {
+      CUDF_EXPECTS(
+        type_dispatcher<non_nested_id_to_type>(c.type(), is_relationally_comparable_functor{}),
+        "Cannot lexicographic compare a table with a column of type " +
+          jit::get_type_name(c.type()));
+    }
     for (int i = 0; i < c.num_children(); ++i) {
       check_column(c.child(i));
     }
