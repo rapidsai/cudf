@@ -182,19 +182,19 @@ struct MurmurHash3_32 {
 template <>
 hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& key) const
 {
-  return this->compute(static_cast<uint8_t>(key));
+  return compute(static_cast<uint8_t>(key));
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
 {
-  return this->compute_floating_point(key);
+  return compute(detail::normalize_nans_and_zeros(key));
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
 {
-  return this->compute_floating_point(key);
+  return compute(detail::normalize_nans_and_zeros(key));
 }
 
 template <>
@@ -203,28 +203,28 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
   auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
+  return compute_bytes(data, len);
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
-  return this->compute(key.value());
+  return compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<numeric::decimal64>::operator()(
   numeric::decimal64 const& key) const
 {
-  return this->compute(key.value());
+  return compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<numeric::decimal128>::operator()(
   numeric::decimal128 const& key) const
 {
-  return this->compute(key.value());
+  return compute(key.value());
 }
 
 template <>
@@ -332,32 +332,32 @@ struct SparkMurmurHash3_32 {
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<bool>::operator()(bool const& key) const
 {
-  return this->compute<uint32_t>(key);
+  return compute<uint32_t>(key);
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<int8_t>::operator()(int8_t const& key) const
 {
-  return this->compute<uint32_t>(key);
+  return compute<uint32_t>(key);
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<uint8_t>::operator()(uint8_t const& key) const
 {
-  return this->compute<uint32_t>(key);
+  return compute<uint32_t>(key);
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<int16_t>::operator()(int16_t const& key) const
 {
-  return this->compute<uint32_t>(key);
+  return compute<uint32_t>(key);
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
   uint16_t const& key) const
 {
-  return this->compute<uint32_t>(key);
+  return compute<uint32_t>(key);
 }
 
 template <>
@@ -378,21 +378,21 @@ hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operat
 {
   auto const data = reinterpret_cast<std::byte const*>(key.data());
   auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
+  return compute_bytes(data, len);
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
-  return this->compute<uint64_t>(key.value());
+  return compute<uint64_t>(key.value());
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal64>::operator()(
   numeric::decimal64 const& key) const
 {
-  return this->compute<uint64_t>(key.value());
+  return compute<uint64_t>(key.value());
 }
 
 template <>
@@ -434,7 +434,7 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
   __int128_t big_endian_value = 0;
   auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
   thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
-  return this->compute_bytes(big_endian_data, length);
+  return compute_bytes(big_endian_data, length);
 }
 
 template <>
