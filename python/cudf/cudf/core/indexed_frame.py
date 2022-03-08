@@ -723,7 +723,7 @@ class IndexedFrame(Frame):
 
         return [
             self._from_columns_like_self(
-                columns_splitted[i],
+                columns_split[i],
                 self._column_names,
                 self._index.names if keep_index else None,
             )
