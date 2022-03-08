@@ -700,9 +700,9 @@ struct ParquetFieldUnionFunctor<T, true> {
 };
 
 template <typename T>
-ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bool& b, T& v)
+ParquetFieldUnionFunctor<T, std::is_empty_v<T>> ParquetFieldUnion(int f, bool& b, T& v)
 {
-  return ParquetFieldUnionFunctor<T, std::is_empty<T>::value>(f, b, v);
+  return ParquetFieldUnionFunctor<T, std::is_empty_v<T>>(f, b, v);
 }
 
 /**

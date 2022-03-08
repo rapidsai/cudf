@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -385,20 +385,29 @@ class TimeDeltaColumn(column.ColumnBase):
         return result.astype(self.dtype)
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count=0
+        self, skipna: bool = None, min_count: int = 0, dtype: Dtype = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.sum(
-                skipna=skipna, dtype=dtype, min_count=min_count
+            # Since sum isn't overriden in Numerical[Base]Column, mypy only
+            # sees the signature from Reducible (which doesn't have the extra
+            # parameters from ColumnBase._reduce) so we have to ignore this.
+            self.as_numerical.sum(  # type: ignore
+                skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+        self,
+        skipna: bool = None,
+        min_count: int = 0,
+        dtype: Dtype = np.float64,
+        ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
+            self.as_numerical.std(
+                skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
+            ),
             unit=self.time_unit,
         )
 

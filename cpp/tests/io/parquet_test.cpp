@@ -251,7 +251,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 
