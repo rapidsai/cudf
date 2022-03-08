@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "cudf/types.hpp"
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -50,6 +51,27 @@ std::unique_ptr<column> index_of(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
+ *                                cudf::scalar const&,
+ *                                rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::scalar const& search_key,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
+ *                                cudf::column_view const&,
+ *                                rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::column_view const& search_keys,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf

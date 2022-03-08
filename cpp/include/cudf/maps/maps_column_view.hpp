@@ -102,6 +102,11 @@ class maps_column_view {
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
+  std::unique_ptr<column> contains(
+    scalar const& key,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
  private:
   lists_column_view keys_, values_;
 };
