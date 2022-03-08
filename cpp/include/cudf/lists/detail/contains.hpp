@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include "cudf/types.hpp"
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
