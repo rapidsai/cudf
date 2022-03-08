@@ -1276,52 +1276,51 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     ),
                 )
 
-        # This is just to handle RangeIndex type, stop
-        # it from materializing unnecessarily
-        keep_index = True
-        if self.index is not None and isinstance(self.index, RangeIndex):
+        # If index type is RangeIndex, slice without materializing.
+        is_range_index = isinstance(self.index, RangeIndex)
+        if is_range_index:
             if self._num_columns == 0:
-                result = self._empty_like(keep_index)
+                result = self._empty_like(keep_index=False)
                 result._index = self.index[start:stop:stride]
                 return result
-            keep_index = False
 
-        # For decreasing slices, terminal at before-the-zero
-        # position is preserved.
         if start < 0:
             start = start + num_rows
+
+        # Decreasing slices that terminates at -1, such as slice(4, -1, -1),
+        # has end index of 0, The check below makes sure -1 is not wrapped
+        # to `-1 + num_rows`.
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + num_rows
+        stride = 1 if stride is None else stride
 
-        if start > stop and (stride is None or stride == 1):
-            return self._empty_like(keep_index)
-        else:
-            start = len(self) if start > num_rows else start
-            stop = len(self) if stop > num_rows else stop
+        if (stop - start) * stride <= 0:
+            return self._empty_like(keep_index=True)
 
-            if stride is not None and stride != 1:
-                return self._gather(
-                    cudf.core.column.arange(
-                        start, stop=stop, step=stride, dtype=np.int32
-                    )
+        start = len(self) if start > num_rows else start
+        stop = len(self) if stop > num_rows else stop
+
+        if stride != 1:
+            return self._gather(
+                cudf.core.column.arange(
+                    start, stop=stop, step=stride, dtype=np.int32
                 )
-            else:
-                result = self._from_data(
-                    *libcudf.copying.table_slice(
-                        self, [start, stop], keep_index
-                    )[0]
-                )
+            )
 
-                result._copy_type_metadata(self, include_index=keep_index)
-                if self.index is not None:
-                    if keep_index:
-                        result._index.names = self.index.names
-                    else:
-                        # Adding index of type RangeIndex back to
-                        # result
-                        result.index = self.index[start:stop]
-                result._set_column_names_like(self)
-                return result
+        columns_to_slice = [
+            *(self._index._data.columns if not is_range_index else []),
+            *self._columns,
+        ]
+        result = self._from_columns_like_self(
+            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
+            self._column_names,
+            None if is_range_index else self._index.names,
+        )
+
+        if is_range_index:
+            result.index = self.index[start:stop]
+        result._set_column_names_like(self)
+        return result
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
