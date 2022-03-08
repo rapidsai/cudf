@@ -63,6 +63,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self
+        # Decimals in libcudf don't support truediv, see
+        # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+        op = op.replace("true", "")
 
         if not isinstance(
             other,
@@ -255,12 +258,6 @@ class Decimal128Column(DecimalBaseColumn):
 
 class Decimal64Column(DecimalBaseColumn):
     dtype: Decimal64Dtype
-
-    def __truediv__(self, other):
-        # TODO: This override is not sufficient. While it will change the
-        # behavior of x / y for two decimal columns, it will not affect
-        # col1.binary_operator(col2), which is how Series/Index will call this.
-        return self.binary_operator("div", other)
 
     def __setitem__(self, key, value):
         if isinstance(value, np.integer):

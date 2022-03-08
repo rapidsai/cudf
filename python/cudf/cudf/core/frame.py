@@ -3459,13 +3459,7 @@ class Frame(BinaryOperand, Scannable):
             elif not isinstance(right_column, ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
-            fn_apply = fn
-            if fn == "truediv":
-                # Decimals in libcudf don't support truediv, see
-                # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-                if is_decimal_dtype(left_column.dtype):
-                    fn_apply = "div"
-
+            if fn in {"truediv", "rtruediv"}:
                 # Division with integer types results in a suitable float.
                 truediv_type = {
                     np.int8: np.float32,
@@ -3505,9 +3499,9 @@ class Frame(BinaryOperand, Scannable):
             # types are valid, and if so, whether we need to coerce the output
             # columns to booleans.
             coerce_to_bool = False
-            if fn_apply in {"and", "or", "xor"}:
+            if fn in {"and", "or", "xor"}:
                 err_msg = (
-                    f"Operation 'bitwise {fn_apply}' not supported between "
+                    f"Operation 'bitwise {fn}' not supported between "
                     f"{left_column.dtype.type.__name__} and {{}}"
                 )
                 if right_column is None:
@@ -3533,9 +3527,7 @@ class Frame(BinaryOperand, Scannable):
                     )
 
             outcol = (
-                left_column.binary_operator(
-                    fn_apply, right_column, reflect=reflect
-                )
+                left_column.binary_operator(fn, right_column, reflect=reflect)
                 if right_column is not None
                 else column_empty(
                     left_column.size, left_column.dtype, masked=True
