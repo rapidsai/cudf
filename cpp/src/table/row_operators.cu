@@ -18,7 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operator3.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
@@ -49,8 +49,11 @@ auto struct_lex_verticalize(table_view table,
                                                                          int depth) {
         flattened.push_back(c);
         depths.push_back(depth);
-        for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
-          recursive_child(c.child(child_idx), depth + 1);
+        if (c.type().id() == type_id::STRUCT) {
+          for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
+            auto scol = structs_column_view(c);
+            recursive_child(scol.get_sliced_child(child_idx), depth + 1);
+          }
         }
       };
       recursive_child(col, 0);
@@ -90,6 +93,8 @@ auto struct_lex_verticalize(table_view table,
     } else {
       verticalized_columns.push_back(col);
       verticalized_col_depths.push_back(0);
+      if (not column_order.empty()) { new_column_order.push_back(column_order[col_idx]); }
+      if (not null_precedence.empty()) { new_null_precedence.push_back(null_precedence[col_idx]); }
     }
   }
   return std::make_tuple(table_view(verticalized_columns),
