@@ -355,7 +355,7 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * The caller should ensure the corresponding column types are comparable.
+   * Behavior is undefined if called with incomparable column types.
    *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
    *
