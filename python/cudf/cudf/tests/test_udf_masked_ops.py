@@ -668,3 +668,116 @@ def test_masked_udf_caching():
     data.apply(f)
 
     assert precompiled.currsize == 1
+
+
+@pytest.mark.parametrize(
+    "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022"]}]
+)
+def test_string_udf_len(data):
+    # tests the `len` function in string udfs
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row["str_col"]
+        return len(st)
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data", [{"str_col": ["cudf", "rapids", "AI", "gpu", "2022", "cuDF"]}]
+)
+@pytest.mark.parametrize("substr", ["a", "cu", "2"])
+def test_string_udf_startswith(data, substr):
+    # tests the `startswith` method of strings
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row["str_col"]
+        return st.startswith(substr)
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "gpu",
+                "2022",
+                "cuDF",
+                "again_gpu",
+            ]
+        }
+    ],
+)
+@pytest.mark.parametrize("substr", ["a", "gpu", "2"])
+def test_string_udf_endswith(data, substr):
+    # tests the `endswith` method of strings
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row["str_col"]
+        return st.endswith(substr)
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "gpu",
+                "2022",
+                "cuDF",
+                "again_gpu",
+            ]
+        }
+    ],
+)
+@pytest.mark.parametrize("substr", ["u", "gpu", "a"])
+def test_string_udf_find(data, substr):
+    # tests the `find` method of strings
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row["str_col"]
+        return st.find(substr)
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "gpu",
+                "2022",
+                "cuDF",
+                "again_gpu",
+            ]
+        }
+    ],
+)
+@pytest.mark.parametrize("substr", ["u", "gpu", "a"])
+def test_string_udf_rfind(data, substr):
+    # tests the `find` method of strings
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row["str_col"]
+        return st.rfind(substr)
+
+    run_masked_udf_test(func, data, check_dtype=False)
