@@ -248,7 +248,7 @@ def print_result(passed, stdout, file, errors):
 
 def run_clang_tidy(cmd, args):
     command, is_cuda = get_tidy_args(cmd, args)
-    header_filter = "-header-filter='.*cudf/cpp/(include|src|test)/.*'"
+    header_filter = "-header-filter='.*cudf/cpp/(include|src|test)/.*(?!brotli_dict).*'"
     # print(header_path_any)
     # print(header_filter)
     # breakpoint()
