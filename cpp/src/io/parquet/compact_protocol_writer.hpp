@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,12 @@ class CompactProtocolWriter {
   CompactProtocolWriter(std::vector<uint8_t>* output) : m_buf(*output) {}
 
   size_t write(const FileMetaData&);
+  size_t write(const DecimalType&);
+  size_t write(const TimeUnit&);
+  size_t write(const TimeType&);
+  size_t write(const TimestampType&);
+  size_t write(const IntType&);
+  size_t write(const LogicalType&);
   size_t write(const SchemaElement&);
   size_t write(const RowGroup&);
   size_t write(const KeyValue&);
@@ -70,6 +76,10 @@ class CompactProtocolFieldWriter {
   uint32_t put_int(int64_t v);
 
   void put_field_header(int f, int cur, int t);
+
+  inline void field_bool(int field, bool b);
+
+  inline void field_int8(int field, int8_t val);
 
   inline void field_int(int field, int32_t val);
 
