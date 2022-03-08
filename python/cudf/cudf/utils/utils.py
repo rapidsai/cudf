@@ -2,6 +2,7 @@
 
 import decimal
 import functools
+import hashlib
 import os
 import traceback
 from functools import partial
@@ -33,6 +34,7 @@ _EQUALITY_OPS = {
     "__ge__",
 }
 
+_NVTX_COLORS = ["green", "blue", "purple", "rapids"]
 
 # The test root is set by pytest to support situations where tests are run from
 # a source tree on a built version of cudf.
@@ -404,13 +406,23 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
     return indices
 
 
-def cudf_nvtx_annotate(func, color="rapids", domain="cudf_python"):
+def _get_color_for_nvtx(name):
+    m = hashlib.sha256()
+    m.update(name.encode())
+    hash_value = int(m.hexdigest(), 16)
+    idx = hash_value % len(_NVTX_COLORS)
+    return _NVTX_COLORS[idx]
+
+
+def _cudf_nvtx_annotate(func, domain="cudf_python"):
     """Decorator for applying nvtx annotations to methods in cudf."""
-    return annotate(message=func.__qualname__, color=color, domain=domain)(
-        func
-    )
+    return annotate(
+        message=func.__qualname__,
+        color=_get_color_for_nvtx(func.__qualname__),
+        domain=domain,
+    )(func)
 
 
-dask_cudf_nvtx_annotate = partial(
-    cudf_nvtx_annotate, domain="dask_cudf_python"
+_dask_cudf_nvtx_annotate = partial(
+    _cudf_nvtx_annotate, domain="dask_cudf_python"
 )
