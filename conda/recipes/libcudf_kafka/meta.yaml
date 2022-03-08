@@ -20,6 +20,9 @@ build:
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
     - PROJECT_FLASH
+  # libcudf's run_exports pinning is looser than we would like
+  ignore_run_exports:
+    - libcudf
 
 requirements:
   build:
