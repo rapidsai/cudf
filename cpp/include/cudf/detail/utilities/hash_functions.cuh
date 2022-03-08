@@ -80,7 +80,6 @@ void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destinatio
 }
 
 }  // namespace detail
-}  // namespace cudf
 
 // MurmurHash3_32 implementation from
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
@@ -485,3 +484,5 @@ struct IdentityHash {
 
 template <typename Key>
 using default_hash = MurmurHash3_32<Key>;
+
+}  // namespace cudf

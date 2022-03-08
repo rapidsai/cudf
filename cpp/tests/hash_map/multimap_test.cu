@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ class MultimapTest : public cudf::test::BaseFixture {
                                   size_type,
                                   std::numeric_limits<key_type>::max(),
                                   std::numeric_limits<value_type>::max(),
-                                  default_hash<key_type>,
+                                  cudf::default_hash<key_type>,
                                   equal_to<key_type>,
                                   default_allocator<thrust::pair<key_type, value_type>>>;
 
