@@ -8,12 +8,8 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.copying cimport gather as cpp_gather, out_of_bounds_policy
-from cudf._lib.cpp.sorting cimport (
-    stable_sorted_order as cpp_stable_sorted_order,
-)
+from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
     drop_duplicates as cpp_drop_duplicates,
@@ -165,26 +161,18 @@ def drop_duplicates(columns: list,
         )
     )
 
-    cdef unique_ptr[column] gather_map
-    cdef unique_ptr[table] sorted_source_table
-    cdef unique_ptr[table] c_result
     cdef table_view source_table_view = table_view_from_columns(columns)
     cdef table_view keys_view = source_table_view.select(cpp_keys)
-    cdef out_of_bounds_policy policy = out_of_bounds_policy.DONT_CHECK
+    cdef unique_ptr[table] sorted_source_table
+    cdef unique_ptr[table] c_result
 
     with nogil:
-        gather_map = move(
-            cpp_stable_sorted_order(
+        sorted_source_table = move(
+            cpp_stable_sort_by_key(
+                source_table_view,
                 keys_view,
                 column_order,
                 null_precedence
-            )
-        )
-        sorted_source_table = move(
-            cpp_gather(
-                source_table_view,
-                gather_map.get().view(),
-                policy
             )
         )
         c_result = move(
