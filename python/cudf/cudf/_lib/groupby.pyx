@@ -135,12 +135,6 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
-            if (valid_aggregations is _DECIMAL_AGGS
-                    and rmm._cuda.gpu.runtimeGetVersion() < 11000):
-                raise RuntimeError(
-                    "Decimal aggregations are only supported on CUDA >= 11 "
-                    "due to an nvcc compiler bug."
-                )
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
             for agg in aggs:
@@ -214,12 +208,6 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
-            if (valid_aggregations is _DECIMAL_AGGS
-                    and rmm._cuda.gpu.runtimeGetVersion() < 11000):
-                raise RuntimeError(
-                    "Decimal aggregations are only supported on CUDA >= 11 "
-                    "due to an nvcc compiler bug."
-                )
 
             c_agg_request = move(libcudf_groupby.scan_request())
             for agg in aggs:
