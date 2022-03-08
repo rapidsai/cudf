@@ -1844,7 +1844,7 @@ class IndexedFrame(Frame):
         dtype: int64
         """
         return self._from_columns_like_self(
-            self._repeat(
+            Frame._repeat(
                 [*self._index._data.columns, *self._columns], repeats
             ),
             self._column_names,

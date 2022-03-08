@@ -1550,19 +1550,6 @@ class Frame:
 
         return self._from_data(data, index).astype(np.float64)
 
-    def _repeat(
-        self, columns: List[ColumnBase], repeats, axis=None
-    ) -> List[ColumnBase]:
-        if axis is not None:
-            raise NotImplementedError(
-                "Only axis=`None` supported at this time."
-            )
-
-        if not is_scalar(repeats):
-            repeats = as_column(repeats)
-
-        return libcudf.filling.repeat(columns, repeats)
-
     @annotate("FRAME_SHIFT", color="green", domain="cudf_python")
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
@@ -6677,6 +6664,20 @@ class Frame:
             name: col.distinct_count(method=method, dropna=dropna)
             for name, col in self._data.items()
         }
+
+    @staticmethod
+    def _repeat(
+        columns: List[ColumnBase], repeats, axis=None
+    ) -> List[ColumnBase]:
+        if axis is not None:
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
+
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
+
+        return libcudf.filling.repeat(columns, repeats)
 
 
 @annotate(
