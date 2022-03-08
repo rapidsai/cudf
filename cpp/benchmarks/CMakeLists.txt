@@ -153,11 +153,10 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
 
-ConfigureBench(COMPARE_BENCH compare/comparator_benchmark.cu)
-
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
+ConfigureBench(SORT_NVBENCH sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
