@@ -56,10 +56,11 @@ std::unique_ptr<column> index_of(
  *                                rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::scalar const& search_key,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> contains(
+  cudf::lists_column_view const& lists,
+  cudf::scalar const& search_key,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
@@ -67,10 +68,11 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
  *                                rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::column_view const& search_keys,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> contains(
+  cudf::lists_column_view const& lists,
+  cudf::column_view const& search_keys,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf
