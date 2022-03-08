@@ -405,6 +405,7 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
 
 
 def cudf_nvtx_annotate(func, color="rapids", domain="cudf_python"):
+    """Decorator for applying nvtx annotations to methods in cudf."""
     return annotate(message=func.__qualname__, color=color, domain=domain)(
         func
     )
