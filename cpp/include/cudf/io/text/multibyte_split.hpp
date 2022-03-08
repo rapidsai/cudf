@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,20 +17,65 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace cudf {
 namespace io {
 namespace text {
 
+/**
+ * @brief Splits the source text into a strings column using a multiple byte delimiter.
+ *
+ * Providing a byte range allows multibyte_split to read a whole file, but only return the offsets
+ * of delimiters which begin within the range. If thinking in terms of "records", where each
+ * delimiter dictates the end of a record, all records which begin within the byte range provided
+ * will be returned, including any record which may begin in the range but end outside of the
+ * range. Records which begin outside of the range will ignored, even if those records end inside
+ * the range.
+ *
+ * @code{.pseudo}
+ * Examples:
+ *  source:     "abc..def..ghi..jkl.."
+ *  delimiter:  ".."
+ *
+ *  byte_range: nullopt
+ *  return:     ["abc..", "def..", "ghi..", jkl..", ""]
+ *
+ *  byte_range: [0, 2)
+ *  return:     ["abc.."]
+ *
+ *  byte_range: [2, 9)
+ *  return:     ["def..", "ghi.."]
+ *
+ *  byte_range: [11, 2)
+ *  return:     []
+ *
+ *  byte_range: [13, 7)
+ *  return:     ["jkl..", ""]
+ * @endcode
+ *
+ * @param source The source string
+ * @param delimiter UTF-8 encoded string for which to find offsets in the source
+ * @param byte_range range in which to consider offsets relevant
+ * @param mr Memory resource to use for the device memory allocation
+ * @return The strings found by splitting the source by the delimiter within the relevant byte
+ * range.
+ */
 std::unique_ptr<cudf::column> multibyte_split(
   data_chunk_source const& source,
   std::string const& delimiter,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::optional<byte_range_info> byte_range = std::nullopt,
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<cudf::column> multibyte_split(data_chunk_source const& source,
+                                              std::string const& delimiter,
+                                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace text
 }  // namespace io
