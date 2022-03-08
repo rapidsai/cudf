@@ -56,13 +56,13 @@ using duration_us = cuda::std::chrono::duration<int64_t, cuda::std::chrono::micr
  */
 using duration_ns = cuda::std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
 
-static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
-static_assert(sizeof(duration_h) == sizeof(typename duration_h::rep), "");
-static_assert(sizeof(duration_m) == sizeof(typename duration_m::rep), "");
-static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep), "");
-static_assert(sizeof(duration_ms) == sizeof(typename duration_ms::rep), "");
-static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep), "");
-static_assert(sizeof(duration_ns) == sizeof(typename duration_ns::rep), "");
+static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep));
+static_assert(sizeof(duration_h) == sizeof(typename duration_h::rep));
+static_assert(sizeof(duration_m) == sizeof(typename duration_m::rep));
+static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep));
+static_assert(sizeof(duration_ms) == sizeof(typename duration_ms::rep));
+static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep));
+static_assert(sizeof(duration_ns) == sizeof(typename duration_ns::rep));
 
 /** @} */  // end of group
 }  // namespace cudf
