@@ -1312,23 +1312,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     start, stop=stop, step=stride, dtype=np.int32
                 )
             )
-        else:
-            columns_to_slice = [
-                *(self._index._data.columns if not is_range_index else []),
-                *self._columns,
-            ]
-            result = self._from_columns_like_self(
-                libcudf.copying.columns_slice(columns_to_slice, [start, stop])[
-                    0
-                ],
-                self._column_names,
-                None if is_range_index else self._index.names,
-            )
 
-            if is_range_index:
-                result.index = self.index[start:stop]
-            result._set_column_names_like(self)
-            return result
+        columns_to_slice = [
+            *(self._index._data.columns if not is_range_index else []),
+            *self._columns,
+        ]
+        result = self._from_columns_like_self(
+            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
+            self._column_names,
+            None if is_range_index else self._index.names,
+        )
+
+        if is_range_index:
+            result.index = self.index[start:stop]
+        result._set_column_names_like(self)
+        return result
 
     @annotate("DATAFRAME_MEMORY_USAGE", color="blue", domain="cudf_python")
     def memory_usage(self, index=True, deep=False):
