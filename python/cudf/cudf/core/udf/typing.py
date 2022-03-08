@@ -469,7 +469,7 @@ class MaskedStringAttrs(AttributeTemplate):
         return types.BoundFunction(MaskedStringFind, MaskedType(string_view))
 
     def resolve_rfind(self, mod):
-        return types.BoundFunction(MaskedStringFind, MaskedType(string_view))
+        return types.BoundFunction(MaskedStringRFind, MaskedType(string_view))
 
 _len_string_view = cuda.declare_device('len_2', types.int32(types.CPointer(string_view)))
 _string_view_startswith = cuda.declare_device("startswith", types.boolean(types.CPointer(string_view), types.CPointer(string_view)))
