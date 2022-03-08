@@ -221,14 +221,13 @@ class device_row_comparator {
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      int depth = _depth.has_value() ? _depth.value()[i] : 0;
+      int depth = _depth.has_value() ? (*_depth)[i] : 0;
       if (depth > last_null_depth) { continue; }
 
-      bool ascending =
-        _column_order.has_value() ? _column_order.value()[i] == order::ASCENDING : true;
+      bool ascending = _column_order.has_value() ? (*_column_order)[i] == order::ASCENDING : true;
 
       null_order null_precedence =
-        _null_precedence.has_value() ? _null_precedence.value()[i] : null_order::BEFORE;
+        _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
       auto comparator = element_relational_comparator{
         _nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
