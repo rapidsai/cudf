@@ -37,6 +37,7 @@ auto make_normal_dist(T upper_bound)
 {
   // Provided n is large enough, Normal(μ,σ2) is a good approximation for Binomial(n, p)
   // where μ = np and σ2 = np (1 - p).
+  // https://www.real-statistics.com/binomial-and-related-distributions/relationship-binomial-and-normal-distributions/
   using realT        = std::conditional_t<sizeof(T) * 8 <= 23, float, double>;
   realT const mean   = static_cast<realT>(upper_bound) / 2;             // μ = np, p=0.5
   realT const stddev = std::sqrt(static_cast<realT>(upper_bound) / 4);  // sqrt(np (1 - p))

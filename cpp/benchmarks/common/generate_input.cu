@@ -232,16 +232,16 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
       upper_bound{desc.upper_bound},
       dist{make_distribution<rep>(desc.id, desc.lower_bound, desc.upper_bound)}
   {
-    if (not scale.has_value()) {
-      int const max_scale = std::numeric_limits<rep>::digits10;
-      std::binomial_distribution<int> scale_dist_normal(2 * max_scale, 0.5);
-      std::mt19937 engine;
-      scale = numeric::scale_type{scale_dist_normal(engine) - max_scale};
-    }
   }
 
   rmm::device_uvector<T> operator()(thrust::minstd_rand& engine, unsigned size)
   {
+    if (not scale.has_value()) {
+      int const max_scale = std::numeric_limits<rep>::digits10;
+      std::binomial_distribution<int> scale_dist_normal(2 * max_scale, 0.5);
+      std::mt19937 engine_scale(engine());
+      scale = numeric::scale_type{scale_dist_normal(engine_scale) - max_scale};
+    }
     auto ints = dist(engine, size);
     rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
     // Clamp the generated random value to the specified range
@@ -291,14 +291,13 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
   distribution_fn<bool> dist;
 
   random_value_fn(distribution_params<bool> const& desc)
-    : dist{
-        [valid_prob = desc.probability_true, dist = thrust::uniform_real_distribution<float>(0, 1)](
-          thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<bool> {
-          rmm::device_uvector<bool> result(size, rmm::cuda_stream_default);
-          thrust::tabulate(
-            thrust::device, result.begin(), result.end(), bool_generator(engine, valid_prob));
-          return result;
-        }}
+    : dist{[valid_prob = desc.probability_true](thrust::minstd_rand& engine,
+                                                size_t size) mutable -> rmm::device_uvector<bool> {
+        rmm::device_uvector<bool> result(size, rmm::cuda_stream_default);
+        thrust::tabulate(
+          thrust::device, result.begin(), result.end(), bool_generator(engine, valid_prob));
+        return result;
+      }}
   {
   }
   auto operator()(thrust::minstd_rand& engine, unsigned size) { return dist(engine, size); }
