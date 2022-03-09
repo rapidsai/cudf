@@ -878,6 +878,7 @@ class CategoricalColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
     ) -> ColumnBase:
+        rhs = self._wrap_binop_normalization(rhs)
         if not (self.ordered and rhs.ordered) and op not in (
             "eq",
             "ne",

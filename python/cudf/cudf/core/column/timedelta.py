@@ -225,6 +225,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs: BinaryOperand, reflect: bool = False
     ) -> "column.ColumnBase":
+        rhs = self._wrap_binop_normalization(rhs)
         lhs, rhs = self, rhs
 
         if op in ("eq", "ne"):

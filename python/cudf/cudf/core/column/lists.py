@@ -133,7 +133,7 @@ class ListColumn(ColumnBase):
         Name: val, dtype: list
 
         """
-
+        other = self._wrap_binop_normalization(other)
         if isinstance(other.dtype, ListDtype):
             if binop == "add":
                 return concatenate_rows(

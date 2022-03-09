@@ -3451,13 +3451,6 @@ class Frame(BinaryOperand, Scannable):
                     output[col] = left_column.isnull()
                 continue
 
-            if right_column is cudf.NA:
-                right_column = cudf.Scalar(
-                    right_column, dtype=left_column.dtype
-                )
-            elif not isinstance(right_column, ColumnBase):
-                right_column = left_column.normalize_binop_value(right_column)
-
             output_mask = None
             if fill_value is not None:
                 if isinstance(right_column, ColumnBase):

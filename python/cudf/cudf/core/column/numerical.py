@@ -153,6 +153,7 @@ class NumericalColumn(NumericalBaseColumn):
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
+        rhs = self._wrap_binop_normalization(rhs)
 
         if binop in {"truediv", "rtruediv"}:
             # Division with integer types results in a suitable float.

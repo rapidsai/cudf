@@ -390,6 +390,7 @@ class DatetimeColumn(column.ColumnBase):
         rhs: Union[ColumnBase, "cudf.Scalar"],
         reflect: bool = False,
     ) -> ColumnBase:
+        rhs = self._wrap_binop_normalization(rhs)
         if isinstance(rhs, cudf.DateOffset):
             return rhs._datetime_binop(self, op, reflect=reflect)
         lhs: Union[ScalarLike, ColumnBase] = self

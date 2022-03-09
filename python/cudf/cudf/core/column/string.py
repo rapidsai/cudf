@@ -5448,9 +5448,8 @@ class StringColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
     ) -> "column.ColumnBase":
-        lhs = self
-        if reflect:
-            lhs, rhs = rhs, lhs
+        rhs = self._wrap_binop_normalization(rhs)
+        lhs, rhs = (rhs, self) if reflect else (self, rhs)
         if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
             if op == "add":
                 return cast(

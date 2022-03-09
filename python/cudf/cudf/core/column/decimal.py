@@ -66,6 +66,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # Decimals in libcudf don't support truediv, see
         # https://github.com/rapidsai/cudf/pull/7435 for explanation.
         op = op.replace("true", "")
+        other = self._wrap_binop_normalization(other)
 
         if not isinstance(
             other,
