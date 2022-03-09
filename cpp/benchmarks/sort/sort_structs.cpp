@@ -16,18 +16,12 @@
 
 #include <cudf/detail/sorting.hpp>
 
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-
-#include <benchmark/benchmark.h>
-#include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <nvbench/nvbench.cuh>
+
+#include <random>
 
 void nvbench_sort_struct(nvbench::state& state)
 {
@@ -70,9 +64,8 @@ void nvbench_sort_struct(nvbench::state& state)
     child_cols.push_back(struct_col.release());
   }
 
-  // // Create table view
+  // Create table view
   auto input = cudf::table(std::move(child_cols));
-  // auto input = cudf::table_view({cols[0]->view()});
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
