@@ -92,7 +92,7 @@ template <typename Key>
 struct MurmurHash3_32 {
   using result_type = hash_value_type;
 
-  MurmurHash3_32() = default;
+  constexpr MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t h, uint32_t r) const
@@ -253,7 +253,7 @@ template <typename Key>
 struct SparkMurmurHash3_32 {
   using result_type = hash_value_type;
 
-  SparkMurmurHash3_32() = default;
+  constexpr SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
