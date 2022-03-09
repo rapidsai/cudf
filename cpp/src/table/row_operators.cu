@@ -113,6 +113,11 @@ struct is_relationally_comparable_functor {
   }
 };
 
+/**
+ * @brief Check a table for compatibility with lexicographic comparison
+ *
+ * Checks whether a given table contains columns of non-relationally comparable types.
+ */
 void check_lex_compatibility(table_view const& input)
 {
   // Basically check if there's any LIST hiding anywhere in the table

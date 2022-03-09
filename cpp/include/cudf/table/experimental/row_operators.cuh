@@ -64,6 +64,7 @@ class element_relational_comparator {
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param has_nulls Indicates if either input column contains nulls.
    * @param null_precedence Indicates how null values are ordered with other values
+   * @param depth The depth of the column if part of a nested column @see preprocessed_table::depths
    */
   __host__ __device__ element_relational_comparator(Nullate has_nulls,
                                                     column_device_view lhs,
@@ -86,8 +87,8 @@ class element_relational_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   * @return Indicates the relationship between the elements in
-   * the `lhs` and `rhs` columns.
+   * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+   * with the depth at which a null value was encountered.
    */
   template <typename Element,
             std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
@@ -178,19 +179,19 @@ class device_row_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
    * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param has_nulls Indicates if either input table contains columns with nulls.
-   * @param column_order Optional, device array the same length as a row that
-   * indicates the desired ascending/descending order of each column in a row.
-   * If `nullptr`, it is assumed all columns are sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row
-   * and indicates how null values compare to all other for every column. If
-   * it is nullptr, then null precedence would be `null_order::BEFORE` for all
-   * columns.
+   * @param depth Optional, device array the same length as a row that contains starting depths of
+   * columns if they're nested, and 0 otherwise.
+   * @param column_order Optional, device array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If `nullopt`, then null precedence would be
+   * `null_order::BEFORE` for all columns.
    */
   device_row_comparator(Nullate has_nulls,
                         table_device_view lhs,
@@ -214,8 +215,7 @@ class device_row_comparator {
    *
    * @param lhs_index The index of row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than row in the
-   * `rhs` table
+   * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
    */
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
@@ -253,19 +253,60 @@ class device_row_comparator {
 };  // class row_lexicographic_comparator
 
 struct preprocessed_table {
+  /**
+   * @brief Preprocess table for use with lexicographical comparison
+   *
+   * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
+   * be passed to the constructor of `lexicographic_comparison::self_comparator` to avoid
+   * preprocessing again.
+   *
+   * @param table The table to preprocess
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If it is nullptr, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   */
   preprocessed_table(table_view const& table,
                      host_span<order const> column_order,
                      host_span<null_order const> null_precedence,
                      rmm::cuda_stream_view stream);
 
+  // TODO: Should we add a static create method that returns a shared_ptr?
+
+ private:
+  friend class self_comparator;
+
+  /**
+   * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
+   *
+   * @return table_device_view
+   */
   operator table_device_view() { return **d_t; }
 
+  /**
+   * @brief Get a device array containing the desired order of each column in the preprocessed table
+   *
+   * @return std::optional<device_span<order const>> Device array containing respective column
+   * orders. If no explicit column orders were specified during the creation of this object then
+   * this will be `nullopt`.
+   */
   [[nodiscard]] std::optional<device_span<order const>> column_order() const
   {
     return d_column_order.size() ? std::optional<device_span<order const>>(d_column_order)
                                  : std::nullopt;
   }
 
+  /**
+   * @brief Get a device array containing the desired null precedence of each column in the
+   * preprocessed table
+   *
+   * @return std::optional<device_span<null_order const>> Device array containing respective column
+   * null precedence. If no explicit column null precedences were specified during the creation of
+   * this object then this will be `nullopt`.
+   */
   [[nodiscard]] std::optional<device_span<null_order const>> null_precedence() const
   {
     return d_null_precedence.size()
@@ -273,11 +314,40 @@ struct preprocessed_table {
              : std::nullopt;
   }
 
+  /**
+   * @brief Get a device array containing the depth of each column in the preprocessed table
+   *
+   * A `depth` value is the number of nested levels as parent of the column in the original,
+   * non-preprocessed table, which were pruned during preprocessing.
+   * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
+   *      S
+   *     / \
+   *    S   d
+   *   / \
+   *  i   f
+   * then after preprocessing, we get three columns:
+   * `Struct<Struct<int>>`, `float`, and `decimal`.
+   * 0   2   1  <- depths
+   * S
+   * |
+   * S       d
+   * |
+   * i   f
+   * The depth of the first column is 0 because it contains all its parent levels, while the depth
+   * of the second column is 2 because two of its parent struct levels were pruned.
+   *
+   * @return std::optional<device_span<int const>> Device array containing respective column depths.
+   * If there are no nested columns in the table then this will be `nullopt`.
+   */
   [[nodiscard]] std::optional<device_span<int const>> depths() const
   {
     return d_depths.size() ? std::optional<device_span<int const>>(d_depths) : std::nullopt;
   }
 
+  /**
+   * @brief Whether the table has any nullable column
+   *
+   */
   [[nodiscard]] bool has_nulls() const { return _has_nulls; }
 
  private:
@@ -291,18 +361,53 @@ struct preprocessed_table {
   bool _has_nulls;
 };
 
+/**
+ * @brief An owning object that can be used to lexicographically compare two rows of the same table
+ *
+ * This class can take a table_view and preprocess certain columns to allow for lexicographical
+ * comparison. The preprocessed table and temporary data required for the comparison are created and
+ * owned by this class.
+ *
+ * This class can then provide a functor object that can used on the device.
+ * The object of this class must outlive the usage of the device functor.
+ */
 class self_comparator {
  public:
+  /**
+   * @brief Construct an owning object for performing a lexicographic comparison between two rows of
+   * the same table.
+   *
+   * @param table The table to compare
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If empty, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
   self_comparator(table_view const& t,
-                  host_span<order const> column_order,
-                  host_span<null_order const> null_precedence,
-                  rmm::cuda_stream_view stream)
+                  host_span<order const> column_order         = {},
+                  host_span<null_order const> null_precedence = {},
+                  rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
     : d_t{std::make_shared<preprocessed_table>(t, column_order, null_precedence, stream)}
   {
   }
 
+  /**
+   * @brief Construct an owning object for performing a lexicographic comparison between two rows of
+   * the same preprocessed table.
+   *
+   * @param t A table preprocessed for lexicographic comparison
+   */
   self_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
+  /**
+   * @brief Ger the comparison operator to use on the device
+   *
+   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   */
   template <typename Nullate = nullate::DYNAMIC>
   device_row_comparator<Nullate> device_comparator()
   {
