@@ -401,9 +401,15 @@ class GroupBy(Serializable, Reducible):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self):
-        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
-        grouped_values = self.obj.__class__._from_data(*grouped_values)
-        grouped_values._copy_type_metadata(self.obj)
+        grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
+            [*self.obj._index._columns, *self.obj._columns]
+        )
+        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_values = self.obj._from_columns_like_self(
+            grouped_value_cols,
+            column_names=self.obj._column_names,
+            index_names=self.obj._index_names,
+        )
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
 
@@ -1245,17 +1251,19 @@ class GroupBy(Serializable, Reducible):
             raise NotImplementedError("Only axis=0 is supported.")
 
         # grouped values
-        value_columns = self.grouping.values
-        _, (data, index), _ = self._groupby.groups(
-            cudf.core.frame.Frame(value_columns._data)
-        )
-        grouped = self.obj.__class__._from_data(data, index)
-        grouped = self._mimic_pandas_order(grouped)._copy_type_metadata(
-            value_columns
+        values = self.grouping.values
+        _, grouped_value_cols, _ = self._groupby.groups(
+            [*values._index._columns, *values._columns]
         )
 
+        grouped = self.obj._from_columns_like_self(
+            grouped_value_cols, values._column_names, values._index_names
+        )
+
+        grouped = self._mimic_pandas_order(grouped)._copy_type_metadata(values)
+
         result = grouped - self.shift(periods=periods)
-        return result._copy_type_metadata(value_columns)
+        return result._copy_type_metadata(values)
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
@@ -1377,17 +1385,19 @@ class GroupBy(Serializable, Reducible):
                 )
             return getattr(self, method, limit)()
 
-        value_columns = self.grouping.values
-        _, (data, index), _ = self._groupby.groups(
-            cudf.core.frame.Frame(value_columns._data)
+        values = self.grouping.values
+        _, grouped_value_cols, _ = self._groupby.groups(
+            [*values._index._columns, *values._columns]
         )
 
-        grouped = self.obj.__class__._from_data(data, index)
+        grouped = self.obj._from_columns_like_self(
+            grouped_value_cols, values._column_names, values._index_names
+        )
         result = grouped.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
         result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(value_columns)
+        return result._copy_type_metadata(values)
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
@@ -1451,11 +1461,10 @@ class GroupBy(Serializable, Reducible):
         """Given a groupby result from libcudf, reconstruct the row orders
         matching that of pandas. This also adds appropriate indices.
         """
-        sorted_order_column = arange(0, result._data.nrows)
-        _, (order, _), _ = self._groupby.groups(
-            cudf.core.frame.Frame({"sorted_order_column": sorted_order_column})
+        _, order_cols, _ = self._groupby.groups(
+            [arange(0, result._data.nrows)]
         )
-        gather_map = order["sorted_order_column"].argsort()
+        gather_map = order_cols[0].argsort()
         result = result.take(gather_map)
         result.index = self.obj.index
         return result

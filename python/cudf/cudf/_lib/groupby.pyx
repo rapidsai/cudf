@@ -26,7 +26,12 @@ import cudf
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport table_view_from_table
+from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
+    data_from_unique_ptr,
+    table_view_from_columns,
+    table_view_from_table,
+)
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -46,7 +51,6 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.utilities.host_span cimport host_span
-from cudf._lib.utils cimport data_from_unique_ptr
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -88,29 +92,15 @@ cdef class GroupBy:
         self.keys = keys
         self.dropna = dropna
 
-    def groups(self, values):
-
-        cdef table_view values_view = table_view_from_table(values)
+    def groups(self, list values):
+        cdef table_view values_view = table_view_from_columns(values)
 
         with nogil:
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
 
-        c_grouped_keys = move(c_groups.keys)
-        c_grouped_values = move(c_groups.values)
-        c_group_offsets = c_groups.offsets
-
-        grouped_keys = cudf.core.index._index_from_data(
-            *data_from_unique_ptr(
-                move(c_grouped_keys),
-                column_names=range(c_grouped_keys.get()[0].num_columns())
-            )
-        )
-        grouped_values = data_from_unique_ptr(
-            move(c_grouped_values),
-            index_names=values._index_names,
-            column_names=values._column_names
-        )
-        return grouped_keys, grouped_values, c_group_offsets
+        grouped_key_cols = columns_from_unique_ptr(move(c_groups.keys))
+        grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
+        return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
     def aggregate_internal(self, values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
