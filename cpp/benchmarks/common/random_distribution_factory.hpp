@@ -29,32 +29,19 @@
 #include <cmath>
 #include <memory>
 #include <type_traits>
-/**
- * @brief Generates a normal(binomial) distribution between zero and upper_bound.
- */
-template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
-auto make_normal_dist(T upper_bound)
-{
-  // Provided n is large enough, Normal(μ,σ2) is a good approximation for Binomial(n, p)
-  // where μ = np and σ2 = np (1 - p).
-  // https://www.real-statistics.com/binomial-and-related-distributions/relationship-binomial-and-normal-distributions/
-  using realT        = std::conditional_t<sizeof(T) * 8 <= 23, float, double>;
-  auto const n       = static_cast<realT>(upper_bound);
-  realT const p      = 0.5;    // Hardcoded binomial probability of 0.5
-  realT const mean   = n * p;  // μ = np
-  realT const stddev = std::sqrt(n * p * (1 - p));
-  return thrust::random::normal_distribution<realT>(mean, stddev);
-}
 
 /**
  * @brief Generates a normal distribution between zero and upper_bound.
  */
-template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
+template <typename T>
 auto make_normal_dist(T upper_bound)
 {
+  using realT    = std::conditional_t<cuda::std::is_floating_point_v<T>,
+                                   T,
+                                   std::conditional_t<sizeof(T) * 8 <= 23, float, double>>;
   T const mean   = upper_bound / 2;
   T const stddev = upper_bound / 6;
-  return thrust::random::normal_distribution<T>(mean, stddev);
+  return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
 template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
@@ -89,7 +76,12 @@ struct value_generator {
   __device__ T operator()(size_t n)
   {
     engine.discard(n);
-    return dist(engine) + lower_bound;
+    if constexpr (cuda::std::is_integral_v<T> &&
+                  cuda::std::is_floating_point_v<decltype(dist(engine))>) {
+      return std::round(dist(engine)) + lower_bound;
+    } else {
+      return dist(engine) + lower_bound;
+    }
   }
 
   T lower_bound;
