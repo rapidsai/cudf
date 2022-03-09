@@ -102,6 +102,53 @@ cdef class GroupBy:
         grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
         return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
+    def _aggregate(self, list values, list aggregations):
+        """Minimal wrapper over c++ groupby::aggregate API.
+
+        `values` is a list of value columns. `aggregations` is a list of
+        of lists of aggregations, where `aggregations[i]` are the aggregations
+        for `values[i]`.
+        """
+        cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
+        cdef libcudf_groupby.aggregation_request c_agg_request
+        cdef GroupbyAggregation grpby_agg
+        cdef Column col
+        cdef pair[
+            unique_ptr[table],
+            vector[libcudf_groupby.aggregation_result]
+        ] c_result
+
+        groupby_aggregations = [
+            [
+                make_groupby_aggregation(agg) for agg in aggs
+            ] for aggs in aggregations
+        ]
+
+        for col, grpby_aggs in values, groupby_aggregations:
+            c_agg_request = move(libcudf_groupby.aggregation_request())
+            for grpby_agg in grpby_aggs:
+                c_agg_request.aggregations.push_back(move(grpby_agg.c_obj))
+            c_agg_request.values = col.view()
+            c_agg_requests.push_back(move(c_agg_request))
+
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].aggregate(
+                    c_agg_requests
+                )
+            )
+
+        grouped_keys = columns_from_unique_ptr(move(c_result.first))
+        result_columns = [
+            [
+                Column.from_unique_ptr(
+                    move(c_result.second[i].results[j])
+                ) for j in range(len(aggs))
+            ] for i, aggs in enumerate(aggregations)
+        ]
+
+        return grouped_keys, result_columns
+
     def aggregate_internal(self, values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
@@ -116,6 +163,8 @@ cdef class GroupBy:
             col = values._data[col_name]
             dtype = col.dtype
 
+            # TODO: 1. Refactor the filtering step outside of cython
+            # This should be a preprocessing step to aggregations.
             valid_aggregations = (
                 _LIST_AGGS if is_list_dtype(dtype)
                 else _STRING_AGGS if is_string_dtype(dtype)
@@ -135,12 +184,17 @@ cdef class GroupBy:
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
+            # TODO: 2. In the filtering step, if some column has no aggregation
+            # The values and aggregation list should drop that column.
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-
+        # TODO: 3. If final aggregation list is empty, not because of the input
+        # aggregation was empty, then we can determine the result of the
+        # emptiness is because all columns were filtered out. We should raise
+        # and error at the end of the filtering step if this happens.
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 

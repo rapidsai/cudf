@@ -280,6 +280,7 @@ class GroupBy(Serializable, Reducible):
         if self._sort:
             result = result.sort_index()
 
+        # TODO: can _is_multi_agg be performed inside normalized_agg?
         if not _is_multi_agg(func):
             if result._data.nlevels <= 1:  # 0 or 1 levels
                 # make sure it's a flat index:
@@ -305,9 +306,12 @@ class GroupBy(Serializable, Reducible):
             result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
+        # TODO: Why is this needed?
         result.index._copy_type_metadata(self.grouping.keys)
         result._index = cudf.Index(result._index)
 
+        # TODO: optimize this part, construct the result list of columns
+        # depending on the _as_index column
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
                 result._insert(
@@ -421,8 +425,8 @@ class GroupBy(Serializable, Reducible):
 
     def _normalize_aggs(self, aggs):
         """
-        Normalize aggs to a dict mapping column names
-        to a list of aggregations.
+        Normalize aggs to a list of list of aggregations, where `result[i]`
+        is a list of aggregations for `self.obj[i]`.
         """
         if not isinstance(aggs, collections.abc.Mapping):
             # Make col_name->aggs mapping from aggs.
