@@ -383,7 +383,7 @@ def call_len_string_view(st):
     return _len_string_view(st)
 
 
-@cuda_lower(len, MaskedType(types.pyobject))
+@cuda_lower(len, MaskedType(string_view))
 def string_view_len_impl(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
