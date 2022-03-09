@@ -65,9 +65,10 @@ class stringview_model(models.StructModel):
     bytes = 0
     for member_ty in (t[1] for t in _members):
         if isinstance(member_ty, types.CPointer):
+            # TODO: is this always right?
             bytes += 8
         else:
-            bytes += max(member_ty.bitwidth / 8, 8)
+            bytes += member_ty.bitwidth / 8
     
     size_bytes = bytes
 
