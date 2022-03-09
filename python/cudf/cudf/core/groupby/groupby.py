@@ -192,7 +192,9 @@ class GroupBy(Serializable, Reducible):
 
     @cached_property
     def _groupby(self):
-        return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
+        return libgroupby.GroupBy(
+            [*self.grouping.keys._columns], dropna=self._dropna
+        )
 
     @annotate("GROUPBY_AGG", domain="cudf_python")
     def agg(self, func):
@@ -267,9 +269,13 @@ class GroupBy(Serializable, Reducible):
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
-        result = cudf.DataFrame._from_data(
-            *self._groupby.aggregate(self.obj, normalized_aggs)
+        result_data, grouped_key_cols = self._groupby.aggregate(
+            self.obj, normalized_aggs
         )
+        grouped_key = cudf.core.index._index_from_data(
+            dict(zip(self.grouping.keys._column_names, grouped_key_cols))
+        )
+        result = cudf.DataFrame._from_data(result_data, index=grouped_key)
 
         if self._sort:
             result = result.sort_index()
@@ -1705,6 +1711,7 @@ class _Grouping(Serializable):
     @property
     def keys(self):
         """Return grouping key columns as index"""
+        # TODO: return just a list of columns
         nkeys = len(self._key_columns)
 
         if nkeys == 0:

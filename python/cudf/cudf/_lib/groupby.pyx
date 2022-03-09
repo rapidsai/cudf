@@ -70,7 +70,7 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, keys, bool dropna=True, *args, **kwargs):
+    def __cinit__(self, list keys, bool dropna=True, *args, **kwargs):
         cdef libcudf_types.null_policy c_null_handling
 
         if dropna:
@@ -78,7 +78,7 @@ cdef class GroupBy:
         else:
             c_null_handling = libcudf_types.null_policy.INCLUDE
 
-        cdef table_view keys_view = table_view_from_table(keys)
+        cdef table_view keys_view = table_view_from_columns(keys)
 
         with nogil:
             self.c_obj.reset(
@@ -88,7 +88,7 @@ cdef class GroupBy:
                 )
             )
 
-    def __init__(self, keys, bool dropna=True):
+    def __init__(self, list keys, bool dropna=True):
         self.keys = keys
         self.dropna = dropna
 
@@ -156,9 +156,8 @@ cdef class GroupBy:
                 )
             )
 
-        grouped_keys, _ = data_from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
+        grouped_keys = columns_from_unique_ptr(
+            move(c_result.first)
         )
 
         result_data = ColumnAccessor(multiindex=True)
@@ -172,8 +171,7 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return result_data, cudf.core.index._index_from_data(
-            grouped_keys)
+        return result_data, grouped_keys
 
     def scan_internal(self, values, aggregations):
         from cudf.core.column_accessor import ColumnAccessor
@@ -229,10 +227,7 @@ cdef class GroupBy:
                 )
             )
 
-        grouped_keys, _ = data_from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
-        )
+        grouped_keys = columns_from_unique_ptr(move(c_result.first))
 
         result_data = ColumnAccessor(multiindex=True)
         # Note: This loop relies on the included_aggregations dict being
@@ -245,8 +240,7 @@ cdef class GroupBy:
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
 
-        return result_data, cudf.core.index._index_from_data(
-            grouped_keys)
+        return result_data, grouped_keys
 
     def aggregate(self, values, aggregations):
         """
