@@ -638,7 +638,6 @@ class Frame(BinaryOperand, Scannable):
 
         return self._data[None].copy(deep=False)
 
-
     @property
     def values(self):
         """
@@ -3339,7 +3338,6 @@ class Frame(BinaryOperand, Scannable):
             self, ascending=ascending, null_position=null_position
         )
 
-
     @_cudf_nvtx_annotate
     def _split(self, splits):
         """Split a frame with split points in ``splits``. Returns a list of
@@ -3354,7 +3352,6 @@ class Frame(BinaryOperand, Scannable):
             )
             for split_idx in range(len(splits) + 1)
         ]
-
 
     @_cudf_nvtx_annotate
     def _encode(self):
