@@ -3427,30 +3427,6 @@ class Frame(BinaryOperand, Scannable):
             col,
             (left_column, right_column, reflect, fill_value),
         ) in operands.items():
-
-            # Handle object columns that are empty or
-            # all nulls when performing binary operations
-            if (
-                left_column.dtype == "object"
-                and left_column.null_count == len(left_column)
-                and fill_value is None
-            ):
-                if fn in (
-                    "add",
-                    "sub",
-                    "mul",
-                    "mod",
-                    "pow",
-                    "truediv",
-                    "floordiv",
-                ):
-                    output[col] = left_column
-                elif fn in ("eq", "lt", "le", "gt", "ge"):
-                    output[col] = left_column.notnull()
-                elif fn == "ne":
-                    output[col] = left_column.isnull()
-                continue
-
             output_mask = None
             if fill_value is not None:
                 if isinstance(right_column, ColumnBase):
