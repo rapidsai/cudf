@@ -1,6 +1,7 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import math
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -10,6 +11,20 @@ import cudf
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
+
+
+@contextmanager
+def _hide_pandas_rolling_min_periods_warning(agg):
+    if agg == "count":
+        with pytest.warns(
+            FutureWarning,
+            match="min_periods=None will default to the size of window "
+            "consistent with other methods in a future version. Specify "
+            "min_periods=0 instead.",
+        ):
+            yield
+    else:
+        yield
 
 
 @pytest.mark.parametrize(
@@ -406,9 +421,10 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
-            -1
-        )
+        with _hide_pandas_rolling_min_periods_warning(agg):
+            expect = getattr(
+                pdf.groupby("a").rolling(window_size), agg
+            )().fillna(-1)
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -418,9 +434,10 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
-            -1
-        )
+        with _hide_pandas_rolling_min_periods_warning(agg):
+            expect = getattr(
+                pdf.groupby("a").rolling(window_size), agg
+            )().fillna(-1)
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -439,9 +456,10 @@ def test_rolling_groupby_multi(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        expect = getattr(
-            pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
-        )().fillna(-1)
+        with _hide_pandas_rolling_min_periods_warning(agg):
+            expect = getattr(
+                pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
+            )().fillna(-1)
         got = getattr(
             gdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
         )().fillna(-1)
