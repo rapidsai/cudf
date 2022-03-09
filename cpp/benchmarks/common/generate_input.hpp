@@ -397,14 +397,15 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
  * @param dtype_ids Vector of requested column types
  * @param num_rows Number of rows in the output table
  * @param null_probability optional, probability of a null value
- *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ *  no value implies no null mask, =0 implies all valids, >=1 implies all nulls
  * @param seed optional, seed for the pseudo-random engine
  * @return A table with the sequence columns.
  */
-std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                   row_count num_rows,
-                                                   float null_probability = -1.0,
-                                                   unsigned seed          = 1);
+std::unique_ptr<cudf::table> create_sequence_table(
+  std::vector<cudf::type_id> const& dtype_ids,
+  row_count num_rows,
+  std::optional<float> null_probability = std::nullopt,
+  unsigned seed                         = 1);
 
 /**
  * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
@@ -421,10 +422,9 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
  *
  * @param size number of rows
  * @param null_probability probability of a null value
- *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ *  no value implies no null mask, =0 implies all valids, >=1 implies all nulls
  * @param seed optional, seed for the pseudo-random engine
  * @return null mask device buffer with random null mask data and null count
  */
-std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
-                                                                       float null_probability,
-                                                                       unsigned seed = 1);
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
+  cudf::size_type size, std::optional<float> null_probability = std::nullopt, unsigned seed = 1);

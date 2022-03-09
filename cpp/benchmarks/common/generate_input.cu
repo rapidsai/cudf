@@ -26,6 +26,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -197,8 +198,8 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
 
   rmm::device_uvector<T> operator()(thrust::minstd_rand& engine, unsigned size)
   {
-    auto sec = seconds_gen(engine, size);
-    auto ns  = nanoseconds_gen(engine, size);
+    auto const sec = seconds_gen(engine, size);
+    auto const ns  = nanoseconds_gen(engine, size);
     rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
     thrust::transform(
       thrust::device,
@@ -217,7 +218,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
 };
 
 /**
- * @brief Creates an random fixed_point value. Not implemented yet.
+ * @brief Creates an random fixed_point value.
  */
 template <typename T>
 struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
@@ -238,9 +239,9 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   {
     if (not scale.has_value()) {
       int const max_scale = std::numeric_limits<rep>::digits10;
-      std::binomial_distribution<int> scale_dist_normal(2 * max_scale, 0.5);
+      std::uniform_int_distribution<int> scale_dist{-max_scale, max_scale};
       std::mt19937 engine_scale(engine());
-      scale = numeric::scale_type{scale_dist_normal(engine_scale) - max_scale};
+      scale = numeric::scale_type{scale_dist(engine_scale)};
     }
     auto ints = dist(engine, size);
     rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
@@ -252,7 +253,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
                       [scale       = *(this->scale),
                        upper_bound = this->upper_bound,
                        lower_bound = this->lower_bound] __device__(auto int_value) {
-                        return T{std::max(std::min(int_value, upper_bound), lower_bound), scale};
+                        return T{std::clamp(int_value, lower_bound, upper_bound), scale};
                       });
     return result;
   }
@@ -277,7 +278,7 @@ struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_
   auto operator()(thrust::minstd_rand& engine, unsigned size)
   {
     // Clamp the generated random value to the specified range
-    // return std::max(std::min(dist(engine), upper_bound), lower_bound);
+    // return std::clamp(dist(engine), lower_bound, upper_bound);
     return dist(engine, size);
   }
 };
@@ -292,7 +293,7 @@ struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
 
   random_value_fn(distribution_params<bool> const& desc)
     : dist{[valid_prob = desc.probability_true](thrust::minstd_rand& engine,
-                                                size_t size) mutable -> rmm::device_uvector<bool> {
+                                                size_t size) -> rmm::device_uvector<bool> {
         rmm::device_uvector<bool> result(size, rmm::cuda_stream_default);
         thrust::tabulate(
           thrust::device, result.begin(), result.end(), bool_generator(engine, valid_prob));
@@ -330,11 +331,11 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
   if (avg_run_len > 1) {
     auto avglen_dist =
       random_value_fn<int>{distribution_params<int>{distribution_id::UNIFORM, 1, 2 * avg_run_len}};
-    auto approx_run_len = num_rows / avg_run_len + 1;
-    auto run_lens       = avglen_dist(engine, approx_run_len);
+    auto const approx_run_len = num_rows / avg_run_len + 1;
+    auto run_lens             = avglen_dist(engine, approx_run_len);
     thrust::inclusive_scan(
       thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
-    auto samples_indices = sample_dist(engine, approx_run_len + 1);
+    auto const samples_indices = sample_dist(engine, approx_run_len + 1);
     // This is gather.
     auto avg_repeated_sample_indices = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
@@ -352,9 +353,8 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
                  repeated_sample_indices.begin());
     return repeated_sample_indices;
   } else {
-    // generate n samples. and gather.
-    auto samples_indices = sample_dist(engine, num_rows);
-    return samples_indices;
+    // generate n samples.
+    return sample_dist(engine, num_rows);
   }
 }
 
@@ -393,8 +393,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     data      = value_dist(engine, num_rows);
     null_mask = valid_dist(engine, num_rows);
   } else {
-    // generate n samples. and gather.
-    auto sample_indices =
+    // generate n samples and gather.
+    auto const sample_indices =
       sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
     data      = rmm::device_uvector<T>(num_rows, rmm::cuda_stream_default);
     null_mask = rmm::device_uvector<bool>(num_rows, rmm::cuda_stream_default);
@@ -431,6 +431,9 @@ struct string_generator {
   thrust::uniform_int_distribution<unsigned char> char_dist;
   string_generator(char* c, thrust::minstd_rand& engine)
     : chars(c), engine(engine), char_dist(32, 137)
+  // ~90% ASCII, ~10% UTF-8.
+  // ~80% space, ~20% space.
+  // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
   __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
@@ -458,7 +461,6 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
 {
   auto len_dist =
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::string_view>().length_params};
-  // TODO get_null_frequency == 0.
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
   auto lengths   = len_dist(engine, num_rows + 1);
@@ -507,27 +509,18 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                                                                       thrust::minstd_rand& engine,
                                                                       cudf::size_type num_rows)
 {
-  // ~10% UTF-8. ~90% ASCII.
-  // ~20% space, ~80% space.
-  // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   auto const cardinality = std::min(profile.get_cardinality(), num_rows);
   auto const avg_run_len = profile.get_avg_run_length();
 
-  // TODO check if null is working fine.
   auto sample_strings =
     create_random_utf8_string_column(profile, engine, cardinality == 0 ? num_rows : cardinality);
-  if (cardinality == 0) {
-    return sample_strings;
-  } else {
-    auto sample_indices =
-      sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
-    auto str_table =
-      cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
-                           sample_indices,
-                           cudf::out_of_bounds_policy::DONT_CHECK,  // TODO ensure no memory errors.
-                           cudf::detail::negative_index_policy::NOT_ALLOWED);
-    return std::move(str_table->release()[0]);
-  }
+  if (cardinality == 0) { return sample_strings; }
+  auto sample_indices = sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
+  auto str_table      = cudf::detail::gather(cudf::table_view{{sample_strings->view()}},
+                                        sample_indices,
+                                        cudf::out_of_bounds_policy::DONT_CHECK,
+                                        cudf::detail::negative_index_policy::NOT_ALLOWED);
+  return std::move(str_table->release()[0]);
 }
 
 template <>
@@ -702,34 +695,38 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 
 std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
                                                    row_count num_rows,
-                                                   float null_probability,
+                                                   std::optional<float> null_probability,
                                                    unsigned seed)
 {
+  auto seed_engine = deterministic_engine(seed);
+  thrust::uniform_int_distribution<unsigned> seed_dist;
+
   auto columns = std::vector<std::unique_ptr<cudf::column>>(dtype_ids.size());
   std::transform(dtype_ids.begin(), dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
-    auto init          = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
-    auto col           = cudf::sequence(num_rows.count, *init);
-    auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
+    auto init = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
+    auto col  = cudf::sequence(num_rows.count, *init);
+    auto [mask, count] =
+      create_random_null_mask(num_rows.count, null_probability, seed_dist(seed_engine));
     col->set_null_mask(std::move(mask), count);
     return col;
   });
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
-                                                                       float null_probability,
-                                                                       unsigned seed)
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
+  cudf::size_type size, std::optional<float> null_probability, unsigned seed)
 {
-  if (null_probability < 0.0f) {
-    return {rmm::device_buffer{}, 0};
-  } else if (null_probability == 0.0f) {
-    return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
-  } else if (null_probability >= 1.0f) {
+  if (not null_probability.has_value()) { return {rmm::device_buffer{}, 0}; }
+  CUDF_EXPECTS(*null_probability >= 0.0f and *null_probability <= 1.0f,
+               "Null probability must be within the range [0.0, 1.0]");
+  if (*null_probability == 0.0f) {
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_VALID), 0};
+  } else if (*null_probability >= 1.0f) {
+    return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),
-                                  bool_generator{seed, 1.0f - null_probability});
+                                  bool_generator{seed, 1.0f - *null_probability});
   }
 }
 

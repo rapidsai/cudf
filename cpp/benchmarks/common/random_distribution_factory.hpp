@@ -39,8 +39,10 @@ auto make_normal_dist(T upper_bound)
   // where μ = np and σ2 = np (1 - p).
   // https://www.real-statistics.com/binomial-and-related-distributions/relationship-binomial-and-normal-distributions/
   using realT        = std::conditional_t<sizeof(T) * 8 <= 23, float, double>;
-  realT const mean   = static_cast<realT>(upper_bound) / 2;             // μ = np, p=0.5
-  realT const stddev = std::sqrt(static_cast<realT>(upper_bound) / 4);  // sqrt(np (1 - p))
+  auto const n       = static_cast<realT>(upper_bound);
+  realT const p      = 0.5;    // Hardcoded binomial probability of 0.5
+  realT const mean   = n * p;  // μ = np
+  realT const stddev = std::sqrt(n * p * (1 - p));
   return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
@@ -122,7 +124,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
   switch (dist_id) {
     case distribution_id::NORMAL:
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
-               thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
+               thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
         thrust::tabulate(thrust::device,
                          result.begin(),
@@ -132,7 +134,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
       };
     case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
-               thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
+               thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
         thrust::tabulate(
           thrust::device, result.begin(), result.end(), value_generator{T{0}, T{0}, engine, dist});
@@ -141,7 +143,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
     case distribution_id::GEOMETRIC:
       // kind of exponential distribution from lower_bound to upper_bound.
       return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
-               thrust::minstd_rand& engine, size_t size) mutable -> rmm::device_uvector<T> {
+               thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
         thrust::tabulate(thrust::device,
                          result.begin(),
