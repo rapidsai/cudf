@@ -451,14 +451,13 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
 
-  auto calc_var = [](std::vector<T>& v, cudf::size_type valid_count) {
+  auto calc_var = [](std::vector<T>& v, cudf::size_type valid_count, int ddof) {
     double mean = std::accumulate(v.begin(), v.end(), double{0});
     mean /= valid_count;
 
     double sum_of_sq = std::accumulate(
       v.begin(), v.end(), double{0}, [](double acc, TypeParam i) { return acc + i * i; });
 
-    int ddof            = 1;
     cudf::size_type div = valid_count - ddof;
 
     double var = sum_of_sq / div - ((mean * mean) * valid_count) / div;
@@ -469,9 +468,9 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
-  double var      = calc_var(v, v.size());
-  double std      = std::sqrt(var);
   auto const ddof = 1;
+  double var      = calc_var(v, v.size(), ddof);
+  double std      = std::sqrt(var);
   auto var_agg    = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg    = cudf::make_std_aggregation<reduce_aggregation>(ddof);
 
@@ -484,7 +483,7 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
     cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
   auto replaced_array = replace_nulls(v, host_bools, T{0});
 
-  double var_nulls = calc_var(replaced_array, valid_count);
+  double var_nulls = calc_var(replaced_array, valid_count, ddof);
   double std_nulls = std::sqrt(var_nulls);
 
   this->reduction_test(
@@ -797,8 +796,8 @@ TEST_P(ReductionParamTest, DISABLED_std_var)
 
   double var   = calc_var(int_values, int_values.size());
   double std   = std::sqrt(var);
-  auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(/*ddof = 1*/ ddof);
-  auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(/*ddof = 1*/ ddof);
+  auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
+  auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(ddof);
 
   this->reduction_test(col, var, true, var_agg, cudf::data_type(cudf::type_id::FLOAT64));
   this->reduction_test(col, std, true, std_agg, cudf::data_type(cudf::type_id::FLOAT64));
@@ -1900,24 +1899,24 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::data_type output_type{cudf::type_to_id<double>()};
 
-  auto calc_var = [](std::vector<T> const& v, cudf::size_type valid_count) {
+  auto calc_var = [](std::vector<T> const& v, cudf::size_type valid_count, cudf::size_type ddof) {
     double mean = std::accumulate(v.cbegin(), v.cend(), double{0});
     mean /= valid_count;
     double sum_of_sq = std::accumulate(
       v.cbegin(), v.cend(), double{0}, [](double acc, TypeParam i) { return acc + i * i; });
-    cudf::size_type ddof = 1;
-    auto const div       = valid_count - ddof;
-    double var           = sum_of_sq / div - ((mean * mean) * valid_count) / div;
+    auto const div = valid_count - ddof;
+    double var     = sum_of_sq / div - ((mean * mean) * valid_count) / div;
     return var;
   };
 
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
-  double var   = calc_var(v, v.size());
-  double std   = std::sqrt(var);
-  auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(/*ddof =*/1);
-  auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(/*ddof =*/1);
+  cudf::size_type const ddof = 1;
+  double var                 = calc_var(v, v.size(), ddof);
+  double std                 = std::sqrt(var);
+  auto var_agg               = cudf::make_variance_aggregation<reduce_aggregation>(1);
+  auto std_agg               = cudf::make_std_aggregation<reduce_aggregation>(1);
 
   this->reduction_test(col, var, true, var_agg, output_type);
   this->reduction_test(col, std, true, std_agg, output_type);
@@ -1926,9 +1925,9 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  cudf::size_type valid_count = std::count(validity.begin(), validity.end(), true);
+  cudf::size_type const valid_count = std::count(validity.begin(), validity.end(), true);
 
-  double var_nulls = calc_var(replace_nulls(v, validity, T{0}), valid_count);
+  double var_nulls = calc_var(replace_nulls(v, validity, T{0}), valid_count, ddof);
   double std_nulls = std::sqrt(var_nulls);
 
   this->reduction_test(col_nulls, var_nulls, true, var_agg, output_type);
