@@ -23,16 +23,14 @@ from cudf.api.types import (
     is_bool_dtype,
     is_categorical_dtype,
     is_integer_dtype,
-    is_string_dtype,
     is_list_like,
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.core.udf.utils import _compile_or_get, _launch_arg_from_col, _supported_cols_from_frame
 
-from cudf_jit_udf import to_string_view_array
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -844,12 +842,7 @@ class IndexedFrame(Frame):
         # if _compile_or_get succeeds, it is safe to create a kernel that only
         # consumes the columns that are of supported dtype
         for col in _supported_cols_from_frame(self).values():
-            data = col.data if not is_string_dtype(col.dtype) else to_string_view_array(col)
-            mask = col.mask
-            if mask is None:
-                launch_args.append(data)
-            else:
-                launch_args.append((data, mask))
+            launch_args.append(_launch_arg_from_col(col))
             offsets.append(col.offset)
         launch_args += offsets
         launch_args += list(args)

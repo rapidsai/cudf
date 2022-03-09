@@ -8,6 +8,8 @@ from numba.np import numpy_support
 from numba.types import Poison, Tuple, boolean, int64, void, CPointer
 from nvtx import annotate
 
+from cudf.core.buffer import Buffer
+
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.typing import MaskedType, string_view, str_view_arg_handler
 from cudf.utils import cudautils
@@ -19,6 +21,8 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
+
+from cudf_jit_udf import to_string_view_array
 
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
@@ -227,3 +231,11 @@ def _get_kernel(kernel_string, globals_, sig, func):
     kernel = cuda.jit(sig, link=['/home/nfs/brmiller/ipynb/strings_udf/len.ptx'], extensions=[str_view_arg_handler])(_kernel)
 
     return kernel
+
+def _launch_arg_from_col(col):
+    data = col.data if not is_string_dtype(col.dtype) else to_string_view_array(col)
+    mask = col.mask
+    if mask is None:
+        return data
+    else:
+        return data, mask

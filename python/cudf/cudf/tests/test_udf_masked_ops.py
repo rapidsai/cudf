@@ -525,7 +525,6 @@ def test_masked_udf_subset_selection(data):
 @pytest.mark.parametrize(
     "unsupported_col",
     [
-        ["a", "b", "c"],
         _decimal_series(
             ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
         ),
