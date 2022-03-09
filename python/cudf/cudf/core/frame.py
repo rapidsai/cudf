@@ -3458,22 +3458,6 @@ class Frame(BinaryOperand, Scannable):
             elif not isinstance(right_column, ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
-            if fn in {"truediv", "rtruediv"}:
-                # Division with integer types results in a suitable float.
-                truediv_type = {
-                    np.int8: np.float32,
-                    np.int16: np.float32,
-                    np.int32: np.float32,
-                    np.int64: np.float64,
-                    np.uint8: np.float32,
-                    np.uint16: np.float32,
-                    np.uint32: np.float64,
-                    np.uint64: np.float64,
-                    np.bool_: np.float32,
-                }.get(left_column.dtype.type)
-                if truediv_type is not None:
-                    left_column = left_column.astype(truediv_type)
-
             output_mask = None
             if fill_value is not None:
                 if is_scalar(right_column):

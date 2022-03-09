@@ -153,6 +153,25 @@ class NumericalColumn(NumericalBaseColumn):
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
+
+        if binop in {"truediv", "rtruediv"}:
+            # Division with integer types results in a suitable float.
+            truediv_type = {
+                np.int8: np.float32,
+                np.int16: np.float32,
+                np.int32: np.float32,
+                np.int64: np.float64,
+                np.uint8: np.float32,
+                np.uint16: np.float32,
+                np.uint32: np.float64,
+                np.uint64: np.float64,
+                np.bool_: np.float32,
+            }.get(self.dtype.type)
+            if truediv_type is not None:
+                return self.astype(truediv_type).binary_operator(
+                    binop, rhs, reflect
+                )
+
         int_dtypes = [
             cudf.dtype("int8"),
             cudf.dtype("int16"),
