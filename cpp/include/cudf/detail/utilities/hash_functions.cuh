@@ -121,7 +121,7 @@ struct MurmurHash3_32 {
 
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
-    return compute(normalize_nans_and_zeros(key));
+    return compute(detail::normalize_nans_and_zeros(key));
   }
 
   template <typename T>
@@ -176,20 +176,31 @@ struct MurmurHash3_32 {
     return h;
   }
 
+ private:
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
   static constexpr uint32_t c1     = 0xcc9e2d51;
   static constexpr uint32_t c2     = 0x1b873593;
   static constexpr uint32_t c3     = 0xe6546b64;
   static constexpr uint32_t rot_c1 = 15;
   static constexpr uint32_t rot_c2 = 13;
-
- private:
-  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& key) const
 {
   return compute(static_cast<uint8_t>(key));
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
+{
+  return compute(detail::normalize_nans_and_zeros(key));
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
+{
+  return compute(detail::normalize_nans_and_zeros(key));
 }
 
 template <>
@@ -239,15 +250,45 @@ hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
 }
 
 template <typename Key>
-struct SparkMurmurHash3_32 : public MurmurHash3_32<Key> {
+struct SparkMurmurHash3_32 {
   using result_type = hash_value_type;
 
   SparkMurmurHash3_32() = default;
-  constexpr SparkMurmurHash3_32(uint32_t seed) : MurmurHash3_32<Key>(seed) {}
+  constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
+
+  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
+  {
+    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
+  }
+
+  [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
+  {
+    h ^= h >> 16;
+    h *= 0x85ebca6b;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35;
+    h ^= h >> 16;
+    return h;
+  }
+
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
+  {
+    // Read a 4-byte value from the data pointer as individual bytes for safe
+    // unaligned access (very likely for string types).
+    auto block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+  }
 
   [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
   {
-    return compute(normalize_nans(key));
+    return compute(key);
+  }
+
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
+  {
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
   }
 
   result_type __device__ inline compute_remaining_bytes(std::byte const* data,
@@ -273,12 +314,39 @@ struct SparkMurmurHash3_32 : public MurmurHash3_32<Key> {
     return h;
   }
 
-  using MurmurHash3_32<Key>::rotl32;
-  using MurmurHash3_32<Key>::c1;
-  using MurmurHash3_32<Key>::c2;
-  using MurmurHash3_32<Key>::c3;
-  using MurmurHash3_32<Key>::rot_c1;
-  using MurmurHash3_32<Key>::rot_c2;
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
+    result_type h                        = m_seed;
+
+    // Process all four-byte chunks.
+    for (cudf::size_type i = 0; i < nblocks; i++) {
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
+      k1 *= c1;
+      k1 = rotl32(k1, rot_c1);
+      k1 *= c2;
+      h ^= k1;
+      h = rotl32(h, rot_c2);
+      h = h * 5 + c3;
+    }
+
+    h = compute_remaining_bytes(data, len, tail_offset, h);
+
+    // Finalize hash.
+    h ^= len;
+    h = fmix32(h);
+    return h;
+  }
+
+ private:
+  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
+  static constexpr uint32_t c1     = 0xcc9e2d51;
+  static constexpr uint32_t c2     = 0x1b873593;
+  static constexpr uint32_t c3     = 0xe6546b64;
+  static constexpr uint32_t rot_c1 = 15;
+  static constexpr uint32_t rot_c2 = 13;
 };
 
 template <>
@@ -310,6 +378,27 @@ hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
   uint16_t const& key) const
 {
   return compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
+{
+  return compute<float>(detail::normalize_nans(key));
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
+{
+  return compute<double>(detail::normalize_nans(key));
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return compute_bytes(data, len);
 }
 
 template <>
@@ -366,6 +455,22 @@ hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::oper
   auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
   thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
   return compute_bytes(big_endian_data, length);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::list_view>::operator()(
+  cudf::list_view const& key) const
+{
+  cudf_assert(false && "List column hashing is not supported");
+  return 0;
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operator()(
+  cudf::struct_view const& key) const
+{
+  cudf_assert(false && "Direct hashing of struct_view is not supported");
+  return 0;
 }
 
 /**
