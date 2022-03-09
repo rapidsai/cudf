@@ -47,6 +47,11 @@ class temp_directory {
     return std::remove(pathname);
   }
 
+  temp_directory& operator=(temp_directory const&) = delete;
+  temp_directory(temp_directory const&) = delete;
+  temp_directory& operator=(temp_directory &&) = default;
+  temp_directory(temp_directory &&) = default;
+
   ~temp_directory()
   {
     // TODO: should use std::filesystem instead, once C++17 support added
