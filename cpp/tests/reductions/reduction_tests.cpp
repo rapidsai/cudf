@@ -1915,8 +1915,8 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   cudf::size_type const ddof = 1;
   double var                 = calc_var(v, v.size(), ddof);
   double std                 = std::sqrt(var);
-  auto var_agg               = cudf::make_variance_aggregation<reduce_aggregation>(1);
-  auto std_agg               = cudf::make_std_aggregation<reduce_aggregation>(1);
+  auto var_agg               = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
+  auto std_agg               = cudf::make_std_aggregation<reduce_aggregation>(ddof);
 
   this->reduction_test(col, var, true, var_agg, output_type);
   this->reduction_test(col, std, true, std_agg, output_type);
