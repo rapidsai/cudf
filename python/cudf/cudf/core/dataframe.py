@@ -1320,7 +1320,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
         result = self._from_columns_like_self(
             libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
-            [*self._column_names],
+            self._column_names,
             None if is_range_index else self._index.names,
         )
 
@@ -6065,7 +6065,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: Iterable[str],
         index_names: Optional[List[str]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(

@@ -200,7 +200,7 @@ class Frame(BinaryOperand, Scannable):
     def _from_columns(
         cls,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` object from a list of columns.
@@ -233,7 +233,7 @@ class Frame(BinaryOperand, Scannable):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
