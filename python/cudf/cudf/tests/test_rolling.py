@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import math
 
@@ -78,16 +78,16 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
     pdf = pd.DataFrame(data)
 
     if len(pdf) > 0:
-        for col_name in pdf.columns:
+        for col_idx in range(len(pdf.columns)):
             if nulls == "one":
                 p = rng.integers(0, len(data))
-                pdf[col_name][p] = np.nan
+                pdf.iloc[p, col_idx] = np.nan
             elif nulls == "some":
                 p1, p2 = rng.integers(0, len(data), (2,))
-                pdf[col_name][p1] = np.nan
-                pdf[col_name][p2] = np.nan
+                pdf.iloc[p1, col_idx] = np.nan
+                pdf.iloc[p2, col_idx] = np.nan
             elif nulls == "all":
-                pdf[col_name][:] = np.nan
+                pdf.iloc[:, col_idx] = np.nan
 
     gdf = cudf.from_pandas(pdf)
     for window_size in range(1, len(data) + 1):
