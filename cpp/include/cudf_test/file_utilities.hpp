@@ -48,9 +48,9 @@ class temp_directory {
   }
 
   temp_directory& operator=(temp_directory const&) = delete;
-  temp_directory(temp_directory const&) = delete;
-  temp_directory& operator=(temp_directory &&) = default;
-  temp_directory(temp_directory &&) = default;
+  temp_directory(temp_directory const&)            = delete;
+  temp_directory& operator=(temp_directory&&) = default;
+  temp_directory(temp_directory&&)            = default;
 
   ~temp_directory()
   {
