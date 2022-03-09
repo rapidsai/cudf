@@ -17,7 +17,6 @@ from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
-from cudf.core.buffer import Buffer, StringViewBuffer
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -33,8 +32,6 @@ SUPPORTED_NUMBA_TYPES = (
     types.NPTimedelta,
     types.PyObject,
 )
-
-from numba.extending import type_callable
 
 
 # String object definitions
@@ -68,8 +65,19 @@ class stringview_model(models.StructModel):
 
 
 class StrViewArgHandler:
+    """
+    As part of Numbas preprocessing step incoming function arguments are
+    modified based on the associated type for that argument that was used
+    to JIT the kernel. However it only knows how to handle built in array
+    types natively. With string UDFs, the jitted type is string_view*,
+    which numba does not know how to handle.
+
+    This small piece of code implements the necessary handling. Really all
+    it does is says is funnel the handling of string_view* to the handling
+    of raw pointer arguments, which numba knows what to do with. 
+    """
     def prepare_args(self, ty, val, **kwargs):
-        if isinstance(val, StringViewBuffer):
+        if isinstance(ty, types.CPointer) and isinstance(ty.dtype, StringView):
             return types.uint64, val.ptr
         else:
             return ty, val

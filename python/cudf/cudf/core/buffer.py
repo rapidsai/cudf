@@ -199,6 +199,3 @@ def get_c_contiguity(shape, strides, itemsize):
         if this_stride != this_dim * itemsize:
             return False
     return True
-
-class StringViewBuffer(Buffer):
-    pass
