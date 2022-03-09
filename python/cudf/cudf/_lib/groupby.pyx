@@ -270,8 +270,8 @@ cdef class GroupBy:
 
         return self.aggregate_internal(values, aggregations)
 
-    def shift(self, values, int periods, list fill_values):
-        cdef table_view view = table_view_from_table(values)
+    def shift(self, list values, int periods, list fill_values):
+        cdef table_view view = table_view_from_columns(values)
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
@@ -279,7 +279,7 @@ cdef class GroupBy:
         cdef DeviceScalar d_slr
         d_slrs = []
         c_fill_values.reserve(num_col)
-        for val, col in zip(fill_values, values._columns):
+        for val, col in zip(fill_values, values):
             d_slr = as_device_scalar(val, dtype=col.dtype)
             d_slrs.append(d_slr)
             c_fill_values.push_back(
@@ -293,16 +293,8 @@ cdef class GroupBy:
                 self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
-        grouped_keys = cudf.core.index._index_from_data(
-            *data_from_unique_ptr(
-                move(c_result.first),
-                column_names=self.keys._column_names
-            )
-        )
-
-        shifted, _ = data_from_unique_ptr(
-            move(c_result.second), column_names=values._column_names
-        )
+        grouped_keys = columns_from_unique_ptr(move(c_result.first))
+        shifted = columns_from_unique_ptr(move(c_result.second))
 
         return shifted, grouped_keys
 

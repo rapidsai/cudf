@@ -1253,7 +1253,7 @@ class GroupBy(Serializable, Reducible):
         # grouped values
         values = self.grouping.values
         _, grouped_value_cols, _ = self._groupby.groups(
-            [*values._index._columns, *values._columns]
+            [*values._index._data.columns, *values._columns]
         )
 
         grouped = self.obj._from_columns_like_self(
@@ -1387,7 +1387,7 @@ class GroupBy(Serializable, Reducible):
 
         values = self.grouping.values
         _, grouped_value_cols, _ = self._groupby.groups(
-            [*values._index._columns, *values._columns]
+            [*values._index._data.columns, *values._columns]
         )
 
         grouped = self.obj._from_columns_like_self(
@@ -1438,22 +1438,21 @@ class GroupBy(Serializable, Reducible):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        value_columns = self.grouping.values
+        values = self.grouping.values
         if is_list_like(fill_value):
-            if not len(fill_value) == len(value_columns._data):
+            if not len(fill_value) == len(values._data):
                 raise ValueError(
                     "Mismatched number of columns and values to fill."
                 )
         else:
-            fill_value = [fill_value] * len(value_columns._data)
+            fill_value = [fill_value] * len(values._data)
 
-        result = self.obj.__class__._from_data(
-            *self._groupby.shift(
-                cudf.core.frame.Frame(value_columns._data), periods, fill_value
-            )
+        result = self.obj._from_columns_like_self(
+            self._groupby.shift([*values._columns], periods, fill_value)[0],
+            values._column_names,
         )
         result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(value_columns)
+        return result._copy_type_metadata(values)
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
@@ -1461,6 +1460,8 @@ class GroupBy(Serializable, Reducible):
         """Given a groupby result from libcudf, reconstruct the row orders
         matching that of pandas. This also adds appropriate indices.
         """
+        # TODO: copy metadata after this method is a common pattern, should
+        # merge in this method.
         _, order_cols, _ = self._groupby.groups(
             [arange(0, result._data.nrows)]
         )
