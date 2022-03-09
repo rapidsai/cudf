@@ -722,7 +722,7 @@ class IndexedFrame(Frame):
             self._index.names if not ignore_index else None,
         )
 
-    @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True):
         return self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
