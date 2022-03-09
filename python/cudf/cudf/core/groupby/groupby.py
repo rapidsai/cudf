@@ -1267,14 +1267,13 @@ class GroupBy(Serializable, Reducible):
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
-        value_columns = self.grouping.values
-        result = self.obj.__class__._from_data(
-            self._groupby.replace_nulls(
-                cudf.core.frame.Frame(value_columns._data), method
-            )
+        values = self.grouping.values
+        result = self.obj._from_columns_like_self(
+            self._groupby.replace_nulls([*values._columns], method),
+            values._column_names,
         )
         result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(value_columns)
+        return result._copy_type_metadata(values)
 
     def pad(self, limit=None):
         """Forward fill NA values.
@@ -1729,6 +1728,7 @@ class _Grouping(Serializable):
 
         This is mainly used in transform-like operations.
         """
+        # TODO: return just a list of columns, not frame?
         # If the key columns are in `obj`, filter them out
         value_column_names = [
             x for x in self._obj._data.names if x not in self._named_columns

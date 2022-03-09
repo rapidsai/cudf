@@ -298,8 +298,8 @@ cdef class GroupBy:
 
         return shifted, grouped_keys
 
-    def replace_nulls(self, values, object method):
-        cdef table_view val_view = table_view_from_table(values)
+    def replace_nulls(self, list values, object method):
+        cdef table_view val_view = table_view_from_columns(values)
         cdef pair[unique_ptr[table], unique_ptr[table]] c_result
         cdef replace_policy policy = (
             replace_policy.PRECEDING
@@ -314,9 +314,7 @@ cdef class GroupBy:
                 self.c_obj.get()[0].replace_nulls(val_view, policies)
             )
 
-        return data_from_unique_ptr(
-            move(c_result.second), column_names=values._column_names
-        )[0]
+        return columns_from_unique_ptr(move(c_result.second))
 
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
