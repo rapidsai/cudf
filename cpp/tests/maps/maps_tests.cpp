@@ -221,4 +221,34 @@ TYPED_TEST(MapsTypedTest, Lookup)
   }
 }
 
+TYPED_TEST(MapsTypedTest, Contains)
+{
+  using T = TypeParam;
+
+  auto const list_binary_structs_column = make_numeric_maps_input<T>();
+  auto const lists_view                 = list_binary_structs_column->view();
+  auto const maps                       = cudf::maps_column_view{lists_view};
+  {
+    // Lookup key is a scalar{0}.
+    auto const result   = maps.contains(*make_scalar_search_key<T>(0));
+    auto const expected = fwcw<bool>{1, 1, 1, 1, 0, 1, 0, 0, 0};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+  }
+  {
+    // Lookup key is null scalar.
+    auto const result   = maps.contains(*make_null_scalar_search_key<T>());
+    auto const expected = fwcw<bool>{0, 0, 0, 0, 0, 0, 0, 0, 0};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+  }
+  {
+    // Input is a sliced column.
+    auto const sliced_lists      = slice_off_ends({lists_view});
+    auto const sliced_maps       = cudf::maps_column_view{sliced_lists};
+    auto const expected_lookup_0 = fwcw<bool>{1, 1, 1, 0, 1, 0, 0};
+
+    auto const result_scalar_0 = sliced_maps.contains(*make_scalar_search_key<T>(0));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_scalar_0->view(), expected_lookup_0);
+  }
+}
+
 }  // namespace cudf::test
