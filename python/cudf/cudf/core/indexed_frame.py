@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import numbers
 import operator
 import warnings
 from collections import Counter, abc
@@ -23,10 +24,12 @@ from cudf.api.types import (
     is_bool_dtype,
     is_categorical_dtype,
     is_integer_dtype,
+    is_list_dtype,
     is_list_like,
 )
+from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
@@ -55,6 +58,26 @@ doc_reset_index_template = """
         --------
         {example}
 """
+
+
+def _get_host_unique(array):
+    if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
+        return array.unique.to_pandas()
+    elif isinstance(array, (str, numbers.Number)):
+        return [array]
+    else:
+        return set(array)
+
+
+def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
+    for c in columns:
+        try:
+            f._drop_column(c)
+        except KeyError as e:
+            if errors == "ignore":
+                pass
+            else:
+                raise e
 
 
 def _indices_from_labels(obj, labels):
@@ -698,6 +721,37 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if not ignore_index else None,
         )
+
+    @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
+    def _empty_like(self, keep_index=True):
+        return self._from_columns_like_self(
+            libcudf.copying.columns_empty_like(
+                [
+                    *(self._index._data.columns if keep_index else ()),
+                    *self._columns,
+                ]
+            ),
+            self._column_names,
+            self._index.names if keep_index else None,
+        )
+
+    def _split(self, splits, keep_index=True):
+        columns_split = libcudf.copying.columns_split(
+            [
+                *(self._index._data.columns if keep_index else []),
+                *self._columns,
+            ],
+            splits,
+        )
+
+        return [
+            self._from_columns_like_self(
+                columns_split[i],
+                self._column_names,
+                self._index.names if keep_index else None,
+            )
+            for i in range(len(splits) + 1)
+        ]
 
     def add_prefix(self, prefix):
         """
@@ -1694,6 +1748,202 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
+    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    def sample(
+        self,
+        n=None,
+        frac=None,
+        replace=False,
+        weights=None,
+        random_state=None,
+        axis=None,
+        ignore_index=False,
+    ):
+        """Return a random sample of items from an axis of object.
+
+        If reproducible results are required, a random number generator may be
+        provided via the `random_state` parameter. This function will always
+        produce the same sample given an identical `random_state`.
+
+        Notes
+        -----
+        When sampling from ``axis=0/'index'``, ``random_state`` can be either
+        a numpy random state (``numpy.random.RandomState``) or a cupy random
+        state (``cupy.random.RandomState``). When a numpy random state is
+        used, the output is guaranteed to match the output of the corresponding
+        pandas method call, but generating the sample may be slow. If exact
+        pandas equivalence is not required, using a cupy random state will
+        achieve better performance, especially when sampling large number of
+        items. It's advised to use the matching `ndarray` type to the random
+        state for the `weights` array.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of items from axis to return. Cannot be used with `frac`.
+            Default = 1 if frac = None.
+        frac : float, optional
+            Fraction of axis items to return. Cannot be used with n.
+        replace : bool, default False
+            Allow or disallow sampling of the same row more than once.
+            `replace == True` is not supported for axis = 1/"columns".
+            `replace == False` is not supported for axis = 0/"index" given
+            `random_state` is `None` or a cupy random state, and `weights` is
+            specified.
+        weights : ndarray-like, optional
+            Default `None` for uniform probability distribution over rows to
+            sample from. If `ndarray` is passed, the length of `weights` should
+            equal to the number of rows to sample from, and will be normalized
+            to have a sum of 1. Unlike pandas, index alignment is not currently
+            not performed.
+        random_state : int, numpy/cupy RandomState, or None, default None
+            If None, default cupy random state is chosen.
+            If int, the seed for the default cupy random state.
+            If RandomState, rows-to-sample are generated from the RandomState.
+        axis : {0 or `index`, 1 or `columns`, None}, default None
+            Axis to sample. Accepts axis number or name.
+            Default is stat axis for given data type
+            (0 for Series and DataFrames). Series doesn't support axis=1.
+        ignore_index : bool, default False
+            If True, the resulting index will be labeled 0, 1, …, n - 1.
+
+        Returns
+        -------
+        Series or DataFrame
+            A new object of same type as caller containing n items
+            randomly sampled from the caller object.
+
+        Examples
+        --------
+        >>> import cudf as cudf
+        >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
+        >>> df.sample(3)
+           a
+        1  2
+        3  4
+        0  1
+
+        >>> sr = cudf.Series([1, 2, 3, 4, 5])
+        >>> sr.sample(10, replace=True)
+        1    4
+        3    1
+        2    4
+        0    5
+        0    1
+        4    5
+        4    1
+        0    2
+        0    3
+        3    2
+        dtype: int64
+
+        >>> df = cudf.DataFrame(
+        ...     {"a": [1, 2], "b": [2, 3], "c": [3, 4], "d": [4, 5]}
+        ... )
+        >>> df.sample(2, axis=1)
+           a  c
+        0  1  3
+        1  2  4
+        """
+        axis = self._get_axis_from_axis_arg(axis)
+        size = self.shape[axis]
+
+        # Compute `n` from parameter `frac`.
+        if frac is None:
+            n = 1 if n is None else n
+        else:
+            if frac > 1 and not replace:
+                raise ValueError(
+                    "Replace has to be set to `True` when upsampling the "
+                    "population `frac` > 1."
+                )
+            if n is not None:
+                raise ValueError(
+                    "Please enter a value for `frac` OR `n`, not both."
+                )
+            n = int(round(size * frac))
+
+        if n > 0 and size == 0:
+            raise ValueError(
+                "Cannot take a sample larger than 0 when axis is empty."
+            )
+
+        if isinstance(random_state, cp.random.RandomState):
+            lib = cp
+        elif isinstance(random_state, np.random.RandomState):
+            lib = np
+        else:
+            # Construct random state if `random_state` parameter is None or a
+            # seed. By default, cupy random state is used to sample rows
+            # and numpy is used to sample columns. This is because row data
+            # is stored on device, and the column objects are stored on host.
+            lib = cp if axis == 0 else np
+            random_state = lib.random.RandomState(seed=random_state)
+
+        # Normalize `weights` array.
+        if weights is not None:
+            if isinstance(weights, str):
+                raise NotImplementedError(
+                    "Weights specified by string is unsupported yet."
+                )
+
+            if size != len(weights):
+                raise ValueError(
+                    "Weights and axis to be sampled must be of same length."
+                )
+
+            weights = lib.asarray(weights)
+            weights = weights / weights.sum()
+
+        if axis == 0:
+            return self._sample_axis_0(
+                n, weights, replace, random_state, ignore_index
+            )
+        else:
+            if isinstance(random_state, cp.random.RandomState):
+                raise ValueError(
+                    "Sampling from `axis=1`/`columns` with cupy random state"
+                    "isn't supported."
+                )
+            return self._sample_axis_1(
+                n, weights, replace, random_state, ignore_index
+            )
+
+    def _sample_axis_0(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: Union[np.random.RandomState, cp.random.RandomState],
+        ignore_index: bool,
+    ):
+        try:
+            gather_map_array = random_state.choice(
+                len(self), size=n, replace=replace, p=weights
+            )
+        except NotImplementedError as e:
+            raise NotImplementedError(
+                "Random sampling with cupy does not support these inputs."
+            ) from e
+
+        return self._gather(
+            cudf.core.column.as_column(gather_map_array),
+            keep_index=not ignore_index,
+            check_bounds=False,
+        )
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        raise NotImplementedError(
+            f"Sampling from axis 1 is not implemented for {self.__class__}."
+        )
+
     def _binaryop(
         self,
         other: Any,
@@ -1728,10 +1978,7 @@ class IndexedFrame(Frame):
         **kwargs,
     ) -> Tuple[
         Union[
-            Dict[
-                Optional[str],
-                Tuple[cudf.core.column.ColumnBase, Any, bool, Any],
-            ],
+            Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
             Type[NotImplemented],
         ],
         Optional[cudf.BaseIndex],
@@ -1779,6 +2026,403 @@ class IndexedFrame(Frame):
             return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented
+
+    def _append(
+        self, other, ignore_index=False, verify_integrity=False, sort=None
+    ):
+        warnings.warn(
+            "append is deprecated and will be removed in a future version. "
+            "Use concat instead.",
+            FutureWarning,
+        )
+        if verify_integrity not in (None, False):
+            raise NotImplementedError(
+                "verify_integrity parameter is not supported yet."
+            )
+
+        if is_list_like(other):
+            to_concat = [self, *other]
+        else:
+            to_concat = [self, other]
+
+        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+        """Cast the object to the given dtype.
+
+        Parameters
+        ----------
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast entire DataFrame object to
+            the same type. Alternatively, use ``{col: dtype, ...}``, where col
+            is a column label and dtype is a numpy.dtype or Python type
+            to cast one or more of the DataFrame's columns to
+            column-specific types.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
+        **kwargs : extra arguments to pass on to the constructor
+
+        Returns
+        -------
+        DataFrame/Series
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [10, 20, 30], 'b': [1, 2, 3]})
+        >>> df
+            a  b
+        0  10  1
+        1  20  2
+        2  30  3
+        >>> df.dtypes
+        a    int64
+        b    int64
+        dtype: object
+
+        Cast all columns to `int32`:
+
+        >>> df.astype('int32').dtypes
+        a    int32
+        b    int32
+        dtype: object
+
+        Cast `a` to `float32` using a dictionary:
+
+        >>> df.astype({'a': 'float32'}).dtypes
+        a    float32
+        b      int64
+        dtype: object
+        >>> df.astype({'a': 'float32'})
+              a  b
+        0  10.0  1
+        1  20.0  2
+        2  30.0  3
+
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([1, 2], dtype='int32')
+        >>> series
+        0    1
+        1    2
+        dtype: int32
+        >>> series.astype('int64')
+        0    1
+        1    2
+        dtype: int64
+
+        Convert to categorical type:
+
+        >>> series.astype('category')
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [1, 2]
+
+        Convert to ordered categorical type with custom ordering:
+
+        >>> cat_dtype = cudf.CategoricalDtype(categories=[2, 1], ordered=True)
+        >>> series.astype(cat_dtype)
+        0    1
+        1    2
+        dtype: category
+        Categories (2, int64): [2 < 1]
+
+        Note that using ``copy=False`` (enabled by default)
+        and changing data on a new Series will
+        propagate changes:
+
+        >>> s1 = cudf.Series([1, 2])
+        >>> s1
+        0    1
+        1    2
+        dtype: int64
+        >>> s2 = s1.astype('int64', copy=False)
+        >>> s2[0] = 10
+        >>> s1
+        0    10
+        1     2
+        dtype: int64
+        """
+        if errors not in ("ignore", "warn", "raise"):
+            raise ValueError("invalid error value specified")
+        elif errors == "warn":
+            warnings.warn(
+                "Specifying errors='warn' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+            )
+
+        try:
+            data = super().astype(dtype, copy, **kwargs)
+        except Exception as e:
+            if errors == "raise":
+                raise e
+            elif errors == "warn":
+                import traceback
+
+                tb = traceback.format_exc()
+                warnings.warn(tb)
+            return self
+
+        return self._from_data(data, index=self._index)
+
+    @annotate("INDEXED_FRAME_DROP", color="green", domain="cudf_python")
+    def drop(
+        self,
+        labels=None,
+        axis=0,
+        index=None,
+        columns=None,
+        level=None,
+        inplace=False,
+        errors="raise",
+    ):
+        """Drop specified labels from rows or columns.
+
+        Remove rows or columns by specifying label names and corresponding
+        axis, or by specifying directly index or column names. When using a
+        multi-index, labels on different levels can be removed by specifying
+        the level.
+
+        Parameters
+        ----------
+        labels : single label or list-like
+            Index or column labels to drop.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Whether to drop labels from the index (0 or 'index') or
+            columns (1 or 'columns').
+        index : single label or list-like
+            Alternative to specifying axis (``labels, axis=0``
+            is equivalent to ``index=labels``).
+        columns : single label or list-like
+            Alternative to specifying axis (``labels, axis=1``
+            is equivalent to ``columns=labels``).
+        level : int or level name, optional
+            For MultiIndex, level from which the labels will be removed.
+        inplace : bool, default False
+            If False, return a copy. Otherwise, do operation
+            inplace and return None.
+        errors : {'ignore', 'raise'}, default 'raise'
+            If 'ignore', suppress error and only existing labels are
+            dropped.
+
+        Returns
+        -------
+        DataFrame or Series
+            DataFrame or Series without the removed index or column labels.
+
+        Raises
+        ------
+        KeyError
+            If any of the labels is not found in the selected axis.
+
+        See Also
+        --------
+        DataFrame.loc : Label-location based indexer for selection by label.
+        DataFrame.dropna : Return DataFrame with labels on given axis omitted
+            where (all or any) data are missing.
+        DataFrame.drop_duplicates : Return DataFrame with duplicate rows
+            removed, optionally only considering certain columns.
+        Series.reindex
+            Return only specified index labels of Series
+        Series.dropna
+            Return series without null values
+        Series.drop_duplicates
+            Return series with duplicate values removed
+
+        Examples
+        --------
+        **Series**
+
+        >>> s = cudf.Series([1,2,3], index=['x', 'y', 'z'])
+        >>> s
+        x    1
+        y    2
+        z    3
+        dtype: int64
+
+        Drop labels x and z
+
+        >>> s.drop(labels=['x', 'z'])
+        y    2
+        dtype: int64
+
+        Drop a label from the second level in MultiIndex Series.
+
+        >>> midx = cudf.MultiIndex.from_product([[0, 1, 2], ['x', 'y']])
+        >>> s = cudf.Series(range(6), index=midx)
+        >>> s
+        0  x    0
+           y    1
+        1  x    2
+           y    3
+        2  x    4
+           y    5
+        dtype: int64
+        >>> s.drop(labels='y', level=1)
+        0  x    0
+        1  x    2
+        2  x    4
+        Name: 2, dtype: int64
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2, 3, 4],
+        ...                      "B": [5, 6, 7, 8],
+        ...                      "C": [10, 11, 12, 13],
+        ...                      "D": [20, 30, 40, 50]})
+        >>> df
+           A  B   C   D
+        0  1  5  10  20
+        1  2  6  11  30
+        2  3  7  12  40
+        3  4  8  13  50
+
+        Drop columns
+
+        >>> df.drop(['B', 'C'], axis=1)
+           A   D
+        0  1  20
+        1  2  30
+        2  3  40
+        3  4  50
+        >>> df.drop(columns=['B', 'C'])
+           A   D
+        0  1  20
+        1  2  30
+        2  3  40
+        3  4  50
+
+        Drop a row by index
+
+        >>> df.drop([0, 1])
+           A  B   C   D
+        2  3  7  12  40
+        3  4  8  13  50
+
+        Drop columns and/or rows of MultiIndex DataFrame
+
+        >>> midx = cudf.MultiIndex(levels=[['lama', 'cow', 'falcon'],
+        ...                              ['speed', 'weight', 'length']],
+        ...                      codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2],
+        ...                             [0, 1, 2, 0, 1, 2, 0, 1, 2]])
+        >>> df = cudf.DataFrame(index=midx, columns=['big', 'small'],
+        ...                   data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
+        ...                         [250, 150], [1.5, 0.8], [320, 250],
+        ...                         [1, 0.8], [0.3, 0.2]])
+        >>> df
+                         big  small
+        lama   speed    45.0   30.0
+               weight  200.0  100.0
+               length    1.5    1.0
+        cow    speed    30.0   20.0
+               weight  250.0  150.0
+               length    1.5    0.8
+        falcon speed   320.0  250.0
+               weight    1.0    0.8
+               length    0.3    0.2
+        >>> df.drop(index='cow', columns='small')
+                         big
+        lama   speed    45.0
+               weight  200.0
+               length    1.5
+        falcon speed   320.0
+               weight    1.0
+               length    0.3
+        >>> df.drop(index='length', level=1)
+                         big  small
+        lama   speed    45.0   30.0
+               weight  200.0  100.0
+        cow    speed    30.0   20.0
+               weight  250.0  150.0
+        falcon speed   320.0  250.0
+               weight    1.0    0.8
+        """
+        if labels is not None:
+            if index is not None or columns is not None:
+                raise ValueError(
+                    "Cannot specify both 'labels' and 'index'/'columns'"
+                )
+            target = labels
+        elif index is not None:
+            target = index
+            axis = 0
+        elif columns is not None:
+            target = columns
+            axis = 1
+        else:
+            raise ValueError(
+                "Need to specify at least one of 'labels', "
+                "'index' or 'columns'"
+            )
+
+        if inplace:
+            out = self
+        else:
+            out = self.copy()
+
+        if axis in (1, "columns"):
+            target = _get_host_unique(target)
+
+            _drop_columns(out, target, errors)
+        elif axis in (0, "index"):
+            dropped = _drop_rows_by_labels(out, target, level, errors)
+
+            if columns is not None:
+                columns = _get_host_unique(columns)
+                _drop_columns(dropped, columns, errors)
+
+            out._data = dropped._data
+            out._index = dropped._index
+
+        if not inplace:
+            return out
+
+    @annotate("INDEXED_FRAME_EXPLODE", color="green", domain="cudf_python")
+    def _explode(self, explode_column: Any, ignore_index: bool):
+        # Helper function for `explode` in `Series` and `Dataframe`, explodes a
+        # specified nested column. Other columns' corresponding rows are
+        # duplicated. If ignore_index is set, the original index is not
+        # exploded and will be replaced with a `RangeIndex`.
+        if not is_list_dtype(self._data[explode_column].dtype):
+            data = self._data.copy(deep=True)
+            idx = None if ignore_index else self._index.copy(deep=True)
+            return self.__class__._from_data(data, index=idx)
+
+        explode_column_num = self._column_names.index(explode_column)
+        if not ignore_index and self._index is not None:
+            explode_column_num += self._index.nlevels
+
+        data, index = libcudf.lists.explode_outer(
+            self, explode_column_num, ignore_index
+        )
+        res = self.__class__._from_data(
+            ColumnAccessor(
+                data,
+                multiindex=self._data.multiindex,
+                level_names=self._data._level_names,
+            ),
+            index=index,
+        )
+
+        if not ignore_index and self._index is not None:
+            res.index.names = self._index.names
+        return res
 
 
 def _check_duplicate_level_names(specified, level_names):
