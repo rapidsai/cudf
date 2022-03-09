@@ -50,18 +50,32 @@ def typeof_stringview(val, c):
 
 @register_model(StringView)
 class stringview_model(models.StructModel):
+    # from string_view.hpp:
+    # private:
+    #  const char* _data{};          ///< Pointer to device memory contain char array for this string
+    #  size_type _bytes{};           ///< Number of bytes in _data for this string
+    #  mutable size_type _length{};  ///< Number of characters in this string (computed)
+
+    _members = (
+        ("data", types.CPointer(types.char)),
+        ("bytes", types.int32),
+        ("length", types.int32),
+    )
+
+    bytes = 0
+    for member_ty in (t[1] for t in _members):
+        if isinstance(member_ty, types.CPointer):
+            bytes += 8
+        else:
+            bytes += max(member_ty.bitwidth / 8, 8)
+    
+    size_bytes = bytes
+
+
     def __init__(self, dmm, fe_type):
-        # from string_view.hpp:
-        # private:
-        #  const char* _data{};          ///< Pointer to device memory contain char array for this string
-        #  size_type _bytes{};           ///< Number of bytes in _data for this string
-        #  mutable size_type _length{};  ///< Number of characters in this string (computed)
-        members = (
-            ("data", types.CPointer(types.char)),
-            ("bytes", types.int32),
-            ("length", types.int32),
-        )
-        super().__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, self._members)
+
+
 
 
 class StrViewArgHandler:
@@ -177,13 +191,6 @@ class MaskedType(types.Type):
 
         # Require a cast for another masked with a different value type
         return self.value_type == other.value_type
-
-    def startswith(self, other):
-        pass
-
-    def endswith(self, other):
-        pass
-
 
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).

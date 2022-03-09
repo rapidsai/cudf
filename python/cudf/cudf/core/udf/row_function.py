@@ -23,6 +23,8 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
+from cudf.core.udf.typing import stringview_model
+
 
 def _get_frame_row_type(dtype):
     """
@@ -47,7 +49,7 @@ def _get_frame_row_type(dtype):
     sizes = []
     for field in dtype.fields.values():
         if field[0] == np.dtype('object'):
-            sizes.append(24)
+            sizes.append(stringview_model.size_bytes)
         else:
             sizes.append(field[0].itemsize)
 
@@ -69,7 +71,7 @@ def _get_frame_row_type(dtype):
 
         # increment offset by itemsize plus one byte for validity
         if elemdtype == np.dtype('object'):
-            itemsize = 24
+            itemsize = stringview_model.size_bytes
         else:
             itemsize = elemdtype.itemsize
         offset += itemsize + 1
