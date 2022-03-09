@@ -763,6 +763,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def _split(self, splits):
+        return Int64Index._from_columns(
+            [self._values.columns_split(splits)], [self.name]
+        )
+
     def _binaryop(self, other, op: str):
         return self._as_int64()._binaryop(other, op=op)
 
