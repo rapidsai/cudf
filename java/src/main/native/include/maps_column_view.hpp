@@ -19,7 +19,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::jni {
@@ -33,16 +32,16 @@ namespace cudf::jni {
  * retrieve the corresponding value.
  */
 class maps_column_view {
- public:
-  maps_column_view(lists_column_view const& lists_of_structs,
+public:
+  maps_column_view(lists_column_view const &lists_of_structs,
                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   // Rule of 5.
-  maps_column_view(maps_column_view const& maps_view) = default;
-  maps_column_view(maps_column_view&& maps_view)      = default;
-  maps_column_view& operator=(maps_column_view const&) = default;
-  maps_column_view& operator=(maps_column_view&&) = default;
-  ~maps_column_view()                             = default;
+  maps_column_view(maps_column_view const &maps_view) = default;
+  maps_column_view(maps_column_view &&maps_view) = default;
+  maps_column_view &operator=(maps_column_view const &) = default;
+  maps_column_view &operator=(maps_column_view &&) = default;
+  ~maps_column_view() = default;
 
   /**
    * @brief Returns number of map rows in the column.
@@ -79,9 +78,8 @@ class maps_column_view {
    * @return std::unique_ptr<column> Column of values corresponding the value of the lookup key.
    */
   std::unique_ptr<column> get_values_for(
-    column_view const& keys,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+      column_view const &keys, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Map lookup by a scalar key.
@@ -98,16 +96,15 @@ class maps_column_view {
    * @return std::unique_ptr<column>
    */
   std::unique_ptr<column> get_values_for(
-    scalar const& key,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+      scalar const &key, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Check if each map row contains a specified scalar key.
    *
    * The type of the lookup scalar must match the key-type of the map.
    * A column of values is returned, with the same number of rows as the map column.
-   * 
+   *
    * Each row in the returned column contains a bool indicating whether the row contains
    * the specified key (`true`) or not (`false`).
    * The returned column contains no nulls. i.e. If the search key is null, or if the
@@ -118,13 +115,12 @@ class maps_column_view {
    * @param mr Device memory resource used to allocate the returned column's device memory.
    * @return std::unique_ptr<column>
    */
-  std::unique_ptr<column> contains(
-    scalar const& key,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  std::unique_ptr<column>
+  contains(scalar const &key, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
- private:
+private:
   lists_column_view keys_, values_;
 };
 
-}  // namespace cudf::jni
+} // namespace cudf::jni
