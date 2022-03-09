@@ -22,7 +22,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.stream_compaction import drop_nulls
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
-from cudf.api.types import is_integer_dtype, is_number
+from cudf.api.types import is_bool_dtype, is_integer_dtype, is_number
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -177,8 +177,10 @@ class NumericalColumn(NumericalBaseColumn):
                 )
                 or np.isscalar(rhs)
             ):
-                msg = "{!r} operator not supported between {} and {}"
-                raise TypeError(msg.format(binop, type(self), type(rhs)))
+                raise TypeError(
+                    f"{repr(binop)} operator not supported between "
+                    f"{type(self)} and {type(rhs)}"
+                )
             if isinstance(rhs, cudf.core.column.Decimal128Column):
                 lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
                     Decimal128Dtype(Decimal128Dtype.MAX_PRECISION, 0)
@@ -215,6 +217,24 @@ class NumericalColumn(NumericalBaseColumn):
             "NULL_EQUALS",
         }:
             out_dtype = "bool"
+
+        if binop in {"and", "or", "xor"}:
+            left_is_bool = is_bool_dtype(self.dtype)
+            right_is_bool = is_bool_dtype(rhs)
+            left_is_int = is_integer_dtype(self.dtype)
+            right_is_int = is_integer_dtype(rhs)
+
+            if not (left_is_bool or left_is_int) and (
+                right_is_bool or right_is_int
+            ):
+                raise TypeError(
+                    f"Operation 'bitwise {binop}' not supported between "
+                    f"{self.dtype.type.__name__} and "
+                    f"{rhs.dtype.type.__name__}"
+                )
+            if left_is_bool or right_is_bool:
+                out_dtype = "bool"
+
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 

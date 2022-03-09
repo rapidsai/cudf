@@ -29,11 +29,9 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
-    is_integer_dtype,
     is_scalar,
 )
 from cudf.core.column import (
@@ -3496,31 +3494,8 @@ class Frame(BinaryOperand, Scannable):
                     elif right_column.nullable:
                         right_column = right_column.fillna(fill_value)
 
-            # For bitwise operations we must verify whether the input column
-            # types are valid, and if so, whether we need to coerce the output
-            # columns to booleans.
-            coerce_to_bool = False
-            if fn in {"and", "or", "xor"}:
-                err_msg = (
-                    f"Operation 'bitwise {fn}' not supported between "
-                    f"{left_column.dtype.type.__name__} and {{}}"
-                )
-                if right_column is None:
-                    raise TypeError(err_msg.format(type(None)))
-
-                left_is_bool = is_bool_dtype(left_column)
-                right_is_bool = is_bool_dtype(right_column)
-                left_is_int = is_integer_dtype(left_column)
-                right_is_int = is_integer_dtype(right_column)
-
-                coerce_to_bool = left_is_bool or right_is_bool
-
-                if not (left_is_bool or left_is_int) and (
-                    right_is_bool or right_is_int
-                ):
-                    raise TypeError(
-                        err_msg.format(right_column.dtype.type.__name__)
-                    )
+            # TODO: Disable logical and binary operators between columns that
+            # are not numerical using the new binops mixin.
 
             outcol = (
                 left_column.binary_operator(fn, right_column, reflect=reflect)
@@ -3532,9 +3507,6 @@ class Frame(BinaryOperand, Scannable):
 
             if output_mask is not None:
                 outcol = outcol.set_mask(output_mask)
-
-            if coerce_to_bool:
-                outcol = outcol.astype(np.bool_)
 
             output[col] = outcol
 
