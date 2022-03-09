@@ -294,6 +294,100 @@ TYPED_TEST(Sort, WithNestedStructColumn)
   }
 }
 
+TYPED_TEST(Sort, WithNullableStructColumn)
+{
+  // Test for a struct column that has nulls on struct layer but not pushed down on the child
+  using T    = int;
+  using fwcw = cudf::test::fixed_width_column_wrapper<T>;
+  using mask = std::vector<bool>;
+
+  auto make_struct = [&](std::vector<std::unique_ptr<cudf::column>> child_cols,
+                         std::vector<bool> nulls) {
+    cudf::test::structs_column_wrapper struct_col(std::move(child_cols));
+    auto struct_ = struct_col.release();
+    struct_->set_null_mask(cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+    return struct_;
+  };
+
+  {
+    /*
+         /+-------------+
+         |s1{s2{a,b}, c}|
+         +--------------+
+       0 |  { {1, 1}, 5}|
+       1 |  { {1, 2}, 4}|
+       2 |  {@{2, 1}, 6}|
+       3 |  {@{2, 2}, 5}|
+       4 | @{ {2, 2}, 3}|
+       5 | @{ {1, 1}, 3}|
+       6 |  { {1, 2}, 3}|
+       7 |  {@{1, 1}, 4}|
+       8 |  { {2, 1}, 5}|
+         +--------------+
+
+      Intermediate representation:
+      s1{s2{a}}, b, c
+    */
+
+    auto col_a   = fwcw{1, 1, 2, 2, 2, 1, 1, 1, 2};
+    auto col_b   = fwcw{1, 2, 1, 2, 2, 1, 2, 1, 1};
+    auto s2_mask = mask{1, 1, 0, 0, 1, 1, 1, 0, 1};
+    auto col_c   = fwcw{5, 4, 6, 5, 3, 3, 3, 4, 5};
+    auto s1_mask = mask{1, 1, 1, 1, 0, 0, 1, 1, 1};
+
+    std::vector<std::unique_ptr<cudf::column>> s2_children;
+    s2_children.push_back(col_a.release());
+    s2_children.push_back(col_b.release());
+    auto s2 = make_struct(std::move(s2_children), s2_mask);
+
+    std::vector<std::unique_ptr<cudf::column>> s1_children;
+    s1_children.push_back(std::move(s2));
+    s1_children.push_back(col_c.release());
+    auto s1 = make_struct(std::move(s1_children), s1_mask);
+
+    auto expect = fwcw{4, 5, 7, 3, 2, 0, 6, 1, 8};
+    run_sort_test(table_view({s1->view()}), expect);
+  }
+  { /*
+        /+-------------+
+        |s1{a,s2{b, c}}|
+        +--------------+
+      0 |  {1,  {1, 5}}|
+      1 |  {1,  {2, 4}}|
+      2 |  {2, @{2, 6}}|
+      3 |  {2, @{1, 5}}|
+      4 | @{2,  {2, 3}}|
+      5 | @{1,  {1, 3}}|
+      6 |  {1,  {2, 3}}|
+      7 |  {1, @{1, 4}}|
+      8 |  {2,  {1, 5}}|
+        +--------------+
+
+     Intermediate representation:
+     s1{a}, s2{b}, c
+   */
+
+    auto s1_mask = mask{1, 1, 1, 1, 0, 0, 1, 1, 1};
+    auto col_a   = fwcw{1, 1, 2, 2, 2, 1, 1, 1, 2};
+    auto s2_mask = mask{1, 1, 0, 0, 1, 1, 1, 0, 1};
+    auto col_b   = fwcw{1, 2, 1, 2, 2, 1, 2, 1, 1};
+    auto col_c   = fwcw{5, 4, 6, 5, 3, 3, 3, 4, 5};
+
+    std::vector<std::unique_ptr<cudf::column>> s22_children;
+    s22_children.push_back(col_b.release());
+    s22_children.push_back(col_c.release());
+    auto s22 = make_struct(std::move(s22_children), s2_mask);
+
+    std::vector<std::unique_ptr<cudf::column>> s12_children;
+    s12_children.push_back(col_a.release());
+    s12_children.push_back(std::move(s22));
+    auto s12 = make_struct(std::move(s12_children), s1_mask);
+
+    auto expect = fwcw{4, 5, 7, 0, 6, 1, 2, 3, 8};
+    run_sort_test(table_view({s12->view()}), expect);
+  }
+}
+
 TYPED_TEST(Sort, WithSingleStructColumn)
 {
   using T = TypeParam;
