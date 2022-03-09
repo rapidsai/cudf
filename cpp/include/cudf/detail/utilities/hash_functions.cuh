@@ -27,9 +27,10 @@
 
 #include <thrust/iterator/reverse_iterator.h>
 
+namespace cudf {
+
 using hash_value_type = uint32_t;
 
-namespace cudf {
 namespace detail {
 
 /**
