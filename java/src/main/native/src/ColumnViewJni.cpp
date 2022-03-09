@@ -33,7 +33,6 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
-#include <cudf/maps/maps_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
@@ -76,6 +75,7 @@
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
 #include "map_lookup.hpp"
+#include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
@@ -1338,7 +1338,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
     cudf::jni::auto_set_device(env);
     auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
     auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
-    auto const maps_view = cudf::maps_column_view{*cv};
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
     return release_as_jlong(maps_view.get_values_for(*scalar_key));
   }
   CATCH_STD(env, 0);
@@ -1353,7 +1353,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, 
     cudf::jni::auto_set_device(env);
     auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
     auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
-    auto const maps_view = cudf::maps_column_view{*cv};
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
     return release_as_jlong(maps_view.contains(*scalar_key));
   }
   CATCH_STD(env, 0);

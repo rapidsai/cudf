@@ -22,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
+namespace cudf::jni {
 
 /**
  * @brief Given a column-view of LIST<STRUCT<K,V>>, an instance of this class
@@ -127,4 +127,4 @@ class maps_column_view {
   lists_column_view keys_, values_;
 };
 
-}  // namespace cudf
+}  // namespace cudf::jni

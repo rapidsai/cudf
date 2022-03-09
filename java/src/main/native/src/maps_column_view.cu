@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
+#include <maps_column_view.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/detail/extract.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/maps/maps_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/exec_policy.hpp>
 
-namespace cudf {
+namespace cudf::jni {
 
 namespace {
 column_view make_lists(column_view const& lists_child, lists_column_view const& lists_of_structs)
@@ -108,4 +108,4 @@ std::unique_ptr<column> maps_column_view::contains(scalar const& lookup_key,
   return detail::replace_nulls(contains->view(), *scalar_false, stream, mr);
 }
 
-}  // namespace cudf
+}  // namespace cudf::jni

@@ -167,7 +167,6 @@ test:
     - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
     - test -f $PREFIX/include/cudf/lists/sorting.hpp
-    - test -f $PREFIX/include/cudf/maps/maps_column_view.hpp
     - test -f $PREFIX/include/cudf/merge.hpp
     - test -f $PREFIX/include/cudf/null_mask.hpp
     - test -f $PREFIX/include/cudf/partitioning.hpp
