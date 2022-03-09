@@ -36,6 +36,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
+from cudf._typing import ColumnLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -62,7 +63,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
@@ -1161,7 +1162,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg][:] = value
+                        self._data[arg] = utils.scalar_broadcast_to(
+                            value, len(self)
+                        )
                     else:
                         value = as_column(value)
                         self._data[arg] = value
@@ -1221,9 +1224,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
     def __delitem__(self, name):
-        """
-        Drop the given column by *name*.
-        """
         self._drop_column(name)
 
     @annotate("DATAFRAME_SLICE", color="blue", domain="cudf_python")
@@ -1282,52 +1282,51 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     ),
                 )
 
-        # This is just to handle RangeIndex type, stop
-        # it from materializing unnecessarily
-        keep_index = True
-        if self.index is not None and isinstance(self.index, RangeIndex):
+        # If index type is RangeIndex, slice without materializing.
+        is_range_index = isinstance(self.index, RangeIndex)
+        if is_range_index:
             if self._num_columns == 0:
-                result = self._empty_like(keep_index)
+                result = self._empty_like(keep_index=False)
                 result._index = self.index[start:stop:stride]
                 return result
-            keep_index = False
 
-        # For decreasing slices, terminal at before-the-zero
-        # position is preserved.
         if start < 0:
             start = start + num_rows
+
+        # Decreasing slices that terminates at -1, such as slice(4, -1, -1),
+        # has end index of 0, The check below makes sure -1 is not wrapped
+        # to `-1 + num_rows`.
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + num_rows
+        stride = 1 if stride is None else stride
 
-        if start > stop and (stride is None or stride == 1):
-            return self._empty_like(keep_index)
-        else:
-            start = len(self) if start > num_rows else start
-            stop = len(self) if stop > num_rows else stop
+        if (stop - start) * stride <= 0:
+            return self._empty_like(keep_index=True)
 
-            if stride is not None and stride != 1:
-                return self._gather(
-                    cudf.core.column.arange(
-                        start, stop=stop, step=stride, dtype=np.int32
-                    )
+        start = len(self) if start > num_rows else start
+        stop = len(self) if stop > num_rows else stop
+
+        if stride != 1:
+            return self._gather(
+                cudf.core.column.arange(
+                    start, stop=stop, step=stride, dtype=np.int32
                 )
-            else:
-                result = self._from_data(
-                    *libcudf.copying.table_slice(
-                        self, [start, stop], keep_index
-                    )[0]
-                )
+            )
 
-                result._copy_type_metadata(self, include_index=keep_index)
-                if self.index is not None:
-                    if keep_index:
-                        result._index.names = self.index.names
-                    else:
-                        # Adding index of type RangeIndex back to
-                        # result
-                        result.index = self.index[start:stop]
-                result._set_column_names_like(self)
-                return result
+        columns_to_slice = [
+            *(self._index._data.columns if not is_range_index else []),
+            *self._columns,
+        ]
+        result = self._from_columns_like_self(
+            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
+            self._column_names,
+            None if is_range_index else self._index.names,
+        )
+
+        if is_range_index:
+            result.index = self.index[start:stop]
+        result._set_column_names_like(self)
+        return result
 
     @annotate("DATAFRAME_MEMORY_USAGE", color="blue", domain="cudf_python")
     def memory_usage(self, index=True, deep=False):
@@ -1337,41 +1336,31 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @annotate("DATAFRAME_ARRAY_FUNCTION", color="blue", domain="cudf_python")
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_df_module = DataFrame
-        cudf_series_module = Series
-
-        for submodule in func.__module__.split(".")[1:]:
-            # point cudf to the correct submodule
-            if hasattr(cudf_df_module, submodule):
-                cudf_df_module = getattr(cudf_df_module, submodule)
-            else:
-                return NotImplemented
-
-        fname = func.__name__
-
-        handled_types = [cudf_df_module, cudf_series_module]
-
-        for t in types:
-            if t not in handled_types:
-                return NotImplemented
-
-        if hasattr(cudf_df_module, fname):
-            cudf_func = getattr(cudf_df_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
-                return NotImplemented
-            # numpy returns an array from the dot product of two dataframes
-            elif (
-                func is np.dot
-                and isinstance(args[0], (DataFrame, pd.DataFrame))
-                and isinstance(args[1], (DataFrame, pd.DataFrame))
-            ):
-                return cudf_func(*args, **kwargs).values
-            else:
-                return cudf_func(*args, **kwargs)
-        else:
+        if "out" in kwargs or not all(
+            issubclass(t, (Series, DataFrame)) for t in types
+        ):
             return NotImplemented
+
+        try:
+            if cudf_func := getattr(self.__class__, func.__name__, None):
+                out = cudf_func(*args, **kwargs)
+                # The dot product of two DataFrames returns an array in pandas.
+                if (
+                    func is np.dot
+                    and isinstance(args[0], (DataFrame, pd.DataFrame))
+                    and isinstance(args[1], (DataFrame, pd.DataFrame))
+                ):
+                    return out.values
+                return out
+        except Exception:
+            # The rare instance where a "silent" failure is preferable. Except
+            # in the (highly unlikely) case that some other library
+            # interoperates with cudf objects, the result will be that numpy
+            # raises a TypeError indicating that the operation is not
+            # implemented, which is much friendlier than an arbitrary internal
+            # cudf error.
+            pass
+        return NotImplemented
 
     # The _get_numeric_data method is necessary for dask compatibility.
     @annotate("DATAFRAME_GET_NUMERIC_DATA", color="blue", domain="cudf_python")
@@ -1639,99 +1628,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     def astype(self, dtype, copy=False, errors="raise", **kwargs):
-        """
-        Cast the DataFrame to the given dtype
-
-        Parameters
-        ----------
-
-        dtype : data type, or dict of column name -> data type
-            Use a numpy.dtype or Python type to cast entire DataFrame object to
-            the same type. Alternatively, use ``{col: dtype, ...}``, where col
-            is a column label and dtype is a numpy.dtype or Python type
-            to cast one or more of the DataFrame's columns to
-            column-specific types.
-        copy : bool, default False
-            Return a deep-copy when ``copy=True``. Note by default
-            ``copy=False`` setting is used and hence changes to
-            values then may propagate to other cudf objects.
-        errors : {'raise', 'ignore', 'warn'}, default 'raise'
-            Control raising of exceptions on invalid data for provided dtype.
-
-            -   ``raise`` : allow exceptions to be raised
-            -   ``ignore`` : suppress exceptions. On error return original
-                object.
-            -   ``warn`` : prints last exceptions as warnings and
-                return original object.
-        **kwargs : extra arguments to pass on to the constructor
-
-        Returns
-        -------
-        casted : DataFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [10, 20, 30], 'b': [1, 2, 3]})
-        >>> df
-            a  b
-        0  10  1
-        1  20  2
-        2  30  3
-        >>> df.dtypes
-        a    int64
-        b    int64
-        dtype: object
-
-        Cast all columns to `int32`:
-
-        >>> df.astype('int32').dtypes
-        a    int32
-        b    int32
-        dtype: object
-
-        Cast `a` to `float32` using a dictionary:
-
-        >>> df.astype({'a': 'float32'}).dtypes
-        a    float32
-        b      int64
-        dtype: object
-        >>> df.astype({'a': 'float32'})
-              a  b
-        0  10.0  1
-        1  20.0  2
-        2  30.0  3
-        """
-        result = DataFrame(index=self.index)
-
         if is_dict_like(dtype):
-            current_cols = self._data.names
-            if len(set(dtype.keys()) - set(current_cols)) > 0:
+            if len(set(dtype.keys()) - set(self._data.names)) > 0:
                 raise KeyError(
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
-            for col_name in current_cols:
-                if col_name in dtype:
-                    result._data[col_name] = self._data[col_name].astype(
-                        dtype=dtype[col_name],
-                        errors=errors,
-                        copy=copy,
-                        **kwargs,
-                    )
-                else:
-                    result._data[col_name] = (
-                        self._data[col_name].copy(deep=True)
-                        if copy
-                        else self._data[col_name]
-                    )
         else:
-            for col in self._data:
-                result._data[col] = self._data[col].astype(
-                    dtype=dtype, **kwargs
-                )
-
-        return result
+            dtype = {cc: dtype for cc in self._data.names}
+        return super().astype(dtype, copy, errors, **kwargs)
 
     def _clean_renderable_dataframe(self, output):
         """
@@ -2773,187 +2678,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return df
 
         return self - self.shift(periods=periods)
-
-    @annotate("DATAFRAME_DROP", color="green", domain="cudf_python")
-    def drop(
-        self,
-        labels=None,
-        axis=0,
-        index=None,
-        columns=None,
-        level=None,
-        inplace=False,
-        errors="raise",
-    ):
-        """
-        Drop specified labels from rows or columns.
-
-        Remove rows or columns by specifying label names and corresponding
-        axis, or by specifying directly index or column names. When using a
-        multi-index, labels on different levels can be removed by specifying
-        the level.
-
-        Parameters
-        ----------
-        labels : single label or list-like
-            Index or column labels to drop.
-        axis : {0 or 'index', 1 or 'columns'}, default 0
-            Whether to drop labels from the index (0 or 'index') or
-            columns (1 or 'columns').
-        index : single label or list-like
-            Alternative to specifying axis (``labels, axis=0``
-            is equivalent to ``index=labels``).
-        columns : single label or list-like
-            Alternative to specifying axis (``labels, axis=1``
-            is equivalent to ``columns=labels``).
-        level : int or level name, optional
-            For MultiIndex, level from which the labels will be removed.
-        inplace : bool, default False
-            If False, return a copy. Otherwise, do operation
-            inplace and return None.
-        errors : {'ignore', 'raise'}, default 'raise'
-            If 'ignore', suppress error and only existing labels are
-            dropped.
-
-        Returns
-        -------
-        DataFrame
-            DataFrame without the removed index or column labels.
-
-        Raises
-        ------
-        KeyError
-            If any of the labels is not found in the selected axis.
-
-        See Also
-        --------
-        DataFrame.loc : Label-location based indexer for selection by label.
-        DataFrame.dropna : Return DataFrame with labels on given axis omitted
-            where (all or any) data are missing.
-        DataFrame.drop_duplicates : Return DataFrame with duplicate rows
-            removed, optionally only considering certain columns.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"A": [1, 2, 3, 4],
-        ...                      "B": [5, 6, 7, 8],
-        ...                      "C": [10, 11, 12, 13],
-        ...                      "D": [20, 30, 40, 50]})
-        >>> df
-           A  B   C   D
-        0  1  5  10  20
-        1  2  6  11  30
-        2  3  7  12  40
-        3  4  8  13  50
-
-        Drop columns
-
-        >>> df.drop(['B', 'C'], axis=1)
-           A   D
-        0  1  20
-        1  2  30
-        2  3  40
-        3  4  50
-        >>> df.drop(columns=['B', 'C'])
-           A   D
-        0  1  20
-        1  2  30
-        2  3  40
-        3  4  50
-
-        Drop a row by index
-
-        >>> df.drop([0, 1])
-           A  B   C   D
-        2  3  7  12  40
-        3  4  8  13  50
-
-        Drop columns and/or rows of MultiIndex DataFrame
-
-        >>> midx = cudf.MultiIndex(levels=[['lama', 'cow', 'falcon'],
-        ...                              ['speed', 'weight', 'length']],
-        ...                      codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2],
-        ...                             [0, 1, 2, 0, 1, 2, 0, 1, 2]])
-        >>> df = cudf.DataFrame(index=midx, columns=['big', 'small'],
-        ...                   data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
-        ...                         [250, 150], [1.5, 0.8], [320, 250],
-        ...                         [1, 0.8], [0.3, 0.2]])
-        >>> df
-                         big  small
-        lama   speed    45.0   30.0
-               weight  200.0  100.0
-               length    1.5    1.0
-        cow    speed    30.0   20.0
-               weight  250.0  150.0
-               length    1.5    0.8
-        falcon speed   320.0  250.0
-               weight    1.0    0.8
-               length    0.3    0.2
-        >>> df.drop(index='cow', columns='small')
-                         big
-        lama   speed    45.0
-               weight  200.0
-               length    1.5
-        falcon speed   320.0
-               weight    1.0
-               length    0.3
-        >>> df.drop(index='length', level=1)
-                         big  small
-        lama   speed    45.0   30.0
-               weight  200.0  100.0
-        cow    speed    30.0   20.0
-               weight  250.0  150.0
-        falcon speed   320.0  250.0
-               weight    1.0    0.8
-        """
-
-        if labels is not None:
-            if index is not None or columns is not None:
-                raise ValueError(
-                    "Cannot specify both 'labels' and 'index'/'columns'"
-                )
-            target = labels
-        elif index is not None:
-            target = index
-            axis = 0
-        elif columns is not None:
-            target = columns
-            axis = 1
-        else:
-            raise ValueError(
-                "Need to specify at least one of 'labels', "
-                "'index' or 'columns'"
-            )
-
-        if inplace:
-            out = self
-        else:
-            out = self.copy()
-
-        if axis in (1, "columns"):
-            target = _get_host_unique(target)
-
-            _drop_columns(out, target, errors)
-        elif axis in (0, "index"):
-            dropped = _drop_rows_by_labels(out, target, level, errors)
-
-            if columns is not None:
-                columns = _get_host_unique(columns)
-                _drop_columns(dropped, columns, errors)
-
-            out._data = dropped._data
-            out._index = dropped._index
-
-        if not inplace:
-            return out
-
-    @annotate("DATAFRAME_DROP_COLUMN", color="green", domain="cudf_python")
-    def _drop_column(self, name):
-        """Drop a column by *name*"""
-        if name not in self._data:
-            raise KeyError(f"column '{name}' does not exist")
-        del self._data[name]
 
     @annotate("DATAFRAME_DROP_DUPLICATES", color="green", domain="cudf_python")
     def drop_duplicates(
@@ -5433,7 +5157,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis == 0:
             return super()._scan(op, axis=axis, *args, **kwargs)
         elif axis == 1:
-            return self._apply_cupy_method_axis_1(f"cum{op}", **kwargs)
+            return self._apply_cupy_method_axis_1(op, **kwargs)
 
     @annotate("DATAFRAME_MODE", color="green", domain="cudf_python")
     def mode(self, axis=0, numeric_only=False, dropna=True):
@@ -6126,19 +5850,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  3
         4  4
         """
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
         if isinstance(other, dict):
             if not ignore_index:
                 raise TypeError("Can only append a dict if ignore_index=True")
             other = DataFrame(other)
-            result = cudf.concat(
-                [self, other], ignore_index=ignore_index, sort=sort
-            )
-            return result
         elif isinstance(other, Series):
             if other.name is None and not ignore_index:
                 raise TypeError(
@@ -6169,23 +5884,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             other = other.reindex(combined_columns, copy=False).to_frame().T
             if not current_cols.equals(combined_columns):
                 self = self.reindex(columns=combined_columns)
-        elif isinstance(other, list):
-            if not other:
-                pass
-            elif not isinstance(other[0], DataFrame):
-                other = DataFrame(other)
-                cols = self._data.to_pandas_index()
-                if (
-                    cols.get_indexer(other._data.to_pandas_index()) >= 0
-                ).all():
-                    other = other.reindex(columns=cols)
+        elif (
+            isinstance(other, list)
+            and other
+            and not isinstance(other[0], DataFrame)
+        ):
+            other = DataFrame(other)
+            cols = self._data.to_pandas_index()
+            if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
+                other = other.reindex(columns=cols)
 
-        if is_list_like(other):
-            to_concat = [self, *other]
-        else:
-            to_concat = [self, other]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
+        return super(DataFrame, self)._append(
+            other, ignore_index, verify_integrity, sort
+        )
 
     @annotate("DATAFRAME_PIVOT", color="green", domain="cudf_python")
     @copy_docstring(reshape.pivot)
@@ -6210,7 +5921,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Parameters
         ----------
-        column : str or tuple
+        column : str
             Column to explode.
         ignore_index : bool, default False
             If True, the resulting index will be labeled 0, 1, …, n - 1.
@@ -6244,11 +5955,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         if column not in self._column_names:
             raise KeyError(column)
-
-        if not is_list_dtype(self._data[column].dtype):
-            data = self._data.copy(deep=True)
-            idx = None if ignore_index else self._index.copy(deep=True)
-            return self.__class__._from_data(data, index=idx)
 
         return super()._explode(column, ignore_index)
 
@@ -6329,6 +6035,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis parameter is not supported yet.")
 
         return cudf.Series(super().nunique(method="sort", dropna=dropna))
+
+    def _sample_axis_1(
+        self,
+        n: int,
+        weights: Optional[ColumnLike],
+        replace: bool,
+        random_state: np.random.RandomState,
+        ignore_index: bool,
+    ):
+        if replace:
+            # Since cuDF does not support multiple columns with same name,
+            # sample with replace=True at axis 1 is unsupported.
+            raise NotImplementedError(
+                "Sample is not supported for axis 1/`columns` when"
+                "`replace=True`."
+            )
+
+        sampled_column_labels = random_state.choice(
+            self._column_names, size=n, replace=False, p=weights
+        )
+
+        result = self._get_columns_by_label(sampled_column_labels)
+        if ignore_index:
+            result.reset_index(drop=True)
+
+        return result
 
 
 def from_dataframe(df, allow_copy=False):
@@ -6710,26 +6442,6 @@ def _get_union_of_series_names(series_list):
         names_list = range(len(series_list))
 
     return names_list
-
-
-def _get_host_unique(array):
-    if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
-        return array.unique.to_pandas()
-    elif isinstance(array, (str, numbers.Number)):
-        return [array]
-    else:
-        return set(array)
-
-
-def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
-    for c in columns:
-        try:
-            df._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
 
 
 # Create a dictionary of the common, non-null columns

@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/dispatcher.hpp>
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
@@ -86,6 +87,28 @@ struct extract_fn {
     }
   }
 };
+
+struct extract_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  std::unique_ptr<column> operator()(column_device_view const& d_strings,
+                                     size_type total_groups,
+                                     offset_type const* d_offsets,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    rmm::device_uvector<string_index_pair> indices(total_groups, stream);
+
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       d_strings.size(),
+                       extract_fn<stack_size>{d_strings, d_prog, d_offsets, indices.data()});
+
+    return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  }
+};
+
 }  // namespace
 
 /**
@@ -94,14 +117,14 @@ struct extract_fn {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_all_record(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::string const& pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const strings_count = strings.size();
-  auto const d_strings     = column_device_view::create(strings.parent(), stream);
+  auto const strings_count = input.size();
+  auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // Compile regex into device object.
   auto d_prog =
@@ -143,29 +166,8 @@ std::unique_ptr<column> extract_all_record(
   auto const total_groups =
     cudf::detail::get_value<offset_type>(offsets->view(), strings_count, stream);
 
-  // Create an indices vector with the total number of groups that will be extracted.
-  rmm::device_uvector<string_index_pair> indices(total_groups, stream);
-  auto d_indices = indices.data();
-  auto begin     = thrust::make_counting_iterator<size_type>(0);
-
-  // Call the extract functor to fill in the indices vector.
-  auto const regex_insts = d_prog->insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    extract_fn<RX_STACK_SMALL> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    extract_fn<RX_STACK_MEDIUM> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    extract_fn<RX_STACK_LARGE> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else {
-    extract_fn<RX_STACK_ANY> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  }
-
-  // Build the child strings column from the indices.
-  auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto strings_output = regex_dispatcher(
+    *d_prog, extract_dispatch_fn{*d_prog}, *d_strings, total_groups, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings.
   return make_lists_column(strings_count,
