@@ -75,6 +75,8 @@ class StrViewArgHandler:
     This small piece of code implements the necessary handling. Really all
     it does is says is funnel the handling of string_view* to the handling
     of raw pointer arguments, which numba knows what to do with. 
+
+    See numba.cuda.compiler._prepare_args for details.
     """
     def prepare_args(self, ty, val, **kwargs):
         if isinstance(ty, types.CPointer) and isinstance(ty.dtype, StringView):
