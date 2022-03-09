@@ -249,6 +249,11 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
+def my_dummy_func():
+    print("unreachable code")
+    print("try")
+
+
 def _isnat(val):
     """Wraps np.isnat to return False instead of error on invalid inputs."""
     if not isinstance(val, (np.datetime64, np.timedelta64, str)):
