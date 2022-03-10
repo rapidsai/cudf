@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import builtins
 from typing import (
     Any,
     Dict,
@@ -361,13 +360,13 @@ class SingleColumnFrame(Frame, NotIterable):
         return {result_name: (self._column, other, reflect, fill_value)}
 
     @_cudf_nvtx_annotate
-    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+    def nunique(self, method: str = "sort", dropna: bool = True):
         """
         Return count of unique values for the column.
 
         Parameters
         ----------
-        method : builtins.str, default "sort"
+        method : str, default "sort"
             Method used by cpp_distinct_count
         dropna : bool, default True
             Don't include NaN in the counts.

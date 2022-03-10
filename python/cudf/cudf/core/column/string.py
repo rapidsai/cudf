@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import re
 import warnings
@@ -5400,7 +5399,7 @@ class StringColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: builtins.str = None,
+        method: str = None,
         dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
@@ -5450,7 +5449,7 @@ class StringColumn(column.ColumnBase):
             raise TypeError(f"cannot broadcast {type(other)}")
 
     def binary_operator(
-        self, op: builtins.str, rhs, reflect: bool = False
+        self, op: str, rhs, reflect: bool = False
     ) -> "column.ColumnBase":
         lhs = self
         if reflect:
