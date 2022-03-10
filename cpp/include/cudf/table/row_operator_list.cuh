@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,18 +121,16 @@ class element_equality_comparator {
       auto r_size = r_end_off - r_start_off;
       if (l_size != r_size) { return false; }
 
-      for (int i = 0; i < l_size; ++i) {
-        bool const lhs_is_null{lcol.is_null(l_start_off + i)};
-        bool const rhs_is_null{rcol.is_null(r_start_off + i)};
+      if (nulls) {
+        for (int i = 0; i < l_size; ++i) {
+          bool const lhs_is_null{lcol.is_null(l_start_off + i)};
+          bool const rhs_is_null{rcol.is_null(r_start_off + i)};
 
-        if (lhs_is_null and rhs_is_null) {
-          if (nulls_are_equal == null_equality::EQUAL) {
-            continue;
-          } else {
+          if (lhs_is_null and rhs_is_null) {
+            if (nulls_are_equal == null_equality::UNEQUAL) { return false; }
+          } else if (lhs_is_null != rhs_is_null) {
             return false;
           }
-        } else if (lhs_is_null != rhs_is_null) {
-          return false;
         }
       }
       if (lcol.type().id() == type_id::STRUCT) {
