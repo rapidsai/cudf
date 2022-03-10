@@ -147,7 +147,8 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  */
 class sum_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -166,7 +167,7 @@ class sum_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public groupby_aggregation {
+class product_aggregation final : public groupby_aggregation, public segmented_reduce_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -187,7 +188,8 @@ class product_aggregation final : public groupby_aggregation {
  */
 class min_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -208,7 +210,8 @@ class min_aggregation final : public rolling_aggregation,
  */
 class max_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -248,7 +251,7 @@ class count_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying an any aggregation
  */
-class any_aggregation final : public aggregation {
+class any_aggregation final : public segmented_reduce_aggregation {
  public:
   any_aggregation() : aggregation(ANY) {}
 
@@ -267,7 +270,7 @@ class any_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying an all aggregation
  */
-class all_aggregation final : public aggregation {
+class all_aggregation final : public segmented_reduce_aggregation {
  public:
   all_aggregation() : aggregation(ALL) {}
 
