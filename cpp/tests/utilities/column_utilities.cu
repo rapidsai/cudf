@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -373,7 +373,7 @@ class corresponding_rows_not_equivalent {
 
   struct typed_element_not_equivalent {
     template <typename T>
-    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool> operator()(
+    __device__ std::enable_if_t<std::is_floating_point_v<T>, bool> operator()(
       column_device_view const& lhs,
       column_device_view const& rhs,
       size_type lhs_index,
@@ -401,7 +401,7 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args...)
+    __device__ std::enable_if_t<not std::is_floating_point_v<T>, bool> operator()(Args...)
     {
       // Non-floating point inequality is checked already
       return true;
@@ -836,13 +836,13 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 
 namespace {
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 static auto numeric_to_string_precise(T value)
 {
   return std::to_string(value);
 }
 
-template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
 static auto numeric_to_string_precise(T value)
 {
   std::ostringstream o;
@@ -915,7 +915,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 }
 
 struct column_view_printer {
-  template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
@@ -939,7 +939,7 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<is_timestamp<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
@@ -965,7 +965,7 @@ struct column_view_printer {
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
 
-  template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
@@ -987,7 +987,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
@@ -1008,7 +1008,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
@@ -1029,7 +1029,7 @@ struct column_view_printer {
   }
 
   // Print the tick counts with the units
-  template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<is_duration<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
@@ -1054,8 +1054,7 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
+  template <typename Element, std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
@@ -1084,7 +1083,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
