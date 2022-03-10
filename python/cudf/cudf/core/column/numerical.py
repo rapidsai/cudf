@@ -583,9 +583,7 @@ class NumericalColumn(NumericalBaseColumn):
                     s = cudf.Series(self)
                     # TODO: replace np.inf with cudf scalar when
                     # https://github.com/rapidsai/cudf/pull/6297 merges
-                    non_infs = s[
-                        ((s == np.inf) | (s == -np.inf)).logical_not()
-                    ]
+                    non_infs = s[~((s == np.inf) | (s == -np.inf))]
                     col = non_infs._column
                 else:
                     col = self

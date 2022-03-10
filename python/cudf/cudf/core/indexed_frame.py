@@ -14,7 +14,6 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
-from nvtx import annotate
 
 import cudf
 import cudf._lib as libcudf
@@ -33,6 +32,7 @@ from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -340,7 +340,7 @@ class IndexedFrame(Frame):
         """
         return self._iloc_indexer_type(self)
 
-    @annotate("SORT_INDEX", color="red", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def sort_index(
         self,
         axis=0,
@@ -722,7 +722,7 @@ class IndexedFrame(Frame):
             self._index.names if not ignore_index else None,
         )
 
-    @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True):
         return self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
@@ -871,7 +871,7 @@ class IndexedFrame(Frame):
                 Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
 
-    @annotate("APPLY", color="purple", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _apply(self, func, kernel_getter, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
         if kwargs:
@@ -1748,7 +1748,7 @@ class IndexedFrame(Frame):
             slice_func=lambda i: self.iloc[i:],
         )
 
-    @annotate("SAMPLE", color="orange", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def sample(
         self,
         n=None,
@@ -2180,7 +2180,7 @@ class IndexedFrame(Frame):
 
         return self._from_data(data, index=self._index)
 
-    @annotate("INDEXED_FRAME_DROP", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def drop(
         self,
         labels=None,
@@ -2393,7 +2393,7 @@ class IndexedFrame(Frame):
         if not inplace:
             return out
 
-    @annotate("INDEXED_FRAME_EXPLODE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _explode(self, explode_column: Any, ignore_index: bool):
         # Helper function for `explode` in `Series` and `Dataframe`, explodes a
         # specified nested column. Other columns' corresponding rows are
