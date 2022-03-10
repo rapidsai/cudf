@@ -5840,7 +5840,8 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
         new HostColumnVector.BasicType(true, DType.INT32)));
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
-         ColumnVector res = cv.getMapValue(Scalar.fromInt(1));
+         Scalar lookupKey = Scalar.fromInt(1);
+         ColumnVector res = cv.getMapValue(lookupKey);
          ColumnVector expected = ColumnVector.fromBoxedInts(2, 3, null)) {
       assertColumnsAreEqual(expected, res);
     }
@@ -5854,7 +5855,8 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
         new HostColumnVector.BasicType(true, DType.STRING)));
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
-         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         Scalar lookupKey = Scalar.fromString("a");
+         ColumnVector res = cv.getMapValue(lookupKey);
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
       assertColumnsAreEqual(expected, res);
     }
@@ -5865,7 +5867,8 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
         new HostColumnVector.BasicType(true, DType.STRING)));
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType));
-         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         Scalar lookupKey = Scalar.fromString("a");
+         ColumnVector res = cv.getMapValue(lookupKey);
          ColumnVector expected = ColumnVector.fromStrings()) {
       assertColumnsAreEqual(expected, res);
     }
@@ -5883,10 +5886,12 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
             new HostColumnVector.BasicType(true, DType.INT32)));
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);
-         ColumnVector resValidKey = cv.getMapKeyExistence(Scalar.fromInt(1));
+         Scalar lookup1 = Scalar.fromInt(1);
+         ColumnVector resValidKey = cv.getMapKeyExistence(lookup1);
          ColumnVector expectedValid = ColumnVector.fromBoxedBooleans(true, true, false, true, true, false, false);
          ColumnVector expectedNull = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false, false);
-         ColumnVector resNullKey = cv.getMapKeyExistence(Scalar.fromNull(DType.INT32))) {
+         Scalar lookupNull = Scalar.fromNull(DType.INT32);
+         ColumnVector resNullKey = cv.getMapKeyExistence(lookupNull)) {
       assertColumnsAreEqual(expectedValid, resValidKey);
       assertColumnsAreEqual(expectedNull, resNullKey);
     }
@@ -5911,10 +5916,12 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
             new HostColumnVector.BasicType(true, DType.STRING)));
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);
-         ColumnVector resValidKey = cv.getMapKeyExistence(Scalar.fromString("a"));
+         Scalar lookupA = Scalar.fromString("a");
+         ColumnVector resValidKey = cv.getMapKeyExistence(lookupA);
          ColumnVector expectedValid = ColumnVector.fromBoxedBooleans(true, true, false, true, true, false, false);
          ColumnVector expectedNull = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false, false);
-         ColumnVector resNullKey = cv.getMapKeyExistence(Scalar.fromNull(DType.STRING))) {
+         Scalar lookupNull = Scalar.fromNull(DType.STRING);
+         ColumnVector resNullKey = cv.getMapKeyExistence(lookupNull)) {
       assertColumnsAreEqual(expectedValid, resValidKey);
       assertColumnsAreEqual(expectedNull, resNullKey);
     }

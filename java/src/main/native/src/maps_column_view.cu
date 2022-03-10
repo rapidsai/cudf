@@ -15,13 +15,9 @@
  */
 
 #include <cudf/detail/replace.hpp>
-#include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/detail/extract.hpp>
-#include <cudf/lists/extract.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <maps_column_view.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -46,6 +42,8 @@ maps_column_view::maps_column_view(lists_column_view const &lists_of_structs,
   auto const structs = lists_of_structs.child();
   CUDF_EXPECTS(structs.type().id() == type_id::STRUCT,
                "maps_column_view input must have exactly 1 child (STRUCT) column.");
+  CUDF_EXPECTS(structs.num_children() == 2,
+               "maps_column_view key-value struct must have exactly 2 children.");
 }
 
 template <typename KeyT>
@@ -86,16 +84,11 @@ std::unique_ptr<column> maps_column_view::contains(scalar const &lookup_key,
                                                    rmm::mr::device_memory_resource *mr) const {
   CUDF_EXPECTS(lookup_key.type().id() == keys_.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
-  auto contains = lists::detail::contains(keys_, lookup_key, stream);
+  auto const contains = lists::detail::contains(keys_, lookup_key, stream);
 
   // Replace nulls with BOOL8{false};
-  auto const scalar_false = [] {
-    auto false_value = make_numeric_scalar(data_type{type_id::BOOL8});
-    static_cast<scalar_type_t<int8_t> *>(false_value.get())->set_value(false);
-    return false_value;
-  }();
-
-  return detail::replace_nulls(contains->view(), *scalar_false, stream, mr);
+  auto const scalar_false = numeric_scalar<bool>{false, true, stream};
+  return detail::replace_nulls(contains->view(), scalar_false, stream, mr);
 }
 
 } // namespace cudf::jni

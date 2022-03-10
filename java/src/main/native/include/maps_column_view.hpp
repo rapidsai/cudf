@@ -18,10 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::jni {
+namespace cudf {
+
+class scalar;
+
+namespace jni {
 
 /**
  * @brief Given a column-view of LIST<STRUCT<K,V>>, an instance of this class
@@ -123,4 +126,5 @@ private:
   lists_column_view keys_, values_;
 };
 
-} // namespace cudf::jni
+} // namespace jni
+} // namespace cudf
