@@ -1,15 +1,17 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 import os
-import pytest
 
-import cudf
-import dask_cudf
+import pytest
 
 import dask.dataframe as dd
 
+import cudf
+
+import dask_cudf
+
 cur_dir = os.path.dirname(__file__)
-text_file = os.path.join(cur_dir, "sample.pgn")
+text_file = os.path.join(cur_dir, "data/sample.pgn")
 
 
 @pytest.mark.parametrize("file", [text_file, [text_file]])

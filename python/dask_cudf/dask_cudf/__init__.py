@@ -8,7 +8,7 @@ from cudf._version import get_versions
 from . import backends
 from .core import DataFrame, Series, concat, from_cudf, from_dask_dataframe
 from .groupby import groupby_agg
-from .io import read_csv, read_json, read_orc, to_orc, read_text
+from .io import read_csv, read_json, read_orc, read_text, to_orc
 
 try:
     from .io import read_parquet

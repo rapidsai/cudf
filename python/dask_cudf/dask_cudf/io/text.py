@@ -3,13 +3,11 @@
 import os
 from glob import glob
 
+import dask.dataframe as dd
 from dask.base import tokenize
-
-import cudf
-
 from dask.utils import apply, parse_bytes
 
-import dask.dataframe as dd
+import cudf
 
 
 def read_text(path, chunksize="256 MiB", **kwargs):
