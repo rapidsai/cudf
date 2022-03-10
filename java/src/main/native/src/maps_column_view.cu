@@ -57,7 +57,7 @@ std::unique_ptr<column> get_values_for_impl(maps_column_view const &maps_view,
   auto key_indices =
       lists::detail::index_of(keys_, lookup_keys, lists::duplicate_find_option::FIND_LAST, stream);
   auto constexpr absent_offset = size_type{-1};
-  auto constexpr nullity_offset = std::numeric_limits<size_type>::max();
+  auto constexpr nullity_offset = std::numeric_limits<size_type>::min();
   thrust::replace(rmm::exec_policy(stream), key_indices->mutable_view().template begin<size_type>(),
                   key_indices->mutable_view().template end<size_type>(), absent_offset,
                   nullity_offset);
