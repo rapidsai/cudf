@@ -374,6 +374,13 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
+  src/reductions/segmented_all.cu
+  src/reductions/segmented_any.cu
+  src/reductions/segmented_max.cu
+  src/reductions/segmented_min.cu
+  src/reductions/segmented_product.cu
+  src/reductions/segmented_reductions.cpp
+  src/reductions/segmented_sum.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
