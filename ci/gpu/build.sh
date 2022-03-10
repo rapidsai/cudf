@@ -115,7 +115,7 @@ function install_dask {
         gpuci_logger "gpuci_mamba_retry update dask"
         gpuci_mamba_retry update dask
         gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2021.11.1 --force-reinstall"
-        gpuci_mamba_retry install -c conda-forge dask>=2021.11.1 distributed>=2021.11.1 --force-reinstall
+        gpuci_mamba_retry install -c conda-forge::dask>=2021.11.1 conda-forge::distributed>=2021.11.1 --force-reinstall
     else
         gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2021.11.1 --force-reinstall"
         gpuci_mamba_retry install "conda-forge::dask>=2021.11.1" --force-reinstall
