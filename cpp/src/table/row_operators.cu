@@ -215,25 +215,6 @@ void check_lex_compatibility(table_view const& input)
   }
 }
 
-void check_shape_compatibility(table_view const& lhs, table_view const& rhs)
-{
-  std::function<void(column_view const&, column_view const&)> check_column =
-    [&](column_view const& l, column_view const& r) {
-      CUDF_EXPECTS(l.type().id() == r.type().id(),
-                   "Cannot compare tables with different column types");
-      CUDF_EXPECTS(l.num_children() == r.num_children(), "Mismatched number of children");
-      for (size_type i = 0; i < l.num_children(); ++i) {
-        check_column(l.child(i), r.child(i));
-      }
-    };
-
-  CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
-               "Cannot compare tables with different number of columns");
-  for (size_type i = 0; i < lhs.num_columns(); ++i) {
-    check_column(lhs.column(i), rhs.column(i));
-  }
-}
-
 }  // namespace
 
 namespace lexicographic_comparison {
@@ -262,27 +243,18 @@ preprocessed_table::preprocessed_table(table_view const& t,
 
 }  // namespace lexicographic_comparison
 
-row_eq_operator::row_eq_operator(table_view const& t, rmm::cuda_stream_view stream)
-  : any_nulls(has_nested_nulls(t))
+namespace equality_hashing {
+
+preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_view stream)
+  : _has_nulls(has_nested_nulls(t))
 {
   auto [verticalized_lhs, _, __, ___] = struct_lex_verticalize(t);
 
-  d_lhs =
+  d_t =
     std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
 }
 
-row_eq_operator::row_eq_operator(table_view const& lhs,
-                                 table_view const& rhs,
-                                 rmm::cuda_stream_view stream)
-  : row_eq_operator(lhs, stream)
-{
-  check_shape_compatibility(lhs, rhs);
-  auto [verticalized_rhs, _, __, ___] = struct_lex_verticalize(rhs);
+}  // namespace equality_hashing
 
-  d_rhs =
-    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_rhs, stream));
-
-  any_nulls |= has_nested_nulls(rhs);
-}
 }  // namespace experimental
 }  // namespace cudf

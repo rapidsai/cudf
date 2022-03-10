@@ -40,6 +40,8 @@ struct non_nested_id_to_type {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
+namespace equality_hashing {
+
 /**
  * @brief Performs an equality comparison between two elements in two columns.
  *
@@ -207,20 +209,45 @@ class row_equality_comparator {
   null_equality nulls_are_equal;
 };
 
-struct row_eq_operator {
-  row_eq_operator(table_view const& lhs, table_view const& rhs, rmm::cuda_stream_view stream);
+struct preprocessed_table {
+  preprocessed_table(table_view const& table, rmm::cuda_stream_view stream);
 
-  row_eq_operator(table_view const& t, rmm::cuda_stream_view stream);
+  /**
+   * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
+   *
+   * @return table_device_view
+   */
+  operator table_device_view() { return **d_t; }
+
+  /**
+   * @brief Whether the table has any nullable column
+   *
+   */
+  [[nodiscard]] bool has_nulls() const { return _has_nulls; }
+
+ private:
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  std::unique_ptr<table_device_view_owner> d_t;
+  bool _has_nulls;
+};
+
+struct self_eq_comparator {
+  self_eq_comparator(table_view const& t, rmm::cuda_stream_view stream)
+    : d_t(std::make_shared<preprocessed_table>(t, stream))
+  {
+  }
+
+  self_eq_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
   template <typename Nullate = nullate::DYNAMIC>
   row_equality_comparator<Nullate> device_comparator()
   {
-    auto lhs = **d_lhs;
-    auto rhs = (d_rhs ? **d_rhs : **d_lhs);
     if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
-      return row_equality_comparator(Nullate{any_nulls}, lhs, rhs);
+      return row_equality_comparator(Nullate{d_t->has_nulls()}, *d_t, *d_t);
     } else {
-      return row_equality_comparator(Nullate{}, lhs, rhs);
+      return row_equality_comparator(Nullate{}, *d_t, *d_t);
     }
   }
 
@@ -228,10 +255,9 @@ struct row_eq_operator {
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
-  std::unique_ptr<table_device_view_owner> d_lhs;
-  std::unique_ptr<table_device_view_owner> d_rhs;
-  bool any_nulls;
+  std::shared_ptr<preprocessed_table> d_t;
 };
 
+}  // namespace equality_hashing
 }  // namespace experimental
 }  // namespace cudf
