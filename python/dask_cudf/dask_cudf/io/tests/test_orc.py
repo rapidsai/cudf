@@ -1,3 +1,5 @@
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 import glob
 import os
 from datetime import datetime, timezone
