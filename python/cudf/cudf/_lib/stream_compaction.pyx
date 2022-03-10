@@ -12,10 +12,10 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
-    drop_duplicates as cpp_drop_duplicates,
+    distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
-    unordered_distinct_count as cpp_unordered_distinct_count,
+    unique as cpp_unique,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -167,9 +167,10 @@ def drop_duplicates(columns: list,
     cdef unique_ptr[table] c_result
 
     with nogil:
-        # cudf::drop_duplicates works like std::unique thus does NOT match
-        # the behavior of pandas.DataFrame.drop_duplicates. Users need to
-        # stable sort the input first and then drop.
+        # cudf::unique keeps unique rows in each consecutive group of
+        # equivalent rows. To match the behavior of pandas.DataFrame.
+        # drop_duplicates, users need to stable sort the input first
+        # and then unique.
         sorted_source_table = move(
             cpp_stable_sort_by_key(
                 source_table_view,
@@ -179,7 +180,7 @@ def drop_duplicates(columns: list,
             )
         )
         c_result = move(
-            cpp_drop_duplicates(
+            cpp_unique(
                 sorted_source_table.get().view(),
                 cpp_keys,
                 cpp_keep_option,
@@ -220,7 +221,7 @@ def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
-        count = cpp_unordered_distinct_count(
+        count = cpp_distinct_count(
             source_column_view,
             cpp_null_handling,
             cpp_nan_handling
