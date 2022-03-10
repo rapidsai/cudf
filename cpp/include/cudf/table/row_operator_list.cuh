@@ -116,11 +116,9 @@ class element_equality_comparator {
     int r_start_off         = rhs_element_index;
     int l_end_off           = lhs_element_index + 1;
     int r_end_off           = rhs_element_index + 1;
+    auto l_size             = 1;
+    auto r_size             = 1;
     while (is_nested(lcol.type())) {
-      auto l_size = l_end_off - l_start_off;
-      auto r_size = r_end_off - r_start_off;
-      if (l_size != r_size) { return false; }
-
       if (nulls) {
         for (int i = 0; i < l_size; ++i) {
           bool const lhs_is_null{lcol.is_null(l_start_off + i)};
@@ -152,11 +150,11 @@ class element_equality_comparator {
         r_start_off = r_off.element<size_type>(r_start_off);
         l_end_off   = l_off.element<size_type>(l_end_off);
         r_end_off   = r_off.element<size_type>(r_end_off);
+        l_size      = l_end_off - l_start_off;
+        r_size      = r_end_off - r_start_off;
+        if (l_size != r_size) { return false; }
       }
     }
-    auto l_size = l_end_off - l_start_off;
-    auto r_size = r_end_off - r_start_off;
-    if (l_size != r_size) { return false; }
 
     for (int i = 0; i < l_size; ++i) {
       bool equal = type_dispatcher<non_nested_id_to_type>(
