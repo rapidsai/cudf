@@ -3460,10 +3460,7 @@ class Frame(BinaryOperand, Scannable):
 
             output_mask = None
             if fill_value is not None:
-                if is_scalar(right_column):
-                    if left_column.nullable:
-                        left_column = left_column.fillna(fill_value)
-                else:
+                if isinstance(right_column, ColumnBase):
                     # If both columns are nullable, pandas semantics dictate
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
@@ -3477,6 +3474,9 @@ class Frame(BinaryOperand, Scannable):
                         left_column = left_column.fillna(fill_value)
                     elif right_column.nullable:
                         right_column = right_column.fillna(fill_value)
+                else:
+                    if left_column.nullable:
+                        left_column = left_column.fillna(fill_value)
 
             # TODO: Disable logical and binary operators between columns that
             # are not numerical using the new binops mixin.
