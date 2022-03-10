@@ -507,8 +507,8 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
 }
 
 /**
- * @brief Reduce an input null mask using segments defined by offset indices
- * into an output null mask.
+ * @brief Create an output null mask whose validity is determined by the
+ * validity of any/all elements of segments of an input null mask.
  *
  * @tparam OffsetIterator Random-access input iterator type.
  * @param bitmask Null mask residing in device memory whose segments will be
