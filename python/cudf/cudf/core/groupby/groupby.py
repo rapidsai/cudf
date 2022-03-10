@@ -5,6 +5,7 @@ import itertools
 import pickle
 import warnings
 from functools import cached_property
+from typing import Any, List, Tuple
 
 import numpy as np
 from nvtx import annotate
@@ -15,7 +16,7 @@ from cudf._lib.reshape import interleave_columns
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
-from cudf.core.column.column import arange, as_column
+from cudf.core.column.column import ColumnBase, arange, as_column
 from cudf.core.mixins import Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin
@@ -264,7 +265,7 @@ class GroupBy(Serializable, Reducible):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        normalized_aggs = self._normalize_aggs(func)
+        columns_to_agg, normalized_aggs = self._normalize_aggs(func)
 
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
@@ -423,37 +424,33 @@ class GroupBy(Serializable, Reducible):
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
 
-    def _normalize_aggs(self, aggs):
+    def _normalize_aggs(
+        self, aggs: Any
+    ) -> Tuple[Tuple[ColumnBase], List[List[Any]]]:
         """
-        Normalize aggs to a list of list of aggregations, where `result[i]`
-        is a list of aggregations for `self.obj[i]`.
+        Normalize aggs to a list of list of aggregations, where `out[i]`
+        is a list of aggregations for column `self.obj[i]`. We support two
+        different form of `aggs` input here:
+        - A single agg, such as "sum". This agg is applied to all value
+        columns.
+        - A list of aggs, such as ["sum", "mean"]. All aggs are applied to all
+        value columns.
+        - A mapping of column name to aggs, such as
+        {"a": ["sum"], "b": ["mean"]}, the aggs are applied to specified
+        column.
+        `agg` can be string or lambda functions.
         """
+        values = self.grouping.values
         if not isinstance(aggs, collections.abc.Mapping):
-            # Make col_name->aggs mapping from aggs.
-            # Do not include named key columns
-
-            # Can't do set arithmetic here as sets are
-            # not ordered
-            if isinstance(self, SeriesGroupBy):
-                columns = [self.obj.name]
-            else:
-                columns = [
-                    col_name
-                    for col_name in self.obj._data
-                    if col_name not in self.grouping._named_columns
-                ]
-            out = dict.fromkeys(columns, aggs)
+            column_names = values._column_names
+            out = [aggs] * len(values._data)
         else:
-            out = aggs.copy()
+            column_names = tuple(col for col in aggs.keys() if col in values)
+            out = [aggs[col] for col in column_names]
 
-        # Convert all values to list-like:
-        for col, agg in out.items():
-            if not is_list_like(agg):
-                out[col] = [agg]
-            else:
-                out[col] = list(agg)
-
-        return out
+        cols_to_agg = values._data.select_by_label(column_names)._columns
+        out = [[agg] if not is_list_like(agg) else list(agg) for agg in out]
+        return cols_to_agg, out
 
     def pipe(self, func, *args, **kwargs):
         """
