@@ -788,6 +788,8 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids)
 template std::unique_ptr<aggregation> make_tdigest_aggregation<aggregation>(int max_centroids);
 template std::unique_ptr<groupby_aggregation> make_tdigest_aggregation<groupby_aggregation>(
   int max_centroids);
+template std::unique_ptr<reduce_aggregation> make_tdigest_aggregation<reduce_aggregation>(
+  int max_centroids);
 
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids)
@@ -797,6 +799,8 @@ std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids)
 template std::unique_ptr<aggregation> make_merge_tdigest_aggregation<aggregation>(
   int max_centroids);
 template std::unique_ptr<groupby_aggregation> make_merge_tdigest_aggregation<groupby_aggregation>(
+  int max_centroids);
+template std::unique_ptr<reduce_aggregation> make_merge_tdigest_aggregation<reduce_aggregation>(
   int max_centroids);
 
 namespace detail {

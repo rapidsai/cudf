@@ -1040,7 +1040,7 @@ class correlation_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying TDIGEST aggregation
  */
-class tdigest_aggregation final : public groupby_aggregation {
+class tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit tdigest_aggregation(int max_centroids_)
     : aggregation{TDIGEST}, max_centroids{max_centroids_}
@@ -1064,7 +1064,7 @@ class tdigest_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
  */
-class merge_tdigest_aggregation final : public groupby_aggregation {
+class merge_tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_tdigest_aggregation(int max_centroids_)
     : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}

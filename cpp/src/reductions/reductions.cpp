@@ -22,6 +22,7 @@
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
@@ -102,6 +103,10 @@ struct reduce_dispatch_functor {
         auto nth_agg = dynamic_cast<nth_element_aggregation const*>(agg.get());
         return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, stream, mr);
       } break;
+      case aggregation::TDIGEST: {
+        auto td_agg = dynamic_cast<tdigest_aggregation const*>(agg.get());
+        return detail::tdigest::reduce_tdigest(col, td_agg->max_centroids, stream, mr);
+      } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
@@ -117,6 +122,9 @@ std::unique_ptr<scalar> reduce(
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
+    if (agg->kind == aggregation::TDIGEST || agg->kind == aggregation::MERGE_TDIGEST) {
+      return detail::tdigest::make_empty_tdigest_scalar();
+    }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
       return make_default_constructed_scalar(output_dtype, stream, mr);
     }

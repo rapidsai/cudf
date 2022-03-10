@@ -64,6 +64,18 @@ struct make_centroid {
   }
 };
 
+// make a centroid from a scalar with a weight of 1. this functor
+// assumes any value index it is passed is not null
+template <typename T>
+struct make_centroid_no_nulls {
+  column_device_view const col;
+
+  centroid operator() __device__(size_type index)
+  {
+    return {static_cast<double>(col.element<T>(index)), 1.0, true};
+  }
+};
+
 // make a centroid from an input stream of mean/weight values.
 struct make_weighted_centroid {
   double const* mean;
@@ -92,6 +104,27 @@ struct merge_centroids {
 };
 
 /**
+ * @brief A functor which returns the nearest cumulative weight in the grouped input stream prior to
+ * the specified next weight limit.
+ *
+ * This functor assumes the weight for all scalars is simply 1. Under this assumption,
+ * the nearest weight that will be <= the next limit is simply the nearest integer < the limit,
+ * which we can get by just taking floor(next_limit).  For example if our next limit is 3.56, the
+ * nearest whole number <= it is floor(3.56) == 3.
+ */
+struct nearest_value_scalar_weights_grouped {
+  offset_type const* group_offsets;
+
+  thrust::pair<double, int> operator() __device__(double next_limit, size_type group_index)
+  {
+    double const f                   = floor(next_limit);
+    auto const relative_weight_index = max(0, static_cast<int>(next_limit) - 1);
+    auto const group_size            = group_offsets[group_index + 1] - group_offsets[group_index];
+    return {f, relative_weight_index < group_size ? relative_weight_index : group_size - 1};
+  }
+};
+
+/**
  * @brief A functor which returns the nearest cumulative weight in the input stream prior to the
  * specified next weight limit.
  *
@@ -101,14 +134,13 @@ struct merge_centroids {
  * nearest whole number <= it is floor(3.56) == 3.
  */
 struct nearest_value_scalar_weights {
-  offset_type const* group_offsets;
+  size_type const input_size;
 
-  thrust::pair<double, int> operator() __device__(double next_limit, size_type group_index)
+  thrust::pair<double, int> operator() __device__(double next_limit, size_type)
   {
     double const f                   = floor(next_limit);
     auto const relative_weight_index = max(0, static_cast<int>(next_limit) - 1);
-    auto const group_size            = group_offsets[group_index + 1] - group_offsets[group_index];
-    return {f, relative_weight_index < group_size ? relative_weight_index : group_size - 1};
+    return {f, relative_weight_index < input_size ? relative_weight_index : input_size - 1};
   }
 };
 
@@ -152,7 +184,7 @@ struct nearest_value_centroid_weights {
  * This functor assumes the weight for all scalars is simply 1. Under this assumption,
  * the cumulative weight for a given value index I is simply I+1.
  */
-struct cumulative_scalar_weight {
+struct cumulative_scalar_weight_grouped {
   cudf::device_span<size_type const> group_offsets;
   cudf::device_span<size_type const> group_labels;
   std::tuple<size_type, size_type, double> operator() __device__(size_type value_index) const
@@ -160,6 +192,20 @@ struct cumulative_scalar_weight {
     auto const group_index          = group_labels[value_index];
     auto const relative_value_index = value_index - group_offsets[group_index];
     return {group_index, relative_value_index, relative_value_index + 1};
+  }
+};
+
+/**
+ * @brief A functor which returns the cumulative input weight for a given index in a
+ * set of input values.
+ *
+ * This functor assumes the weight for all scalars is simply 1. Under this assumption,
+ * the cumulative weight for a given value index I is simply I+1.
+ */
+struct cumulative_scalar_weight {
+  std::tuple<size_type, size_type, double> operator() __device__(size_type value_index) const
+  {
+    return {0, value_index, value_index + 1};
   }
 };
 
@@ -192,8 +238,8 @@ struct cumulative_centroid_weight {
   }
 };
 
-// retrieve group info of scalar inputs by group index
-struct scalar_group_info {
+// retrieve group info (total weight, size, start offset) of scalar inputs by group index.
+struct scalar_group_info_grouped {
   size_type const* group_valid_counts;
   offset_type const* group_offsets;
 
@@ -202,6 +248,17 @@ struct scalar_group_info {
     return {static_cast<double>(group_valid_counts[group_index]),
             group_offsets[group_index + 1] - group_offsets[group_index],
             group_offsets[group_index]};
+  }
+};
+
+// retrieve group info (total weight, size, start offset) of scalar inputs
+struct scalar_group_info {
+  double const total_weight;
+  size_type const size;
+
+  __device__ thrust::tuple<double, size_type, size_type> operator()(size_type)
+  {
+    return {total_weight, size, 0};
   }
 };
 
@@ -690,7 +747,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
 
 // return the min/max value of scalar inputs by group index
 template <typename T>
-struct get_scalar_minmax {
+struct get_scalar_minmax_grouped {
   column_device_view const col;
   device_span<size_type const> group_offsets;
   size_type const* group_valid_counts;
@@ -702,6 +759,21 @@ struct get_scalar_minmax {
              ? thrust::make_tuple(
                  static_cast<double>(col.element<T>(group_offsets[group_index])),
                  static_cast<double>(col.element<T>(group_offsets[group_index] + valid_count - 1)))
+             : thrust::make_tuple(0.0, 0.0);
+  }
+};
+
+// return the min/max value of scalar inputs
+template <typename T>
+struct get_scalar_minmax {
+  column_device_view const col;
+  size_type const valid_count;
+
+  __device__ thrust::tuple<double, double> operator()(size_type)
+  {
+    return valid_count > 0
+             ? thrust::make_tuple(static_cast<double>(col.element<T>(0)),
+                                  static_cast<double>(col.element<T>(valid_count - 1)))
              : thrust::make_tuple(0.0, 0.0);
   }
 };
@@ -723,9 +795,9 @@ struct typed_group_tdigest {
     auto [group_cluster_wl, group_cluster_offsets, total_clusters] = generate_group_cluster_info(
       delta,
       num_groups,
-      nearest_value_scalar_weights{group_offsets.begin()},
-      scalar_group_info{group_valid_counts.begin(), group_offsets.begin()},
-      cumulative_scalar_weight{group_offsets, group_labels},
+      nearest_value_scalar_weights_grouped{group_offsets.begin()},
+      scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
+      cumulative_scalar_weight_grouped{group_offsets, group_labels},
       col.null_count() > 0,
       stream,
       mr);
@@ -745,7 +817,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
                                                    max_col->mutable_view().begin<double>())),
-      get_scalar_minmax<T>{*d_col, group_offsets, group_valid_counts.begin()});
+      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
@@ -755,7 +827,7 @@ struct typed_group_tdigest {
     return compute_tdigests(delta,
                             scalar_to_centroid,
                             scalar_to_centroid + col.size(),
-                            cumulative_scalar_weight{group_offsets, group_labels},
+                            cumulative_scalar_weight_grouped{group_offsets, group_labels},
                             std::move(min_col),
                             std::move(max_col),
                             group_cluster_wl,
@@ -776,7 +848,109 @@ struct typed_group_tdigest {
   }
 };
 
+struct typed_reduce_tdigest {
+  // this function assumes col is sorted in ascending order with nulls at the end
+  template <
+    typename T,
+    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     int delta,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    // treat this the same as the groupby path with a single group.  Note:  even though
+    // there is only 1 group there are still multiple keys within the group that represent
+    // the clustering of (N input values) -> (1 output centroid), so the final computation
+    // remains a reduce_by_key() and not a reduce().
+    //
+    // additionally we get a few optimizations.
+    // - since we only ever have 1 "group" that is sorted with nulls at the end,
+    //   we can simply process just the non-null values and act as if the column
+    //   is non-nullable, allowing us to process fewer values than if we were doing a groupby.
+    //
+    // - several of the functors used during the reduction are cheaper than during a groupby.
+
+    auto const valid_count = col.size() - col.null_count();
+    auto const num_groups  = 1;
+
+    // first, generate cluster weight information for each input group
+    auto [cluster_wl, cluster_offsets, total_clusters] =
+      generate_group_cluster_info(delta,
+                                  num_groups,
+                                  nearest_value_scalar_weights{valid_count},
+                                  scalar_group_info{static_cast<double>(valid_count), valid_count},
+                                  cumulative_scalar_weight{},
+                                  false,
+                                  stream,
+                                  mr);
+
+    // device column view. handy because the .element() function
+    // automatically handles fixed-point conversions for us
+    auto d_col = cudf::column_device_view::create(col, stream);
+
+    // compute min and max columns
+    auto min_col = cudf::make_numeric_column(
+      data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
+    auto max_col = cudf::make_numeric_column(
+      data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(0) + num_groups,
+      thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
+                                                   max_col->mutable_view().begin<double>())),
+      get_scalar_minmax<T>{*d_col, valid_count});
+
+    // for simple input values, the "centroids" all have a weight of 1.
+    auto scalar_to_centroid =
+      cudf::detail::make_counting_transform_iterator(0, make_centroid_no_nulls<T>{*d_col});
+
+    // generate the final tdigest and wrap it in a struct_scalar
+    auto tdigest  = compute_tdigests(delta,
+                                    scalar_to_centroid,
+                                    scalar_to_centroid + valid_count,
+                                    cumulative_scalar_weight{},
+                                    std::move(min_col),
+                                    std::move(max_col),
+                                    cluster_wl,
+                                    std::move(cluster_offsets),
+                                    total_clusters,
+                                    false,
+                                    stream,
+                                    mr);
+    auto contents = tdigest->release();
+    return std::make_unique<struct_scalar>(
+      std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
+  }
+
+  template <
+    typename T,
+    typename... Args,
+    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(Args&&...)
+  {
+    CUDF_FAIL("Non-numeric type in group_tdigest");
+  }
+};
+
 }  // anonymous namespace
+
+std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
+                                       int max_centroids,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  if (col.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_scalar(stream, mr); }
+
+  // since this isn't coming out of a groupby, we need to sort the inputs in ascending
+  // order with nulls at the end.
+  table_view t({col});
+  auto sorted = cudf::detail::sort(t, {order::ASCENDING}, {null_order::AFTER}, stream);
+
+  auto const delta = max_centroids;
+  return cudf::type_dispatcher(
+    col.type(), typed_reduce_tdigest{}, sorted->get_column(0), delta, stream, mr);
+}
 
 std::unique_ptr<column> group_tdigest(column_view const& col,
                                       cudf::device_span<size_type const> group_offsets,
