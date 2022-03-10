@@ -25,6 +25,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/json.hpp>
@@ -676,9 +677,10 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
   int write_index = 0;
   for (int i = 0; i < num_children; i++, write_index++) {
     cudf::io::column_in_metadata child;
-    child.set_name(col_names[read_index])
-        .set_decimal_precision(precisions[read_index])
-        .set_nullability(nullability[read_index]);
+    child.set_name(col_names[read_index]).set_nullability(nullability[read_index]);
+    if (precisions[read_index] > -1) {
+      child.set_decimal_precision(precisions[read_index]);
+    }
     if (!is_int96.is_null()) {
       child.set_int96_timestamps(is_int96[read_index]);
     }
@@ -717,8 +719,10 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
   for (int i = read_index, write_index = 0; i < top_level_children; i++, write_index++) {
     metadata.column_metadata[write_index]
         .set_name(cpp_names[read_index])
-        .set_nullability(col_nullability[read_index])
-        .set_decimal_precision(precisions[read_index]);
+        .set_nullability(col_nullability[read_index]);
+    if (precisions[read_index] > -1) {
+      metadata.column_metadata[write_index].set_decimal_precision(precisions[read_index]);
+    }
     if (!is_int96.is_null()) {
       metadata.column_metadata[write_index].set_int96_timestamps(is_int96[read_index]);
     }
@@ -1489,6 +1493,44 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
             .build();
     return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(JNIEnv *env, jclass,
+                                                                jobjectArray filter_col_names,
+                                                                jstring inputfilepath, jlong buffer,
+                                                                jlong buffer_length, jint unit) {
+
+  const bool read_buffer = (buffer != 0);
+  if (!read_buffer) {
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+  } else if (inputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an inputfilepath", NULL);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
+                  NULL);
+  }
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstring filename(env, inputfilepath);
+    if (!read_buffer && filename.is_empty()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
+                    NULL);
+    }
+
+    cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+
+    auto source = read_buffer ? cudf::io::source_info(reinterpret_cast<char *>(buffer),
+                                                      static_cast<std::size_t>(buffer_length)) :
+                                cudf::io::source_info(filename.get());
+
+    cudf::io::avro_reader_options opts = cudf::io::avro_reader_options::builder(source)
+                                             .columns(n_filter_col_names.as_cpp_vector())
+                                             .build();
+    return convert_table_for_return(env, cudf::io::read_avro(opts).tbl);
   }
   CATCH_STD(env, NULL);
 }

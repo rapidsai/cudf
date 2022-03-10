@@ -53,8 +53,8 @@ namespace detail {
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<is_fixed_width<OutputType>() &&
-                                    not cudf::is_fixed_point<OutputType>()>* = nullptr>
+          std::enable_if_t<is_fixed_width<OutputType>() &&
+                           not cudf::is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
@@ -96,7 +96,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
+          std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
@@ -112,7 +112,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
+          std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,

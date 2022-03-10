@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,13 +88,13 @@ class cufile_shim {
 void cufile_shim::modify_cufile_json() const
 {
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-  temp_directory tmp_config_dir{"cudf_cufile_config"};
+  static temp_directory tmp_config_dir{"cudf_cufile_config"};
 
   // Modify the config file based on the policy
   auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
   std::ifstream user_config_file(config_file_path);
   // Modified config file is stored in a temporary directory
-  auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
+  auto const cudf_config_path = tmp_config_dir.path() + "cufile.json";
   std::ofstream cudf_config_file(cudf_config_path);
 
   std::string line;
@@ -194,20 +194,13 @@ template <typename DataT,
 std::vector<std::future<ResultT>> make_sliced_tasks(
   F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
 {
+  constexpr size_t default_max_slice_size = 4 * 1024 * 1024;
+  static auto const max_slice_size = getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_size);
+  auto const slices                = make_file_io_slices(size, max_slice_size);
   std::vector<std::future<ResultT>> slice_tasks;
-  constexpr size_t default_max_slice_bytes = 4 * 1024 * 1024;
-  static auto const max_slice_bytes =
-    getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_bytes);
-  size_t const n_slices = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_offset   = 0;
-  for (size_t t = 0; t < n_slices; ++t) {
-    DataT* ptr_slice = ptr + slice_offset;
-
-    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
-    slice_tasks.push_back(pool.submit(function, ptr_slice, slice_size, offset + slice_offset));
-
-    slice_offset += slice_size;
-  }
+  std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
+    return pool.submit(function, ptr + slice.offset, slice.size, offset + slice.offset);
+  });
   return slice_tasks;
 }
 
@@ -316,6 +309,21 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
   }
 #endif
   return nullptr;
+}
+
+std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size)
+{
+  max_slice_size      = std::max(1024ul, max_slice_size);
+  auto const n_slices = util::div_rounding_up_safe(size, max_slice_size);
+  std::vector<file_io_slice> slices;
+  slices.reserve(n_slices);
+  std::generate_n(std::back_inserter(slices), n_slices, [&, idx = 0]() mutable {
+    auto const slice_offset = idx++ * max_slice_size;
+    auto const slice_size   = std::min(size - slice_offset, max_slice_size);
+    return file_io_slice{slice_offset, slice_size};
+  });
+
+  return slices;
 }
 
 }  // namespace detail
