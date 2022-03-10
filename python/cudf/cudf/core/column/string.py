@@ -5397,10 +5397,7 @@ class StringColumn(column.ColumnBase):
         return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
-        self,
-        fill_value: Any = None,
-        method: str = None,
-        dtype: Dtype = None,
+        self, fill_value: Any = None, method: str = None, dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):
