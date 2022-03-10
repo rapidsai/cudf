@@ -31,12 +31,7 @@ from cudf.core.column import (
     column,
     string,
 )
-from cudf.core.dtypes import (
-    CategoricalDtype,
-    Decimal32Dtype,
-    Decimal64Dtype,
-    Decimal128Dtype,
-)
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -155,34 +150,26 @@ class NumericalColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         rhs = self._wrap_binop_normalization(rhs)
 
+        int_float_dtype_mapping = {
+            np.int8: np.float32,
+            np.int16: np.float32,
+            np.int32: np.float32,
+            np.int64: np.float64,
+            np.uint8: np.float32,
+            np.uint16: np.float32,
+            np.uint32: np.float64,
+            np.uint64: np.float64,
+            np.bool_: np.float32,
+        }
+
         if binop in {"truediv", "rtruediv"}:
             # Division with integer types results in a suitable float.
-            truediv_type = {
-                np.int8: np.float32,
-                np.int16: np.float32,
-                np.int32: np.float32,
-                np.int64: np.float64,
-                np.uint8: np.float32,
-                np.uint16: np.float32,
-                np.uint32: np.float64,
-                np.uint64: np.float64,
-                np.bool_: np.float32,
-            }.get(self.dtype.type)
+            truediv_type = int_float_dtype_mapping.get(self.dtype.type)
             if truediv_type is not None:
                 return self.astype(truediv_type).binary_operator(
                     binop, rhs, reflect
                 )
 
-        int_dtypes = [
-            cudf.dtype("int8"),
-            cudf.dtype("int16"),
-            cudf.dtype("int32"),
-            cudf.dtype("int64"),
-            cudf.dtype("uint8"),
-            cudf.dtype("uint16"),
-            cudf.dtype("uint32"),
-            cudf.dtype("uint64"),
-        ]
         if rhs is None:
             out_dtype = self.dtype
         else:
@@ -201,27 +188,22 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{repr(binop)} operator not supported between "
                     f"{type(self)} and {type(rhs)}"
                 )
-            if isinstance(rhs, cudf.core.column.Decimal128Column):
-                lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
-                    Decimal128Dtype(Decimal128Dtype.MAX_PRECISION, 0)
-                )
-                return lhs.binary_operator(binop, rhs)
-            elif isinstance(rhs, cudf.core.column.Decimal64Column):
-                lhs = self.as_decimal_column(
-                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
-                )
-                return lhs.binary_operator(binop, rhs)
-            elif isinstance(rhs, cudf.core.column.Decimal32Column):
-                lhs = self.as_decimal_column(
-                    Decimal32Dtype(Decimal32Dtype.MAX_PRECISION, 0)
-                )
-                return lhs.binary_operator(binop, rhs)
+            if isinstance(rhs, cudf.core.column.DecimalBaseColumn):
+                dtyp = rhs.dtype.__class__(rhs.dtype.MAX_PRECISION, 0)
+                return self.as_decimal_column(dtyp).binary_operator(binop, rhs)
+
             out_dtype = np.result_type(self.dtype, rhs.dtype)
-            if binop in ["mod", "floordiv"]:
+            if binop in {"mod", "floordiv"}:
                 tmp = self if reflect else rhs
-                if (tmp.dtype in int_dtypes) and (
-                    (np.isscalar(tmp) and (0 == tmp))
-                    or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
+                if (
+                    (tmp.dtype.type in int_float_dtype_mapping)
+                    and (tmp.dtype.type != np.bool_)
+                    and (
+                        (np.isscalar(tmp) and (0 == tmp))
+                        or (
+                            (isinstance(tmp, NumericalColumn)) and (0.0 in tmp)
+                        )
+                    )
                 ):
                     out_dtype = cudf.dtype("float64")
 
