@@ -942,63 +942,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "Only pearson correlation is currently supported"
             )
 
-        # create expanded dataframe consisting all combinations of the
-        # struct columns-pairs to be correlated
-        # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        _cols = self.grouping.values._data.to_pandas_index().tolist()
-        len_cols = len(_cols)
-
-        new_df_data = {}
-        for x, y in itertools.combinations_with_replacement(_cols, 2):
-            new_df_data[(x, y)] = cudf.DataFrame._from_data(
-                {"x": self.obj._data[x], "y": self.obj._data[y]}
-            ).to_struct()
-        new_gb = cudf.DataFrame._from_data(new_df_data).groupby(
-            by=self.grouping.keys
-        )
-
-        try:
-            gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
-        except RuntimeError as e:
-            if "Unsupported groupby reduction type-agg combination" in str(e):
-                raise TypeError(
-                    "Correlation accepts only numerical column-pairs"
-                )
-            raise
-
-        # ensure that column-pair labels are arranged in ascending order
-        cols_list = [
-            (y, x) if i > j else (x, y)
-            for j, y in enumerate(_cols)
-            for i, x in enumerate(_cols)
-        ]
-        cols_split = [
-            cols_list[i : i + len_cols]
-            for i in range(0, len(cols_list), len_cols)
-        ]
-
-        # interleave: combine the correlation results for each column-pair
-        # into a single column
-        res = cudf.DataFrame._from_data(
-            {
-                x: gb_corr.loc[:, i].interleave_columns()
-                for i, x in zip(cols_split, _cols)
-            }
-        )
-
-        # create a multiindex for the groupby correlated dataframe,
-        # to match pandas behavior
-        unsorted_idx = gb_corr.index.repeat(len_cols)
-        idx_sort_order = unsorted_idx._get_sorted_inds()
-        sorted_idx = unsorted_idx._gather(idx_sort_order)
-        if len(gb_corr):
-            # TO-DO: Should the operation below be done on the CPU instead?
-            sorted_idx._data[None] = as_column(
-                cudf.Series(_cols).tile(len(gb_corr.index))
+        def func(column_pair_groupby):
+            return column_pair_groupby.agg(
+                lambda x: x.corr(method, min_periods)
             )
-        res.index = MultiIndex._from_data(sorted_idx._data)
 
-        return res
+        return self._cov_or_corr(func, "Correlation")
 
     def cov(self, min_periods=0, ddof=1):
         """
@@ -1085,96 +1034,16 @@ class GroupBy(Serializable, Reducible, Scannable):
            val3  3.833333  12.333333  12.333333
         """
 
-        # create expanded dataframe consisting all combinations of the
-        # struct columns-pairs used in the covariance calculation
-        # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values._column_names
-        num_cols = len(column_names)
+        def func(column_pair_groupby):
+            return column_pair_groupby.agg(lambda x: x.cov(min_periods, ddof))
 
-        column_pair_structs = {}
-        for x, y in itertools.combinations_with_replacement(column_names, 2):
-            # The number of output columns is the number of input columns
-            # squared. We directly call the struct column factory here to
-            # reduce overhead and avoid copying data. Since libcudf groupby
-            # maintains a cache of aggregation requests, reusing the same
-            # column also makes use of previously cached column means and
-            # reduces kernel costs.
+        return self._cov_or_corr(func, "Covariance")
 
-            # checks if input column names are string, raise a warning if
-            # not so and cast them to strings
-            if not (isinstance(x, str) and isinstance(y, str)):
-                warnings.warn(
-                    "DataFrame contains non-string column name(s). "
-                    "Struct columns require field names to be strings. "
-                    "Non-string column names will be cast to strings "
-                    "in the result's field names."
-                )
-                x, y = str(x), str(y)
-
-            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
-                names=(x, y),
-                children=(self.obj._data[x], self.obj._data[y]),
-                size=len(self.obj),
-            )
-
-        column_pair_groupby = cudf.DataFrame._from_data(
-            column_pair_structs
-        ).groupby(by=self.grouping.keys)
-
-        try:
-            gb_cov = column_pair_groupby.agg(
-                lambda x: x.cov(min_periods, ddof)
-            )
-        except RuntimeError as e:
-            if "Unsupported groupby reduction type-agg combination" in str(e):
-                raise TypeError(
-                    "Covariance accepts only numerical column-pairs"
-                )
-            raise
-
-        # ensure that column-pair labels are arranged in ascending order
-        cols_list = [
-            (y, x) if i > j else (x, y)
-            for j, y in enumerate(column_names)
-            for i, x in enumerate(column_names)
-        ]
-        cols_split = [
-            cols_list[i : i + num_cols]
-            for i in range(0, len(cols_list), num_cols)
-        ]
-
-        def combine_columns(gb_cov, ys):
-            list_of_columns = [gb_cov._data[y] for y in ys]
-            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
-            return interleave_columns(frame)
-
-        # interleave: combine the correlation results for each column-pair
-        # into a single column
-        res = cudf.DataFrame._from_data(
-            {
-                x: combine_columns(gb_cov, ys)
-                for ys, x in zip(cols_split, column_names)
-            }
-        )
-
-        # create a multiindex for the groupby correlated dataframe,
-        # to match pandas behavior
-        unsorted_idx = gb_cov.index.repeat(num_cols)
-        idx_sort_order = unsorted_idx._get_sorted_inds()
-        sorted_idx = unsorted_idx._gather(idx_sort_order)
-        if len(gb_cov):
-            # TO-DO: Should the operation below be done on the CPU instead?
-            sorted_idx._data[None] = as_column(
-                np.tile(column_names, len(gb_cov.index))
-            )
-        res.index = MultiIndex._from_data(sorted_idx._data)
-
-        return res
-
-    def _cov_or_corr(self, min_periods=0, ddof=1):
+    def _cov_or_corr(self, func, method_name):
         """
-        internal function that calls to either corr() or cov()
-        for sort groupby computations
+        internal function that is called by either corr() or cov()
+        for sort groupby correlation and covariance computations,
+        respectively.
 
         """
         # create expanded dataframe consisting all combinations of the
@@ -1214,13 +1083,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ).groupby(by=self.grouping.keys)
 
         try:
-            gb_cov = column_pair_groupby.agg(
-                lambda x: x.cov(min_periods, ddof)
-            )
+            gb_cov_corr = func(column_pair_groupby)
         except RuntimeError as e:
             if "Unsupported groupby reduction type-agg combination" in str(e):
                 raise TypeError(
-                    "Covariance accepts only numerical column-pairs"
+                    f"{method_name} accepts only numerical column-pairs"
                 )
             raise
 
@@ -1235,8 +1102,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             for i in range(0, len(cols_list), num_cols)
         ]
 
-        def combine_columns(gb_cov, ys):
-            list_of_columns = [gb_cov._data[y] for y in ys]
+        def combine_columns(gb_cov_corr, ys):
+            list_of_columns = [gb_cov_corr._data[y] for y in ys]
             frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
             return interleave_columns(frame)
 
@@ -1244,20 +1111,20 @@ class GroupBy(Serializable, Reducible, Scannable):
         # into a single column
         res = cudf.DataFrame._from_data(
             {
-                x: combine_columns(gb_cov, ys)
+                x: combine_columns(gb_cov_corr, ys)
                 for ys, x in zip(cols_split, column_names)
             }
         )
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
-        unsorted_idx = gb_cov.index.repeat(num_cols)
+        unsorted_idx = gb_cov_corr.index.repeat(num_cols)
         idx_sort_order = unsorted_idx._get_sorted_inds()
         sorted_idx = unsorted_idx._gather(idx_sort_order)
-        if len(gb_cov):
+        if len(gb_cov_corr):
             # TO-DO: Should the operation below be done on the CPU instead?
             sorted_idx._data[None] = as_column(
-                np.tile(column_names, len(gb_cov.index))
+                np.tile(column_names, len(gb_cov_corr.index))
             )
         res.index = MultiIndex._from_data(sorted_idx._data)
 
