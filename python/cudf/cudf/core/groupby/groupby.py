@@ -1047,7 +1047,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         """
         # create expanded dataframe consisting all combinations of the
-        # struct columns-pairs used in the covariance calculation
+        # struct columns-pairs to be used in the correlation or covariance
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
         column_names = self.grouping.values._column_names
         num_cols = len(column_names)
@@ -1107,8 +1107,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
             return interleave_columns(frame)
 
-        # interleave: combine the correlation results for each column-pair
-        # into a single column
+        # interleave: combine the correlation or covariance results for each
+        # column-pair into a single column
         res = cudf.DataFrame._from_data(
             {
                 x: combine_columns(gb_cov_corr, ys)
@@ -1116,8 +1116,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             }
         )
 
-        # create a multiindex for the groupby correlated dataframe,
-        # to match pandas behavior
+        # create a multiindex for the groupby covariance or correlation
+        # dataframe, to match pandas behavior
         unsorted_idx = gb_cov_corr.index.repeat(num_cols)
         idx_sort_order = unsorted_idx._get_sorted_inds()
         sorted_idx = unsorted_idx._gather(idx_sort_order)
