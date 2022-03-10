@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include "cudf/lists/lists_column_view.hpp"
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -251,6 +252,70 @@ std::unique_ptr<scalar> nth_element(
   column_view const& col,
   size_type n,
   null_policy null_handling,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Collect input column into a (list) scalar
+ *
+ * @param col input column to collect from
+ * @param null_handling Indicates if null values will be counted while collecting.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return collected list as scalar
+ */
+std::unique_ptr<scalar> collect_list(
+  column_view const& col,
+  null_policy null_handling,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Merge a bunch of list scalars into single list scalar
+ *
+ * @param col input list column representing numbers of list scalars to be merged
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return merged list as scalar
+ */
+std::unique_ptr<scalar> merge_lists(
+  lists_column_view const& col,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Collect input column into a (list) scalar without duplicated elements
+ *
+ * @param col input column to collect from
+ * @param null_handling Indicates if null values will be counted while collecting.
+ * @param nulls_equal Indicates if null values will be considered as equal values.
+ * @param nans_equal Indicates if nan values will be considered as equal values.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return collected list with unique elements as scalar
+ */
+std::unique_ptr<scalar> collect_set(
+  column_view const& col,
+  null_policy null_handling,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Merge a bunch of list scalars into single list scalar then drop duplicated elements
+ *
+ * @param col input list column representing numbers of list scalars to be merged
+ * @param nulls_equal Indicates if null values will be considered as equal values.
+ * @param nans_equal Indicates if nan values will be considered as equal values.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return collected list with unique elements as scalar
+ */
+std::unique_ptr<scalar> merge_sets(
+  lists_column_view const& col,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

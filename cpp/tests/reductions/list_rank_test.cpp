@@ -79,7 +79,7 @@ TEST_F(ListRankScanTest, Datagen)
   data_profile table_data_profile;
   table_data_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
   table_data_profile.set_null_frequency(0);
-  auto const tbl = create_random_table({cudf::type_id::LIST}, 1, row_count{10}, table_data_profile);
+  auto const tbl = create_random_table({cudf::type_id::LIST}, row_count{10}, table_data_profile);
   cudf::test::print(tbl->get_column(0));
   auto const new_tbl = cudf::repeat(tbl->view(), 2);
   cudf::test::print(new_tbl->get_column(0));

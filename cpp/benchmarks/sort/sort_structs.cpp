@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,35 +14,26 @@
  * limitations under the License.
  */
 
-#include <cudf/sort2.cuh>
-#include <cudf/sorting.hpp>
+#include <cudf/detail/sorting.hpp>
 
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
 
-#include <benchmark/benchmark.h>
-#include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <nvbench/nvbench.cuh>
 
-template <bool stable>
-class Sort : public cudf::benchmark {
-};
+#include <random>
 
-template <bool stable>
-static void BM_sort(benchmark::State& state, bool nulls)
+void nvbench_sort_struct(nvbench::state& state)
 {
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution(0, 100);
 
-  const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
-  const cudf::size_type depth{(cudf::size_type)state.range(1)};
+  const cudf::size_type n_rows{(cudf::size_type)state.get_int64("NumRows")};
   const cudf::size_type n_cols{1};
+  const cudf::size_type depth{(cudf::size_type)state.get_int64("Depth")};
+  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
@@ -73,25 +64,17 @@ static void BM_sort(benchmark::State& state, bool nulls)
     child_cols.push_back(struct_col.release());
   }
 
-  // // Create table view
+  // Create table view
   auto input = cudf::table(std::move(child_cols));
-  // auto input = cudf::table_view({cols[0]->view()});
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
-
-    // auto result = cudf::sorted_order(input);
-    auto result = cudf::detail::experimental::sorted_order2(input);
-  }
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+    cudf::detail::sorted_order(input, {}, {}, stream_view, rmm::mr::get_current_device_resource());
+  });
 }
 
-#define SORT_BENCHMARK_DEFINE(name, stable, nulls)          \
-  BENCHMARK_TEMPLATE_DEFINE_F(Sort, name, stable)           \
-  (::benchmark::State & st) { BM_sort<stable>(st, nulls); } \
-  BENCHMARK_REGISTER_F(Sort, name)                          \
-    ->RangeMultiplier(8)                                    \
-    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                  \
-    ->UseManualTime()                                       \
-    ->Unit(benchmark::kMillisecond);
-
-SORT_BENCHMARK_DEFINE(unstable, false, true)
+NVBENCH_BENCH(nvbench_sort_struct)
+  .set_name("sort_struct")
+  .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
+  .add_int64_axis("Depth", {1, 8})
+  .add_int64_axis("Nulls", {0, 1});
