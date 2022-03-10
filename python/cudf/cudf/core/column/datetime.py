@@ -225,6 +225,8 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.datetime.round_datetime(self, freq)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
+        if isinstance(other, ColumnBase):
+            return other
         if isinstance(other, cudf.Scalar):
             return other
 

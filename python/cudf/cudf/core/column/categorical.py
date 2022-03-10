@@ -897,6 +897,8 @@ class CategoricalColumn(column.ColumnBase):
         return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
+        if isinstance(other, column.ColumnBase):
+            return other  # type: ignore
 
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()

@@ -531,9 +531,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
     def _wrap_binop_normalization(self, other):
         if other is cudf.NA:
             return cudf.Scalar(other, dtype=self.dtype)
-        elif not isinstance(other, ColumnBase):
-            return self.normalize_binop_value(other)
-        return other
+        return self.normalize_binop_value(other)
 
     def _scatter_by_slice(
         self, key: Slice, value: Union[cudf.core.scalar.Scalar, ColumnBase]

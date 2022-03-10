@@ -250,6 +250,8 @@ class NumericalColumn(NumericalBaseColumn):
     def normalize_binop_value(
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:
+        if isinstance(other, ColumnBase):
+            return other
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):

@@ -5427,6 +5427,8 @@ class StringColumn(column.ColumnBase):
         return self._find_first_and_last(value)[1]
 
     def normalize_binop_value(self, other) -> "column.ColumnBase":
+        if isinstance(other, column.ColumnBase):
+            return other
         # fastpath: gpu scalar
         if isinstance(other, cudf.Scalar) and other.dtype == "object":
             return column.as_column(other, length=len(self))

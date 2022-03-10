@@ -144,6 +144,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result._with_type_metadata(self.dtype)
 
     def normalize_binop_value(self, other):
+        if isinstance(other, ColumnBase):
+            return other
         if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
             return cudf.Scalar(Decimal(other))
         elif isinstance(other, cudf.Scalar) and isinstance(

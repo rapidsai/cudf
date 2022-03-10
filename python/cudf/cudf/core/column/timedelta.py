@@ -257,6 +257,8 @@ class TimeDeltaColumn(column.ColumnBase):
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def normalize_binop_value(self, other) -> BinaryOperand:
+        if isinstance(other, ColumnBase):
+            return other
         if isinstance(other, cudf.Scalar):
             return other
 

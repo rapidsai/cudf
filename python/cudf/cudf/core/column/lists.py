@@ -254,6 +254,9 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
+    def normalize_binop_value(self, other):
+        return other
+
     def _with_type_metadata(
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
