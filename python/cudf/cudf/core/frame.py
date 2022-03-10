@@ -24,7 +24,6 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -52,6 +51,7 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 T = TypeVar("T", bound="Frame")
 
@@ -185,7 +185,7 @@ class Frame(BinaryOperand, Scannable):
         return cls_deserialize._from_data(dict(zip(column_names, columns)))
 
     @classmethod
-    @annotate("FRAME_FROM_DATA", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _from_data(
         cls,
         data: MutableMapping,
@@ -196,11 +196,11 @@ class Frame(BinaryOperand, Scannable):
         return obj
 
     @classmethod
-    @annotate("FRAME_FROM_COLUMNS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _from_columns(
         cls,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` object from a list of columns.
@@ -227,13 +227,11 @@ class Frame(BinaryOperand, Scannable):
 
         return cls._from_data(data, index)
 
-    @annotate(
-        "FRAME_FROM_COLUMNS_LIKE_SELF", color="green", domain="cudf_python"
-    )
+    @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
@@ -427,7 +425,7 @@ class Frame(BinaryOperand, Scannable):
     def __len__(self):
         return self._num_rows
 
-    @annotate("FRAME_COPY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def copy(self: T, deep: bool = True) -> T:
         """
         Make a copy of this object's indices and data.
@@ -513,6 +511,7 @@ class Frame(BinaryOperand, Scannable):
 
         return new_frame
 
+    @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
         result = {}
         for col_name, col in self._data.items():
@@ -524,7 +523,7 @@ class Frame(BinaryOperand, Scannable):
 
         return result
 
-    @annotate("FRAME_EQUALS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def equals(self, other, **kwargs):
         """
         Test whether two objects contain the same elements.
@@ -607,9 +606,7 @@ class Frame(BinaryOperand, Scannable):
         else:
             return self._index.equals(other._index)
 
-    @annotate(
-        "FRAME_GET_COLUMNS_BY_LABEL", color="green", domain="cudf_python"
-    )
+    @_cudf_nvtx_annotate
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
@@ -617,9 +614,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return self._data.select_by_label(labels)
 
-    @annotate(
-        "FRAME_GET_COLUMNS_BY_INDEX", color="green", domain="cudf_python"
-    )
+    @_cudf_nvtx_annotate
     def _get_columns_by_index(self, indices):
         """
         Returns columns of the Frame specified by `labels`
@@ -642,15 +637,6 @@ class Frame(BinaryOperand, Scannable):
             no index and None as the name to use this method"""
 
         return self._data[None].copy(deep=False)
-
-    @annotate("FRAME_EMPTY_LIKE", color="green", domain="cudf_python")
-    def _empty_like(self, keep_index=True):
-        result = self.__class__._from_data(
-            *libcudf.copying.table_empty_like(self, keep_index)
-        )
-
-        result._copy_type_metadata(self, include_index=keep_index)
-        return result
 
     @property
     def values(self):
@@ -739,7 +725,7 @@ class Frame(BinaryOperand, Scannable):
     # particular, we need to benchmark how much of the overhead is coming from
     # (potentially unavoidable) local copies in to_cupy and how much comes from
     # inefficiencies in the implementation.
-    @annotate("FRAME_TO_CUPY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -774,7 +760,7 @@ class Frame(BinaryOperand, Scannable):
             na_value,
         )
 
-    @annotate("FRAME_TO_NUMPY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def to_numpy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -809,7 +795,7 @@ class Frame(BinaryOperand, Scannable):
             (lambda col: col.values_host), np.empty, dtype, na_value
         )
 
-    @annotate("FRAME_CLIP", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
         """
         Trim values at input threshold(s).
@@ -937,7 +923,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._mimic_inplace(output, inplace=inplace)
 
-    @annotate("FRAME_WHERE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is False.
@@ -996,7 +982,7 @@ class Frame(BinaryOperand, Scannable):
             frame=self, cond=cond, other=other, inplace=inplace
         )
 
-    @annotate("FRAME_MASK", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def mask(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is True.
@@ -1058,7 +1044,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    @annotate("FRAME_PIPE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def pipe(self, func, *args, **kwargs):
         """
         Apply ``func(self, *args, **kwargs)``.
@@ -1106,7 +1092,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def scatter_by_map(
         self, map_index, map_size=None, keep_index=True, **kwargs
     ):
@@ -1189,7 +1175,7 @@ class Frame(BinaryOperand, Scannable):
 
         return result
 
-    @annotate("FRAME_FILLNA", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
@@ -1344,14 +1330,14 @@ class Frame(BinaryOperand, Scannable):
             inplace=inplace,
         )
 
-    @annotate("FRAME_DROP_COLUMN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _drop_column(self, name):
         """Drop a column by *name*"""
         if name not in self._data:
             raise KeyError(f"column '{name}' does not exist")
         del self._data[name]
 
-    @annotate("FRAME_DROPNA_COLUMNS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
         Drop columns containing nulls
@@ -1383,7 +1369,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self[out_cols]
 
-    @annotate("FRAME_INTERPOLATE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def interpolate(
         self,
         method="linear",
@@ -1453,7 +1439,7 @@ class Frame(BinaryOperand, Scannable):
             else result._gather(perm_sort.argsort())
         )
 
-    @annotate("FRAME_QUANTILES", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _quantiles(
         self,
         q,
@@ -1486,7 +1472,7 @@ class Frame(BinaryOperand, Scannable):
         result._copy_type_metadata(self)
         return result
 
-    @annotate("FRAME_RANK", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rank(
         self,
         axis=0,
@@ -1563,7 +1549,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._from_data(data, index).astype(np.float64)
 
-    @annotate("FRAME_REPEAT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def repeat(self, repeats, axis=None):
         """Repeats elements consecutively.
 
@@ -1653,7 +1639,7 @@ class Frame(BinaryOperand, Scannable):
         result._copy_type_metadata(self)
         return result
 
-    @annotate("FRAME_SHIFT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
         axis = self._get_axis_from_axis_arg(axis)
@@ -1670,7 +1656,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @classmethod
-    @annotate("FRAME_FROM_ARROW", color="orange", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def from_arrow(cls, data):
         """Convert from PyArrow Table to Frame
 
@@ -1810,7 +1796,7 @@ class Frame(BinaryOperand, Scannable):
 
         return cls._from_data({name: result[name] for name in column_names})
 
-    @annotate("FRAME_TO_ARROW", color="orange", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def to_arrow(self):
         """
         Convert to arrow Table
@@ -1846,7 +1832,7 @@ class Frame(BinaryOperand, Scannable):
             if name in set(column_names)
         ]
 
-    @annotate("FRAME_REPLACE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def replace(
         self,
         to_replace=None,
@@ -2133,7 +2119,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self
 
-    @annotate("FRAME_ISNULL", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def isnull(self):
         """
         Identify missing values.
@@ -2215,7 +2201,7 @@ class Frame(BinaryOperand, Scannable):
     # Alias for isnull
     isna = isnull
 
-    @annotate("FRAME_NOTNULL", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def notnull(self):
         """
         Identify non-missing values.
@@ -2297,7 +2283,7 @@ class Frame(BinaryOperand, Scannable):
     # Alias for notnull
     notna = notnull
 
-    @annotate("FRAME_INTERLEAVE_COLUMNS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def interleave_columns(self):
         """
         Interleave Series columns of a table into a single column.
@@ -2337,7 +2323,7 @@ class Frame(BinaryOperand, Scannable):
 
         return result
 
-    @annotate("FRAME_TILE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def tile(self, count):
         """
         Repeats the rows from `self` DataFrame `count` times to form a
@@ -2367,7 +2353,7 @@ class Frame(BinaryOperand, Scannable):
         result._copy_type_metadata(self)
         return result
 
-    @annotate("FRAME_SEARCHSORTED", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"
     ):
@@ -2452,7 +2438,7 @@ class Frame(BinaryOperand, Scannable):
         else:
             return result
 
-    @annotate("FRAME_ARGSORT", color="yellow", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def argsort(
         self,
         by=None,
@@ -2555,7 +2541,7 @@ class Frame(BinaryOperand, Scannable):
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
-    @annotate("FRAME_SIN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def sin(self):
         """
         Get Trigonometric sine, element-wise.
@@ -2622,7 +2608,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("sin")
 
-    @annotate("FRAME_COS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def cos(self):
         """
         Get Trigonometric cosine, element-wise.
@@ -2689,7 +2675,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("cos")
 
-    @annotate("FRAME_TAN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def tan(self):
         """
         Get Trigonometric tangent, element-wise.
@@ -2756,7 +2742,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("tan")
 
-    @annotate("FRAME_ASIN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def asin(self):
         """
         Get Trigonometric inverse sine, element-wise.
@@ -2812,7 +2798,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("asin")
 
-    @annotate("FRAME_ACOS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def acos(self):
         """
         Get Trigonometric inverse cosine, element-wise.
@@ -2876,7 +2862,7 @@ class Frame(BinaryOperand, Scannable):
         result = result.mask((result < 0) | (result > np.pi + 1))
         return result
 
-    @annotate("FRAME_ATAN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def atan(self):
         """
         Get Trigonometric inverse tangent, element-wise.
@@ -2942,7 +2928,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("atan")
 
-    @annotate("FRAME_EXP", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def exp(self):
         """
         Get the exponential of all elements, element-wise.
@@ -3010,7 +2996,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("exp")
 
-    @annotate("FRAME_LOG", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def log(self):
         """
         Get the natural logarithm of all elements, element-wise.
@@ -3077,7 +3063,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("log")
 
-    @annotate("FRAME_SQRT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def sqrt(self):
         """
         Get the non-negative square-root of all elements, element-wise.
@@ -3138,7 +3124,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("sqrt")
 
-    @annotate("FRAME_ABS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def abs(self):
         """
         Return a Series/DataFrame with absolute numeric value of each element.
@@ -3165,7 +3151,7 @@ class Frame(BinaryOperand, Scannable):
         return self._unaryop("abs")
 
     # Rounding
-    @annotate("FRAME_CEIL", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def ceil(self):
         """
         Rounds each value upward to the smallest integral value not less
@@ -3202,7 +3188,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("ceil")
 
-    @annotate("FRAME_FLOOR", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def floor(self):
         """Rounds each value downward to the largest integral value not greater
         than the original.
@@ -3242,7 +3228,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._unaryop("floor")
 
-    @annotate("FRAME_SCALE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def scale(self):
         """
         Scale values to [0, 1] in float64
@@ -3277,7 +3263,7 @@ class Frame(BinaryOperand, Scannable):
         scaled._index = self._index.copy(deep=False)
         return scaled
 
-    @annotate("FRAME_INTERNAL_MERGE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _merge(
         self,
         right,
@@ -3321,7 +3307,7 @@ class Frame(BinaryOperand, Scannable):
             suffixes=suffixes,
         ).perform_merge()
 
-    @annotate("FRAME_IS_SORTED", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _is_sorted(self, ascending=None, null_position=None):
         """
         Returns a boolean indicating whether the data of the Frame are sorted
@@ -3352,14 +3338,22 @@ class Frame(BinaryOperand, Scannable):
             self, ascending=ascending, null_position=null_position
         )
 
-    @annotate("FRAME_SPLIT", color="green", domain="cudf_python")
-    def _split(self, splits, keep_index=True):
-        results = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-        return [self.__class__._from_data(*result) for result in results]
+    @_cudf_nvtx_annotate
+    def _split(self, splits):
+        """Split a frame with split points in ``splits``. Returns a list of
+        Frames of length `len(splits) + 1`.
+        """
+        return [
+            self._from_columns_like_self(
+                libcudf.copying.columns_split([*self._data.columns], splits)[
+                    split_idx
+                ],
+                self._column_names,
+            )
+            for split_idx in range(len(splits) + 1)
+        ]
 
-    @annotate("FRAME_ENCODE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _encode(self):
         data, index, indices = libcudf.transform.table_encode(self)
         for name, col in data.items():
@@ -3367,7 +3361,7 @@ class Frame(BinaryOperand, Scannable):
         keys = self.__class__._from_data(data, index)
         return keys, indices
 
-    @annotate("FRAME_UNARYOP", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
         return self.__class__._from_data(
@@ -3399,7 +3393,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @classmethod
-    @annotate("FRAME_COLWISE_BINOP", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _colwise_binop(
         cls,
         operands: Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
@@ -3637,7 +3631,7 @@ class Frame(BinaryOperand, Scannable):
                 data[i][name] = as_column(out).set_mask(mask)
         return data
 
-    @annotate("FRAME_DOT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def dot(self, other, reflect=False):
         """
         Get dot product of frame and other, (binary operator `dot`).
@@ -3739,7 +3733,7 @@ class Frame(BinaryOperand, Scannable):
             f"Reductions are not supported for objects of type {type(self)}."
         )
 
-    @annotate("FRAME_MIN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def min(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
     ):
@@ -3785,7 +3779,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_MAX", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def max(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
     ):
@@ -3831,7 +3825,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_SUM", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def sum(
         self,
         axis=None,
@@ -3890,7 +3884,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_PRODUCT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def product(
         self,
         axis=None,
@@ -3955,7 +3949,7 @@ class Frame(BinaryOperand, Scannable):
     # Alias for pandas compatibility.
     prod = product
 
-    @annotate("FRAME_MEAN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def mean(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
@@ -4000,7 +3994,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_STD", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def std(
         self,
         axis=None,
@@ -4057,7 +4051,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_VAR", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def var(
         self,
         axis=None,
@@ -4113,7 +4107,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_KURTOSIS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def kurtosis(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
@@ -4182,7 +4176,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_SKEW", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def skew(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
@@ -4240,7 +4234,7 @@ class Frame(BinaryOperand, Scannable):
             **kwargs,
         )
 
-    @annotate("FRAME_ALL", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def all(self, axis=0, skipna=True, level=None, **kwargs):
         """
         Return whether all elements are True in DataFrame.
@@ -4276,7 +4270,7 @@ class Frame(BinaryOperand, Scannable):
             "all", axis=axis, skipna=skipna, level=level, **kwargs,
         )
 
-    @annotate("FRAME_ANY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def any(self, axis=0, skipna=True, level=None, **kwargs):
         """
         Return whether any elements is True in DataFrame.
@@ -4312,7 +4306,7 @@ class Frame(BinaryOperand, Scannable):
             "any", axis=axis, skipna=skipna, level=level, **kwargs,
         )
 
-    @annotate("FRAME_SUM_OF_SQUARES", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def sum_of_squares(self, dtype=None):
         """Return the sum of squares of values.
 
@@ -4336,7 +4330,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return self._reduce("sum_of_squares", dtype=dtype)
 
-    @annotate("FRAME_MEDIAN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def median(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
@@ -4382,7 +4376,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     # Scans
-    @annotate("FRAME_SCAN", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _scan(self, op, axis=None, skipna=True):
         """
         Return {op_name} of the {cls}.
@@ -4464,7 +4458,7 @@ class Frame(BinaryOperand, Scannable):
         # for Index._from_data and simplify.
         return self._from_data(results, index=self._index)
 
-    @annotate("FRAME_TO_JSON", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """{docstring}"""
@@ -4473,21 +4467,21 @@ class Frame(BinaryOperand, Scannable):
             self, path_or_buf=path_or_buf, *args, **kwargs
         )
 
-    @annotate("FRAME_TO_HDF", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
         """{docstring}"""
 
         cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
-    @annotate("FRAME_TO_DLPACK", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
 
         return cudf.io.dlpack.to_dlpack(self)
 
-    @annotate("FRAME_TO_STRING", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def to_string(self):
         """
         Convert to string
@@ -4513,15 +4507,15 @@ class Frame(BinaryOperand, Scannable):
     def __str__(self):
         return self.to_string()
 
-    @annotate("FRAME_DEEP_COPY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def __deepcopy__(self, memo):
         return self.copy(deep=True)
 
-    @annotate("FRAME_COPY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def __copy__(self):
         return self.copy(deep=False)
 
-    @annotate("FRAME_HEAD", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def head(self, n=5):
         """
         Return the first `n` rows.
@@ -4605,7 +4599,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return self.iloc[:n]
 
-    @annotate("FRAME_TAIL", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def tail(self, n=5):
         """
         Returns the last n rows as a new DataFrame or Series
@@ -4637,7 +4631,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self.iloc[-n:]
 
-    @annotate("FRAME_ROLLING", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     @copy_docstring(Rolling)
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
@@ -4651,7 +4645,7 @@ class Frame(BinaryOperand, Scannable):
             win_type=win_type,
         )
 
-    @annotate("FRAME_NANS_TO_NULLS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
@@ -4706,7 +4700,7 @@ class Frame(BinaryOperand, Scannable):
                 result_data[name] = col.copy()
         return self._from_data(result_data, self._index)
 
-    @annotate("FRAME_INVERT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data(
@@ -4717,7 +4711,7 @@ class Frame(BinaryOperand, Scannable):
             self._index,
         )
 
-    @annotate("FRAME_ADD", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def add(self, other, axis, level=None, fill_value=None):
         """
         Get Addition of dataframe or series and other, element-wise (binary
@@ -4788,7 +4782,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__add__", fill_value)
 
-    @annotate("FRAME_RADD", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def radd(self, other, axis, level=None, fill_value=None):
         """
         Get Addition of dataframe or series and other, element-wise (binary
@@ -4868,7 +4862,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__radd__", fill_value)
 
-    @annotate("FRAME_SUBTRACT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def subtract(self, other, axis, level=None, fill_value=None):
         """
         Get Subtraction of dataframe or series and other, element-wise (binary
@@ -4951,7 +4945,7 @@ class Frame(BinaryOperand, Scannable):
 
     sub = subtract
 
-    @annotate("FRAME_RSUB", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rsub(self, other, axis, level=None, fill_value=None):
         """
         Get Subtraction of dataframe or series and other, element-wise (binary
@@ -5035,7 +5029,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__rsub__", fill_value)
 
-    @annotate("FRAME_MULTIPLY", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def multiply(self, other, axis, level=None, fill_value=None):
         """
         Get Multiplication of dataframe or series and other, element-wise
@@ -5120,7 +5114,7 @@ class Frame(BinaryOperand, Scannable):
 
     mul = multiply
 
-    @annotate("FRAME_RMUL", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rmul(self, other, axis, level=None, fill_value=None):
         """
         Get Multiplication of dataframe or series and other, element-wise
@@ -5205,7 +5199,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__rmul__", fill_value)
 
-    @annotate("FRAME_MOD", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def mod(self, other, axis, level=None, fill_value=None):
         """
         Get Modulo division of dataframe or series and other, element-wise
@@ -5276,7 +5270,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__mod__", fill_value)
 
-    @annotate("FRAME_RMOD", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rmod(self, other, axis, level=None, fill_value=None):
         """
         Get Modulo division of dataframe or series and other, element-wise
@@ -5359,7 +5353,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__rmod__", fill_value)
 
-    @annotate("FRAME_POW", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def pow(self, other, axis, level=None, fill_value=None):
         """
         Get Exponential power of dataframe series and other, element-wise
@@ -5439,7 +5433,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__pow__", fill_value)
 
-    @annotate("FRAME_RPOW", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rpow(self, other, axis, level=None, fill_value=None):
         """
         Get Exponential power of dataframe or series and other, element-wise
@@ -5519,7 +5513,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__rpow__", fill_value)
 
-    @annotate("FRAME_FLOORDIV", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def floordiv(self, other, axis, level=None, fill_value=None):
         """
         Get Integer division of dataframe or series and other, element-wise
@@ -5599,7 +5593,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__floordiv__", fill_value)
 
-    @annotate("FRAME_RFLOORDIV", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rfloordiv(self, other, axis, level=None, fill_value=None):
         """
         Get Integer division of dataframe or series and other, element-wise
@@ -5696,7 +5690,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._binaryop(other, "__rfloordiv__", fill_value)
 
-    @annotate("FRAME_TRUEDIV", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def truediv(self, other, axis, level=None, fill_value=None):
         """
         Get Floating division of dataframe or series and other, element-wise
@@ -5785,7 +5779,7 @@ class Frame(BinaryOperand, Scannable):
     div = truediv
     divide = truediv
 
-    @annotate("FRAME_RTRUEDIV", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def rtruediv(self, other, axis, level=None, fill_value=None):
         """
         Get Floating division of dataframe or series and other, element-wise
@@ -5878,7 +5872,7 @@ class Frame(BinaryOperand, Scannable):
     # Alias for rtruediv
     rdiv = rtruediv
 
-    @annotate("FRAME_EQ", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def eq(self, other, axis="columns", level=None, fill_value=None):
         """Equal to, element-wise (binary operator eq).
 
@@ -5954,7 +5948,7 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
 
-    @annotate("FRAME_NE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def ne(self, other, axis="columns", level=None, fill_value=None):
         """Not equal to, element-wise (binary operator ne).
 
@@ -6030,7 +6024,7 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
 
-    @annotate("FRAME_LT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def lt(self, other, axis="columns", level=None, fill_value=None):
         """Less than, element-wise (binary operator lt).
 
@@ -6106,7 +6100,7 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
 
-    @annotate("FRAME_LE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def le(self, other, axis="columns", level=None, fill_value=None):
         """Less than or equal, element-wise (binary operator le).
 
@@ -6182,7 +6176,7 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
 
-    @annotate("FRAME_GT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def gt(self, other, axis="columns", level=None, fill_value=None):
         """Greater than, element-wise (binary operator gt).
 
@@ -6258,7 +6252,7 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
 
-    @annotate("FRAME_GE", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def ge(self, other, axis="columns", level=None, fill_value=None):
         """Greater than or equal, element-wise (binary operator ge).
 
@@ -6357,11 +6351,7 @@ class Frame(BinaryOperand, Scannable):
         }
 
 
-@annotate(
-    "FRAME_GET_REPLACEMENT_VALUES_FOR_COLUMNS",
-    color="green",
-    domain="cudf_python",
-)
+@_cudf_nvtx_annotate
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
 ) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
@@ -6526,7 +6516,7 @@ def _is_series(obj):
     return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
 
 
-@annotate("FRAME_DROP_ROWS_BY_LABELS", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _drop_rows_by_labels(
     obj: DataFrameOrSeries,
     labels: Union[ColumnLike, abc.Iterable, str],
