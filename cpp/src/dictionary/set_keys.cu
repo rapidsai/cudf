@@ -119,9 +119,9 @@ std::unique_ptr<column> set_keys(
   auto keys = dictionary_column.keys();
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
-  // copy the keys -- use unordered_drop_duplicates to make sure they are unique, then
+  // copy the keys -- use cudf::distinct to make sure they are unique, then
   // sort the results.
-  auto unique_keys = cudf::detail::unordered_drop_duplicates(
+  auto unique_keys = cudf::detail::distinct(
     table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
   auto sorted_keys = cudf::detail::sort(unique_keys->view(),
                                         std::vector<order>{order::ASCENDING},

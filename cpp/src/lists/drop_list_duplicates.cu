@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <stream_compaction/drop_duplicates.cuh>
+#include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>

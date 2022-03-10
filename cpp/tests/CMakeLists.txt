@@ -316,9 +316,11 @@ ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/distinct_count_tests.cpp
+  stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
-  stream_compaction/drop_duplicates_tests.cpp
+  stream_compaction/unique_count_tests.cpp
+  stream_compaction/unique_tests.cpp
 )
 
 # ##################################################################################################

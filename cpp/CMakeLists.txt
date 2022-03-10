@@ -400,10 +400,12 @@ add_library(
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/stream_compaction/apply_boolean_mask.cu
+  src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/drop_duplicates.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/unique.cu
+  src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu

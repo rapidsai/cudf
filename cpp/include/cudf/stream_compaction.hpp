@@ -234,7 +234,7 @@ enum class duplicate_keep_option {
  *
  * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`.
  */
-std::unique_ptr<table> drop_duplicates(
+std::unique_ptr<table> unique(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
@@ -242,7 +242,7 @@ std::unique_ptr<table> drop_duplicates(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a new table without duplicate rows with hash-based algorithms.
+ * @brief Create a new table without duplicate rows.
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
  * row of `keys` columns is unique. If duplicate rows are present, it is unspecified which
@@ -259,7 +259,7 @@ std::unique_ptr<table> drop_duplicates(
  *
  * @return Table with unique rows in an unspecified order.
  */
-std::unique_ptr<table> unordered_drop_duplicates(
+std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
   null_equality nulls_equal           = null_equality::EQUAL,
@@ -280,9 +280,9 @@ std::unique_ptr<table> unordered_drop_duplicates(
  *
  * @return number of distinct consecutive groups in the column
  */
-cudf::size_type distinct_count(column_view const& input,
-                               null_policy null_handling,
-                               nan_policy nan_handling);
+cudf::size_type unique_count(column_view const& input,
+                             null_policy null_handling,
+                             nan_policy nan_handling);
 
 /**
  * @brief Count the number of consecutive groups of equivalent elements in a table.
@@ -293,8 +293,8 @@ cudf::size_type distinct_count(column_view const& input,
  *
  * @return number of distinct consecutive groups in the table
  */
-cudf::size_type distinct_count(table_view const& input,
-                               null_equality nulls_equal = null_equality::EQUAL);
+cudf::size_type unique_count(table_view const& input,
+                             null_equality nulls_equal = null_equality::EQUAL);
 
 /**
  * @brief Count the unique elements in the column_view.
@@ -316,9 +316,9 @@ cudf::size_type distinct_count(table_view const& input,
  *
  * @return number of unique elements
  */
-cudf::size_type unordered_distinct_count(column_view const& input,
-                                         null_policy null_handling,
-                                         nan_policy nan_handling);
+cudf::size_type distinct_count(column_view const& input,
+                               null_policy null_handling,
+                               nan_policy nan_handling);
 
 /**
  * @brief Count the unique rows in a table.
@@ -329,8 +329,8 @@ cudf::size_type unordered_distinct_count(column_view const& input,
  *
  * @return number of unique rows in the table
  */
-cudf::size_type unordered_distinct_count(table_view const& input,
-                                         null_equality nulls_equal = null_equality::EQUAL);
+cudf::size_type distinct_count(table_view const& input,
+                               null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
 }  // namespace cudf
