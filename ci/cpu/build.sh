@@ -110,6 +110,8 @@ if [ "$BUILD_CUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for cudf"
   gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
+  gpuci_mamba_retry install conda-forge::dask>=2022.02.1 conda-forge::distributed>=2022.02.1 --force-reinstall
+  conda list
   gpuci_logger "Build conda pkg for dask-cudf"
   gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
