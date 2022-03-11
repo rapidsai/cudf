@@ -356,12 +356,13 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
+   * Behavior is undefined if called with incomparable column types.
    *
+   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
@@ -382,8 +383,6 @@ class row_lexicographic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
-                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**
