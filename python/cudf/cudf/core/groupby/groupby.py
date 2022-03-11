@@ -277,8 +277,9 @@ class GroupBy(Serializable, Reducible):
             grouped_key_cols,
             included_aggregations,
         ) = self._groupby.aggregate(columns, normalized_aggs)
-        grouped_key = cudf.core.index._index_from_data(
-            dict(zip(self.grouping.keys._column_names, grouped_key_cols))
+
+        result_index = self.grouping.keys._from_columns_like_self(
+            grouped_key_cols,
         )
 
         multilevel = _is_multi_agg(func)
@@ -297,34 +298,17 @@ class GroupBy(Serializable, Reducible):
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
-        result = cudf.DataFrame._from_data(data, index=grouped_key)
+        result = cudf.DataFrame._from_data(data, index=result_index)
 
         if self._sort:
             result = result.sort_index()
 
+        if not self._as_index:
+            result = result.reset_index()
+
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
-
-        # set index names to be group key names
-        if len(result):
-            result.index.names = self.grouping.names
-
-        # copy categorical information from keys to the result index:
-        # TODO: Why is this needed?
-        result.index._copy_type_metadata(self.grouping.keys)
-        result._index = cudf.Index(result._index)
-
-        # TODO: optimize this part, construct the result list of columns
-        # depending on the _as_index column
-        if not self._as_index:
-            for col_name in reversed(self.grouping._named_columns):
-                result._insert(
-                    0,
-                    col_name,
-                    result.index.get_level_values(col_name)._values,
-                )
-            result.index = cudf.core.index.RangeIndex(len(result))
 
         return result
 
@@ -1718,7 +1702,6 @@ class _Grouping(Serializable):
     @property
     def keys(self):
         """Return grouping key columns as index"""
-        # TODO: return just a list of columns
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
@@ -1742,7 +1725,6 @@ class _Grouping(Serializable):
 
         This is mainly used in transform-like operations.
         """
-        # TODO: return just a list of columns, not frame?
         # If the key columns are in `obj`, filter them out
         value_column_names = [
             x for x in self._obj._data.names if x not in self._named_columns
