@@ -52,10 +52,7 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
   });
 }
 
-using data_type   = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
-using keep_option = nvbench::enum_type_list<cudf::duplicate_keep_option::KEEP_FIRST,
-                                            cudf::duplicate_keep_option::KEEP_LAST,
-                                            cudf::duplicate_keep_option::KEEP_NONE>;
+using data_type = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
 
 NVBENCH_BENCH_TYPES(nvbench_distinct, NVBENCH_TYPE_AXES(data_type))
   .set_name("distinct")
