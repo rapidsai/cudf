@@ -14,35 +14,36 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/groupby/group_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/detail/iterator.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 class Groupby : public cudf::benchmark {
 };
 
 void BM_group_shift(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
-
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const int num_groups = 100;
 
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [](cudf::size_type row) { return random_int(0, num_groups); });
+  data_profile profile;
+  profile.set_null_frequency(0.01);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<int64_t>(
+    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, num_groups);
 
-  wrapper keys(data_it, data_it + column_size);
-  wrapper vals(data_it, data_it + column_size);
+  auto keys_table =
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
+  auto vals_table =
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
 
-  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+  cudf::groupby::groupby gb_obj(*keys_table);
 
   std::vector<cudf::size_type> offsets{
     static_cast<cudf::size_type>(column_size / float(num_groups) * 0.5)};  // forward shift half way
@@ -53,7 +54,7 @@ void BM_group_shift(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = gb_obj.shift(cudf::table_view{{vals}}, offsets, {*fill_value});
+    auto result = gb_obj.shift(*vals_table, offsets, {*fill_value});
   }
 }
 

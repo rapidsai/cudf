@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,6 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/filling.hpp>
-#include <cudf/null_mask.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-
-#include <random>
-
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
 
 class Repeat : public cudf::benchmark {
 };
@@ -48,21 +37,13 @@ void BM_repeat(benchmark::State& state)
   auto input = cudf::table_view(*input_table);
 
   // repeat counts
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 3);
-
-  std::vector<cudf::size_type> host_repeat_count(n_rows);
-  std::generate(
-    host_repeat_count.begin(), host_repeat_count.end(), [&] { return distribution(generator); });
-
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> repeat_count(host_repeat_count.begin(),
-                                                                       host_repeat_count.end());
-
-  // Create column views
-  auto const column_views = std::vector<cudf::column_view>(columns.begin(), columns.end());
-
-  // Create table view
-  auto input = cudf::table_view(column_views);
+  using sizeT = cudf::size_type;
+  data_profile profile;
+  profile.set_null_frequency(-1);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<sizeT>(cudf::type_to_id<sizeT>(), distribution_id::UNIFORM, 0, 3);
+  auto repeat_table = create_random_table({cudf::type_to_id<sizeT>()}, row_count{n_rows}, profile);
+  cudf::column_view repeat_count{repeat_table->get_column(0)};
 
   // warm up
   auto output = cudf::repeat(input, repeat_count);

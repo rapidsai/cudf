@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/groupby/group_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -22,32 +23,27 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
-
-#include <memory>
 
 class Groupby : public cudf::benchmark {
 };
 
 void BM_basic_no_requests(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
-
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return random_int(0, 100); });
-
-  wrapper keys(data_it, data_it + column_size);
-  wrapper vals(data_it, data_it + column_size);
+  data_profile profile;
+  profile.set_null_frequency(-1);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<int64_t>(
+    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
+  auto keys_table =
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
 
   std::vector<cudf::groupby::aggregation_request> requests;
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+    cudf::groupby::groupby gb_obj(*keys_table);
     auto result = gb_obj.aggregate(requests);
   }
 }
@@ -67,21 +63,18 @@ BENCHMARK_REGISTER_F(Groupby, BasicNoRequest)
 
 void BM_pre_sorted_no_requests(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
-
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return random_int(0, 100); });
-  auto valid_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return random_int(0, 100) < 90; });
+  data_profile profile;
+  profile.set_null_frequency(-1);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<int64_t>(
+    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
+  auto keys_table =
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
 
-  wrapper keys(data_it, data_it + column_size);
-  wrapper vals(data_it, data_it + column_size, valid_it);
-
-  auto keys_table  = cudf::table_view({keys});
-  auto sort_order  = cudf::sorted_order(keys_table);
-  auto sorted_keys = cudf::gather(keys_table, *sort_order);
+  auto sort_order  = cudf::sorted_order(*keys_table);
+  auto sorted_keys = cudf::gather(*keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
   std::vector<cudf::groupby::aggregation_request> requests;

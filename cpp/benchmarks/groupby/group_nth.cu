@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/groupby/group_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -22,31 +23,28 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
-
-#include <memory>
 
 class Groupby : public cudf::benchmark {
 };
 
 void BM_pre_sorted_nth(benchmark::State& state)
 {
-  using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
-
   // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return random_int(0, 100); });
+  data_profile profile;
+  profile.set_null_frequency(-1);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<int64_t>(
+    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, 100);
+  auto keys_table =
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
+  auto vals_table =
+    create_random_table({cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
 
-  wrapper keys(data_it, data_it + column_size);
-  wrapper vals(data_it, data_it + column_size);
-
-  auto keys_table  = cudf::table_view({keys});
-  auto sort_order  = cudf::sorted_order(keys_table);
-  auto sorted_keys = cudf::gather(keys_table, *sort_order);
+  cudf::column_view vals(vals_table->get_column(0));
+  auto sort_order  = cudf::sorted_order(*keys_table);
+  auto sorted_keys = cudf::gather(*keys_table, *sort_order);
   // No need to sort values using sort_order because they were generated randomly
 
   cudf::groupby::groupby gb_obj(*sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/column/column_view.hpp"
 #include <cudf/sorting.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -32,22 +33,16 @@ class Rank : public cudf::benchmark {
 
 static void BM_rank(benchmark::State& state, bool nulls)
 {
-  using Type           = int;
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
-  std::default_random_engine generator;
-  std::uniform_int_distribution<int> distribution(0, 100);
-
+  using Type = int;
   const cudf::size_type n_rows{(cudf::size_type)state.range(0)};
 
   // Create columns with values in the range [0,100)
-  column_wrapper input = [&, n_rows]() {
-    auto elements = cudf::detail::make_counting_transform_iterator(
-      0, [&](auto row) { return distribution(generator); });
-    if (!nulls) return column_wrapper(elements, elements + n_rows);
-    auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 100 == 0 ? false : true; });
-    return column_wrapper(elements, elements + n_rows, valids);
-  }();
+  data_profile profile;
+  profile.set_null_frequency(nulls ? 0.01 : -0.01);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
+  auto keys_table = create_random_table({cudf::type_to_id<Type>()}, row_count{n_rows}, profile);
+  cudf::column_view input{keys_table->get_column(0)};
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
