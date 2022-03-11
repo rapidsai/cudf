@@ -248,7 +248,7 @@ class DatetimeColumn(column.ColumnBase):
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
-            if other_time_unit not in ("s", "ms", "ns", "us"):
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
                 other = other.astype("timedelta64[s]")
 
             if np.isnat(other):
@@ -391,9 +391,10 @@ class DatetimeColumn(column.ColumnBase):
         rhs = self._wrap_binop_normalization(rhs)
         if isinstance(rhs, cudf.DateOffset):
             return rhs._datetime_binop(self, op, reflect=reflect)
+
         lhs: Union[ScalarLike, ColumnBase] = self
-        if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = cudf.dtype(np.bool_)  # type: Dtype
+        if op in {"eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"}:
+            out_dtype: Dtype = cudf.dtype(np.bool_)
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs
@@ -417,8 +418,7 @@ class DatetimeColumn(column.ColumnBase):
                 f" the operation {op}"
             )
 
-        if reflect:
-            lhs, rhs = rhs, lhs
+        lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(

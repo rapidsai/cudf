@@ -153,8 +153,6 @@ class NumericalColumn(NumericalBaseColumn):
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
-        rhs = self._wrap_binop_normalization(rhs)
-
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -174,6 +172,7 @@ class NumericalColumn(NumericalBaseColumn):
                     binop, rhs, reflect
                 )
 
+        rhs = self._wrap_binop_normalization(rhs)
         out_dtype = self.dtype
         if rhs is not None:
             if isinstance(rhs, cudf.core.column.DecimalBaseColumn):
@@ -183,6 +182,7 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in {"mod", "floordiv"}:
                 tmp = self if reflect else rhs
+                # Guard against division by zero for integers.
                 if (
                     (tmp.dtype.type in int_float_dtype_mapping)
                     and (tmp.dtype.type != np.bool_)
