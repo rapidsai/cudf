@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
@@ -35,22 +37,15 @@ class Repeat : public cudf::benchmark {
 template <class TypeParam, bool nulls>
 void BM_repeat(benchmark::State& state)
 {
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
-  auto const n_rows    = static_cast<cudf::size_type>(state.range(0));
-  auto const n_cols    = static_cast<cudf::size_type>(state.range(1));
+  auto const n_rows = static_cast<cudf::size_type>(state.range(0));
+  auto const n_cols = static_cast<cudf::size_type>(state.range(1));
 
-  auto idx_begin = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto idx_end   = thrust::make_counting_iterator<cudf::size_type>(n_rows);
-
-  std::vector<column_wrapper> columns;
-  columns.reserve(n_rows);
-  std::generate_n(std::back_inserter(columns), n_cols, [&]() {
-    return nulls ? column_wrapper(
-                     idx_begin,
-                     idx_end,
-                     thrust::make_transform_iterator(idx_begin, [](auto idx) { return true; }))
-                 : column_wrapper(idx_begin, idx_end);
-  });
+  auto const input_table =
+    create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
+                          row_count{n_rows},
+                          nulls ? std::optional<float>{1.0} : std::nullopt);
+  // Create table view
+  auto input = cudf::table_view(*input_table);
 
   // repeat counts
   std::default_random_engine generator;

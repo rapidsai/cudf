@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/concatenate.hpp>
-#include <cudf/table/table.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
-
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/fixture/templated_benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/concatenate.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -33,31 +34,14 @@ class Concatenate : public cudf::benchmark {
 template <typename T, bool Nullable>
 static void BM_concatenate(benchmark::State& state)
 {
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
+  cudf::size_type const num_rows = state.range(0);
+  cudf::size_type const num_cols = state.range(1);
 
-  auto const num_rows = state.range(0);
-  auto const num_cols = state.range(1);
-
-  // Create owning columns
-  std::vector<column_wrapper> columns;
-  columns.reserve(num_cols);
-  std::generate_n(std::back_inserter(columns), num_cols, [num_rows]() {
-    auto iter = thrust::make_counting_iterator(0);
-    if (Nullable) {
-      auto valid_iter = thrust::make_transform_iterator(iter, [](auto i) { return i % 3 == 0; });
-      return column_wrapper(iter, iter + num_rows, valid_iter);
-    } else {
-      return column_wrapper(iter, iter + num_rows);
-    }
-  });
-
-  // Generate column views
-  std::vector<cudf::column_view> column_views;
-  column_views.reserve(columns.size());
-  std::transform(
-    columns.begin(), columns.end(), std::back_inserter(column_views), [](auto const& col) {
-      return static_cast<cudf::column_view>(col);
-    });
+  auto input         = create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
+                                     row_count{num_rows},
+                                     Nullable ? std::optional<float>{2.0 / 3.0} : std::nullopt);
+  auto input_columns = input->view();
+  std::vector<cudf::column_view> column_views(input_columns.begin(), input_columns.end());
 
   CHECK_CUDA(0);
 
@@ -84,42 +68,22 @@ CONCAT_BENCHMARK_DEFINE(int64_t, true)
 template <typename T, bool Nullable>
 static void BM_concatenate_tables(benchmark::State& state)
 {
-  using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
+  cudf::size_type const num_rows   = state.range(0);
+  cudf::size_type const num_cols   = state.range(1);
+  cudf::size_type const num_tables = state.range(2);
 
-  auto const num_rows   = state.range(0);
-  auto const num_cols   = state.range(1);
-  auto const num_tables = state.range(2);
-
-  // Create owning columns
-  std::vector<column_wrapper> columns;
-  columns.reserve(num_cols);
-  std::generate_n(std::back_inserter(columns), num_cols * num_tables, [num_rows]() {
-    auto iter = thrust::make_counting_iterator(0);
-    if (Nullable) {
-      auto valid_iter = thrust::make_transform_iterator(iter, [](auto i) { return i % 3 == 0; });
-      return column_wrapper(iter, iter + num_rows, valid_iter);
-    } else {
-      return column_wrapper(iter, iter + num_rows);
-    }
+  std::vector<std::unique_ptr<cudf::table>> tables(num_tables);
+  std::generate_n(tables.begin(), num_tables, [&]() mutable {
+    return create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
+                                 row_count{num_rows},
+                                 Nullable ? std::optional<float>{2.0 / 3.0} : std::nullopt);
   });
 
-  // Generate column views
-  std::vector<std::vector<cudf::column_view>> column_views(num_tables);
-  for (int i = 0; i < num_tables; ++i) {
-    column_views[i].reserve(num_cols);
-    auto it = columns.begin() + (i * num_cols);
-    std::transform(it, it + num_cols, std::back_inserter(column_views[i]), [](auto const& col) {
-      return static_cast<cudf::column_view>(col);
-    });
-  }
-
   // Generate table views
-  std::vector<cudf::table_view> table_views;
-  table_views.reserve(num_tables);
-  std::transform(column_views.begin(),
-                 column_views.end(),
-                 std::back_inserter(table_views),
-                 [](auto const& col_vec) { return cudf::table_view(col_vec); });
+  std::vector<cudf::table_view> table_views(num_tables);
+  std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) mutable {
+    return table->view();
+  });
 
   CHECK_CUDA(0);
 
