@@ -162,12 +162,7 @@ type_id to_type_id(SchemaElement const& schema,
     default: break;
   }
 
-  if (logical_type.isset.TIME) {
-    if (logical_type.TIME.unit.isset.NANOS) {
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::DURATION_NANOSECONDS;
-    }
-  } else if (logical_type.isset.TIMESTAMP) {
+  if (logical_type.isset.TIMESTAMP) {
     if (logical_type.TIMESTAMP.unit.isset.NANOS) {
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;

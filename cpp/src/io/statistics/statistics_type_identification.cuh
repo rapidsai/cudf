@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,6 @@ struct conversion_map<io_file_format::ORC> {
 template <>
 struct conversion_map<io_file_format::PARQUET> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
                            std::pair<cudf::duration_s, cudf::duration_ms>,
                            std::pair<cudf::duration_ns, cudf::duration_us>>;
 };

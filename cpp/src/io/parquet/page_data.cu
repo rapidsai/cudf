@@ -924,19 +924,18 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
-            if (s->col.converted_type == TIME_MICROS or s->col.converted_type == TIMESTAMP_MICROS) {
-              units = cudf::timestamp_us::period::den;
-            } else if (s->col.converted_type == TIME_MILLIS or
-                       s->col.converted_type == TIMESTAMP_MILLIS) {
+            if (s->col.converted_type == TIME_MILLIS or s->col.converted_type == TIMESTAMP_MILLIS) {
               units = cudf::timestamp_ms::period::den;
-            } else if (s->col.logical_type.TIME.unit.isset.NANOS or
-                       s->col.logical_type.TIMESTAMP.unit.isset.NANOS) {
+            } else if (s->col.converted_type == TIME_MICROS or
+                       s->col.converted_type == TIMESTAMP_MICROS) {
+              units = cudf::timestamp_us::period::den;
+            } else if (s->col.logical_type.TIMESTAMP.unit.isset.NANOS) {
               units = cudf::timestamp_ns::period::den;
             }
-            // TODO: can we remove this time scale handling?
-            if (units and units != s->col.ts_clock_rate)
+            if (units and units != s->col.ts_clock_rate) {
               s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
                                                            : (s->col.ts_clock_rate / units);
+            }
           }
           // Fall through to DOUBLE
         case DOUBLE: s->dtype_len = 8; break;
