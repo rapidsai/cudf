@@ -18,15 +18,10 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
 
 static constexpr cudf::size_type num_struct_members = 8;
 static constexpr cudf::size_type max_int            = 100;
