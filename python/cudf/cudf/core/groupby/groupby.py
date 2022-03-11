@@ -947,7 +947,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 lambda x: x.corr(method, min_periods)
             )
 
-        return self._cov_or_corr(func, "Correlation")
+        return self._cov_or_corr(lambda x: x.corr(method, min_periods), "Correlation")
 
     def cov(self, min_periods=0, ddof=1):
         """
