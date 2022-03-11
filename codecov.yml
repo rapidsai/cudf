@@ -2,4 +2,7 @@
 coverage:
   status:
     project: off
-    patch: off
+    patch: on
+
+github_checks:
+    annotations: true

@@ -14,6 +14,7 @@ from collections.abc import Iterable, Sequence
 from typing import (
     Any,
     Dict,
+    List,
     MutableMapping,
     Optional,
     Set,
@@ -1349,7 +1350,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if is_range_index:
             result.index = self.index[start:stop]
-        result._set_column_names_like(self)
         return result
 
     @_cudf_nvtx_annotate
@@ -6050,7 +6050,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("axis parameter is not supported yet.")
 
-        return cudf.Series(super().nunique(method="sort", dropna=dropna))
+        return cudf.Series(super().nunique(dropna=dropna))
 
     def _sample_axis_1(
         self,
@@ -6076,6 +6076,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if ignore_index:
             result.reset_index(drop=True)
 
+        return result
+
+    def _from_columns_like_self(
+        self,
+        columns: List[ColumnBase],
+        column_names: Iterable[str],
+        index_names: Optional[List[str]] = None,
+    ) -> DataFrame:
+        result = super()._from_columns_like_self(
+            columns, column_names, index_names
+        )
+        result._set_column_names_like(self)
         return result
 
 
