@@ -301,12 +301,12 @@ add_library(
   src/io/orc/stripe_init.cu
   src/io/orc/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/parquet.cpp
   src/io/parquet/reader_impl.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu

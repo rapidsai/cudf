@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-#include "parquet.hpp"
+#include "compact_protocol_reader.hpp"
+
 #include <algorithm>
+#include <cstddef>
+#include <tuple>
 
 namespace cudf {
 namespace io {

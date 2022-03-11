@@ -20,9 +20,11 @@
  */
 
 #include "writer_impl.hpp"
-#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+
+#include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
 

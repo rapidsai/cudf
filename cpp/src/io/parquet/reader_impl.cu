@@ -21,6 +21,8 @@
 
 #include "reader_impl.hpp"
 
+#include "compact_protocol_reader.hpp"
+
 #include <io/comp/gpuinflate.h>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
