@@ -228,6 +228,8 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
         if isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
@@ -236,8 +238,6 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
-        elif isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
 
         if isinstance(other, np.datetime64):
             if np.isnat(other):
