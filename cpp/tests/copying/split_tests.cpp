@@ -1357,6 +1357,15 @@ TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
   }
 }
 
+TEST_F(ContiguousSplitUntypedTest, CalculationOverflow)
+{
+  // tests an edge case where buf.elements * buf.element_size overflows an INT32.
+  auto col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
+  auto result = cudf::contiguous_split(cudf::table_view{{*col}}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
+}
+
 // contiguous split with strings
 struct ContiguousSplitStringTableTest : public SplitTest<std::string> {
 };

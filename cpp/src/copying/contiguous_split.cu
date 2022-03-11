@@ -821,7 +821,7 @@ void copy_data(int num_bufs,
     chunks.begin(),
     [desired_chunk_size] __device__(dst_buf_info const& buf) -> thrust::pair<size_t, size_t> {
       // Total bytes for this incoming partition
-      size_t const bytes = buf.num_elements * buf.element_size;
+      size_t const bytes = static_cast<size_t>(buf.num_elements) * static_cast<size_t>(buf.element_size);
 
       // This clause handles nested data types (e.g. list or string) that store no data in the roow
       // columns, only in their children.
