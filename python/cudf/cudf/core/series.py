@@ -5396,22 +5396,23 @@ class Series(Frame, Serializable):
         >>> ser1.corr(ser2, method="spearman")
         -0.5
         """
-
+        if min_periods not in (None,):
+            raise NotImplementedErroe("Unsupported argument 'min_periods'")
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         if method == "pearson":
             lhs = self.nans_to_nulls().dropna()
             rhs = other.nans_to_nulls().dropna()
-
+            lhs, rhs = _align_indices([lhs, rhs], how="inner")           
         elif method == "spearman":
-            lhs = self.nans_to_nulls().dropna().rank()
-            rhs = other.nans_to_nulls().dropna().rank()
-
+            lhs = self.nans_to_nulls().dropna()
+            rhs = other.nans_to_nulls().dropna()
+            lhs, rhs = _align_indices([lhs, rhs], how="inner")
+            lhs = lhs.rank()
+            rhs = rhs.rank()
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
-
-        lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
         return lhs._column.corr(rhs._column)
 
