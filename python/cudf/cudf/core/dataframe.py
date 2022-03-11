@@ -7483,7 +7483,7 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        method : str, Default 'pearson'
+        method : {'pearson', 'spearman'}, default 'pearson'
             The correlation method to use, one of 'pearson' or 'spearman'.
 
         Returns
