@@ -262,10 +262,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(JNIEnv *env, jclass, jlong j_data_view,
-                                                                       jlong j_offsets_view, jlong j_agg,
-                                                                       jboolean include_nulls, jint j_dtype,
-                                                                       jint scale) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(
+    JNIEnv *env, jclass, jlong j_data_view, jlong j_offsets_view, jlong j_agg,
+    jboolean include_nulls, jint j_dtype, jint scale) {
   JNI_NULL_CHECK(env, j_data_view, "data column view is null", 0);
   JNI_NULL_CHECK(env, j_offsets_view, "offsets column view is null", 0);
   JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
@@ -278,7 +277,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(JNIEnv *e
     JNI_ARG_CHECK(env, s_agg != nullptr, "agg is not a cudf::segmented_reduce_aggregation", 0)
     auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
     cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
-    return release_as_jlong(cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
+    return release_as_jlong(
+        cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
   }
   CATCH_STD(env, 0);
 }
