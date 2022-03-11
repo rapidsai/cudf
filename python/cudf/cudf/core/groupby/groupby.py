@@ -17,6 +17,7 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin
@@ -96,6 +97,7 @@ class GroupBy(Serializable, Reducible):
         self._dropna = dropna
 
         if isinstance(by, _Grouping):
+            by._obj = self.obj
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
@@ -265,38 +267,40 @@ class GroupBy(Serializable, Reducible):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        columns_to_agg, normalized_aggs = self._normalize_aggs(func)
+        column_names, columns, normalized_aggs = self._normalize_aggs(func)
 
         # Note: When there are no key columns, the below produces
         # a Float64Index, while Pandas returns an Int64Index
         # (GH: 6945)
-        result_data, grouped_key_cols = self._groupby.aggregate(
-            self.obj, normalized_aggs
-        )
+        (
+            result_columns,
+            grouped_key_cols,
+            included_aggregations,
+        ) = self._groupby.aggregate(columns, normalized_aggs)
         grouped_key = cudf.core.index._index_from_data(
             dict(zip(self.grouping.keys._column_names, grouped_key_cols))
         )
-        result = cudf.DataFrame._from_data(result_data, index=grouped_key)
+
+        multilevel = _is_multi_agg(func)
+        data = {}
+        for col_name, aggs, cols in zip(
+            column_names, included_aggregations, result_columns
+        ):
+            data.update(
+                {
+                    (col_name, agg.__name__ if callable(agg) else agg)
+                    if multilevel
+                    else col_name: col
+                    for agg, col in zip(aggs, cols)
+                }
+            )
+        data = ColumnAccessor(data, multiindex=multilevel)
+        if not multilevel:
+            data = data.rename_levels({np.nan: None}, level=0)
+        result = cudf.DataFrame._from_data(data, index=grouped_key)
 
         if self._sort:
             result = result.sort_index()
-
-        # TODO: can _is_multi_agg be performed inside normalized_agg?
-        if not _is_multi_agg(func):
-            if result._data.nlevels <= 1:  # 0 or 1 levels
-                # make sure it's a flat index:
-                result._data.multiindex = False
-
-            if result._data.nlevels > 1:
-                result._data.droplevel(-1)
-
-                # if, after dropping the last level, the only
-                # remaining key is `NaN`, we need to convert to `None`
-                # for Pandas compat:
-                if result._data.names == (np.nan,):
-                    result._data = result._data.rename_levels(
-                        {np.nan: None}, level=0
-                    )
 
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
@@ -426,7 +430,7 @@ class GroupBy(Serializable, Reducible):
 
     def _normalize_aggs(
         self, aggs: Any
-    ) -> Tuple[Tuple[ColumnBase], List[List[Any]]]:
+    ) -> Tuple[Tuple[Any], Tuple[ColumnBase], List[List[Any]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support two
@@ -440,17 +444,19 @@ class GroupBy(Serializable, Reducible):
         column.
         `agg` can be string or lambda functions.
         """
-        values = self.grouping.values
-        if not isinstance(aggs, collections.abc.Mapping):
-            column_names = values._column_names
-            out = [aggs] * len(values._data)
-        else:
-            column_names = tuple(col for col in aggs.keys() if col in values)
-            out = [aggs[col] for col in column_names]
 
-        cols_to_agg = values._data.select_by_label(column_names)._columns
+        if not isinstance(aggs, collections.abc.Mapping):
+            values = self.grouping.values
+            column_names = values._column_names
+            columns = values._columns
+            out = [aggs] * len(columns)
+        else:
+            column_names = tuple(aggs.keys())
+            columns = tuple(self.obj._data[col] for col in column_names)
+            out = [aggs[col] for col in aggs.keys()]
+
         out = [[agg] if not is_list_like(agg) else list(agg) for agg in out]
-        return cols_to_agg, out
+        return column_names, columns, out
 
     def pipe(self, func, *args, **kwargs):
         """

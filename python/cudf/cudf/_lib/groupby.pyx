@@ -102,69 +102,24 @@ cdef class GroupBy:
         grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
         return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
-    def _aggregate(self, list values, list aggregations):
-        """Minimal wrapper over c++ groupby::aggregate API.
-
-        `values` is a list of value columns. `aggregations` is a list of
-        of lists of aggregations, where `aggregations[i]` are the aggregations
-        for `values[i]`.
-        """
-        cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
-        cdef libcudf_groupby.aggregation_request c_agg_request
-        cdef GroupbyAggregation grpby_agg
-        cdef Column col
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
-
-        groupby_aggregations = [
-            [
-                make_groupby_aggregation(agg) for agg in aggs
-            ] for aggs in aggregations
-        ]
-
-        for col, grpby_aggs in values, groupby_aggregations:
-            c_agg_request = move(libcudf_groupby.aggregation_request())
-            for grpby_agg in grpby_aggs:
-                c_agg_request.aggregations.push_back(move(grpby_agg.c_obj))
-            c_agg_request.values = col.view()
-            c_agg_requests.push_back(move(c_agg_request))
-
-        with nogil:
-            c_result = move(
-                self.c_obj.get()[0].aggregate(
-                    c_agg_requests
-                )
-            )
-
-        grouped_keys = columns_from_unique_ptr(move(c_result.first))
-        result_columns = [
-            [
-                Column.from_unique_ptr(
-                    move(c_result.second[i].results[j])
-                ) for j in range(len(aggs))
-            ] for i, aggs in enumerate(aggregations)
-        ]
-
-        return grouped_keys, result_columns
-
     def aggregate_internal(self, values, aggregations):
-        from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef libcudf_groupby.aggregation_request c_agg_request
         cdef Column col
         cdef GroupbyAggregation agg_obj
 
-        allow_empty = all(len(v) == 0 for v in aggregations.values())
+        cdef pair[
+            unique_ptr[table],
+            vector[libcudf_groupby.aggregation_result]
+        ] c_result
 
-        included_aggregations = defaultdict(list)
-        for i, (col_name, aggs) in enumerate(aggregations.items()):
-            col = values._data[col_name]
+        allow_empty = all(len(v) == 0 for v in aggregations)
+
+        included_aggregations = []
+        column_orders = []
+        for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
-            # TODO: 1. Refactor the filtering step outside of cython
-            # This should be a preprocessing step to aggregations.
             valid_aggregations = (
                 _LIST_AGGS if is_list_dtype(dtype)
                 else _STRING_AGGS if is_string_dtype(dtype)
@@ -176,32 +131,23 @@ cdef class GroupBy:
             )
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
+            included_aggregations.append([])
             for agg in aggs:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations[col_name].append(agg)
+                    included_aggregations[-1].append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
-            # TODO: 2. In the filtering step, if some column has no aggregation
-            # The values and aggregation list should drop that column.
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-        # TODO: 3. If final aggregation list is empty, not because of the input
-        # aggregation was empty, then we can determine the result of the
-        # emptiness is because all columns were filtered out. We should raise
-        # and error at the end of the filtering step if this happens.
+                column_orders.append(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
-
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
 
         with nogil:
             c_result = move(
@@ -214,31 +160,35 @@ cdef class GroupBy:
             move(c_result.first)
         )
 
-        result_data = ColumnAccessor(multiindex=True)
-        # Note: This loop relies on the included_aggregations dict being
-        # insertion ordered to map results to requested aggregations by index.
-        for i, col_name in enumerate(included_aggregations):
-            for j, agg_name in enumerate(included_aggregations[col_name]):
-                if callable(agg_name):
-                    agg_name = agg_name.__name__
-                result_data[(col_name, agg_name)] = (
-                    Column.from_unique_ptr(move(c_result.second[i].results[j]))
-                )
+        result_columns = [
+            [
+                Column.from_unique_ptr(
+                    move(c_result.second[i].results[j])
+                ) for j in range(c_result.second[i].results.size())
+            ] for i in range(c_result.second.size())
+        ]
+        result_columns_with_padding = [[]] * len(included_aggregations)
+        for i, cols in enumerate(result_columns):
+            result_columns_with_padding[column_orders[i]] = cols
 
-        return result_data, grouped_keys
+        return result_columns_with_padding, grouped_keys, included_aggregations
 
     def scan_internal(self, values, aggregations):
-        from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.scan_request] c_agg_requests
         cdef libcudf_groupby.scan_request c_agg_request
         cdef Column col
         cdef GroupbyScanAggregation agg_obj
 
-        allow_empty = all(len(v) == 0 for v in aggregations.values())
+        cdef pair[
+            unique_ptr[table],
+            vector[libcudf_groupby.aggregation_result]
+        ] c_result
 
-        included_aggregations = defaultdict(list)
-        for i, (col_name, aggs) in enumerate(aggregations.items()):
-            col = values._data[col_name]
+        allow_empty = all(len(v) == 0 for v in aggregations)
+
+        included_aggregations = []
+        column_orders = []
+        for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
             valid_aggregations = (
@@ -252,11 +202,12 @@ cdef class GroupBy:
             )
 
             c_agg_request = move(libcudf_groupby.scan_request())
+            included_aggregations.append([])
             for agg in aggs:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations[col_name].append(agg)
+                    included_aggregations[-1].append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
@@ -265,14 +216,9 @@ cdef class GroupBy:
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-
+                column_orders.append(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
-
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
 
         with nogil:
             c_result = move(
@@ -281,20 +227,22 @@ cdef class GroupBy:
                 )
             )
 
-        grouped_keys = columns_from_unique_ptr(move(c_result.first))
+        grouped_keys = columns_from_unique_ptr(
+            move(c_result.first)
+        )
 
-        result_data = ColumnAccessor(multiindex=True)
-        # Note: This loop relies on the included_aggregations dict being
-        # insertion ordered to map results to requested aggregations by index.
-        for i, col_name in enumerate(included_aggregations):
-            for j, agg_name in enumerate(included_aggregations[col_name]):
-                if callable(agg_name):
-                    agg_name = agg_name.__name__
-                result_data[(col_name, agg_name)] = (
-                    Column.from_unique_ptr(move(c_result.second[i].results[j]))
-                )
+        result_columns = [
+            [
+                Column.from_unique_ptr(
+                    move(c_result.second[i].results[j])
+                ) for j in range(c_result.second[i].results.size())
+            ] for i in range(c_result.second.size())
+        ]
+        result_columns_with_padding = [[]] * len(included_aggregations)
+        for i, cols in enumerate(result_columns):
+            result_columns_with_padding[column_orders[i]] = cols
 
-        return result_data, grouped_keys
+        return result_columns_with_padding, grouped_keys, included_aggregations
 
     def aggregate(self, values, aggregations):
         """
@@ -368,7 +316,7 @@ cdef class GroupBy:
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
 
 
-def _is_all_scan_aggregate(aggs):
+def _is_all_scan_aggregate(all_aggs):
     """
     Returns true if all are scan aggregations.
     Raises
@@ -382,15 +330,15 @@ def _is_all_scan_aggregate(aggs):
 
     all_scan = all(
         all(
-            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
+            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs
         )
-        for col_name in aggs
+        for aggs in all_aggs
     )
     any_scan = any(
         any(
-            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
+            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs
         )
-        for col_name in aggs
+        for aggs in all_aggs
     )
 
     if not all_scan and any_scan:
