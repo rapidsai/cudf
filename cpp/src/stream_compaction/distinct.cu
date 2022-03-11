@@ -70,7 +70,7 @@ std::unique_ptr<table> distinct(table_view const& input,
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
-  // insert unique indices into the map.
+  // insert distinct indices into the map.
   key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
 
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
@@ -80,10 +80,10 @@ std::unique_ptr<table> distinct(table_view const& input,
 
   auto const output_size{key_map.get_size()};
 
-  // write unique indices to a numeric column
-  auto unique_indices = cudf::make_numeric_column(
+  // write distinct indices to a numeric column
+  auto distinct_indices = cudf::make_numeric_column(
     data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
-  auto mutable_view = mutable_column_device_view::create(*unique_indices, stream);
+  auto mutable_view = mutable_column_device_view::create(*distinct_indices, stream);
   thrust::copy_if(rmm::exec_policy(stream),
                   counting_iter,
                   counting_iter + num_rows,
@@ -93,7 +93,7 @@ std::unique_ptr<table> distinct(table_view const& input,
 
   // run gather operation to establish new order
   return detail::gather(input,
-                        unique_indices->view(),
+                        distinct_indices->view(),
                         out_of_bounds_policy::DONT_CHECK,
                         detail::negative_index_policy::NOT_ALLOWED,
                         stream,

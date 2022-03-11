@@ -61,8 +61,8 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate(); });
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 100 == 0 ? false : true; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100 != 0; });
   cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + num_rows, valids);
 
   auto input_column = cudf::column_view(values);

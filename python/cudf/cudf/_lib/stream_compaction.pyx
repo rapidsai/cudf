@@ -170,7 +170,7 @@ def drop_duplicates(columns: list,
         # cudf::unique keeps unique rows in each consecutive group of
         # equivalent rows. To match the behavior of pandas.DataFrame.
         # drop_duplicates, users need to stable sort the input first
-        # and then unique.
+        # and then invoke cudf::unique.
         sorted_source_table = move(
             cpp_stable_sort_by_key(
                 source_table_view,

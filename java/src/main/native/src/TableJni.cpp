@@ -3046,7 +3046,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
 
     // cudf::unique keeps unique rows in each consecutive group of equivalent rows. To match the
     // behavior of pandas.DataFrame.drop_duplicates, users need to stable sort the input first and
-    // then unique.
+    // then invoke cudf::unique.
     std::vector<cudf::order> order(keys_indices.size(), cudf::order::ASCENDING);
     std::vector<cudf::null_order> null_precedence(
         keys_indices.size(), nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER);

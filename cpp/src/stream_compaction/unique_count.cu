@@ -50,7 +50,7 @@ namespace {
  * the row `index` of `column_device_view` is `NaN`.
  */
 struct check_nan {
-  // Check if it's `NaN` for floating point type columns
+  // Check if a value is `NaN` for floating point type columns
   template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   __device__ inline bool operator()(column_device_view const& input, size_type index)
   {

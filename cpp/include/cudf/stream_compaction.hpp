@@ -278,7 +278,7 @@ std::unique_ptr<table> distinct(
  * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_handling flag to consider `NaN==null` or not
  *
- * @return number of distinct consecutive groups in the column
+ * @return number of consecutive groups of equivalent rows in the column
  */
 cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
@@ -291,7 +291,7 @@ cudf::size_type unique_count(column_view const& input,
  * @param[in] nulls_equal flag to denote if null elements should be considered equal.
  *            nulls are not equal if null_equality::UNEQUAL.
  *
- * @return number of distinct consecutive groups in the table
+ * @return number of consecutive groups of equivalent rows in the column
  */
 cudf::size_type unique_count(table_view const& input,
                              null_equality nulls_equal = null_equality::EQUAL);
@@ -314,7 +314,7 @@ cudf::size_type unique_count(table_view const& input,
  * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_handling flag to consider `NaN==null` or not
  *
- * @return number of unique elements
+ * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
@@ -327,7 +327,7 @@ cudf::size_type distinct_count(column_view const& input,
  * @param[in] nulls_equal flag to denote if null elements should be considered equal.
  *            nulls are not equal if null_equality::UNEQUAL.
  *
- * @return number of unique rows in the table
+ * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal = null_equality::EQUAL);
