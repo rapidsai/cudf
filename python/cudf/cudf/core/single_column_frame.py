@@ -360,14 +360,12 @@ class SingleColumnFrame(Frame, NotIterable):
         return {result_name: (self._column, other, reflect, fill_value)}
 
     @_cudf_nvtx_annotate
-    def nunique(self, method: str = "sort", dropna: bool = True):
+    def nunique(self, dropna: bool = True):
         """
         Return count of unique values for the column.
 
         Parameters
         ----------
-        method : str, default "sort"
-            Method used by cpp_distinct_count
         dropna : bool, default True
             Don't include NaN in the counts.
 
@@ -378,4 +376,4 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         if self._column.null_count == len(self):
             return 0
-        return self._column.distinct_count(method=method, dropna=dropna)
+        return self._column.distinct_count(dropna=dropna)
