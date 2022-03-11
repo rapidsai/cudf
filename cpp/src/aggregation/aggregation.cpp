@@ -419,6 +419,8 @@ template std::unique_ptr<groupby_aggregation> make_sum_aggregation<groupby_aggre
 template std::unique_ptr<groupby_scan_aggregation> make_sum_aggregation<groupby_scan_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_sum_aggregation<reduce_aggregation>();
 template std::unique_ptr<scan_aggregation> make_sum_aggregation<scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_sum_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>
@@ -430,6 +432,8 @@ template std::unique_ptr<aggregation> make_product_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_product_aggregation<groupby_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_product_aggregation<reduce_aggregation>();
 template std::unique_ptr<scan_aggregation> make_product_aggregation<scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_product_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MIN aggregation
 template <typename Base>
@@ -443,6 +447,8 @@ template std::unique_ptr<groupby_aggregation> make_min_aggregation<groupby_aggre
 template std::unique_ptr<groupby_scan_aggregation> make_min_aggregation<groupby_scan_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_min_aggregation<reduce_aggregation>();
 template std::unique_ptr<scan_aggregation> make_min_aggregation<scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_min_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MAX aggregation
 template <typename Base>
@@ -456,6 +462,8 @@ template std::unique_ptr<groupby_aggregation> make_max_aggregation<groupby_aggre
 template std::unique_ptr<groupby_scan_aggregation> make_max_aggregation<groupby_scan_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_max_aggregation<reduce_aggregation>();
 template std::unique_ptr<scan_aggregation> make_max_aggregation<scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_max_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a COUNT aggregation
 template <typename Base>
@@ -482,6 +490,8 @@ std::unique_ptr<Base> make_any_aggregation()
 }
 template std::unique_ptr<aggregation> make_any_aggregation<aggregation>();
 template std::unique_ptr<reduce_aggregation> make_any_aggregation<reduce_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_any_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a ALL aggregation
 template <typename Base>
@@ -491,6 +501,8 @@ std::unique_ptr<Base> make_all_aggregation()
 }
 template std::unique_ptr<aggregation> make_all_aggregation<aggregation>();
 template std::unique_ptr<reduce_aggregation> make_all_aggregation<reduce_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_all_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
 template <typename Base>
@@ -675,6 +687,8 @@ template std::unique_ptr<rolling_aggregation> make_collect_list_aggregation<roll
   null_policy null_handling);
 template std::unique_ptr<groupby_aggregation> make_collect_list_aggregation<groupby_aggregation>(
   null_policy null_handling);
+template std::unique_ptr<reduce_aggregation> make_collect_list_aggregation<reduce_aggregation>(
+  null_policy null_handling);
 
 /// Factory to create a COLLECT_SET aggregation
 template <typename Base>
@@ -689,6 +703,8 @@ template std::unique_ptr<aggregation> make_collect_set_aggregation<aggregation>(
 template std::unique_ptr<rolling_aggregation> make_collect_set_aggregation<rolling_aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
 template std::unique_ptr<groupby_aggregation> make_collect_set_aggregation<groupby_aggregation>(
+  null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
+template std::unique_ptr<reduce_aggregation> make_collect_set_aggregation<reduce_aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
 
 /// Factory to create a LAG aggregation
@@ -736,6 +752,7 @@ std::unique_ptr<Base> make_merge_lists_aggregation()
 }
 template std::unique_ptr<aggregation> make_merge_lists_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_merge_lists_aggregation<groupby_aggregation>();
+template std::unique_ptr<reduce_aggregation> make_merge_lists_aggregation<reduce_aggregation>();
 
 /// Factory to create a MERGE_SETS aggregation
 template <typename Base>
@@ -747,6 +764,8 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal,
 template std::unique_ptr<aggregation> make_merge_sets_aggregation<aggregation>(null_equality,
                                                                                nan_equality);
 template std::unique_ptr<groupby_aggregation> make_merge_sets_aggregation<groupby_aggregation>(
+  null_equality, nan_equality);
+template std::unique_ptr<reduce_aggregation> make_merge_sets_aggregation<reduce_aggregation>(
   null_equality, nan_equality);
 
 /// Factory to create a MERGE_M2 aggregation
