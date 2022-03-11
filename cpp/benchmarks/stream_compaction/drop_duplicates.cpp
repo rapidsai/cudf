@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <fixture/rmm_pool_raii.hpp>
 
 #include <nvbench/nvbench.cuh>
-
-#include <memory>
-#include <random>
 
 // necessary for custom enum types
 // see: https://github.com/NVIDIA/nvbench/blob/main/examples/enums.cu
@@ -57,16 +53,17 @@ void nvbench_drop_duplicates(nvbench::state& state,
 
   cudf::rmm_pool_raii pool_raii;
 
-  auto const num_rows = state.get_int64("NumRows");
+  cudf::size_type const num_rows = state.get_int64("NumRows");
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](auto row) { return rand_gen.generate(); });
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 100 == 0 ? false : true; });
-  cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + num_rows, valids);
+  data_profile profile;
+  profile.set_null_frequency(0.01);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
-  auto input_column = cudf::column_view(values);
+  auto source_table =
+    create_random_table(cycle_dtypes({cudf::type_to_id<Type>()}, 1), row_count{num_rows}, profile);
+
+  auto input_column = cudf::column_view(source_table->get_column(0));
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -81,16 +78,17 @@ void nvbench_unordered_drop_duplicates(nvbench::state& state, nvbench::type_list
 {
   cudf::rmm_pool_raii pool_raii;
 
-  auto const num_rows = state.get_int64("NumRows");
+  cudf::size_type const num_rows = state.get_int64("NumRows");
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](auto row) { return rand_gen.generate(); });
-  auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 100 == 0 ? false : true; });
-  cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + num_rows, valids);
+  data_profile profile;
+  profile.set_null_frequency(0.01);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
 
-  auto input_column = cudf::column_view(values);
+  auto source_table =
+    create_random_table(cycle_dtypes({cudf::type_to_id<Type>()}, 1), row_count{num_rows}, profile);
+
+  auto input_column = cudf::column_view(source_table->get_column(0));
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

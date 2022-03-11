@@ -340,6 +340,18 @@ class data_profile {
     }
   }
 
+  template <typename T, typename Type_enum, std::enable_if_t<cudf::is_chrono<T>(), T>* = nullptr>
+  void set_distribution_params(Type_enum type_or_group,
+                               distribution_id dist,
+                               typename T::rep lower_bound,
+                               typename T::rep upper_bound)
+  {
+    for (auto tid : get_type_or_group(static_cast<int32_t>(type_or_group))) {
+      int_params[tid] = {
+        dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
+    }
+  }
+
   void set_bool_probability(double p) { bool_probability = p; }
   void set_null_frequency(double f) { null_frequency = f; }
   void set_cardinality(cudf::size_type c) { cardinality = c; }
