@@ -5432,8 +5432,6 @@ class StringColumn(column.ColumnBase):
         # fastpath: gpu scalar
         if isinstance(other, cudf.Scalar) and other.dtype == "object":
             return column.as_column(other, length=len(self))
-        if isinstance(other, column.ColumnBase):
-            return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
             col = utils.scalar_broadcast_to(
                 other, size=len(self), dtype="object"

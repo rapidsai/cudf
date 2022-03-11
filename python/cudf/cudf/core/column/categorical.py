@@ -879,40 +879,40 @@ class CategoricalColumn(column.ColumnBase):
         self, op: str, rhs, reflect: bool = False
     ) -> ColumnBase:
         rhs = self._wrap_binop_normalization(rhs)
-        if not (self.ordered and rhs.ordered) and op not in (
-            "eq",
-            "ne",
-            "NULL_EQUALS",
-        ):
-            if op in ("lt", "gt", "le", "ge"):
-                raise TypeError(
-                    "Unordered Categoricals can only compare equality or not"
-                )
+        # TODO: This is currently just here to make mypy happy, but eventually
+        # we'll need to properly establish the APIs for these methods.
+        if not isinstance(rhs, CategoricalColumn):
+            raise ValueError
+        # Note: at this stage we are guaranteed that the dtypes are equal.
+        if not self.ordered and op not in {"eq", "ne", "NULL_EQUALS"}:
             raise TypeError(
-                f"Series of dtype `{self.dtype}` cannot perform the "
-                f"operation: {op}"
+                "The only binary operations supported by unordered "
+                "categorical columns are equality and inequality."
             )
-        if self.dtype != rhs.dtype:
-            raise TypeError("Categoricals can only compare with the same type")
         return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):
-            return other  # type: ignore
-
+            if not isinstance(other, CategoricalColumn):
+                raise ValueError(
+                    "Binary operations with categorical columns require both "
+                    "columns to be categorical."
+                )
+            if other.dtype != self.dtype:
+                raise TypeError("Categoricals only compare with the same type")
+            return other
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
 
         ary = cudf.utils.utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )
-        col = column.build_categorical_column(
+        return column.build_categorical_column(
             categories=self.dtype.categories._values,
             codes=column.as_column(ary),
             mask=self.base_mask,
             ordered=self.dtype.ordered,
         )
-        return col
 
     def sort_by_values(
         self, ascending: bool = True, na_position="last"

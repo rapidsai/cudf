@@ -22,7 +22,12 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.stream_compaction import drop_nulls
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
-from cudf.api.types import is_bool_dtype, is_integer_dtype, is_number
+from cudf.api.types import (
+    is_bool_dtype,
+    is_float_dtype,
+    is_integer_dtype,
+    is_number,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -164,30 +169,13 @@ class NumericalColumn(NumericalBaseColumn):
 
         if binop in {"truediv", "rtruediv"}:
             # Division with integer types results in a suitable float.
-            truediv_type = int_float_dtype_mapping.get(self.dtype.type)
-            if truediv_type is not None:
+            if (truediv_type := int_float_dtype_mapping.get(self.dtype.type)) :
                 return self.astype(truediv_type).binary_operator(
                     binop, rhs, reflect
                 )
 
-        if rhs is None:
-            out_dtype = self.dtype
-        else:
-            if not (
-                isinstance(
-                    rhs,
-                    (
-                        NumericalColumn,
-                        cudf.Scalar,
-                        cudf.core.column.DecimalBaseColumn,
-                    ),
-                )
-                or np.isscalar(rhs)
-            ):
-                raise TypeError(
-                    f"{repr(binop)} operator not supported between "
-                    f"{type(self)} and {type(rhs)}"
-                )
+        out_dtype = self.dtype
+        if rhs is not None:
             if isinstance(rhs, cudf.core.column.DecimalBaseColumn):
                 dtyp = rhs.dtype.__class__(rhs.dtype.MAX_PRECISION, 0)
                 return self.as_decimal_column(dtyp).binary_operator(binop, rhs)
@@ -221,20 +209,13 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if binop in {"and", "or", "xor"}:
-            left_is_bool = is_bool_dtype(self.dtype)
-            right_is_bool = is_bool_dtype(rhs)
-            left_is_int = is_integer_dtype(self.dtype)
-            right_is_int = is_integer_dtype(rhs)
-
-            if not (left_is_bool or left_is_int) and (
-                right_is_bool or right_is_int
-            ):
+            if is_float_dtype(self.dtype) or is_float_dtype(rhs):
                 raise TypeError(
                     f"Operation 'bitwise {binop}' not supported between "
                     f"{self.dtype.type.__name__} and "
                     f"{rhs.dtype.type.__name__}"
                 )
-            if left_is_bool or right_is_bool:
+            if is_bool_dtype(self.dtype) or is_bool_dtype(rhs):
                 out_dtype = "bool"
 
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
@@ -251,6 +232,13 @@ class NumericalColumn(NumericalBaseColumn):
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:
         if isinstance(other, ColumnBase):
+            if not isinstance(
+                other, (NumericalColumn, cudf.core.column.DecimalBaseColumn,),
+            ):
+                raise TypeError(
+                    f"Binary operations are not supported between "
+                    f"{type(self)}and {type(other)}"
+                )
             return other
         if other is None:
             return other
@@ -434,7 +422,7 @@ class NumericalColumn(NumericalBaseColumn):
         if replacement_col.null_count == len(replacement_col):
             replacement_col = replacement_col.astype(self.dtype)
 
-        if type(to_replace_col) != type(replacement_col):
+        if not isinstance(to_replace_col, type(replacement_col)):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
