@@ -1102,7 +1102,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
             return interleave_columns(frame)
 
-        # interleave: combine the correlation or covariance results for each
+        # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
         res = cudf.DataFrame._from_data(
             {
