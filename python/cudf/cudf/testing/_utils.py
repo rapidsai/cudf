@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import itertools
 import re
 import warnings
 from collections.abc import Mapping, Sequence
@@ -330,3 +331,38 @@ def does_not_raise():
 
 def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
+
+
+def assert_column_memory_eq(
+    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
+):
+    """Assert the memory location and size of `lhs` and `rhs` are equivalent.
+
+    Both data pointer and mask pointer are checked. Also recursively check for
+    children to the same contarints. Also fails check if the number of children
+    mismatches at any level.
+    """
+    assert lhs.base_data_ptr == rhs.base_data_ptr
+    assert lhs.base_mask_ptr == rhs.base_mask_ptr
+    assert lhs.base_size == rhs.base_size
+    assert lhs.offset == rhs.offset
+    assert lhs.size == rhs.size
+    assert len(lhs.base_children) == len(rhs.base_children)
+    for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
+        assert_column_memory_eq(lhs_child, rhs_child)
+
+
+def assert_column_memory_ne(
+    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
+):
+    try:
+        assert_column_memory_eq(lhs, rhs)
+    except AssertionError:
+        return
+    raise AssertionError("lhs and rhs holds the same memory.")
+
+
+parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
+)

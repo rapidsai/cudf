@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import sys
 
@@ -62,7 +62,9 @@ def test_pickle_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical("aaabababac")
+    df["keys"] = pd.Categorical(
+        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
+    )
     df["vals"] = np.random.random(len(df))
 
     check_serialization(df)
@@ -90,9 +92,7 @@ def test_pickle_index():
     idx = GenericIndex(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
-    # TODO: Once operations like `all` are supported on Index objects, we can
-    # just use that without calling values first.
-    assert (idx == out).values.all()
+    assert (idx == out).all()
 
 
 def test_pickle_buffer():

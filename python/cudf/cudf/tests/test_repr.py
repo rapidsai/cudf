@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -13,7 +13,14 @@ from cudf.core._compat import PANDAS_GE_110
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
-repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+repr_categories = [
+    "uint16",
+    "int64",
+    "float64",
+    "str",
+    "category",
+    "datetime64[ns]",
+]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -84,36 +91,22 @@ def test_full_series(nrows, dtype):
     pd.reset_option("display.max_rows")
 
 
+@pytest.mark.parametrize("nrows", [5, 10, 15])
+@pytest.mark.parametrize("ncols", [5, 10, 15])
+@pytest.mark.parametrize("size", [20, 21])
 @pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
-@pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
-def test_full_dataframe_20(dtype, nrows, ncols):
-    size = 20
+def test_full_dataframe_20(dtype, size, nrows, ncols):
     pdf = pd.DataFrame(
         {idx: np.random.randint(0, 100, size) for idx in range(size)}
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
-    assert pdf.__repr__() == gdf.__repr__()
-    assert pdf._repr_html_() == gdf._repr_html_()
-    assert pdf._repr_latex_() == gdf._repr_latex_()
-
-
-@pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [9, 21 / 2, 11, 21 - 1])
-@pytest.mark.parametrize("ncols", [9, 21 / 2, 11, 21 - 1])
-def test_full_dataframe_21(dtype, nrows, ncols):
-    size = 21
-    pdf = pd.DataFrame(
-        {idx: np.random.randint(0, 100, size) for idx in range(size)}
-    ).astype(dtype)
-    gdf = cudf.from_pandas(pdf)
-
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-    assert pdf.__repr__() == gdf.__repr__()
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
+    with pd.option_context(
+        "display.max_rows", int(nrows), "display.max_columns", int(ncols)
+    ):
+        assert repr(pdf) == repr(gdf)
+        assert pdf._repr_html_() == gdf._repr_html_()
+        assert pdf._repr_latex_() == gdf._repr_latex_()
 
 
 @given(

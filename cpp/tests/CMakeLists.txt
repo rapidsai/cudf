@@ -23,7 +23,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               # For std:: support of __int128_t. Can be removed once using cuda::std
+               CXX_EXTENSIONS ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
   )
+
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
   install(
@@ -41,8 +48,13 @@ endfunction()
 # ##################################################################################################
 # * column tests ----------------------------------------------------------------------------------
 ConfigureTest(
-  COLUMN_TEST column/bit_cast_test.cpp column/column_view_shallow_test.cpp column/column_test.cu
-  column/column_device_view_test.cu column/compound_test.cu
+  COLUMN_TEST
+  column/bit_cast_test.cpp
+  column/column_device_view_test.cu
+  column/column_test.cu
+  column/column_view_device_span_test.cpp
+  column/column_view_shallow_test.cpp
+  column/compound_test.cu
 )
 
 # ##################################################################################################
@@ -138,7 +150,8 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
+  REDUCTION_TEST reductions/collect_ops_tests.cpp reductions/rank_tests.cpp
+  reductions/reduction_tests.cpp reductions/scan_tests.cpp reductions/segmented_reduction_tests.cpp
 )
 
 # ##################################################################################################
@@ -199,6 +212,7 @@ ConfigureTest(
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
+ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
@@ -210,7 +224,10 @@ endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
-ConfigureTest(SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/rank_test.cpp)
+ConfigureTest(
+  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/stable_sort_tests.cpp
+  sort/rank_test.cpp
+)
 
 # ##################################################################################################
 # * copying tests ---------------------------------------------------------------------------------

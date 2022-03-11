@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,6 +78,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class dense_rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class percent_rank_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class collect_list_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class collect_set_aggregation const& agg);
@@ -126,6 +128,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class row_number_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
   virtual void visit(class dense_rank_aggregation const& agg);
+  virtual void visit(class percent_rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
@@ -144,7 +147,8 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  */
 class sum_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -163,7 +167,7 @@ class sum_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public groupby_aggregation {
+class product_aggregation final : public groupby_aggregation, public segmented_reduce_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -184,7 +188,8 @@ class product_aggregation final : public groupby_aggregation {
  */
 class min_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -205,7 +210,8 @@ class min_aggregation final : public rolling_aggregation,
  */
 class max_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -245,7 +251,7 @@ class count_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying an any aggregation
  */
-class any_aggregation final : public aggregation {
+class any_aggregation final : public segmented_reduce_aggregation {
  public:
   any_aggregation() : aggregation(ANY) {}
 
@@ -264,7 +270,7 @@ class any_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying an all aggregation
  */
-class all_aggregation final : public aggregation {
+class all_aggregation final : public segmented_reduce_aggregation {
  public:
   all_aggregation() : aggregation(ALL) {}
 
@@ -645,6 +651,22 @@ class dense_rank_aggregation final : public rolling_aggregation, public groupby_
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<dense_rank_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+class percent_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
+ public:
+  percent_rank_aggregation() : aggregation{PERCENT_RANK} {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<percent_rank_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -1139,10 +1161,9 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
 
 // Summing/Multiplying integers of any type, always use int64_t accumulator
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<std::is_integral<Source>::value && is_sum_product_agg(k)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<std::is_integral_v<Source> && is_sum_product_agg(k)>> {
   using type = int64_t;
 };
 
@@ -1160,7 +1181,7 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<std::is_floating_point<Source>::value && is_sum_product_agg(k)>> {
+  std::enable_if_t<std::is_floating_point_v<Source> && is_sum_product_agg(k)>> {
   using type = Source;
 };
 
@@ -1241,6 +1262,12 @@ struct target_type_impl<Source, aggregation::RANK> {
 template <typename Source>
 struct target_type_impl<Source, aggregation::DENSE_RANK> {
   using type = size_type;
+};
+
+// Always use double for PERCENT_RANK
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::PERCENT_RANK> {
+  using type = double;
 };
 
 // Always use list for COLLECT_LIST
@@ -1405,6 +1432,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
     case aggregation::DENSE_RANK:
       return f.template operator()<aggregation::DENSE_RANK>(std::forward<Ts>(args)...);
+    case aggregation::PERCENT_RANK:
+      return f.template operator()<aggregation::PERCENT_RANK>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_SET:
@@ -1512,7 +1541,7 @@ data_type target_type(data_type source_type, aggregation::Kind k);
 template <typename Source, aggregation::Kind k>
 constexpr inline bool is_valid_aggregation()
 {
-  return (not std::is_void<target_type_t<Source, k>>::value);
+  return (not std::is_void_v<target_type_t<Source, k>>);
 }
 
 /**

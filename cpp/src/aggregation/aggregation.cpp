@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, dense_rank_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, percent_rank_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
@@ -333,6 +339,11 @@ void aggregation_finalizer::visit(dense_rank_aggregation const& agg)
   visit(static_cast<aggregation const&>(agg));
 }
 
+void aggregation_finalizer::visit(percent_rank_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
 void aggregation_finalizer::visit(collect_list_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
@@ -406,6 +417,8 @@ template std::unique_ptr<aggregation> make_sum_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_sum_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_sum_aggregation<groupby_aggregation>();
 template std::unique_ptr<groupby_scan_aggregation> make_sum_aggregation<groupby_scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_sum_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>
@@ -415,6 +428,8 @@ std::unique_ptr<Base> make_product_aggregation()
 }
 template std::unique_ptr<aggregation> make_product_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_product_aggregation<groupby_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_product_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MIN aggregation
 template <typename Base>
@@ -426,6 +441,8 @@ template std::unique_ptr<aggregation> make_min_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_min_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_min_aggregation<groupby_aggregation>();
 template std::unique_ptr<groupby_scan_aggregation> make_min_aggregation<groupby_scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_min_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MAX aggregation
 template <typename Base>
@@ -437,6 +454,8 @@ template std::unique_ptr<aggregation> make_max_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_max_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_max_aggregation<groupby_aggregation>();
 template std::unique_ptr<groupby_scan_aggregation> make_max_aggregation<groupby_scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_max_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a COUNT aggregation
 template <typename Base>
@@ -462,6 +481,8 @@ std::unique_ptr<Base> make_any_aggregation()
   return std::make_unique<detail::any_aggregation>();
 }
 template std::unique_ptr<aggregation> make_any_aggregation<aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_any_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a ALL aggregation
 template <typename Base>
@@ -470,6 +491,8 @@ std::unique_ptr<Base> make_all_aggregation()
   return std::make_unique<detail::all_aggregation>();
 }
 template std::unique_ptr<aggregation> make_all_aggregation<aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_all_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
 template <typename Base>
@@ -615,6 +638,16 @@ std::unique_ptr<Base> make_dense_rank_aggregation()
 template std::unique_ptr<aggregation> make_dense_rank_aggregation<aggregation>();
 template std::unique_ptr<groupby_scan_aggregation>
 make_dense_rank_aggregation<groupby_scan_aggregation>();
+
+/// Factory to create a PERCENT_RANK aggregation
+template <typename Base>
+std::unique_ptr<Base> make_percent_rank_aggregation()
+{
+  return std::make_unique<detail::percent_rank_aggregation>();
+}
+template std::unique_ptr<aggregation> make_percent_rank_aggregation<aggregation>();
+template std::unique_ptr<groupby_scan_aggregation>
+make_percent_rank_aggregation<groupby_scan_aggregation>();
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base>
