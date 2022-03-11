@@ -5,6 +5,7 @@ import math
 import os
 import pathlib
 import random
+from contextlib import contextmanager
 from io import BytesIO
 from string import ascii_letters
 
@@ -30,6 +31,19 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     set_random_null_mask_inplace,
 )
+
+
+@contextmanager
+def _hide_pyarrow_parquet_cpu_warnings(engine):
+    if engine == "pyarrow":
+        with pytest.warns(
+            UserWarning,
+            match="Using CPU via PyArrow to read Parquet dataset. This option "
+            "is both inefficient and unstable!",
+        ):
+            yield
+    else:
+        yield
 
 
 @pytest.fixture(scope="module")
