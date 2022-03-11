@@ -415,7 +415,7 @@ def read_parquet(
     # (There is a good chance this was not the intention)
     if engine != "cudf":
         warnings.warn(
-            "Using CPU via PyArrow to read Parquet dataset."
+            "Using CPU via PyArrow to read Parquet dataset. "
             "This option is both inefficient and unstable!"
         )
         if filters is not None:
