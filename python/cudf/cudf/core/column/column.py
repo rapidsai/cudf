@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import warnings
 from functools import cached_property
@@ -619,10 +618,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 raise ValueError(msg)
 
     def fillna(
-        self: T,
-        value: Any = None,
-        method: builtins.str = None,
-        dtype: Dtype = None,
+        self: T, value: Any = None, method: str = None, dtype: Dtype = None,
     ) -> T:
         """Fill null values with ``value``.
 
@@ -809,9 +805,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             ascending=[False], null_position=None
         )
 
-    def get_slice_bound(
-        self, label: ScalarLike, side: builtins.str, kind: builtins.str
-    ) -> int:
+    def get_slice_bound(self, label: ScalarLike, side: str, kind: str) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -844,9 +838,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self: ColumnBase,
-        ascending: bool = True,
-        na_position: builtins.str = "last",
+        self: ColumnBase, ascending: bool = True, na_position: str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -854,9 +846,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
-    def distinct_count(
-        self, method: builtins.str = "sort", dropna: bool = True
-    ) -> int:
+    def distinct_count(self, method: str = "sort", dropna: bool = True) -> int:
         if method != "sort":
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
@@ -1013,7 +1003,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         )
 
     def argsort(
-        self, ascending: bool = True, na_position: builtins.str = "last"
+        self, ascending: bool = True, na_position: str = "last"
     ) -> ColumnBase:
 
         return self.as_frame()._get_sorted_inds(
@@ -1089,9 +1079,9 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
     def searchsorted(
         self,
         value,
-        side: builtins.str = "left",
+        side: str = "left",
         ascending: bool = True,
-        na_position: builtins.str = "last",
+        na_position: str = "last",
     ):
         values = as_column(value).as_frame()
         return self.as_frame().searchsorted(
@@ -1140,13 +1130,13 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             data=data, dtype=dtype, mask=mask, size=header.get("size", None)
         )
 
-    def unary_operator(self, unaryop: builtins.str):
+    def unary_operator(self, unaryop: str):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
 
     def binary_operator(
-        self, op: builtins.str, other: BinaryOperand, reflect: bool = False
+        self, op: str, other: BinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         raise TypeError(
             f"Operation {op} not supported between dtypes {self.dtype} and "

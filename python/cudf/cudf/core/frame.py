@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import copy
 import pickle
 import warnings
@@ -6328,14 +6327,14 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
-    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+    def nunique(self, method: str = "sort", dropna: bool = True):
         """
         Returns a per column mapping with counts of unique values for
         each column.
 
         Parameters
         ----------
-        method : builtins.str, default "sort"
+        method : str, default "sort"
             Method used by cpp_distinct_count
         dropna : bool, default True
             Don't include NaN in the counts.
