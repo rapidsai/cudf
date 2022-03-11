@@ -103,6 +103,11 @@ cdef class GroupBy:
         return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
     def aggregate_internal(self, values, aggregations):
+        """`values` is a list of columns and `aggregations` is a list of list
+        of aggregations. `aggregations[i]` is a list of aggregations for
+        `values[i]`. Returns a list of list of aggregation results, a list of
+        grouped keys, and a list of list of aggregations performed.
+        """
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef libcudf_groupby.aggregation_request c_agg_request
         cdef Column col
@@ -174,6 +179,11 @@ cdef class GroupBy:
         return result_columns_with_padding, grouped_keys, included_aggregations
 
     def scan_internal(self, values, aggregations):
+        """`values` is a list of columns and `aggregations` is a list of list
+        of aggregations. `aggregations[i]` is a list of aggregations for
+        `values[i]`. Returns a list of list of aggregation results, a list of
+        grouped keys, and a list of list of aggregations performed.
+        """
         cdef vector[libcudf_groupby.scan_request] c_agg_requests
         cdef libcudf_groupby.scan_request c_agg_request
         cdef Column col
