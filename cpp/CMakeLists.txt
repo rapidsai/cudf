@@ -311,6 +311,7 @@ add_library(
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
+  src/io/text/byte_range_info.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -361,6 +362,7 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/collect_ops.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
@@ -372,6 +374,13 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
+  src/reductions/segmented_all.cu
+  src/reductions/segmented_any.cu
+  src/reductions/segmented_max.cu
+  src/reductions/segmented_min.cu
+  src/reductions/segmented_product.cu
+  src/reductions/segmented_reductions.cpp
+  src/reductions/segmented_sum.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu

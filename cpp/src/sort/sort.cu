@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
 }
 
 struct inplace_column_sort_fn {
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   void operator()(mutable_column_view& col, bool ascending, rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
@@ -68,7 +68,7 @@ struct inplace_column_sort_fn {
     }
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   void operator()(mutable_column_view&, bool, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Column type must be relationally comparable and fixed-width");

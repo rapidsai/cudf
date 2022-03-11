@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ template <typename NumericType>
 std::unique_ptr<cudf::column> get_numerics_column(cudf::size_type rows)
 {
   std::unique_ptr<cudf::table> result =
-    create_random_table({cudf::type_to_id<NumericType>()}, 1, row_count{rows});
+    create_random_table({cudf::type_to_id<NumericType>()}, row_count{rows});
   return std::move(result->release().front());
 }
 

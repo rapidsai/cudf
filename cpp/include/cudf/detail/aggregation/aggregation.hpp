@@ -149,7 +149,8 @@ class sum_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
                               public groupby_scan_aggregation,
                               public reduce_aggregation,
-                              public scan_aggregation {
+                              public scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -170,7 +171,8 @@ class sum_aggregation final : public rolling_aggregation,
  */
 class product_aggregation final : public groupby_aggregation,
                                   public reduce_aggregation,
-                                  public scan_aggregation {
+                                  public scan_aggregation,
+                                  public segmented_reduce_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -193,7 +195,8 @@ class min_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
                               public groupby_scan_aggregation,
                               public reduce_aggregation,
-                              public scan_aggregation {
+                              public scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -216,7 +219,8 @@ class max_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
                               public groupby_scan_aggregation,
                               public reduce_aggregation,
-                              public scan_aggregation {
+                              public scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -256,7 +260,7 @@ class count_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying an any aggregation
  */
-class any_aggregation final : public reduce_aggregation {
+class any_aggregation final : public reduce_aggregation, public segmented_reduce_aggregation {
  public:
   any_aggregation() : aggregation(ANY) {}
 
@@ -275,7 +279,7 @@ class any_aggregation final : public reduce_aggregation {
 /**
  * @brief Derived class for specifying an all aggregation
  */
-class all_aggregation final : public reduce_aggregation {
+class all_aggregation final : public reduce_aggregation, public segmented_reduce_aggregation {
  public:
   all_aggregation() : aggregation(ALL) {}
 
@@ -694,7 +698,9 @@ class percent_rank_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
-class collect_list_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class collect_list_aggregation final : public rolling_aggregation,
+                                       public groupby_aggregation,
+                                       public reduce_aggregation {
  public:
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
     : aggregation{COLLECT_LIST}, _null_handling{null_handling}
@@ -733,7 +739,9 @@ class collect_list_aggregation final : public rolling_aggregation, public groupb
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class collect_set_aggregation final : public rolling_aggregation,
+                                      public groupby_aggregation,
+                                      public reduce_aggregation {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -881,7 +889,7 @@ class udf_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
-class merge_lists_aggregation final : public groupby_aggregation {
+class merge_lists_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_lists_aggregation() : aggregation{MERGE_LISTS} {}
 
@@ -900,7 +908,7 @@ class merge_lists_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_SETS aggregation
  */
-class merge_sets_aggregation final : public groupby_aggregation {
+class merge_sets_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
     : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)

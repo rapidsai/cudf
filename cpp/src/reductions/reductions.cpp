@@ -102,6 +102,22 @@ struct reduce_dispatch_functor {
         auto nth_agg = dynamic_cast<nth_element_aggregation const*>(agg.get());
         return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, stream, mr);
       } break;
+      case aggregation::COLLECT_LIST: {
+        auto col_agg = dynamic_cast<collect_list_aggregation const*>(agg.get());
+        return reduction::collect_list(col, col_agg->_null_handling, stream, mr);
+      } break;
+      case aggregation::COLLECT_SET: {
+        auto col_agg = dynamic_cast<collect_set_aggregation const*>(agg.get());
+        return reduction::collect_set(
+          col, col_agg->_null_handling, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
+      } break;
+      case aggregation::MERGE_LISTS: {
+        return reduction::merge_lists(col, stream, mr);
+      } break;
+      case aggregation::MERGE_SETS: {
+        auto col_agg = dynamic_cast<merge_sets_aggregation const*>(agg.get());
+        return reduction::merge_sets(col, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
+      } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
