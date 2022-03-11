@@ -942,12 +942,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "Only pearson correlation is currently supported"
             )
 
-        def func(column_pair_groupby):
-            return column_pair_groupby.agg(
-                lambda x: x.corr(method, min_periods)
-            )
-
-        return self._cov_or_corr(lambda x: x.corr(method, min_periods), "Correlation")
+        return self._cov_or_corr(
+            lambda x: x.corr(method, min_periods), "Correlation"
+        )
 
     def cov(self, min_periods=0, ddof=1):
         """
@@ -1034,10 +1031,9 @@ class GroupBy(Serializable, Reducible, Scannable):
            val3  3.833333  12.333333  12.333333
         """
 
-        def func(column_pair_groupby):
-            return column_pair_groupby.agg(lambda x: x.cov(min_periods, ddof))
-
-        return self._cov_or_corr(func, "Covariance")
+        return self._cov_or_corr(
+            lambda x: x.cov(min_periods, ddof), "Covariance"
+        )
 
     def _cov_or_corr(self, func, method_name):
         """
@@ -1083,7 +1079,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         ).groupby(by=self.grouping.keys)
 
         try:
-            gb_cov_corr = func(column_pair_groupby)
+            gb_cov_corr = column_pair_groupby.agg(func)
         except RuntimeError as e:
             if "Unsupported groupby reduction type-agg combination" in str(e):
                 raise TypeError(
