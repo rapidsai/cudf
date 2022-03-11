@@ -374,7 +374,6 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    cudf::size_type num_rows)
 {
   // bernoulli_distribution
-  // get_null_frequency < 0 no null mask, ==0 all valids. //TODO remove unused computations
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
@@ -384,7 +383,6 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   rmm::device_uvector<T> samples              = value_dist(engine, cardinality);
 
   // Distribution for picking elements from the array of samples
-  std::uniform_int_distribution<cudf::size_type> sample_dist{0, cardinality - 1};
   auto const avg_run_len = profile.get_avg_run_length();
   rmm::device_uvector<T> data(0, rmm::cuda_stream_default);
   rmm::device_uvector<bool> null_mask(0, rmm::cuda_stream_default);

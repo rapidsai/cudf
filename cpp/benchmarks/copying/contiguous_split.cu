@@ -75,7 +75,7 @@ void BM_contiguous_split(benchmark::State& state)
 
   // generate input table
   data_profile profile;
-  if (not include_validity) profile.set_null_frequency(-0.1);  // <0 means, no null_mask
+  if (not include_validity) profile.set_null_frequency(-1);  // <0 means, no null_mask
   profile.set_cardinality(0);
   auto range = default_range<int>();
   profile.set_distribution_params<int>(
@@ -113,7 +113,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
 
   // generate input table
   data_profile profile;
-  profile.set_null_frequency(-0.1);  // <0 means, no null mask
+  profile.set_null_frequency(-1);  // <0 means, no null mask
   profile.set_cardinality(0);
   profile.set_distribution_params<int>(
     cudf::type_id::INT32,
