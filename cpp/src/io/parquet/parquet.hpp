@@ -65,7 +65,6 @@ struct MicroSeconds {
 struct NanoSeconds {
 };
 using TimeUnit_isset = struct TimeUnit_isset {
-  TimeUnit_isset() {}
   bool MILLIS{false};
   bool MICROS{false};
   bool NANOS{false};
@@ -99,7 +98,6 @@ struct BsonType {
 
 // thrift generated code simplified.
 using LogicalType_isset = struct LogicalType_isset {
-  LogicalType_isset() {}
   bool STRING{false};
   bool MAP{false};
   bool LIST{false};
