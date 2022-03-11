@@ -5396,8 +5396,12 @@ class Series(Frame, Serializable):
         >>> ser1.corr(ser2, method="spearman")
         -0.5
         """
+        if method not in ("pearson", "spearman",):
+            raise ValueError(f"Unknown method {method}")
+            
         if min_periods not in (None,):
             raise NotImplementedErroe("Unsupported argument 'min_periods'")
+            
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
@@ -5413,8 +5417,12 @@ class Series(Frame, Serializable):
             rhs = rhs.rank()
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
-
-        return lhs._column.corr(rhs._column)
+        try:
+            return lhs._column.corr(rhs._column)
+        except AttributeError:
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
 
     def isin(self, values):
         """Check whether values are contained in Series.
