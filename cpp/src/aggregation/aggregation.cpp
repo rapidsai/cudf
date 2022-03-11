@@ -417,6 +417,8 @@ template std::unique_ptr<aggregation> make_sum_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_sum_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_sum_aggregation<groupby_aggregation>();
 template std::unique_ptr<groupby_scan_aggregation> make_sum_aggregation<groupby_scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_sum_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base>
@@ -426,6 +428,8 @@ std::unique_ptr<Base> make_product_aggregation()
 }
 template std::unique_ptr<aggregation> make_product_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_product_aggregation<groupby_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_product_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MIN aggregation
 template <typename Base>
@@ -437,6 +441,8 @@ template std::unique_ptr<aggregation> make_min_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_min_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_min_aggregation<groupby_aggregation>();
 template std::unique_ptr<groupby_scan_aggregation> make_min_aggregation<groupby_scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_min_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a MAX aggregation
 template <typename Base>
@@ -448,6 +454,8 @@ template std::unique_ptr<aggregation> make_max_aggregation<aggregation>();
 template std::unique_ptr<rolling_aggregation> make_max_aggregation<rolling_aggregation>();
 template std::unique_ptr<groupby_aggregation> make_max_aggregation<groupby_aggregation>();
 template std::unique_ptr<groupby_scan_aggregation> make_max_aggregation<groupby_scan_aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_max_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a COUNT aggregation
 template <typename Base>
@@ -473,6 +481,8 @@ std::unique_ptr<Base> make_any_aggregation()
   return std::make_unique<detail::any_aggregation>();
 }
 template std::unique_ptr<aggregation> make_any_aggregation<aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_any_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a ALL aggregation
 template <typename Base>
@@ -481,6 +491,8 @@ std::unique_ptr<Base> make_all_aggregation()
   return std::make_unique<detail::all_aggregation>();
 }
 template std::unique_ptr<aggregation> make_all_aggregation<aggregation>();
+template std::unique_ptr<segmented_reduce_aggregation>
+make_all_aggregation<segmented_reduce_aggregation>();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
 template <typename Base>

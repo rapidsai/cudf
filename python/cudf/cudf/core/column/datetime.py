@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import datetime as dt
 import locale
 import re
@@ -277,7 +276,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     @property
-    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
