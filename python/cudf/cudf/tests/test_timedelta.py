@@ -816,7 +816,7 @@ def test_timedelta_datetime_index_ops_misc(
         ),
     ],
 )
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -880,7 +880,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         ),
     ],
 )
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
