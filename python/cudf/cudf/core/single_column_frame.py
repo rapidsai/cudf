@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import builtins
 from typing import (
     Any,
     Dict,
@@ -24,7 +23,7 @@ from cudf._typing import Dtype
 from cudf.api.types import _is_scalar_or_zero_d_array
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
-from cudf.utils.utils import NotIterable
+from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
 
 T = TypeVar("T", bound="Frame")
 
@@ -42,6 +41,7 @@ class SingleColumnFrame(Frame, NotIterable):
         "index": 0,
     }
 
+    @_cudf_nvtx_annotate
     def _reduce(
         self, op, axis=None, level=None, numeric_only=None, **kwargs,
     ):
@@ -60,6 +60,7 @@ class SingleColumnFrame(Frame, NotIterable):
         except AttributeError:
             raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
+    @_cudf_nvtx_annotate
     def _scan(self, op, axis=None, *args, **kwargs):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
@@ -67,6 +68,7 @@ class SingleColumnFrame(Frame, NotIterable):
         return super()._scan(op, axis=axis, *args, **kwargs)
 
     @classmethod
+    @_cudf_nvtx_annotate
     def _from_data(
         cls,
         data: MutableMapping,
@@ -79,21 +81,25 @@ class SingleColumnFrame(Frame, NotIterable):
             out.name = name
         return out
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def name(self):
         """Get the name of this object."""
         return next(iter(self._data.names))
 
-    @name.setter
+    @name.setter  # type: ignore
+    @_cudf_nvtx_annotate
     def name(self, value):
         self._data[value] = self._data.pop(self.name)
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def ndim(self):
         """Get the dimensionality (always 1 for single-columned frames)."""
         return 1
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def shape(self):
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
@@ -104,26 +110,32 @@ class SingleColumnFrame(Frame, NotIterable):
             "a.empty, a.bool(), a.item(), a.any() or a.all()."
         )
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def _num_columns(self):
         return 1
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def _column(self):
         return self._data[self.name]
 
-    @_column.setter
+    @_column.setter  # type: ignore
+    @_cudf_nvtx_annotate
     def _column(self, value):
         self._data[self.name] = value
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def values(self):  # noqa: D102
         return self._column.values
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def values_host(self):  # noqa: D102
         return self._column.values_host
 
+    @_cudf_nvtx_annotate
     def to_cupy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -132,6 +144,7 @@ class SingleColumnFrame(Frame, NotIterable):
     ) -> cupy.ndarray:  # noqa: D102
         return super().to_cupy(dtype, copy, na_value).flatten()
 
+    @_cudf_nvtx_annotate
     def to_numpy(
         self,
         dtype: Union[Dtype, None] = None,
@@ -151,6 +164,7 @@ class SingleColumnFrame(Frame, NotIterable):
     to_list = tolist
 
     @classmethod
+    @_cudf_nvtx_annotate
     def from_arrow(cls, array):
         """Create from PyArrow Array/ChunkedArray.
 
@@ -181,6 +195,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return cls(ColumnBase.from_arrow(array))
 
+    @_cudf_nvtx_annotate
     def to_arrow(self):
         """
         Convert to a PyArrow Array.
@@ -211,7 +226,8 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def is_unique(self):
         """Return boolean if values in the object are unique.
 
@@ -221,7 +237,8 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_unique
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def is_monotonic(self):
         """Return boolean if values in the object are monotonically increasing.
 
@@ -233,7 +250,8 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self.is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def is_monotonic_increasing(self):
         """Return boolean if values in the object are monotonically increasing.
 
@@ -243,7 +261,8 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def is_monotonic_decreasing(self):
         """Return boolean if values in the object are monotonically decreasing.
 
@@ -253,10 +272,12 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.is_monotonic_decreasing
 
-    @property
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
+    @_cudf_nvtx_annotate
     def factorize(self, na_sentinel=-1):
         """Encode the input values as integer labels.
 
@@ -284,6 +305,7 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
+    @_cudf_nvtx_annotate
     def _make_operands_for_binop(
         self,
         other: Any,
@@ -337,14 +359,13 @@ class SingleColumnFrame(Frame, NotIterable):
 
         return {result_name: (self._column, other, reflect, fill_value)}
 
-    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+    @_cudf_nvtx_annotate
+    def nunique(self, dropna: bool = True):
         """
         Return count of unique values for the column.
 
         Parameters
         ----------
-        method : builtins.str, default "sort"
-            Method used by cpp_distinct_count
         dropna : bool, default True
             Don't include NaN in the counts.
 
@@ -355,4 +376,4 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         if self._column.null_count == len(self):
             return 0
-        return self._column.distinct_count(method=method, dropna=dropna)
+        return self._column.distinct_count(dropna=dropna)

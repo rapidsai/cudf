@@ -207,14 +207,13 @@ Reshaping, sorting
    Series.repeat
    Series.transpose
 
-Combining / comparing / joining / merging / encoding
-----------------------------------------------------
+Combining / comparing / joining / merging
+-----------------------------------------
 .. autosummary::
    :toctree: api/
 
    Series.append
    Series.update
-   Series.one_hot_encoding
 
 Numerical operations
 ~~~~~~~~~~~~~~~~~~~~
