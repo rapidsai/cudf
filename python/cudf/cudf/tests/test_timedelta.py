@@ -453,7 +453,6 @@ def test_timedelta_dataframe_ops(df, op):
         ),
     ],
 )
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
     psr = gsr.to_pandas()
