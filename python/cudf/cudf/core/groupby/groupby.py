@@ -7,7 +7,6 @@ import warnings
 from functools import cached_property
 
 import numpy as np
-from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
@@ -16,9 +15,9 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
-from cudf.core.mixins import Reducible
+from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import GetAttrGetItemMixin
+from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -36,7 +35,7 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-class GroupBy(Serializable, Reducible):
+class GroupBy(Serializable, Reducible, Scannable):
 
     _VALID_REDUCTIONS = {
         "sum",
@@ -52,6 +51,19 @@ class GroupBy(Serializable, Reducible):
         "last",
         "var",
         "std",
+    }
+
+    _VALID_SCANS = {
+        "cumsum",
+        "cummin",
+        "cummax",
+    }
+
+    # Necessary because the function names don't directly map to the docs.
+    _SCAN_DOCSTRINGS = {
+        "cumsum": {"op_name": "Cumulative sum"},
+        "cummin": {"op_name": "Cumulative min"},
+        "cummax": {"op_name": "Cumulative max"},
     }
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -194,7 +206,7 @@ class GroupBy(Serializable, Reducible):
     def _groupby(self):
         return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
 
-    @annotate("GROUPBY_AGG", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def agg(self, func):
         """
         Apply aggregation(s) to the groups.
@@ -351,6 +363,10 @@ class GroupBy(Serializable, Reducible):
             raise NotImplementedError(
                 "min_count parameter is not implemented yet"
             )
+        return self.agg(op)
+
+    def _scan(self, op: str, *args, **kwargs):
+        """{op_name} for each group."""
         return self.agg(op)
 
     aggregate = agg
@@ -1209,19 +1225,6 @@ class GroupBy(Serializable, Reducible):
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
-
-    def cumsum(self):
-        """Compute the column-wise cumulative sum of the values in
-        each group."""
-        return self.agg("cumsum")
-
-    def cummin(self):
-        """Get the column-wise cumulative minimum value in each group."""
-        return self.agg("cummin")
-
-    def cummax(self):
-        """Get the column-wise cumulative maximum value in each group."""
-        return self.agg("cummax")
 
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.

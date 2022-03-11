@@ -50,7 +50,7 @@ struct scan_dispatcher {
    * @param mr Device memory resource used to allocate the returned column's device memory
    * @return Output column with scan results
    */
-  template <typename T, typename std::enable_if_t<cuda::std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<cuda::std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy,
                                      rmm::cuda_stream_view stream,
