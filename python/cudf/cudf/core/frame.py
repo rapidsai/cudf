@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import copy
 import pickle
 import warnings
@@ -200,7 +199,7 @@ class Frame(BinaryOperand, Scannable):
     def _from_columns(
         cls,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` object from a list of columns.
@@ -231,7 +230,7 @@ class Frame(BinaryOperand, Scannable):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
@@ -6328,15 +6327,13 @@ class Frame(BinaryOperand, Scannable):
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
-    def nunique(self, method: builtins.str = "sort", dropna: bool = True):
+    def nunique(self, dropna: bool = True):
         """
         Returns a per column mapping with counts of unique values for
         each column.
 
         Parameters
         ----------
-        method : builtins.str, default "sort"
-            Method used by cpp_distinct_count
         dropna : bool, default True
             Don't include NaN in the counts.
 
@@ -6346,7 +6343,7 @@ class Frame(BinaryOperand, Scannable):
             Name and unique value counts of each column in frame.
         """
         return {
-            name: col.distinct_count(method=method, dropna=dropna)
+            name: col.distinct_count(dropna=dropna)
             for name, col in self._data.items()
         }
 
