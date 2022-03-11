@@ -2022,14 +2022,7 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
 
     pdf.to_parquet(pandas_path)
-    if engine == "pyarrow":
-        with pytest.warns(
-            UserWarning,
-            match="Using CPU via PyArrow to read Parquet dataset. This option "
-            "is both inefficient and unstable!",
-        ):
-            actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
-    else:
+    with _hide_pyarrow_parquet_cpu_warnings(engine):
         actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
@@ -2104,14 +2097,7 @@ def test_parquet_allnull_str(tmpdir, engine):
     )
 
     pdf.to_parquet(pandas_path)
-    if engine == "pyarrow":
-        with pytest.warns(
-            UserWarning,
-            match="Using CPU via PyArrow to read Parquet dataset. This option "
-            "is both inefficient and unstable!",
-        ):
-            actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
-    else:
+    with _hide_pyarrow_parquet_cpu_warnings(engine):
         actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
