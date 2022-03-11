@@ -2011,7 +2011,7 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     if engine == "pyarrow":
         with pytest.warns(
             UserWarning,
-            match="Using CPU via PyArrow to read Parquet dataset.This option "
+            match="Using CPU via PyArrow to read Parquet dataset. This option "
             "is both inefficient and unstable!",
         ):
             actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
@@ -2093,7 +2093,7 @@ def test_parquet_allnull_str(tmpdir, engine):
     if engine == "pyarrow":
         with pytest.warns(
             UserWarning,
-            match="Using CPU via PyArrow to read Parquet dataset.This option "
+            match="Using CPU via PyArrow to read Parquet dataset. This option "
             "is both inefficient and unstable!",
         ):
             actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
