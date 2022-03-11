@@ -119,13 +119,12 @@ bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
                      });
 }
 
-// Explicit extern template instantiation for a table of immutable views
-extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
-                                                            table_view const& rhs);
+// Explicit template instantiation for a table of immutable views
+template bool is_relationally_comparable<table_view>(table_view const& lhs, table_view const& rhs);
 
-// Explicit extern template instantiation for a table of mutable views
-extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
-                                                                    mutable_table_view const& rhs);
+// Explicit template instantiation for a table of mutable views
+template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
+                                                             mutable_table_view const& rhs);
 
 }  // namespace detail
 }  // namespace cudf
