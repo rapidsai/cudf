@@ -122,8 +122,7 @@ struct compute_children_offsets_fn {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(column_view const& all_keys,
              column_view const& all_indices,
              column_view const& new_keys,
@@ -184,8 +183,7 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(Args&&...)
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");

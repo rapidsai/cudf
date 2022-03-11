@@ -19,6 +19,7 @@
 #include <map>
 
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 /**
@@ -113,7 +114,8 @@ std::pair<int64_t, int64_t> default_range()
 template <typename T, std::enable_if_t<cudf::is_numeric<T>()>* = nullptr>
 std::pair<T, T> default_range()
 {
-  return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max()};
+  // Limits need to be such that `upper - lower` does not overflow
+  return {std::numeric_limits<T>::lowest() / 2, std::numeric_limits<T>::max() / 2};
 }
 }  // namespace
 
@@ -127,9 +129,7 @@ struct distribution_params;
  * @brief Numeric values are parameterized with a distribution type and bounds of the same type.
  */
 template <typename T>
-struct distribution_params<
-  T,
-  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
+struct distribution_params<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   distribution_id id;
   T lower_bound;
   T upper_bound;
@@ -139,7 +139,7 @@ struct distribution_params<
  * @brief Booleans are parameterized with the probability of getting `true` value.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, bool>>> {
   double probability_true;
 };
 
@@ -147,7 +147,7 @@ struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, bool>>
  * @brief Timestamps and durations are parameterized with a distribution type and int64_t bounds.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+struct distribution_params<T, std::enable_if_t<cudf::is_chrono<T>()>> {
   distribution_id id;
   int64_t lower_bound;
   int64_t upper_bound;
@@ -157,7 +157,7 @@ struct distribution_params<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  * @brief Strings are parameterized by the distribution of their length, as an integral value.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   distribution_params<uint32_t> length_params;
 };
 
@@ -166,7 +166,7 @@ struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::
  * the element type.
  */
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
   cudf::type_id element_type;
   distribution_params<uint32_t> length_params;
   cudf::size_type max_depth;
@@ -174,7 +174,7 @@ struct distribution_params<T, typename std::enable_if_t<std::is_same_v<T, cudf::
 
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
-struct distribution_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 };
 
 /**
@@ -223,9 +223,8 @@ class data_profile {
   cudf::size_type avg_run_length = 4;
 
  public:
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_same_v<T, bool> && std::is_integral_v<T>, T>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!std::is_same_v<T, bool> && cuda::std::is_integral_v<T>, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -238,7 +237,7 @@ class data_profile {
     }
   }
 
-  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = float_params.find(cudf::type_to_id<T>());
@@ -257,7 +256,7 @@ class data_profile {
     return distribution_params<T>{bool_probability};
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
   distribution_params<T> get_distribution_params() const
   {
     auto it = int_params.find(cudf::type_to_id<T>());
@@ -283,7 +282,7 @@ class data_profile {
     return list_dist_desc;
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   distribution_params<typename T::rep> get_distribution_params() const
   {
     using rep = typename T::rep;
@@ -306,7 +305,7 @@ class data_profile {
   // discrete distributions (integers, strings, lists). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
+            std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
@@ -330,7 +329,7 @@ class data_profile {
   // have continuous distributions (floating point types). Otherwise the call with have no effect.
   template <typename T,
             typename Type_enum,
-            typename std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
+            std::enable_if_t<std::is_floating_point_v<T>, T>* = nullptr>
   void set_distribution_params(Type_enum type_or_group,
                                distribution_id dist,
                                T lower_bound,
@@ -369,18 +368,13 @@ struct row_count {
 /**
  * @brief Deterministically generates a table filled with data with the given parameters.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
- *
  * @param dtype_ids Vector of requested column types
- * @param num_cols Number of columns in the output table
  * @param table_bytes Target size of the output table, in bytes. Some type may not produce columns
  * of exact size
  * @param data_params optional, set of data parameters describing the data profile for each type
  * @param seed optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
@@ -388,17 +382,51 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 /**
  * @brief Deterministically generates a table filled with data with the given parameters.
  *
- * If the number of passed types is smaller than the number of requested column, the columns types
- * with be repeated in round-robin order to fill the table.
- *
  * @param dtype_ids Vector of requested column types
- * @param num_cols Number of columns in the output table
  * @param num_rows Number of rows in the output table
  * @param data_params optional, set of data parameters describing the data profile for each type
  * @param seed optional, seed for the pseudo-random engine
  */
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  row_count num_rows,
                                                  data_profile const& data_params = data_profile{},
                                                  unsigned seed                   = 1);
+
+/**
+ * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
+ * subsequent rows.
+ *
+ * @param dtype_ids Vector of requested column types
+ * @param num_rows Number of rows in the output table
+ * @param null_probability optional, probability of a null value
+ *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ * @param seed optional, seed for the pseudo-random engine
+ * @return A table with the sequence columns.
+ */
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   row_count num_rows,
+                                                   float null_probability = -1.0,
+                                                   unsigned seed          = 1);
+
+/**
+ * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
+ * elements.
+ *
+ * @param dtype_ids Vector of requested column types
+ * @param num_cols Number of types in the output vector
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols);
+/**
+ * @brief Create a random null mask object
+ *
+ * @param size number of rows
+ * @param null_probability probability of a null value
+ *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ * @param seed optional, seed for the pseudo-random engine
+ * @return null mask device buffer with random null mask data and null count
+ */
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
+                                                                       float null_probability,
+                                                                       unsigned seed = 1);

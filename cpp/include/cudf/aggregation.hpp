@@ -170,6 +170,17 @@ class scan_aggregation : public virtual aggregation {
   scan_aggregation() {}
 };
 
+/**
+ * @brief Derived class intended for segmented reduction usage.
+ */
+class segmented_reduce_aggregation : public virtual aggregation {
+ public:
+  ~segmented_reduce_aggregation() override = default;
+
+ protected:
+  segmented_reduce_aggregation() {}
+};
+
 enum class udf_type : bool { CUDA, PTX };
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 

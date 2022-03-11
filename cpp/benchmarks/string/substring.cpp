@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,8 +43,7 @@ static void BM_substring(benchmark::State& state, substring_type rt)
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table =
-    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
   auto starts_itr = thrust::constant_iterator<cudf::size_type>(1);
   auto stops_itr  = thrust::constant_iterator<cudf::size_type>(max_str_length / 2);

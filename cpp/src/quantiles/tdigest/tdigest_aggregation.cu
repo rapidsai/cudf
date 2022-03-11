@@ -707,9 +707,8 @@ struct get_scalar_minmax {
 };
 
 struct typed_group_tdigest {
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> group_labels,
@@ -766,10 +765,9 @@ struct typed_group_tdigest {
                             mr);
   }
 
-  template <
-    typename T,
-    typename... Args,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            typename... Args,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(Args&&...)
   {
     CUDF_FAIL("Non-numeric type in group_tdigest");
