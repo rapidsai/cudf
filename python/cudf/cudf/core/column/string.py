@@ -5447,13 +5447,9 @@ class StringColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
     ) -> "column.ColumnBase":
-        # TODO: This short-circuiting could probably be applied to any dtype,
-        # not just list dtypes. I'm not sure what `other` operands are valid or
-        # if they differ for different dtypes, though.
-        # TODO: We should raise a pandas issue about this behavior, which
-        # makes no sense for non-string operands...
         # Handle object columns that are empty or all nulls when performing
         # binary operations
+        # See https://github.com/pandas-dev/pandas/issues/46332
         if self.null_count == len(self):
             if op in {
                 "add",
