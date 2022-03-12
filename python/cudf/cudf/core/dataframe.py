@@ -359,33 +359,30 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 for i, col in enumerate(columns_df._column_names):
                     self._frame[col].loc[key[0]] = value_cols[i]
             else:
-
                 if isinstance(value, cudf.DataFrame):
                     if value.shape != self._frame.loc[key[0]].shape:
                         raise ValueError(
-                            f"shape mismatch: value array of shape"
-                            f"{value.shape} could not be broadcast"
-                            f"to indexing result of shape"
+                            f"shape mismatch: value array of shape "
+                            f"{value.shape} could not be broadcast "
+                            f"to indexing result of shape "
                             f"{self._frame.loc[key[0]].shape}"
                         )
                     for col in self._frame._column_names:
                         if col in value:
-                            # breakpoint()
                             self._frame._data[col][key[0]] = value.iloc[
                                 :, columns_df._column_names.index(col)
                             ]
                         else:
                             self._frame._data[col][key[0]] = cudf.NA
-
                 else:
-                    value = np.array(value).T
+                    value = np.array(value)
                     value = value.reshape((-1, value.shape[0]))
                     if value.shape != self._frame.loc[key[0]].shape:
                         raise ValueError(
-                            f"shape mismatch: value array of shape"
-                            f"{value.shape} could not be broadcast"
-                            f"to indexing result of shape"
-                            f"{self._frame.loc[key[0]].shape}"
+                            f"shape mismatch: value array of shape "
+                            f"{value.shape} could not be broadcast "
+                            f"to indexing result of shape "
+                            f"{self._frame.loc[key[0]].shape} "
                         )
                     for col in columns_df._column_names:
                         self._frame._data[col][key[0]] = value[
@@ -452,10 +449,37 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
-        columns = self._frame._get_columns_by_index(key[1])
+        columns_df = self._frame._get_columns_by_index(key[1])
 
-        for col in columns:
-            self._frame[col].iloc[key[0]] = value
+        if isinstance(value, cudf.DataFrame):
+            if value.shape != self._frame.iloc[key[0]].shape:
+                raise ValueError(
+                    f"shape mismatch: value array of shape "
+                    f"{value.shape} could not be broadcast "
+                    f"to indexing result of shape "
+                    f"{self._frame.iloc[key[0]].shape} "
+                )
+            for col in self._frame._column_names:
+                if col in value:
+                    self._frame._data[col][key[0]] = value.iloc[
+                        :, columns_df._column_names.index(col)
+                    ]
+                else:
+                    self._frame._data[col][key[0]] = cudf.NA
+        else:
+            value = np.array(value)
+            value = value.reshape((-1, value.shape[0]))
+            if value.shape != self._frame.iloc[key[0]].shape:
+                raise ValueError(
+                    f"shape mismatch: value array of shape "
+                    f"{value.shape} could not be broadcast "
+                    f"to indexing result of shape "
+                    f"{self._frame.iloc[key[0]].shape} "
+                )
+            for col in columns_df._column_names:
+                self._frame._data[col][key[0]] = value[
+                    :, columns_df._column_names.index(col)
+                ]
 
     def _getitem_scalar(self, arg):
         col = self._frame.columns[arg[1]]
