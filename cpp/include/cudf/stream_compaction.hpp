@@ -216,15 +216,21 @@ enum class duplicate_keep_option {
 /**
  * @brief Create a new table with consecutive duplicate rows removed.
  *
- * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
- * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
- * table/column, while keeping unique rows only removes duplicates from consecutive groupings.
- *
  * Given an `input` table_view, one specific row from a group of equivalent elements is copied to
  * output table depending on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
+ *
+ * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
+ * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
+ * table/column, while keeping unique rows only removes duplicates from consecutive groupings.
+ *
+ * Performance hints:
+ * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted
+ * - If the input is not pre-sorted and the behavior of pandas.DataFrame.drop_duplicates is desired:
+ *   - If `keep` is not relevant, use `cudf::distinct`
+ *   - If `keep` control is required, stable sort the input then `cudf::unique`
  *
  * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
@@ -253,6 +259,12 @@ std::unique_ptr<table> unique(
  * rows are present, it is unspecified which row is copied.
  *
  * The order of elements in the output table is not specified.
+ *
+ * Performance hints:
+ * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted
+ * - If the input is not pre-sorted and the behavior of pandas.DataFrame.drop_duplicates is desired:
+ *   - If `keep` is not relevant, use `cudf::distinct`
+ *   - If `keep` control is required, stable sort the input then `cudf::unique`
  *
  * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`
