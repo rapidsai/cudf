@@ -9107,3 +9107,34 @@ def test_dataframe_pct_change(data, periods, fill_method):
     expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
     assert_eq(expected, actual)
+
+
+# @pytest.mark.parametrize(
+#     ("key, value"),
+#     [
+#         ( [0], ["x", "y"], [10, 20]),
+#         ( [0,2], ["x", "y"], [[10, 30], [20, 40]]),
+#     ]
+# )
+def test_dataframe_loc_inplace_update(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[key] = value
+    expected = pdf.loc[key] = value
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_iloc_inplace_update():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.iloc[[0]] = [10, 20]
+    actual2 = gdf.iloc[[0, 2]] = [[10, 30], [20, 40]]
+
+    expected = pdf.iloc[[0]] = [10, 20]
+    expected2 = pdf.iloc[[0, 2]] = [[10, 30], [20, 40]]
+
+    assert_eq(expected, actual)
+    assert_eq(expected2, actual2)
