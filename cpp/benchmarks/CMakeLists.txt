@@ -144,7 +144,9 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
-ConfigureNVBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates.cpp)
+ConfigureNVBench(
+  STREAM_COMPACTION_BENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+)
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
