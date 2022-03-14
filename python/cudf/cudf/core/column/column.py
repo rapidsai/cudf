@@ -846,10 +846,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
-    def distinct_count(self, method: str = "sort", dropna: bool = True) -> int:
-        if method != "sort":
-            msg = "non sort based distinct_count() not implemented yet"
-            raise NotImplementedError(msg)
+    def distinct_count(self, dropna: bool = True) -> int:
         try:
             return self._distinct_count[dropna]
         except KeyError:
