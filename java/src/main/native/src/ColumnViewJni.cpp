@@ -257,7 +257,32 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
     cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
-    return release_as_jlong(cudf::reduce(*col, agg->clone(), out_dtype));
+    return release_as_jlong(
+        cudf::reduce(*col,
+                     std::unique_ptr<cudf::reduce_aggregation>(
+                         dynamic_cast<cudf::reduce_aggregation *>(agg->clone().release())),
+                     out_dtype));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(
+    JNIEnv *env, jclass, jlong j_data_view, jlong j_offsets_view, jlong j_agg,
+    jboolean include_nulls, jint j_dtype, jint scale) {
+  JNI_NULL_CHECK(env, j_data_view, "data column view is null", 0);
+  JNI_NULL_CHECK(env, j_offsets_view, "offsets column view is null", 0);
+  JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto data = reinterpret_cast<cudf::column_view *>(j_data_view);
+    auto offsets = reinterpret_cast<cudf::column_view *>(j_offsets_view);
+    auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
+    auto s_agg = dynamic_cast<cudf::segmented_reduce_aggregation *>(agg);
+    JNI_ARG_CHECK(env, s_agg != nullptr, "agg is not a cudf::segmented_reduce_aggregation", 0)
+    auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
+    cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    return release_as_jlong(
+        cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -273,7 +298,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
     auto scan_type = is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE;
     auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
-    return release_as_jlong(cudf::scan(*col, agg->clone(), scan_type, null_policy));
+    return release_as_jlong(
+        cudf::scan(*col,
+                   std::unique_ptr<cudf::scan_aggregation>(
+                       dynamic_cast<cudf::scan_aggregation *>(agg->clone().release())),
+                   scan_type, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -1771,6 +1800,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getChildCvPointer(JNIEnv 
     auto const is_list = column->type().id() == cudf::type_id::LIST;
     auto const child = column->child(child_index + (is_list ? 1 : 0));
     return ptr_as_jlong(new cudf::column_view(child));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getListOffsetCvPointer(JNIEnv *env,
+                                                                              jobject j_object,
+                                                                              jlong handle) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::lists_column_view view = cudf::lists_column_view(*column);
+    cudf::column_view offsets_view = view.offsets();
+    return ptr_as_jlong(new cudf::column_view(offsets_view));
   }
   CATCH_STD(env, 0);
 }

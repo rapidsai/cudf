@@ -23,6 +23,7 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
+#include <optional>
 
 namespace cudf {
 namespace io {

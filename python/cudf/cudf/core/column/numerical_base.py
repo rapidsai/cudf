@@ -12,9 +12,10 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
+from cudf.core.mixins import Scannable
 
 
-class NumericalBaseColumn(ColumnBase):
+class NumericalBaseColumn(ColumnBase, Scannable):
     """A column composed of numerical data.
 
     This class encodes a standard interface for different types of columns
@@ -30,6 +31,13 @@ class NumericalBaseColumn(ColumnBase):
         "mean",
         "var",
         "std",
+    }
+
+    _VALID_SCANS = {
+        "cumsum",
+        "cumprod",
+        "cummin",
+        "cummax",
     }
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
@@ -174,7 +182,7 @@ class NumericalBaseColumn(ColumnBase):
         """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 
-    def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)._with_type_metadata(
-            self.dtype
-        )
+    def _scan(self, op: str) -> ColumnBase:
+        return libcudf.reduce.scan(
+            op.replace("cum", ""), self, True
+        )._with_type_metadata(self.dtype)

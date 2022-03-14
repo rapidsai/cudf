@@ -232,6 +232,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get a ColumnView that is the offsets for this list.
+   */
+  ColumnView getListOffsetsView() {
+    assert(getType().equals(DType.LIST));
+    return new ColumnView(getListOffsetCvPointer(viewHandle));
+  }
+
+  /**
    * Gets the data buffer for the current column view (viewHandle).
    * If the type is LIST, STRUCT it returns null.
    * @return    If the type is LIST, STRUCT or data buffer is empty it returns null,
@@ -1493,6 +1501,91 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
     } finally {
       Aggregation.close(nativeId);
+    }
+  }
+
+  /**
+   * Do a segmented reduce where the offsets column indicates which groups in this to combine. The
+   * output type is the same as the input type.
+   * @param offsets an INT32 column with no nulls.
+   * @param aggregation the aggregation to do
+   * @return the result.
+   */
+  public ColumnVector segmentedReduce(ColumnView offsets, SegmentedReductionAggregation aggregation) {
+    return segmentedReduce(offsets, aggregation, NullPolicy.EXCLUDE, type);
+  }
+
+  /**
+   * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   * @param offsets an INT32 column with no nulls.
+   * @param aggregation the aggregation to do
+   * @param outType the output data type.
+   * @return the result.
+   */
+  public ColumnVector segmentedReduce(ColumnView offsets, SegmentedReductionAggregation aggregation,
+      DType outType) {
+    return segmentedReduce(offsets, aggregation, NullPolicy.EXCLUDE, outType);
+  }
+
+  /**
+   * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   * @param offsets an INT32 column with no nulls.
+   * @param aggregation the aggregation to do
+   * @param nullPolicy the null policy.
+   * @param outType the output data type.
+   * @return the result.
+   */
+  public ColumnVector segmentedReduce(ColumnView offsets, SegmentedReductionAggregation aggregation,
+      NullPolicy nullPolicy, DType outType) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new ColumnVector(segmentedReduce(getNativeView(), offsets.getNativeView(), nativeId,
+          nullPolicy.includeNulls, outType.typeId.getNativeId(), outType.getScale()));
+    } finally {
+      Aggregation.close(nativeId);
+    }
+  }
+
+  /**
+   * Do a reduction on the values in a list. The output type will be the type of the data column
+   * of this list.
+   * @param aggregation the aggregation to perform
+   */
+  public ColumnVector listReduce(SegmentedReductionAggregation aggregation) {
+    if (!getType().equals(DType.LIST)) {
+      throw new IllegalArgumentException("listReduce only works on list types");
+    }
+    try (ColumnView offsets = getListOffsetsView();
+         ColumnView data = getChildColumnView(0)) {
+      return data.segmentedReduce(offsets, aggregation);
+    }
+  }
+
+  /**
+   * Do a reduction on the values in a list.
+   * @param aggregation the aggregation to perform
+   * @param outType the type of the output. Typically, this should match with the child type
+   *                of the list.
+   */
+  public ColumnVector listReduce(SegmentedReductionAggregation aggregation, DType outType) {
+    return listReduce(aggregation, NullPolicy.EXCLUDE, outType);
+  }
+
+  /**
+   * Do a reduction on the values in a list.
+   * @param aggregation the aggregation to perform
+   * @param nullPolicy should nulls be included or excluded from the aggregation.
+   * @param outType the type of the output. Typically, this should match with the child type
+   *                of the list.
+   */
+  public ColumnVector listReduce(SegmentedReductionAggregation aggregation, NullPolicy nullPolicy,
+      DType outType) {
+    if (!getType().equals(DType.LIST)) {
+      throw new IllegalArgumentException("listReduce only works on list types");
+    }
+    try (ColumnView offsets = getListOffsetsView();
+         ColumnView data = getChildColumnView(0)) {
+      return data.segmentedReduce(offsets, aggregation, nullPolicy, outType);
     }
   }
 
@@ -3897,6 +3990,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
 
+  private static native long segmentedReduce(long dataViewHandle, long offsetsViewHandle,
+      long aggregation, boolean includeNulls, int dtype, int scale) throws CudfException;
+
   private static native long isNullNative(long viewHandle);
 
   private static native long isNanNative(long viewHandle);
@@ -4023,6 +4119,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
 
   static native long getChildCvPointer(long viewHandle, int childIndex) throws CudfException;
+
+  private static native long getListOffsetCvPointer(long viewHandle) throws CudfException;
 
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
