@@ -214,16 +214,23 @@ enum class duplicate_keep_option {
 };
 
 /**
- * @brief Create a new table without duplicate rows.
+ * @brief Create a new table with consecutive duplicate rows removed.
  *
- * The output table is sorted according to the lexicographic ordering of the data in the columns
- * indexed by `keys`.
- *
- * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
+ * Given an `input` table_view, one specific row from a group of equivalent elements is copied to
+ * output table depending on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
+ *
+ * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
+ * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
+ * table/column, while keeping unique rows only removes duplicates from consecutive groupings.
+ *
+ * Performance hints:
+ * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted
+ * - If the input is not pre-sorted and the behavior of pandas.DataFrame.drop_duplicates is desired:
+ *   - If `keep` is not relevant, use `cudf::distinct`
+ *   - If `keep` control is required, stable sort the input then `cudf::unique`
  *
  * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
@@ -232,46 +239,50 @@ enum class duplicate_keep_option {
  * @param[in] keep            keep first row, last row, or no rows of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
- * @param[in] null_precedence flag to denote nulls should appear before or after non-null items
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
- * @return Table with sorted unique rows as specified by `keep`.
+ * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`.
  */
-std::unique_ptr<table> drop_duplicates(
+std::unique_ptr<table> unique(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
-  null_order null_precedence          = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a new table without duplicate rows with hash-based algorithms.
+ * @brief Create a new table without duplicate rows.
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` columns is unique. If duplicate rows are present, it is unspecified which
- * row is copied.
+ * row of `keys` columns is distinct (no other equivalent row exists in the table). If duplicate
+ * rows are present, it is unspecified which row is copied.
  *
  * The order of elements in the output table is not specified.
  *
- * @param[in] input           input table_view to copy only unique rows
+ * Performance hints:
+ * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted
+ * - If the input is not pre-sorted and the behavior of pandas.DataFrame.drop_duplicates is desired:
+ *   - If `keep` is not relevant, use `cudf::distinct`
+ *   - If `keep` control is required, stable sort the input then `cudf::unique`
+ *
+ * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
- * @return Table with unique rows in an unspecified order.
+ * @return Table with distinct rows in an unspecified order.
  */
-std::unique_ptr<table> unordered_drop_duplicates(
+std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
   null_equality nulls_equal           = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Count the number of consecutive groups of equivalent elements in a column.
+ * @brief Count the number of consecutive groups of equivalent rows in a column.
  *
  * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
  * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
@@ -279,63 +290,63 @@ std::unique_ptr<table> unordered_drop_duplicates(
  *
  * `null`s are handled as equal.
  *
- * @param[in] input The column_view whose number of distinct consecutive groups will be counted
+ * @param[in] input The column_view whose consecutive groups of equivalent rows will be counted
  * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_handling flag to consider `NaN==null` or not
  *
- * @return number of distinct consecutive groups in the column
+ * @return number of consecutive groups of equivalent rows in the column
+ */
+cudf::size_type unique_count(column_view const& input,
+                             null_policy null_handling,
+                             nan_policy nan_handling);
+
+/**
+ * @brief Count the number of consecutive groups of equivalent rows in a table.
+ *
+ * @param[in] input Table whose consecutive groups of equivalent rows will be counted
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal.
+ *            nulls are not equal if null_equality::UNEQUAL.
+ *
+ * @return number of consecutive groups of equivalent rows in the column
+ */
+cudf::size_type unique_count(table_view const& input,
+                             null_equality nulls_equal = null_equality::EQUAL);
+
+/**
+ * @brief Count the distinct elements in the column_view.
+ *
+ * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are distinct.
+ *
+ * Given an input column_view, number of distinct elements in this column_view is returned.
+ *
+ * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
+ * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
+ * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in
+ * distinct count.
+ *
+ * `null`s are handled as equal.
+ *
+ * @param[in] input The column_view whose distinct elements will be counted
+ * @param[in] null_handling flag to include or ignore `null` while counting
+ * @param[in] nan_handling flag to consider `NaN==null` or not
+ *
+ * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
                                nan_policy nan_handling);
 
 /**
- * @brief Count the number of consecutive groups of equivalent elements in a table.
+ * @brief Count the distinct rows in a table.
  *
- * @param[in] input Table whose number of distinct consecutive groups will be counted
+ * @param[in] input Table whose distinct rows will be counted
  * @param[in] nulls_equal flag to denote if null elements should be considered equal.
  *            nulls are not equal if null_equality::UNEQUAL.
  *
- * @return number of distinct consecutive groups in the table
+ * @return number of distinct rows in the table
  */
 cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal = null_equality::EQUAL);
-
-/**
- * @brief Count the unique elements in the column_view.
- *
- * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are unique.
- *
- * Given an input column_view, number of unique elements in this column_view is returned.
- *
- * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
- * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
- * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in unique
- * count.
- *
- * `null`s are handled as equal.
- *
- * @param[in] input The column_view whose unique elements will be counted
- * @param[in] null_handling flag to include or ignore `null` while counting
- * @param[in] nan_handling flag to consider `NaN==null` or not
- *
- * @return number of unique elements
- */
-cudf::size_type unordered_distinct_count(column_view const& input,
-                                         null_policy null_handling,
-                                         nan_policy nan_handling);
-
-/**
- * @brief Count the unique rows in a table.
- *
- * @param[in] input Table whose unique rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal.
- *            nulls are not equal if null_equality::UNEQUAL.
- *
- * @return number of unique rows in the table
- */
-cudf::size_type unordered_distinct_count(table_view const& input,
-                                         null_equality nulls_equal = null_equality::EQUAL);
 
 /** @} */
 }  // namespace cudf
