@@ -1426,7 +1426,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         values = self.grouping.values
         if is_list_like(fill_value):
-            if not len(fill_value) == len(values._data):
+            if len(fill_value) != len(values._data):
                 raise ValueError(
                     "Mismatched number of columns and values to fill."
                 )
