@@ -150,7 +150,8 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
+  REDUCTION_TEST reductions/collect_ops_tests.cpp reductions/rank_tests.cpp
+  reductions/reduction_tests.cpp reductions/scan_tests.cpp reductions/segmented_reduction_tests.cpp
 )
 
 # ##################################################################################################
@@ -316,9 +317,11 @@ ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/distinct_count_tests.cpp
+  stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
-  stream_compaction/drop_duplicates_tests.cpp
+  stream_compaction/unique_count_tests.cpp
+  stream_compaction/unique_tests.cpp
 )
 
 # ##################################################################################################
