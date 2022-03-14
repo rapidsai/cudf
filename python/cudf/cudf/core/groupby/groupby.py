@@ -433,7 +433,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     ) -> Tuple[Tuple[Any], Tuple[ColumnBase], List[List[Any]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
-        is a list of aggregations for column `self.obj[i]`. We support two
+        is a list of aggregations for column `self.obj[i]`. We support three
         different form of `aggs` input here:
         - A single agg, such as "sum". This agg is applied to all value
         columns.
@@ -442,7 +442,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         - A mapping of column name to aggs, such as
         {"a": ["sum"], "b": ["mean"]}, the aggs are applied to specified
         column.
-        `agg` can be string or lambda functions.
+        Each agg can be string or lambda functions.
         """
 
         if not isinstance(aggs, collections.abc.Mapping):
