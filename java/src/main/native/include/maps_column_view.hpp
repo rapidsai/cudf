@@ -56,14 +56,14 @@ public:
    *
    * Note: Keys are not deduped. Repeated keys are returned in order.
    */
-  lists_column_view keys() const { return keys_; }
+  lists_column_view const &keys() const { return keys_; }
 
   /**
    * @brief Getter for values as a list column.
    *
    * Note: Values for repeated keys are not dropped.
    */
-  lists_column_view values() const { return values_; }
+  lists_column_view const &values() const { return values_; }
 
   /**
    * @brief Map lookup by a column of keys.
