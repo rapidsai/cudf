@@ -268,6 +268,15 @@ class ListDtype(_BaseDtype):
 
         return cls(element_type=element_type)
 
+    @property
+    def nesting_levels(self):
+        leaf_typ = self.element_type
+        level = 1
+        while isinstance(leaf_typ, ListDtype):
+            leaf_typ = leaf_typ.element_type
+            level += 1
+        return level
+
 
 class StructDtype(_BaseDtype):
     """

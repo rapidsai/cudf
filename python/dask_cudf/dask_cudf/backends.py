@@ -75,19 +75,39 @@ def _nonempty_index(idx):
     raise TypeError(f"Don't know how to handle index of type {type(idx)}")
 
 
+def _nest(x, n):
+    """
+    Helper for _get_non_empty_data which created nested data
+    """
+    for _ in range(n):
+        x = [x]
+    return x
+
+
 @_dask_cudf_nvtx_annotate
 def _get_non_empty_data(s):
-    if isinstance(s._column, cudf.core.column.CategoricalColumn):
+    if isinstance(s, cudf.core.column.CategoricalColumn):
         categories = (
-            s._column.categories
-            if len(s._column.categories)
-            else [UNKNOWN_CATEGORIES]
+            s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
         )
         codes = cudf.core.column.full(size=2, fill_value=0, dtype="int32")
-        ordered = s._column.ordered
+        ordered = s.ordered
         data = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
+    elif isinstance(s, cudf.core.column.ListColumn):
+        nesting_levels = s.dtype.nesting_levels
+        leaf_type = s.dtype.leaf_type
+        if is_string_dtype(leaf_type):
+            data = ["cat", "dog"]
+        else:
+            data = np.arange(start=0, stop=2, dtype=leaf_type).tolist()
+        data = _nest(data, nesting_levels) * 2
+        data = cudf.core.column.as_column(data, dtype=s.dtype)
+    elif isinstance(s, cudf.core.column.StructColumn):
+        struct_dtype = s.dtype
+        data = [{key: None for key in struct_dtype.fields.keys()}] * 2
+        data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
     else:
@@ -107,7 +127,7 @@ def _get_non_empty_data(s):
 def _nonempty_series(s, idx=None):
     if idx is None:
         idx = _nonempty_index(s.index)
-    data = _get_non_empty_data(s)
+    data = _get_non_empty_data(s._column)
 
     return cudf.Series(data, name=s.name, index=idx)
 
@@ -120,11 +140,15 @@ def meta_nonempty_cudf(x):
     res = cudf.DataFrame(index=idx)
     for col in x._data.names:
         dtype = str(x._data[col].dtype)
-        if dtype not in columns_with_dtype:
-            columns_with_dtype[dtype] = cudf.core.column.as_column(
-                _get_non_empty_data(x[col])
-            )
-        res._data[col] = columns_with_dtype[dtype]
+        if dtype in ("list", "struct"):
+            res._data[col] = _get_non_empty_data(x._data[col])
+        else:
+            if dtype not in columns_with_dtype:
+                columns_with_dtype[dtype] = cudf.core.column.as_column(
+                    _get_non_empty_data(x._data[col])
+                )
+            res._data[col] = columns_with_dtype[dtype]
+
     return res
 
 
