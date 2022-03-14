@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from numbers import Number
-from typing import Any, Sequence, Tuple, Union, cast
+from typing import Any, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -375,12 +374,19 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> "column.ColumnBase":
         result = self.as_numerical.quantile(
-            q=q, interpolation=interpolation, exact=exact
+            q=q,
+            interpolation=interpolation,
+            exact=exact,
+            return_scalar=return_scalar,
         )
-        if isinstance(q, Number):
+        if return_scalar:
             return pd.Timedelta(result, unit=self.time_unit)
         return result.astype(self.dtype)
 

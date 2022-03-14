@@ -6,7 +6,6 @@ import datetime as dt
 import locale
 import re
 from locale import nl_langinfo
-from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
 
@@ -375,12 +374,19 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> ColumnBase:
         result = self.as_numerical.quantile(
-            q=q, interpolation=interpolation, exact=exact
+            q=q,
+            interpolation=interpolation,
+            exact=exact,
+            return_scalar=return_scalar,
         )
-        if isinstance(q, Number):
+        if return_scalar:
             return pd.Timestamp(result, unit=self.time_unit)
         return result.astype(self.dtype)
 

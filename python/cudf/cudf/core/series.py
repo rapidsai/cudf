@@ -7,7 +7,6 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
-from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
@@ -2745,14 +2744,27 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         0.75    3.25
         dtype: float64
         """
+        return_scalar = False
+        # import pdb;pdb.set_trace()
+        if cudf.api.types.is_list_like(q) or cudf.utils.dtypes.is_column_like(
+            q
+        ):
+            np_array_q = cudf.core.column.as_column(q).values_host
+        elif is_scalar(q):
+            return_scalar = True
+            np_array_q = np.asarray([float(q)])
+        else:
+            raise TypeError("hi")
 
-        result = self._column.quantile(q, interpolation, exact)
+        result = self._column.quantile(
+            np_array_q, interpolation, exact, return_scalar=return_scalar
+        )
 
-        if isinstance(q, Number):
+        if return_scalar:
             return result
 
         if quant_index:
-            index = np.asarray(q)
+            index = np_array_q
             if len(self) == 0:
                 result = column_empty_like(
                     index, dtype=self.dtype, masked=True, newsize=len(index),

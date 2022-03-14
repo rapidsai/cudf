@@ -678,7 +678,11 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return concat_columns([self, as_column(other)])
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 

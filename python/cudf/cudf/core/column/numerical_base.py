@@ -3,8 +3,7 @@
 
 from __future__ import annotations
 
-from numbers import Number
-from typing import Sequence, Union
+from typing import Sequence
 
 import numpy as np
 
@@ -92,25 +91,20 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         return skew
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> NumericalBaseColumn:
-        if cudf.api.types.is_list_like(q):
-            np_array_q = np.asarray(q)
-        elif cudf.utils.dtypes.is_column_like(q):
-            np_array_q = cudf.core.column.as_column(q).values_host
-        elif not isinstance(q, (Sequence, np.ndarray)):
-            np_array_q = np.asarray([float(q)])
-        else:
-            np_array_q = q
-
-        if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+        if np.logical_or(q < 0, q > 1).any():
             raise ValueError(
                 "percentiles should all be in the interval [0, 1]"
             )
         # Beyond this point, q either being scalar or list-like
         # will only have values in range [0, 1]
-        result = self._numeric_quantile(np_array_q, interpolation, exact)
-        if isinstance(q, Number):
+        result = self._numeric_quantile(q, interpolation, exact)
+        if return_scalar:
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
                 if result[0] is cudf.NA
@@ -144,7 +138,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
+        return self.quantile(
+            np.array([0.5]),
+            interpolation="linear",
+            exact=True,
+            return_scalar=True,
+        )
 
     def _numeric_quantile(
         self, q: Sequence[float], interpolation: str, exact: bool
