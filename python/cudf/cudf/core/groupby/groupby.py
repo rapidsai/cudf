@@ -451,14 +451,16 @@ class GroupBy(Serializable, Reducible, Scannable):
             values = self.grouping.values
             column_names = values._column_names
             columns = values._columns
-            out = [aggs] * len(columns)
+            aggs_per_column = (aggs,) * len(columns)
         else:
-            column_names = tuple(aggs.keys())
+            column_names, aggs_per_column = list(zip(*aggs.items()))
             columns = tuple(self.obj._data[col] for col in column_names)
-            out = [aggs[col] for col in aggs.keys()]
 
-        out = [[agg] if not is_list_like(agg) else list(agg) for agg in out]
-        return column_names, columns, out
+        normalized_aggs = [
+            [agg] if not is_list_like(agg) else list(agg)
+            for agg in aggs_per_column
+        ]
+        return column_names, columns, normalized_aggs
 
     def pipe(self, func, *args, **kwargs):
         """
