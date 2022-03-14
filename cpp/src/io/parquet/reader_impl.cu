@@ -164,7 +164,7 @@ type_id to_type_id(SchemaElement const& schema,
     default: break;
   }
 
-  if (logical_type.isset.TIMESTAMP) {
+  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64) {
     if (logical_type.TIMESTAMP.unit.isset.NANOS) {
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_NANOSECONDS;
