@@ -14,7 +14,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cpp)
+add_library(cudf_datagen STATIC common/generate_input.cpp common/generate_nullmask.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
@@ -24,7 +24,7 @@ target_compile_options(
 
 target_link_libraries(
   cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
 )
 
 target_include_directories(
@@ -56,8 +56,15 @@ add_custom_command(
 function(ConfigureBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+    ${CMAKE_BENCH_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               # For std:: support of __int128_t. Can be removed once using cuda::std
+               CXX_EXTENSIONS ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
@@ -69,6 +76,13 @@ function(ConfigureBench CMAKE_BENCH_NAME)
     APPEND
     COMMENT "Adding ${CMAKE_BENCH_NAME}"
   )
+
+  install(
+    TARGETS ${CMAKE_BENCH_NAME}
+    COMPONENT testing
+    DESTINATION bin/benchmarks/libcudf
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # This function takes in a benchmark name and benchmark source for nvbench benchmarks and handles
@@ -76,11 +90,18 @@ endfunction()
 function(ConfigureNVBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
-    ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+    ${CMAKE_BENCH_NAME}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+  )
+  install(
+    TARGETS ${CMAKE_BENCH_NAME}
+    COMPONENT testing
+    DESTINATION bin/benchmarks/libcudf
+    EXCLUDE_FROM_ALL
   )
 endfunction()
 
@@ -123,7 +144,9 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
-ConfigureNVBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates.cpp)
+ConfigureNVBench(
+  STREAM_COMPACTION_BENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+)
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
@@ -141,6 +164,7 @@ ConfigureBench(SEARCH_BENCH search/search.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -154,11 +178,10 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/reduce.cpp
-  reduction/scan.cpp reduction/minmax.cpp
+  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
+  reduction/reduce.cpp reduction/scan.cpp
 )
-
-ConfigureBench(RANK_BENCH reduction/rank.cpp)
+ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -241,7 +264,7 @@ ConfigureBench(
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
   string/convert_numerics.cpp
-  string/copy.cpp
+  string/copy.cu
   string/extract.cpp
   string/factory.cu
   string/filter.cpp
@@ -252,12 +275,12 @@ ConfigureBench(
   string/split.cpp
   string/substring.cpp
   string/translate.cpp
-  string/url_decode.cpp
+  string/url_decode.cu
 )
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH string/json.cpp)
+ConfigureBench(JSON_BENCH string/json.cu)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

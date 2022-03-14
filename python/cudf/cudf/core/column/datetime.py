@@ -1,8 +1,7 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import builtins
 import datetime as dt
 import locale
 import re
@@ -277,7 +276,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     @property
-    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
@@ -346,17 +345,27 @@ class DatetimeColumn(column.ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
+    def mean(
+        self, skipna=None, min_count: int = 0, dtype=np.float64
+    ) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            self.as_numerical.mean(
+                skipna=skipna, min_count=min_count, dtype=dtype
+            ),
             unit=self.time_unit,
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+        self,
+        skipna: bool = None,
+        min_count: int = 0,
+        dtype: Dtype = np.float64,
+        ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
+            self.as_numerical.std(
+                skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+            )
             * _numpy_to_pandas_conversion[self.time_unit],
         )
 

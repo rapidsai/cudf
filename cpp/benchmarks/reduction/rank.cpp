@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,54 +14,51 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
+#include <cudf/detail/scan.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/reduction.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/types.hpp>
+#include <cudf/lists/list_view.cuh>
 
-class ReductionScan : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
 template <typename type>
-static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
+static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<type>)
 {
-  // cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  size_t const size{(size_t)state.range(0)};
+  cudf::rmm_pool_raii pool_raii;
+
   auto const dtype = cudf::type_to_id<type>();
+
+  bool const include_nulls = state.get_int64("include_nulls");
+  size_t const size        = state.get_int64("data_size");
+
   data_profile table_data_profile;
   table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 5);
-  table_data_profile.set_null_frequency(0);
-  // auto const table = create_random_table({dtype}, 1, row_count{n_rows}, table_data_profile);
-  auto const table = create_random_table({dtype}, 1, table_size_bytes{size}, table_data_profile);
+  table_data_profile.set_null_frequency((include_nulls) ? 0.1 : 0.0);
+
+  auto const table = create_random_table({dtype}, table_size_bytes{size / 2}, table_data_profile);
 
   auto const new_tbl = cudf::repeat(table->view(), 2);
-  if (!include_nulls) new_tbl->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
   cudf::column_view input(new_tbl->view().column(0));
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto result =
-      cudf::scan(input, cudf::make_dense_rank_aggregation(), cudf::scan_type::INCLUSIVE);
-  }
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
+    auto result = cudf::detail::inclusive_dense_rank_scan(
+      input, stream_view, rmm::mr::get_current_device_resource());
+  });
 }
 
-#define SCAN_BENCHMARK_DEFINE(name, type, nulls)                          \
-  BENCHMARK_DEFINE_F(ReductionScan, name)                                 \
-  (::benchmark::State & state) { BM_reduction_scan<type>(state, nulls); } \
-  BENCHMARK_REGISTER_F(ReductionScan, name)                               \
-    ->UseManualTime()                                                     \
-    ->Arg(10000)      /* 10k */                                           \
-    ->Arg(100000)     /* 100k */                                          \
-    ->Arg(1000000)    /* 1M */                                            \
-    ->Arg(10000000)   /* 10M */                                           \
-    ->Arg(100000000); /* 100M */
+using data_type = nvbench::type_list<int32_t, cudf::list_view>;
 
-SCAN_BENCHMARK_DEFINE(int64_no_nulls, int32_t, false);
-SCAN_BENCHMARK_DEFINE(list_no_nulls, cudf::list_view, false);
+NVBENCH_BENCH_TYPES(nvbench_reduction_scan, NVBENCH_TYPE_AXES(data_type))
+  .set_name("rank_scan")
+  .add_int64_axis("include_nulls", {0, 1})
+  .add_int64_axis("data_size",
+                  {
+                    10000,      // 10k
+                    100000,     // 100k
+                    1000000,    // 1M
+                    10000000,   // 10M
+                    100000000,  // 100M
+                  });

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,111 +35,12 @@
 namespace cudf {
 namespace experimental {
 
-#pragma nv_exec_check_disable
-template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
-          typename Functor,
-          typename... Ts>
-CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher2(cudf::data_type dtype,
-                                                                           Functor f,
-                                                                           Ts&&... args)
-{
-  switch (dtype.id()) {
-    case type_id::BOOL8:
-      return f.template operator()<typename IdTypeMap<type_id::BOOL8>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT8:
-      return f.template operator()<typename IdTypeMap<type_id::INT8>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT16:
-      return f.template operator()<typename IdTypeMap<type_id::INT16>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT32:
-      return f.template operator()<typename IdTypeMap<type_id::INT32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::INT64:
-      return f.template operator()<typename IdTypeMap<type_id::INT64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT8:
-      return f.template operator()<typename IdTypeMap<type_id::UINT8>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT16:
-      return f.template operator()<typename IdTypeMap<type_id::UINT16>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT32:
-      return f.template operator()<typename IdTypeMap<type_id::UINT32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::UINT64:
-      return f.template operator()<typename IdTypeMap<type_id::UINT64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::FLOAT32:
-      return f.template operator()<typename IdTypeMap<type_id::FLOAT32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::FLOAT64:
-      return f.template operator()<typename IdTypeMap<type_id::FLOAT64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::STRING:
-      return f.template operator()<typename IdTypeMap<type_id::STRING>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_DAYS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_DAYS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_SECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_SECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MILLISECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_MICROSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::TIMESTAMP_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::TIMESTAMP_NANOSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_DAYS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_DAYS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_SECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_SECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_MILLISECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_MILLISECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_MICROSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_MICROSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DURATION_NANOSECONDS:
-      return f.template operator()<typename IdTypeMap<type_id::DURATION_NANOSECONDS>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DICTIONARY32:
-      return f.template operator()<typename IdTypeMap<type_id::DICTIONARY32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL32:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL32>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL64:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL64>::type>(
-        std::forward<Ts>(args)...);
-    case type_id::DECIMAL128:
-      return f.template operator()<typename IdTypeMap<type_id::DECIMAL128>::type>(
-        std::forward<Ts>(args)...);
-    default: {
-#ifndef __CUDA_ARCH__
-      CUDF_FAIL("Unsupported type_id.");
-#else
-      cudf_assert(false && "Unsupported type_id.");
+template <cudf::type_id t>
+struct non_nested_id_to_type {
+  using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
+};
 
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
-      return return_type();
-#endif
-    }
-  }
-}
+namespace equality_hashing {
 
 /**
  * @brief Performs an equality comparison between two elements in two columns.
@@ -174,7 +75,8 @@ class element_equality_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   * @return True if both lhs and rhs element are both nulls and `nulls_are_equal` is true, or equal
+   * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are configured
+   * to be considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
@@ -197,7 +99,7 @@ class element_equality_comparator {
 
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::list_view>>* = nullptr>
+                             not cudf::is_nested<Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
@@ -206,7 +108,7 @@ class element_equality_comparator {
 
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>() and
-                             std::is_same_v<Element, cudf::list_view>>* = nullptr>
+                             cudf::is_nested<Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     column_device_view lcol = lhs;
@@ -215,38 +117,55 @@ class element_equality_comparator {
     int r_start_off         = rhs_element_index;
     int l_end_off           = lhs_element_index + 1;
     int r_end_off           = rhs_element_index + 1;
-    while (lcol.type().id() == type_id::LIST) {
-      auto l_size = l_end_off - l_start_off;
-      auto r_size = r_end_off - r_start_off;
-      if (l_size != r_size) { return false; }
+    auto l_size             = 1;
+    auto r_size             = 1;
+    while (is_nested(lcol.type())) {
+      if (nulls) {
+        for (int i = 0; i < l_size; ++i) {
+          bool const lhs_is_null{lcol.is_null(l_start_off + i)};
+          bool const rhs_is_null{rcol.is_null(r_start_off + i)};
 
-      auto l_off = lcol.child(lists_column_view::offsets_column_index);
-      auto r_off = rcol.child(lists_column_view::offsets_column_index);
-      for (int i = 0; i < l_size; ++i) {
-        if (l_off.element<size_type>(l_start_off + i + 1) -
-              l_off.element<size_type>(l_start_off + i) !=
-            r_off.element<size_type>(r_start_off + i + 1) -
-              r_off.element<size_type>(r_start_off + i))
-          return false;
+          if (lhs_is_null and rhs_is_null) {
+            if (nulls_are_equal == null_equality::UNEQUAL) { return false; }
+          } else if (lhs_is_null != rhs_is_null) {
+            return false;
+          }
+        }
       }
-      lcol        = lcol.child(lists_column_view::child_column_index);
-      rcol        = rcol.child(lists_column_view::child_column_index);
-      l_start_off = l_off.element<size_type>(l_start_off);
-      r_start_off = r_off.element<size_type>(r_start_off);
-      l_end_off   = l_off.element<size_type>(l_end_off);
-      r_end_off   = r_off.element<size_type>(r_end_off);
+      if (lcol.type().id() == type_id::STRUCT) {
+        lcol = lcol.child(0);
+        rcol = rcol.child(0);
+      } else if (lcol.type().id() == type_id::LIST) {
+        auto l_off = lcol.child(lists_column_view::offsets_column_index);
+        auto r_off = rcol.child(lists_column_view::offsets_column_index);
+        for (int i = 0; i < l_size; ++i) {
+          if (l_off.element<size_type>(l_start_off + i + 1) -
+                l_off.element<size_type>(l_start_off + i) !=
+              r_off.element<size_type>(r_start_off + i + 1) -
+                r_off.element<size_type>(r_start_off + i))
+            return false;
+        }
+        lcol        = lcol.child(lists_column_view::child_column_index);
+        rcol        = rcol.child(lists_column_view::child_column_index);
+        l_start_off = l_off.element<size_type>(l_start_off);
+        r_start_off = r_off.element<size_type>(r_start_off);
+        l_end_off   = l_off.element<size_type>(l_end_off);
+        r_end_off   = r_off.element<size_type>(r_end_off);
+        l_size      = l_end_off - l_start_off;
+        r_size      = r_end_off - r_start_off;
+        if (l_size != r_size) { return false; }
+      }
     }
-    auto l_size = l_end_off - l_start_off;
-    auto r_size = r_end_off - r_start_off;
-    if (l_size != r_size) { return false; }
-    bool equal = true;
+
     for (int i = 0; i < l_size; ++i) {
-      equal &= type_dispatcher2(lcol.type(),
-                                element_equality_comparator{nulls, lcol, rcol, nulls_are_equal},
-                                l_start_off + i,
-                                r_start_off + i);
+      bool equal = type_dispatcher<non_nested_id_to_type>(
+        lcol.type(),
+        element_equality_comparator{nulls, lcol, rcol, nulls_are_equal},
+        l_start_off + i,
+        r_start_off + i);
+      if (not equal) { return false; }
     }
-    return equal;
+    return true;
   }
 
  private:
@@ -258,7 +177,18 @@ class element_equality_comparator {
 
 template <typename Nullate>
 class row_equality_comparator {
+  friend class self_eq_comparator;
+
  public:
+  /**
+   * @brief Construct a function object for performing equality comparison between the rows of two
+   * tables.
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   */
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
@@ -268,6 +198,15 @@ class row_equality_comparator {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
+ public:
+  /**
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
+   * `rhs_index` in the `rhs` table.
+   *
+   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
+   */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
@@ -424,5 +363,85 @@ class row_hasher {
   uint32_t _seed{DEFAULT_HASH_SEED};
 };
 
+struct preprocessed_table {
+  /**
+   * @brief Preprocess table for use with row equality comparison or row hashing
+   *
+   * Sets up the table for use with row equality comparison or row hashing. The resulting
+   * preprocessed table can be passed to the constructor of `equality_hashing::self_comparator` to
+   * avoid preprocessing again.
+   *
+   * @param table The table to preprocess
+   * @param stream The cuda stream to use while preprocessing.
+   */
+  preprocessed_table(table_view const& table, rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
+   *
+   * @return table_device_view
+   */
+  operator table_device_view() { return **d_t; }
+
+  /**
+   * @brief Whether the table has any nullable column
+   *
+   */
+  [[nodiscard]] bool has_nulls() const { return _has_nulls; }
+
+ private:
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  std::unique_ptr<table_device_view_owner> d_t;
+  bool _has_nulls;
+};
+
+class self_eq_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of the
+   * same table.
+   *
+   * @param t The table to compare
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  self_eq_comparator(table_view const& t, rmm::cuda_stream_view stream)
+    : d_t(std::make_shared<preprocessed_table>(t, stream))
+  {
+  }
+
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of the
+   * same table.
+   *
+   * @param t A table preprocessed for equality comparison
+   */
+  self_eq_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
+
+  /**
+   * @brief Get the comparison operator to use on the device
+   *
+   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   */
+  template <typename Nullate = nullate::DYNAMIC>
+  row_equality_comparator<Nullate> device_comparator()
+  {
+    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
+      return row_equality_comparator(Nullate{d_t->has_nulls()}, *d_t, *d_t);
+    } else {
+      return row_equality_comparator(Nullate{}, *d_t, *d_t);
+    }
+  }
+
+ private:
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  std::shared_ptr<preprocessed_table> d_t;
+};
+
+}  // namespace equality_hashing
 }  // namespace experimental
 }  // namespace cudf

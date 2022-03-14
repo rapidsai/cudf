@@ -19,6 +19,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -65,27 +67,27 @@ T get_distribution_mean(distribution_params<T> const& dist)
 }
 
 // Utilities to determine the mean size of an element, given the data profile
-template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
+template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
+size_t non_fixed_width_size(data_profile const& profile)
 {
-  return sizeof(T);
+  CUDF_FAIL("Should not be called, use `size_of` for this type instead");
 }
 
-template <typename T>
-std::enable_if_t<!cudf::is_fixed_width<T>(), size_t> avg_element_size(data_profile const& profile)
+template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
+size_t non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
 }
 
 template <>
-size_t avg_element_size<cudf::string_view>(data_profile const& profile)
+size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
   return get_distribution_mean(dist);
 }
 
 template <>
-size_t avg_element_size<cudf::list_view>(data_profile const& profile)
+size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
@@ -93,17 +95,18 @@ size_t avg_element_size<cudf::list_view>(data_profile const& profile)
   return element_size * pow(single_level_mean, dist_params.max_depth);
 }
 
-struct avg_element_size_fn {
+struct non_fixed_width_size_fn {
   template <typename T>
   size_t operator()(data_profile const& profile)
   {
-    return avg_element_size<T>(profile);
+    return non_fixed_width_size<T>(profile);
   }
 };
 
-size_t avg_element_bytes(data_profile const& profile, cudf::type_id tid)
+size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
-  return cudf::type_dispatcher(cudf::data_type(tid), avg_element_size_fn{}, profile);
+  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
+  return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
 
 /**
@@ -119,7 +122,7 @@ struct random_value_fn;
  * @brief Creates an random timestamp/duration value
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
+struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
   std::function<int64_t(std::mt19937&)> seconds_gen;
   std::function<int64_t(std::mt19937&)> nanoseconds_gen;
 
@@ -161,7 +164,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  * @brief Creates an random fixed_point value. Not implemented yet.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
+struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   using rep = typename T::rep;
   rep const lower_bound;
   rep const upper_bound;
@@ -191,9 +194,7 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> 
  * @brief Creates an random numeric value with the given distribution.
  */
 template <typename T>
-struct random_value_fn<
-  T,
-  typename std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
+struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_numeric<T>()>> {
   T const lower_bound;
   T const upper_bound;
   distribution_fn<T> dist;
@@ -216,7 +217,7 @@ struct random_value_fn<
  * @brief Creates an boolean value with given probability of returning `true`.
  */
 template <typename T>
-struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
+struct random_value_fn<T, std::enable_if_t<std::is_same_v<T, bool>>> {
   std::bernoulli_distribution b_dist;
 
   random_value_fn(distribution_params<bool> const& desc) : b_dist{desc.probability_true} {}
@@ -257,7 +258,7 @@ struct stored_as {
 
 // Use `int8_t` for bools because that's how they're stored in columns
 template <typename T>
-struct stored_as<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
+struct stored_as<T, std::enable_if_t<std::is_same_v<T, bool>>> {
   using type = int8_t;
 };
 
@@ -419,7 +420,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::string_view>().length_params};
   auto valid_dist = std::bernoulli_distribution{1. - profile.get_null_frequency()};
 
-  auto const avg_string_len = avg_element_size<cudf::string_view>(profile);
+  auto const avg_string_len = non_fixed_width_size<cudf::string_view>(profile);
   auto const cardinality    = std::min(profile.get_cardinality(), num_rows);
   string_column_data samples(cardinality, cardinality * avg_string_len);
   for (cudf::size_type si = 0; si < cardinality; ++si) {
@@ -570,11 +571,11 @@ columns_vector create_random_columns(data_profile const& profile,
 }
 
 /**
- * @brief Repeats the input data types in round-robin order to fill a vector of @ref num_cols
+ * @brief Repeats the input data types cyclically order to fill a vector of @ref num_cols
  * elements.
  */
-std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
-                                         cudf::size_type num_cols)
+std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
+                                        cudf::size_type num_cols)
 {
   if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
@@ -585,29 +586,26 @@ std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  table_size_bytes table_bytes,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
   size_t const avg_row_bytes =
-    std::accumulate(out_dtype_ids.begin(), out_dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
-      return sum + avg_element_bytes(profile, tid);
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
+      return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
 
-  return create_random_table(out_dtype_ids, num_cols, row_count{num_rows}, profile, seed);
+  return create_random_table(dtype_ids, row_count{num_rows}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                 cudf::size_type num_cols,
                                                  row_count num_rows,
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  auto const out_dtype_ids = repeat_dtypes(dtype_ids, num_cols);
-  auto seed_engine         = deterministic_engine(seed);
+  cudf::size_type const num_cols = dtype_ids.size();
+  auto seed_engine               = deterministic_engine(seed);
 
   auto const processor_count            = std::thread::hardware_concurrency();
   cudf::size_type const cols_per_thread = (num_cols + processor_count - 1) / processor_count;
@@ -618,8 +616,8 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   for (unsigned int i = 0; i < processor_count && next_col < num_cols; ++i) {
     auto thread_engine         = deterministic_engine(seed_dist(seed_engine));
     auto const thread_num_cols = std::min(num_cols - next_col, cols_per_thread);
-    std::vector<cudf::type_id> thread_types(out_dtype_ids.begin() + next_col,
-                                            out_dtype_ids.begin() + next_col + thread_num_cols);
+    std::vector<cudf::type_id> thread_types(dtype_ids.begin() + next_col,
+                                            dtype_ids.begin() + next_col + thread_num_cols);
     col_futures.emplace_back(std::async(std::launch::async,
                                         create_random_columns,
                                         std::cref(profile),
@@ -639,6 +637,22 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
   }
 
   return std::make_unique<cudf::table>(std::move(output_columns));
+}
+
+std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
+                                                   row_count num_rows,
+                                                   float null_probability,
+                                                   unsigned seed)
+{
+  auto columns = std::vector<std::unique_ptr<cudf::column>>(dtype_ids.size());
+  std::transform(dtype_ids.begin(), dtype_ids.end(), columns.begin(), [&](auto dtype) mutable {
+    auto init          = cudf::make_default_constructed_scalar(cudf::data_type{dtype});
+    auto col           = cudf::sequence(num_rows.count, *init);
+    auto [mask, count] = create_random_null_mask(num_rows.count, null_probability, seed++);
+    col->set_null_mask(std::move(mask), count);
+    return col;
+  });
+  return std::make_unique<cudf::table>(std::move(columns));
 }
 
 std::vector<cudf::type_id> get_type_or_group(int32_t id)

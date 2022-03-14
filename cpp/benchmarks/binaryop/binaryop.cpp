@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,15 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
-
-#include <benchmark/benchmark.h>
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <numeric>
 #include <vector>
 
 // This set of benchmarks is designed to be a comparison for the AST benchmarks
@@ -47,40 +39,29 @@ class BINARYOP : public cudf::benchmark {
 template <typename key_type, TreeType tree_type, bool reuse_columns>
 static void BM_binaryop_transform(benchmark::State& state)
 {
-  const cudf::size_type table_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type tree_levels = (cudf::size_type)state.range(1);
+  auto const table_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
 
   // Create table data
-  auto n_cols          = reuse_columns ? 1 : tree_levels + 1;
-  auto column_wrappers = std::vector<cudf::test::fixed_width_column_wrapper<key_type>>();
-  auto columns         = std::vector<cudf::column_view>(n_cols);
-
-  auto data_iterator = thrust::make_counting_iterator(0);
-  std::generate_n(std::back_inserter(column_wrappers), n_cols, [=]() {
-    return cudf::test::fixed_width_column_wrapper<key_type>(data_iterator,
-                                                            data_iterator + table_size);
-  });
-  std::transform(
-    column_wrappers.begin(), column_wrappers.end(), columns.begin(), [](auto const& col) {
-      return static_cast<cudf::column_view>(col);
-    });
-
-  cudf::table_view table{columns};
+  auto const n_cols       = reuse_columns ? 1 : tree_levels + 1;
+  auto const source_table = create_sequence_table(
+    cycle_dtypes({cudf::type_to_id<key_type>()}, n_cols), row_count{table_size});
+  cudf::table_view table{*source_table};
 
   // Execute benchmark
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     // Execute tree that chains additions like (((a + b) + c) + d)
-    auto const op         = cudf::binary_operator::ADD;
-    auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
+    auto const op               = cudf::binary_operator::ADD;
+    auto const result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
     if (reuse_columns) {
-      auto result = cudf::binary_operation(columns.at(0), columns.at(0), op, result_data_type);
+      auto result = cudf::binary_operation(table.column(0), table.column(0), op, result_data_type);
       for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-        result = cudf::binary_operation(result->view(), columns.at(0), op, result_data_type);
+        result = cudf::binary_operation(result->view(), table.column(0), op, result_data_type);
       }
     } else {
-      auto result = cudf::binary_operation(columns.at(0), columns.at(1), op, result_data_type);
-      std::for_each(std::next(columns.cbegin(), 2), columns.cend(), [&](auto const& col) {
+      auto result = cudf::binary_operation(table.column(0), table.column(1), op, result_data_type);
+      std::for_each(std::next(table.begin(), 2), table.end(), [&](auto const& col) {
         result = cudf::binary_operation(result->view(), col, op, result_data_type);
       });
     }
