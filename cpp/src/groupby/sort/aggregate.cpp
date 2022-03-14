@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <quantiles/tdigest/tdigest.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -700,7 +702,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   detail::group_tdigest(
+                   cudf::detail::tdigest::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -744,13 +746,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   detail::group_merge_tdigest(get_grouped_values(),
-                                               helper.group_offsets(stream),
-                                               helper.group_labels(stream),
-                                               helper.num_groups(stream),
-                                               max_centroids,
-                                               stream,
-                                               mr));
+                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                                                              helper.group_offsets(stream),
+                                                              helper.group_labels(stream),
+                                                              helper.num_groups(stream),
+                                                              max_centroids,
+                                                              stream,
+                                                              mr));
 };
 
 }  // namespace detail
