@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from typing import Sequence
-
 import numpy as np
 
 import cudf
@@ -146,7 +144,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         )
 
     def _numeric_quantile(
-        self, q: Sequence[float], interpolation: str, exact: bool
+        self, q: np.ndarray, interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(
