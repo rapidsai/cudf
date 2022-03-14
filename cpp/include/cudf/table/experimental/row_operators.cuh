@@ -90,8 +90,7 @@ class element_relational_comparator {
    * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
    * with the depth at which a null value was encountered.
    */
-  template <typename Element,
-            CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
   __device__ cuda::std::pair<weak_ordering, int> operator()(
     size_type lhs_element_index, size_type rhs_element_index) const noexcept
   {
