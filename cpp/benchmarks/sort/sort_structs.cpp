@@ -43,7 +43,7 @@ void nvbench_sort_struct(nvbench::state& state)
       0, [&](auto row) { return distribution(generator); });
     if (!nulls) return column_wrapper(elements, elements + n_rows);
     auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 10 == 0 ? false : true; });
+      0, [](auto i) { return i % 10 != 0; });
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
