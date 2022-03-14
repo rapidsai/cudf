@@ -94,15 +94,22 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
-        if isinstance(q, Number) or cudf.api.types.is_list_like(q):
+        if cudf.api.types.is_list_like(q):
             np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all be in the interval [0, 1]"
-                )
+        elif cudf.utils.dtypes.is_column_like(q):
+            np_array_q = cudf.core.column.as_column(q).values_host
+        elif not isinstance(q, (Sequence, np.ndarray)):
+            np_array_q = np.asarray([float(q)])
+        else:
+            np_array_q = q
+
+        if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+            raise ValueError(
+                "percentiles should all be in the interval [0, 1]"
+            )
         # Beyond this point, q either being scalar or list-like
         # will only have values in range [0, 1]
-        result = self._numeric_quantile(q, interpolation, exact)
+        result = self._numeric_quantile(np_array_q, interpolation, exact)
         if isinstance(q, Number):
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
@@ -142,7 +149,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def _numeric_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
-        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=True, na_position="first"
@@ -150,7 +156,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         sorted_indices = sorted_indices[self.null_count :]
 
         return libcudf.quantiles.quantile(
-            self, quant, interpolation, sorted_indices, exact
+            self, q, interpolation, sorted_indices, exact
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:
