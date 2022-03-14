@@ -106,8 +106,8 @@ cdef class GroupBy:
         """`values` is a list of columns and `aggregations` is a list of list
         of aggregations. `aggregations[i]` is a list of aggregations for
         `values[i]`. Returns a tuple containing 1) list of list of aggregation
-        results, 2) a list of grouped keys, and 3) a list of list of aggregations
-        performed.
+        results, 2) a list of grouped keys, and 3) a list of list of
+        aggregations performed.
         """
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef libcudf_groupby.aggregation_request c_agg_request
@@ -135,17 +135,18 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
+            included_aggregation = []
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
-            included_aggregations.append([])
             for agg in aggs:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations[-1].append(agg)
+                    included_aggregation.append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
+            included_aggregations.append(included_aggregation)
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
@@ -183,8 +184,8 @@ cdef class GroupBy:
         """`values` is a list of columns and `aggregations` is a list of list
         of aggregations. `aggregations[i]` is a list of aggregations for
         `values[i]`. Returns a tuple containing 1) list of list of aggregation
-        results, 2) a list of grouped keys, and 3) a list of list of aggregations
-         performed.
+        results, 2) a list of grouped keys, and 3) a list of list of
+        aggregations performed.
         """
         cdef vector[libcudf_groupby.scan_request] c_agg_requests
         cdef libcudf_groupby.scan_request c_agg_request
@@ -212,17 +213,18 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
+            included_aggregation = []
 
             c_agg_request = move(libcudf_groupby.scan_request())
-            included_aggregations.append([])
             for agg in aggs:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations[-1].append(agg)
+                    included_aggregation.append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
+            included_aggregations.append(included_aggregation)
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
