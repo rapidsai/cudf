@@ -1250,20 +1250,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        # grouped values
-        values = self.grouping.values
-        _, grouped_value_cols, _ = self._groupby.groups(
-            [*values._index._data.columns, *values._columns]
+        values = self.obj.__class__._from_data(
+            self.grouping.values._data, self.obj.index
         )
-
-        grouped = self.obj._from_columns_like_self(
-            grouped_value_cols, values._column_names, values._index_names
-        )
-
-        grouped = self._mimic_pandas_order(grouped)._copy_type_metadata(values)
-
-        result = grouped - self.shift(periods=periods)
-        return result._copy_type_metadata(values)
+        return values - self.shift(periods=periods)
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
@@ -1384,19 +1374,12 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
             return getattr(self, method, limit)()
 
-        values = self.grouping.values
-        _, grouped_value_cols, _ = self._groupby.groups(
-            [*values._index._data.columns, *values._columns]
+        values = self.obj.__class__._from_data(
+            self.grouping.values._data, self.obj.index
         )
-
-        grouped = self.obj._from_columns_like_self(
-            grouped_value_cols, values._column_names, values._index_names
-        )
-        result = grouped.fillna(
+        return values.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
-        result = self._mimic_pandas_order(result)
-        return result._copy_type_metadata(values)
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
