@@ -60,9 +60,9 @@ class element_relational_comparator {
    *
    * @note `lhs` and `rhs` may be the same.
    *
+   * @param has_nulls Indicates if either input column contains nulls.
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
-   * @param has_nulls Indicates if either input column contains nulls.
    * @param null_precedence Indicates how null values are ordered with other values
    * @param depth The depth of the column if part of a nested column @see preprocessed_table::depths
    */
@@ -90,8 +90,7 @@ class element_relational_comparator {
    * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
    * with the depth at which a null value was encountered.
    */
-  template <typename Element,
-            std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
   __device__ cuda::std::pair<weak_ordering, int> operator()(
     size_type lhs_element_index, size_type rhs_element_index) const noexcept
   {
@@ -181,9 +180,9 @@ class device_row_comparator {
    *
    * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
    *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param depth Optional, device array the same length as a row that contains starting depths of
    * columns if they're nested, and 0 otherwise.
    * @param column_order Optional, device array the same length as a row that indicates the desired

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
+
 #include <cudf/detail/sorting.hpp>
 
 #include <cudf_test/column_utilities.hpp>
@@ -25,6 +27,8 @@
 
 void nvbench_sort_struct(nvbench::state& state)
 {
+  cudf::rmm_pool_raii pool_raii;
+
   using Type           = int;
   using column_wrapper = cudf::test::fixed_width_column_wrapper<Type>;
   std::default_random_engine generator;
@@ -42,8 +46,8 @@ void nvbench_sort_struct(nvbench::state& state)
     auto elements = cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return distribution(generator); });
     if (!nulls) return column_wrapper(elements, elements + n_rows);
-    auto valids = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return i % 10 == 0 ? false : true; });
+    auto valids =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 10 != 0; });
     return column_wrapper(elements, elements + n_rows, valids);
   });
 
