@@ -301,9 +301,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ):
             data.update(
                 {
-                    (col_name, agg.__name__ if callable(agg) else agg)
-                    if multilevel
-                    else col_name: col
+                    (
+                        (col_name, agg.__name__ if callable(agg) else agg)
+                        if multilevel
+                        else col_name
+                    ): col
                     for agg, col in zip(aggs, cols)
                 }
             )
