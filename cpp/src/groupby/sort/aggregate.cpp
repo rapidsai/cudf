@@ -36,6 +36,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <quantiles/tdigest/tdigest.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
