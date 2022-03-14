@@ -177,6 +177,8 @@ class element_equality_comparator {
 
 template <typename Nullate>
 class row_equality_comparator {
+  friend class self_eq_comparator;
+
  public:
   /**
    * @brief Construct a function object for performing equality comparison between the rows of two
@@ -196,6 +198,7 @@ class row_equality_comparator {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
+ public:
   /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
    * `rhs_index` in the `rhs` table.
@@ -257,7 +260,8 @@ struct preprocessed_table {
   bool _has_nulls;
 };
 
-struct self_eq_comparator {
+class self_eq_comparator {
+ public:
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows of the
    * same table.
