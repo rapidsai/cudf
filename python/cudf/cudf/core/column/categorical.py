@@ -878,6 +878,11 @@ class CategoricalColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
     ) -> ColumnBase:
+        if op not in {"eq", "ne", "lt", "le", "gt", "ge", "NULL_EQUALS"}:
+            raise TypeError(
+                "Series of dtype `category` cannot perform the operation: "
+                f"{op}"
+            )
         rhs = self._wrap_binop_normalization(rhs)
         # TODO: This is currently just here to make mypy happy, but eventually
         # we'll need to properly establish the APIs for these methods.
@@ -899,7 +904,9 @@ class CategoricalColumn(column.ColumnBase):
                     "columns to be categorical."
                 )
             if other.dtype != self.dtype:
-                raise TypeError("Categoricals only compare with the same type")
+                raise TypeError(
+                    "Categoricals can only compare with the same type"
+                )
             return other
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()

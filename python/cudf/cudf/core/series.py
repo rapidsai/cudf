@@ -2655,7 +2655,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3.0    0.500000
         2.0    0.333333
         1.0    0.166667
-        dtype: float64
+        dtype: float32
 
         To include ``NA`` value counts, pass ``dropna=False``:
 
