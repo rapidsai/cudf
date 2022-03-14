@@ -147,7 +147,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         return self.quantile(0.5, interpolation="linear", exact=True)
 
     def _numeric_quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self, q: Sequence[float], interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(
