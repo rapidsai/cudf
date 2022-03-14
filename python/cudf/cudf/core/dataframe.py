@@ -6020,7 +6020,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("axis parameter is not supported yet.")
 
-        return cudf.Series(super().nunique(method="sort", dropna=dropna))
+        return cudf.Series(super().nunique(dropna=dropna))
 
     def _sample_axis_1(
         self,
