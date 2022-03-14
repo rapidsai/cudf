@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     cudf::detail::copy_if(table_view{{values}}, not_null_pred, stream, mr)->release();
 
   auto null_purged_values = std::move(null_purged_entries.front());
+  null_purged_values->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
   // Recalculate offsets after null entries are purged.
   rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream);

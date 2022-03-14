@@ -88,13 +88,13 @@ class cufile_shim {
 void cufile_shim::modify_cufile_json() const
 {
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-  temp_directory tmp_config_dir{"cudf_cufile_config"};
+  static temp_directory tmp_config_dir{"cudf_cufile_config"};
 
   // Modify the config file based on the policy
   auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
   std::ifstream user_config_file(config_file_path);
   // Modified config file is stored in a temporary directory
-  auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
+  auto const cudf_config_path = tmp_config_dir.path() + "cufile.json";
   std::ofstream cudf_config_file(cudf_config_path);
 
   std::string line;

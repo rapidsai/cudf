@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import re
 import warnings
@@ -5154,7 +5153,7 @@ class StringColumn(column.ColumnBase):
             return super().to_arrow()
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0,
     ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
@@ -5398,10 +5397,7 @@ class StringColumn(column.ColumnBase):
         return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
-        self,
-        fill_value: Any = None,
-        method: builtins.str = None,
-        dtype: Dtype = None,
+        self, fill_value: Any = None, method: str = None, dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):
@@ -5450,7 +5446,7 @@ class StringColumn(column.ColumnBase):
             raise TypeError(f"cannot broadcast {type(other)}")
 
     def binary_operator(
-        self, op: builtins.str, rhs, reflect: bool = False
+        self, op: str, rhs, reflect: bool = False
     ) -> "column.ColumnBase":
         lhs = self
         if reflect:
