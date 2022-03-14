@@ -357,7 +357,7 @@ add_library(
   src/partitioning/round_robin.cu
   src/quantiles/tdigest/tdigest.cu
   src/quantiles/tdigest/tdigest_aggregation.cu
-  src/quantiles/tdigest/tdigest_column_view.cpp  
+  src/quantiles/tdigest/tdigest_column_view.cpp
   src/quantiles/quantile.cu
   src/quantiles/quantiles.cu
   src/reductions/all.cu
