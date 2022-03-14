@@ -1268,7 +1268,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
-        result = self.obj._from_columns_like_self(
+        result = self.obj._from_columns(
             self._groupby.replace_nulls([*values._columns], method),
             values._column_names,
         )
@@ -1446,7 +1446,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             fill_value = [fill_value] * len(values._data)
 
-        result = self.obj._from_columns_like_self(
+        result = self.obj.__class__._from_columns(
             self._groupby.shift([*values._columns], periods, fill_value)[0],
             values._column_names,
         )
