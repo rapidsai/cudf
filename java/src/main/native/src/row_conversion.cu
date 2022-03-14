@@ -906,7 +906,9 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
   // participate in the memcpy of the string data.
   auto my_block = cooperative_groups::this_thread_block();
   auto my_tile = cooperative_groups::tiled_partition<32>(my_block);
+  #ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
+  #endif
 
   auto const start_row =
       blockIdx.x * NUM_STRING_ROWS_PER_BLOCK + my_tile.meta_group_rank() + batch_row_offset;
@@ -928,7 +930,7 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
       }
       auto string_output_dest = &output_data[base_row_offset + offset];
       auto string_output_src = &variable_input_data[col][string_start_offset];
-      memcpy_async(string_output_dest, string_output_src, string_length, block_barrier);
+      MEMCPY(string_output_dest, string_output_src, string_length, block_barrier);
       offset += string_length;
     }
   }
@@ -1386,7 +1388,7 @@ struct column_info_s {
  * @return size of the fixed_width data portion of a row.
  */
 template <typename iterator>
-static column_info_s compute_column_information(iterator begin, iterator end) {
+column_info_s compute_column_information(iterator begin, iterator end) {
   int fixed_width_size_per_row = 0;
   std::vector<size_type> fixed_width_column_starts;
   std::vector<size_type> fixed_width_column_sizes;
@@ -1394,17 +1396,17 @@ static column_info_s compute_column_information(iterator begin, iterator end) {
 
   for (auto cv = begin; cv != end; ++cv) {
     auto col_type = std::get<0>(*cv);
-    bool nested_type = is_compound(col_type);
+    bool compound_type = is_compound(col_type);
 
     // a list or string column will write a single uint64
     // of data here for offset/length
-    auto col_size = nested_type ? 8 : size_of(col_type);
+    auto col_size = compound_type ? 8 : size_of(col_type);
 
     // align size for this type - They are the same for fixed width types and 4 bytes for variable
     // width length/offset combos
-    size_type const alignment_needed = nested_type ? 4 : col_size;
+    size_type const alignment_needed = compound_type ? 4 : col_size;
     fixed_width_size_per_row = util::round_up_unsafe(fixed_width_size_per_row, alignment_needed);
-    if (nested_type) {
+    if (compound_type) {
       variable_width_column_starts.push_back(fixed_width_size_per_row);
     } else {
       fixed_width_column_starts.push_back(fixed_width_size_per_row);
@@ -1773,17 +1775,21 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   auto const num_rows = tbl.num_rows();
 
   auto const fixed_width_only = !variable_width_offsets.has_value();
-  
-  // build fixed_width table view with only fixed-width columns
-  auto fixed_width_table = fixed_width_only ? tbl : [&tbl]() {
+
+  auto select_columns = [](auto const &tbl, auto column_predicate) {
     std::vector<size_type> indices;
     for (int i = 0; i < tbl.num_columns(); ++i) {
-      if (!is_compound(tbl.column(i).type())) {
+      if (column_predicate(tbl.column(i))) {
         indices.push_back(i);
       }
     }
     return tbl.select(indices);
-  }();
+  };
+
+  // build fixed_width table view with only fixed-width columns
+  auto fixed_width_table =
+      fixed_width_only ? tbl :
+                         select_columns(tbl, [](auto col) { return !is_compound(col.type()); });
 
   auto const num_fixed_width_columns = fixed_width_table.num_columns();
   auto dev_col_sizes = make_device_uvector_async(column_info.fixed_width_column_sizes, stream);
@@ -1873,15 +1879,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
   if (!fixed_width_only) {
     // build table view for variable-width data only
-    auto variable_width_table = [&tbl]() {
-      std::vector<size_type> indices;
-      for (int i = 0; i < tbl.num_columns(); ++i) {
-        if (is_compound(tbl.column(i).type())) {
-          indices.push_back(i);
-        }
-      }
-      return tbl.select(indices);
-    }();
+    auto variable_width_table =
+        select_columns(tbl, [](auto col) { return is_compound(col.type()); });
 
     CUDF_EXPECTS(!variable_width_table.is_empty(), "No variable-width columns when expected!");
     CUDF_EXPECTS(variable_width_offsets.has_value(), "No variable width offset data!");
