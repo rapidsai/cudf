@@ -28,7 +28,8 @@ class ReductionDictionary : public cudf::benchmark {
 };
 
 template <typename T>
-void BM_reduction_dictionary(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
+void BM_reduction_dictionary(benchmark::State& state,
+                             std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
@@ -53,7 +54,7 @@ void BM_reduction_dictionary(benchmark::State& state, std::unique_ptr<cudf::aggr
 }
 
 #define concat(a, b, c) a##b##c
-#define get_agg(op)     concat(cudf::make_, op, _aggregation())
+#define get_agg(op)     concat(cudf::make_, op, _aggregation<cudf::reduce_aggregation>())
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, aggregation)                       \
