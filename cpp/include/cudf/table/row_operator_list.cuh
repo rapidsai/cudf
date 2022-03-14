@@ -75,7 +75,8 @@ class element_equality_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   * @return True if both lhs and rhs element are both nulls and `nulls_are_equal` is true, or equal
+   * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are configured
+   * to be considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
@@ -177,6 +178,15 @@ class element_equality_comparator {
 template <typename Nullate>
 class row_equality_comparator {
  public:
+  /**
+   * @brief Construct a function object for performing equality comparison between the rows of two
+   * tables.
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   */
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
@@ -186,6 +196,14 @@ class row_equality_comparator {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
+  /**
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
+   * `rhs_index` in the `rhs` table.
+   *
+   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
+   */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
@@ -206,6 +224,16 @@ class row_equality_comparator {
 };
 
 struct preprocessed_table {
+  /**
+   * @brief Preprocess table for use with row equality comparison or row hashing
+   *
+   * Sets up the table for use with row equality comparison or row hashing. The resulting
+   * preprocessed table can be passed to the constructor of `equality_hashing::self_comparator` to
+   * avoid preprocessing again.
+   *
+   * @param table The table to preprocess
+   * @param stream The cuda stream to use while preprocessing.
+   */
   preprocessed_table(table_view const& table, rmm::cuda_stream_view stream);
 
   /**
@@ -230,13 +258,32 @@ struct preprocessed_table {
 };
 
 struct self_eq_comparator {
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of the
+   * same table.
+   *
+   * @param t The table to compare
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
   self_eq_comparator(table_view const& t, rmm::cuda_stream_view stream)
     : d_t(std::make_shared<preprocessed_table>(t, stream))
   {
   }
 
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of the
+   * same table.
+   *
+   * @param t A table preprocessed for equality comparison
+   */
   self_eq_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
+  /**
+   * @brief Get the comparison operator to use on the device
+   *
+   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   */
   template <typename Nullate = nullate::DYNAMIC>
   row_equality_comparator<Nullate> device_comparator()
   {
