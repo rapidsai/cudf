@@ -18,7 +18,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/tdigest_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -2472,47 +2471,6 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
                          true,
                          cudf::make_max_aggregation<reduce_aggregation>());
   }
-}
-
-template <typename T>
-struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {
-};
-TYPED_TEST_SUITE(ReductionTDigestAllTypes, cudf::test::NumericTypes);
-
-struct reduce_op {
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& values, int delta)
-  {
-    // result is a scalar, but we want to extract out the underlying column
-    auto scalar_result =
-      cudf::reduce(values,
-                   cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(delta),
-                   cudf::data_type{cudf::type_id::FLOAT64});
-    auto tbl = static_cast<cudf::struct_scalar const*>(scalar_result.get())->view();
-    std::vector<std::unique_ptr<cudf::column>> cols;
-    std::transform(
-      tbl.begin(), tbl.end(), std::back_inserter(cols), [](cudf::column_view const& col) {
-        return std::make_unique<cudf::column>(col);
-      });
-    return cudf::make_structs_column(tbl.num_rows(), std::move(cols), 0, rmm::device_buffer());
-  }
-};
-
-TYPED_TEST(ReductionTDigestAllTypes, Simple)
-{
-  using T = TypeParam;
-  cudf::test::simple_tdigest_aggregation<T>(reduce_op{});
-}
-
-TYPED_TEST(ReductionTDigestAllTypes, SimpleWithNulls)
-{
-  using T = TypeParam;
-  cudf::test::simple_with_null_tdigest_aggregation<T>(reduce_op{});
-}
-
-TYPED_TEST(ReductionTDigestAllTypes, AllNull)
-{
-  using T = TypeParam;
-  cudf::test::simple_all_null_tdigest_aggregation<T>(reduce_op{});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

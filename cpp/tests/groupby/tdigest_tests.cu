@@ -32,13 +32,41 @@ namespace test {
 
 using namespace cudf;
 
-template <typename T>
-struct TDigestAllTypes : public cudf::test::BaseFixture {
-};
-TYPED_TEST_SUITE(TDigestAllTypes, cudf::test::NumericTypes);
+/**
+ * @brief Functor to generate a tdigest by key.
+ *
+ */
+struct tdigest_gen_grouped {
+  template <
+    typename T,
+    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& keys, column_view const& values, int delta)
+  {
+    cudf::table_view t({keys});
+    cudf::groupby::groupby gb(t);
+    std::vector<cudf::groupby::aggregation_request> requests;
+    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+    aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+    requests.push_back({values, std::move(aggregations)});
+    auto result = gb.aggregate(requests);
+    return std::move(result.second[0].results[0]);
+  }
 
-struct groupby_simple_op {
-  std::unique_ptr<column> operator()(column_view const& values, int delta)
+  template <
+    typename T,
+    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& keys, column_view const& values, int delta)
+  {
+    CUDF_FAIL("Invalid tdigest test type");
+  }
+};
+
+/**
+ * @brief Functor for generating a tdigest using groupby with a constant key.
+ *
+ */
+struct tdigest_groupby_simple_op {
+  std::unique_ptr<column> operator()(column_view const& values, int delta) const
   {
     // make a simple set of matching keys.
     auto keys = cudf::make_fixed_width_column(
@@ -59,22 +87,54 @@ struct groupby_simple_op {
   }
 };
 
+/**
+ * @brief Functor for merging tdigests using groupby with a constant key.
+ *
+ */
+struct tdigest_groupby_simple_merge_op {
+  std::unique_ptr<column> operator()(column_view const& merge_values, int merge_delta) const
+  {
+    // make a simple set of matching keys.
+    auto merge_keys = cudf::make_fixed_width_column(
+      data_type{type_id::INT32}, merge_values.size(), mask_state::UNALLOCATED);
+    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+                 merge_keys->mutable_view().template begin<int>(),
+                 merge_keys->mutable_view().template end<int>(),
+                 0);
+
+    cudf::table_view key_table({*merge_keys});
+    cudf::groupby::groupby gb(key_table);
+    std::vector<cudf::groupby::aggregation_request> requests;
+    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+    aggregations.push_back(
+      cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(merge_delta));
+    requests.push_back({merge_values, std::move(aggregations)});
+    auto result = gb.aggregate(requests);
+    return std::move(result.second[0].results[0]);
+  }
+};
+
+template <typename T>
+struct TDigestAllTypes : public cudf::test::BaseFixture {
+};
+TYPED_TEST_SUITE(TDigestAllTypes, cudf::test::NumericTypes);
+
 TYPED_TEST(TDigestAllTypes, Simple)
 {
   using T = TypeParam;
-  simple_tdigest_aggregation<T>(groupby_simple_op{});
+  tdigest_simple_aggregation<T>(tdigest_groupby_simple_op{});
 }
 
 TYPED_TEST(TDigestAllTypes, SimpleWithNulls)
 {
   using T = TypeParam;
-  simple_with_null_tdigest_aggregation<T>(groupby_simple_op{});
+  tdigest_simple_with_nulls_aggregation<T>(tdigest_groupby_simple_op{});
 }
 
 TYPED_TEST(TDigestAllTypes, AllNull)
 {
   using T = TypeParam;
-  simple_all_null_tdigest_aggregation<T>(groupby_simple_op{});
+  tdigest_simple_all_nulls_aggregation<T>(tdigest_groupby_simple_op{});
 }
 
 TYPED_TEST(TDigestAllTypes, LargeGroups)
@@ -174,17 +234,17 @@ TEST_F(TDigestTest, EmptyMixed)
 
 TEST_F(TDigestTest, LargeInputDouble)
 {
-  simple_large_input_double_tdigest_aggregation(groupby_simple_op{});
+  tdigest_simple_large_input_double_aggregation(tdigest_groupby_simple_op{});
 }
 
 TEST_F(TDigestTest, LargeInputInt)
 {
-  simple_large_input_int_tdigest_aggregation(groupby_simple_op{});
+  tdigest_simple_large_input_int_aggregation(tdigest_groupby_simple_op{});
 }
 
 TEST_F(TDigestTest, LargeInputDecimal)
 {
-  simple_large_input_decimal_tdigest_aggregation(groupby_simple_op{});
+  tdigest_simple_large_input_decimal_aggregation(tdigest_groupby_simple_op{});
 }
 
 struct TDigestMergeTest : public cudf::test::BaseFixture {
@@ -194,81 +254,7 @@ struct TDigestMergeTest : public cudf::test::BaseFixture {
 // the same regardless of input.
 TEST_F(TDigestMergeTest, Simple)
 {
-  auto values = generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
-  CUDF_EXPECTS(values->size() == 750000, "Unexpected distribution size");
-  // all in the same group
-  auto keys = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
-               keys->mutable_view().template begin<int>(),
-               keys->mutable_view().template end<int>(),
-               0);
-
-  auto split_values = cudf::split(*values, {250000, 500000});
-  auto split_keys   = cudf::split(*keys, {250000, 500000});
-
-  int const delta = 1000;
-
-  // generate seperate digests
-  std::vector<std::unique_ptr<column>> parts;
-  auto iter = thrust::make_counting_iterator(0);
-  std::transform(
-    iter,
-    iter + split_values.size(),
-    std::back_inserter(parts),
-    [&split_keys, &split_values, delta](int i) {
-      cudf::table_view t({split_keys[i]});
-      cudf::groupby::groupby gb(t);
-      std::vector<cudf::groupby::aggregation_request> requests;
-      std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
-      aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
-      requests.push_back({split_values[i], std::move(aggregations)});
-      auto result = gb.aggregate(requests);
-      return std::move(result.second[0].results[0]);
-    });
-  std::vector<column_view> part_views;
-  std::transform(parts.begin(),
-                 parts.end(),
-                 std::back_inserter(part_views),
-                 [](std::unique_ptr<column> const& col) { return col->view(); });
-
-  // merge delta = 1000
-  {
-    int const merge_delta = 1000;
-
-    // merge them
-    auto merge_input = cudf::concatenate(part_views);
-    cudf::test::fixed_width_column_wrapper<int> merge_keys{0, 0, 0};
-    cudf::table_view key_table({merge_keys});
-    cudf::groupby::groupby gb(key_table);
-    std::vector<cudf::groupby::aggregation_request> requests;
-    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
-    aggregations.push_back(
-      cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(merge_delta));
-    requests.push_back({*merge_input, std::move(aggregations)});
-    auto result = gb.aggregate(requests);
-
-    cudf::tdigest::tdigest_column_view tdv(*result.second[0].results[0]);
-
-    // verify centroids
-    std::vector<expected_value> expected{{0, 0.00013945158577498588, 2},
-                                         {10, 0.04804393446447510763, 50},
-                                         {59, 1.68846964439246893797, 284},
-                                         {250, 33.36323141295877547918, 1479},
-                                         {368, 65.36307727957283475462, 2292},
-                                         {409, 73.95399208218296394080, 1784},
-                                         {490, 87.67566167909056673579, 1570},
-                                         {491, 87.83119717763385381204, 1570},
-                                         {500, 89.24891838334393412424, 1555},
-                                         {578, 95.87182997389099625707, 583},
-                                         {625, 98.20470345147104751504, 405},
-                                         {700, 99.96818381983835877236, 56},
-                                         {711, 99.99970905482754801596, 1}};
-    tdigest_sample_compare(tdv, expected);
-
-    // verify min/max
-    tdigest_minmax_compare<double>(tdv, *values);
-  }
+  tdigest_merge_simple(tdigest_groupby_simple_op{}, tdigest_groupby_simple_merge_op{});
 }
 
 struct key_groups {
@@ -466,32 +452,7 @@ TEST_F(TDigestMergeTest, Grouped)
   }
 }
 
-TEST_F(TDigestMergeTest, Empty)
-{
-  // 3 empty tdigests all in the same group
-  auto a = cudf::detail::tdigest::make_empty_tdigest_column();
-  auto b = cudf::detail::tdigest::make_empty_tdigest_column();
-  auto c = cudf::detail::tdigest::make_empty_tdigest_column();
-  std::vector<column_view> cols;
-  cols.push_back(*a);
-  cols.push_back(*b);
-  cols.push_back(*c);
-  auto values = cudf::concatenate(cols);
-  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0};
-
-  auto const delta = 1000;
-  cudf::table_view t({keys});
-  cudf::groupby::groupby gb(t);
-  std::vector<cudf::groupby::aggregation_request> requests;
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
-  aggregations.push_back(cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta));
-  requests.push_back({*values, std::move(aggregations)});
-  auto result = gb.aggregate(requests);
-
-  auto expected = cudf::detail::tdigest::make_empty_tdigest_column();
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
-}
+TEST_F(TDigestMergeTest, Empty) { tdigest_merge_empty(tdigest_groupby_simple_merge_op{}); }
 
 TEST_F(TDigestMergeTest, EmptyGroups)
 {
