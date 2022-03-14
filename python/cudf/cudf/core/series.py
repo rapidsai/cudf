@@ -2745,7 +2745,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: float64
         """
         return_scalar = False
-        # import pdb;pdb.set_trace()
+
         if cudf.api.types.is_list_like(q) or cudf.utils.dtypes.is_column_like(
             q
         ):
@@ -2754,7 +2754,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return_scalar = True
             np_array_q = np.asarray([float(q)])
         else:
-            raise TypeError("hi")
+            raise TypeError(f"q must be a scalar or array-like, got {type(q)}")
 
         result = self._column.quantile(
             np_array_q, interpolation, exact, return_scalar=return_scalar
