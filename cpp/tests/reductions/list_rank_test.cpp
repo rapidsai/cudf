@@ -74,24 +74,7 @@ TEST_F(ListRankScanTest, DeepList)
     col, expected_dense_vals, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);
 }
 
-TEST_F(ListRankScanTest, Datagen)
-{
-  data_profile table_data_profile;
-  table_data_profile.set_distribution_params(cudf::type_id::LIST, distribution_id::UNIFORM, 0, 5);
-  table_data_profile.set_null_frequency(0);
-  auto const tbl = create_random_table({cudf::type_id::LIST}, row_count{10}, table_data_profile);
-  cudf::test::print(tbl->get_column(0));
-  auto const new_tbl = cudf::repeat(tbl->view(), 2);
-  cudf::test::print(new_tbl->get_column(0));
-  auto const expected_dense_vals = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-    1, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
-  this->test_ungrouped_rank_scan(new_tbl->get_column(0),
-                                 expected_dense_vals,
-                                 cudf::make_dense_rank_aggregation(),
-                                 cudf::null_policy::INCLUDE);
-}
-
-TEST_F(ListRankScanTest, ListStruct)
+TEST_F(ListRankScanTest, ListOfStruct)
 {
   // Constructing a list of struct of two elements
   // []                  ==
@@ -141,5 +124,3 @@ TEST_F(ListRankScanTest, ListStruct)
   this->test_ungrouped_rank_scan(
     list_column, expect, cudf::make_dense_rank_aggregation(), cudf::null_policy::INCLUDE);
 }
-
-CUDF_TEST_PROGRAM_MAIN()

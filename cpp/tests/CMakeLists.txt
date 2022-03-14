@@ -30,7 +30,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
   )
-  target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil cudf_datagen GTest::gmock_main GTest::gtest_main)
+  target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
   install(
     TARGETS ${CMAKE_TEST_NAME}
@@ -150,10 +150,8 @@ ConfigureTest(
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTION_TEST reductions/collect_ops_tests.cpp reductions/rank_tests.cpp
-  reductions/reduction_tests.cpp reductions/scan_tests.cpp
+  reductions/reduction_tests.cpp reductions/scan_tests.cpp reductions/list_rank_test.cpp
 )
-
-ConfigureTest(RANK_TEST reductions/list_rank_test.cpp)
 
 # ##################################################################################################
 # * replace tests ---------------------------------------------------------------------------------
