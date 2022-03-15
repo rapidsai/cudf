@@ -79,9 +79,9 @@ struct value_generator {
     engine.discard(n);
     if constexpr (cuda::std::is_integral_v<T> &&
                   cuda::std::is_floating_point_v<decltype(dist(engine))>) {
-      return std::clamp(std::round(dist(engine)), lower_bound, upper_bound);
+      return std::clamp(static_cast<T>(std::round(dist(engine))), lower_bound, upper_bound);
     } else {
-      return std::clamp(dist(engine) + lower_bound, lower_bound, upper_bound);
+      return std::clamp(dist(engine), lower_bound, upper_bound);
     }
     // Note: uniform does not need clamp, because already range is guaranteed to be within bounds.
   }
@@ -127,7 +127,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
         return result;
       };
     case distribution_id::UNIFORM:
-      return [dist = make_uniform_dist(lower_bound, upper_bound)](
+      return [lower_bound, upper_bound, dist = make_uniform_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
         thrust::tabulate(thrust::device,
@@ -138,15 +138,17 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
       };
     case distribution_id::GEOMETRIC:
       // kind of exponential distribution from lower_bound to upper_bound.
-      return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound, T{0})](
-               thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
-        rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
-        thrust::tabulate(thrust::device,
-                         result.begin(),
-                         result.end(),
-                         abs_value_generator{lower_bound, upper_bound, engine, dist});
-        return result;
-      };
+      using diffType = decltype(upper_bound - lower_bound);
+      return
+        [lower_bound, upper_bound, dist = make_normal_dist(diffType{0}, upper_bound - lower_bound)](
+          thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
+          rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
+          thrust::tabulate(thrust::device,
+                           result.begin(),
+                           result.end(),
+                           abs_value_generator{lower_bound, upper_bound, engine, dist});
+          return result;
+        };
     default: CUDF_FAIL("Unsupported probability distribution");
   }
 }
