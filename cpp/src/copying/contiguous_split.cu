@@ -820,8 +820,8 @@ void copy_data(int num_bufs,
     _d_dst_buf_info,
     _d_dst_buf_info + num_bufs,
     chunks.begin(),
-    [desired_chunk_size] __device__(dst_buf_info const& buf) ->
-      thrust::pair<std::size_t, std::size_t> {
+    [desired_chunk_size] __device__(
+      dst_buf_info const& buf) -> thrust::pair<std::size_t, std::size_t> {
       // Total bytes for this incoming partition
       std::size_t const bytes =
         static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
