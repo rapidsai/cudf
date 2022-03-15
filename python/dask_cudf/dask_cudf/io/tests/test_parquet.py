@@ -518,8 +518,14 @@ def test_cudf_dtypes_from_pandas(tmpdir, data):
 
 
 def test_cudf_list_struct_write():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [[[1, 2]], [[2, 3]], None]})
-    df["c"] = df.to_struct()
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": [[[1, 2]], [[2, 3]], None],
+            "c": [[[["a", "z"]]], [[["b", "d", "e"]]], None],
+        }
+    )
+    df["d"] = df.to_struct()
 
     ddf = dask_cudf.from_cudf(df, 3)
     temp_file = str(tempdir.join("list_struct.parquet"))
