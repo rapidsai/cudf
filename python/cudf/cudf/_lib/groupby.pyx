@@ -77,13 +77,13 @@ cdef _agg_result_from_columns(
     for an input column that has no applicable aggregations is an empty list.
     """
     cdef int n_res_cols = c_result_columns.size()
+    result_columns = []
+    cdef int i, j
+    cdef vector[unique_ptr[column]]* c_results_i
     # Note we are constructing a list of python columns in the reverse order
     # to the result in libcudf. This is because the line below requires popping
     # from this list in FIFO order. In python, popping from the end of the list
     # is O(1) but popping from head is O(N).
-    result_columns = []
-    cdef int i, j
-    cdef vector[unique_ptr[column]]* c_results_i
     for i in range(1, n_res_cols + 1):
         c_results_i = &c_result_columns[n_res_cols - i].results
         result_columns.append([
