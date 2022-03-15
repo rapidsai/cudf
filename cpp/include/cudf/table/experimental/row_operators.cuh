@@ -47,11 +47,11 @@ namespace experimental {
  *
  * Usage:
  * @code
- * type_dispatcher<non_nested_id_to_type>(data_type(), functor{});
+ * type_dispatcher<dispatch_nested_to_void>(data_type(), functor{});
  * @endcode
  */
 template <cudf::type_id t>
-struct non_nested_id_to_type {
+struct dispatch_nested_to_void {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
@@ -155,7 +155,7 @@ class element_comparator {
     }
 
     auto comparator = element_comparator{_nulls, lcol, rcol, _null_precedence, _depth};
-    return cudf::type_dispatcher<non_nested_id_to_type>(
+    return cudf::type_dispatcher<dispatch_nested_to_void>(
       lcol.type(), comparator, lhs_element_index, rhs_element_index);
   }
 

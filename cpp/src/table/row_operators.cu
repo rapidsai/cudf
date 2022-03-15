@@ -159,7 +159,7 @@ void check_lex_compatibility(table_view const& input)
                  "Cannot lexicographic compare a table with a LIST column");
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(
-        type_dispatcher<non_nested_id_to_type>(c.type(), is_relationally_comparable_functor{}),
+        type_dispatcher<dispatch_nested_to_void>(c.type(), is_relationally_comparable_functor{}),
         "Cannot lexicographic compare a table with a column of type " +
           jit::get_type_name(c.type()));
     }
