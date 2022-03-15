@@ -64,7 +64,7 @@ struct make_pair_function {
  * ...
  * @endcode
  *
- * @param filename_merges Path to text file containing merge-pairs.
+ * @param filename_merges Path to text file containing merge-pairs
  * @return object containing table elements for the BPE function
  */
 std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_merges,
@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> load_file_to_column(std::string const& filename_me
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::strings_column_view const& input, rmm::cuda_stream_view stream)
 {
-  // Ensure capacity is at least (size*10/7) as documented here:
+  // Ensure capacity is at least (size/0.7) as documented here:
   // https://github.com/NVIDIA/cuCollections/blob/6ec8b6dcdeceea07ab4456d32461a05c18864411/include/cuco/static_map.cuh#L179-L182
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
     static_cast<size_t>(input.size() * 2),        // capacity is 2x;
@@ -126,9 +126,8 @@ std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_im
   std::unique_ptr<cudf::column>&& input, rmm::cuda_stream_view stream)
 {
   auto merge_pairs = initialize_merge_pairs_map(cudf::strings_column_view(input->view()), stream);
-  auto result      = std::make_unique<nvtext::bpe_merge_pairs::bpe_merge_pairs_impl>(
-    std::move(input), std::move(merge_pairs));
-  return result;
+  return std::make_unique<nvtext::bpe_merge_pairs::bpe_merge_pairs_impl>(std::move(input),
+                                                                         std::move(merge_pairs));
 }
 
 std::unique_ptr<bpe_merge_pairs::bpe_merge_pairs_impl> create_bpe_merge_pairs_impl(

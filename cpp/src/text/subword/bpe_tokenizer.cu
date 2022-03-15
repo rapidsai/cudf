@@ -49,16 +49,16 @@ constexpr bool is_whitespace(CharType ch)
 }
 
 /**
- * @brief Resolve a truncated string from a full string.
+ * @brief Resolve a substring up to the first whitespace character.
  *
  * This will return a substring of the input starting with the first byte
- * upto the first whitespace character is found or the end of the string.
+ * up to the first whitespace character found or the end of the string.
  * Any whitespace is expected only at the end of the string.
  *
  * @param d_str Input string to resolve.
- * @return Substring of the input excluding trailing whitespace.
+ * @return Substring of the input excluding any trailing whitespace.
  */
-__device__ cudf::string_view resolve_string(cudf::string_view const& d_str)
+__device__ cudf::string_view get_first_token(cudf::string_view const& d_str)
 {
   auto const begin = d_str.data();
   auto const end   = thrust::find_if(
@@ -178,7 +178,7 @@ struct byte_pair_encoding_fn {
   __device__ void operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = resolve_string(d_strings.element<cudf::string_view>(idx));
+    auto const d_str = get_first_token(d_strings.element<cudf::string_view>(idx));
     if (d_str.empty()) { return; }
 
     auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
@@ -293,7 +293,7 @@ struct build_encoding_fn {
   __device__ void operator()(cudf::size_type idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = resolve_string(d_strings.element<cudf::string_view>(idx));
+    auto const d_str = get_first_token(d_strings.element<cudf::string_view>(idx));
     if (d_str.empty()) { return; }
 
     auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
@@ -312,6 +312,7 @@ struct build_encoding_fn {
       if (*itr++) *d_output++ = ' ';
       *d_output++ = *d_input++;
     }
+    // https://github.com/rapidsai/cudf/pull/10270/files#r826319405
   }
 };
 
@@ -322,7 +323,7 @@ struct build_encoding_fn {
  *
  * The encoding is performed iteratively. Each pass determines the string's lowest
  * ranked merge pair as determined by the strings in `merges_table`. This pair
- * is the removed (virtually) from each string before starting the next iteration.
+ * is removed (virtually) from each string before starting the next iteration.
  *
  * Once all pairs have exhausted for all strings, the output is constructed from
  * the results by adding spaces between each remaining pair in each string.
@@ -344,7 +345,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   auto const d_merges  = cudf::column_device_view::create(merge_pairs.get_merge_pairs(), stream);
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
-  auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+  auto offsets   = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
                                            static_cast<cudf::size_type>(input.size() + 1),
                                            cudf::mask_state::UNALLOCATED,
                                            stream,
@@ -384,7 +385,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
  *
  * This handles sliced input and null strings as well.
  * It is parallelized over bytes and returns true only for valid left edges
- * -- non-space proceeded by a space.
+ * -- non-space preceded by a space.
  */
 struct edge_of_space_fn {
   cudf::column_device_view const d_strings;
@@ -417,7 +418,7 @@ struct edge_of_space_fn {
  * and only returns new offsets. The behavior is more like a view-only slice
  * of the chars child with the result still including trailing delimiters.
  *
- * The encoding algorithm knows to ignore the trailing whitespace of each string.
+ * The encoding algorithm ignores the trailing whitespace of each string.
  *
  * @param input Strings to tokenize.
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -439,7 +440,7 @@ std::unique_ptr<cudf::column> space_offsets(cudf::strings_column_view const& inp
 
   // create output offsets
   auto result =
-    cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
                               static_cast<cudf::size_type>(space_count + input.size() + 1),
                               cudf::mask_state::UNALLOCATED,
                               stream,
