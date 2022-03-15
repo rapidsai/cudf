@@ -33,6 +33,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/discard_iterator.h>
 
+#include <cstddef>
 #include <numeric>
 
 namespace cudf {
@@ -797,8 +798,8 @@ struct size_of_helper {
  * structs) return 0.
  */
 struct num_chunks_func {
-  thrust::pair<size_t, size_t> const* chunks;
-  __device__ size_t operator()(size_type i) const { return thrust::get<0>(chunks[i]); }
+  thrust::pair<std::size_t, std::size_t> const* chunks;
+  __device__ std::size_t operator()(size_type i) const { return thrust::get<0>(chunks[i]); }
 };
 
 void copy_data(int num_bufs,
@@ -812,25 +813,26 @@ void copy_data(int num_bufs,
   // have small numbers of copies to do (a combination of small numbers of splits and/or columns),
   // so we will take the actual set of outgoing source/destination buffers and further partition
   // them into much smaller chunks in order to drive up the number of blocks and overall occupancy.
-  auto const desired_chunk_size = size_t{1 * 1024 * 1024};
-  rmm::device_uvector<thrust::pair<size_t, size_t>> chunks(num_bufs, stream);
+  auto const desired_chunk_size = std::size_t{1 * 1024 * 1024};
+  rmm::device_uvector<thrust::pair<std::size_t, std::size_t>> chunks(num_bufs, stream);
   thrust::transform(
     rmm::exec_policy(stream),
     _d_dst_buf_info,
     _d_dst_buf_info + num_bufs,
     chunks.begin(),
-    [desired_chunk_size] __device__(dst_buf_info const& buf) -> thrust::pair<size_t, size_t> {
+    [desired_chunk_size] __device__(dst_buf_info const& buf) ->
+      thrust::pair<std::size_t, std::size_t> {
       // Total bytes for this incoming partition
-      size_t const bytes =
-        static_cast<size_t>(buf.num_elements) * static_cast<size_t>(buf.element_size);
+      std::size_t const bytes =
+        static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
 
-      // This clause handles nested data types (e.g. list or string) that store no data in the roow
+      // This clause handles nested data types (e.g. list or string) that store no data in the row
       // columns, only in their children.
       if (bytes == 0) { return {1, 0}; }
 
       // The number of chunks we want to subdivide this buffer into
-      size_t const num_chunks =
-        max(size_t{1}, util::round_up_unsafe(bytes, desired_chunk_size) / desired_chunk_size);
+      std::size_t const num_chunks =
+        max(std::size_t{1}, util::round_up_unsafe(bytes, desired_chunk_size) / desired_chunk_size);
 
       // NOTE: leaving chunk size as a separate parameter for future tuning
       // possibilities, even though in the current implementation it will be a
