@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,7 +145,7 @@ TEST_F(StringsFindallTests, DotAll)
 TEST_F(StringsFindallTests, MediumRegex)
 {
   // This results in 15 regex instructions and falls in the 'medium' range.
-  std::string medium_regex = "(\\w+) (\\w+) (\\d+)";
+  std::string const medium_regex = R"((\w+) (\w+) (\d+))";
 
   std::vector<const char*> h_strings{"first words 1234 and just numbers 9876", "neither"};
   cudf::test::strings_column_wrapper strings(

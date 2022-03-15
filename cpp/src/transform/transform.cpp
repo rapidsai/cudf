@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ void unary_operation(mutable_column_view output,
   cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
     .get_kernel(
       kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                   //
+    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())                             //
     ->launch(output.size(),                                                                 //
              cudf::jit::get_data_ptr(output),
              cudf::jit::get_data_ptr(input));

@@ -96,7 +96,7 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
                                               "a23-44-13-2.deploy.static.akamaitechnologies.com"});
   auto strings_view = cudf::strings_column_view(strings);
 
-  std::string pattern = "([\\w]+[\\.].*[^/]|[\\-\\w]+[\\.].*[^/])";
+  std::string pattern = R"(([\w]+[\.].*[^/]|[\-\w]+[\.].*[^/]))";
   auto results        = cudf::strings::extract(strings_view, pattern);
 
   cudf::test::strings_column_wrapper expected1({
@@ -122,11 +122,11 @@ TEST_F(StringsExtractTests, ExtractDomainTest)
 TEST_F(StringsExtractTests, ExtractEventTest)
 {
   std::vector<std::string> patterns({"(^[0-9]+\\.?[0-9]*),",
-                                     "search_name=\"([0-9A-Za-z\\s\\-\\(\\)]+)",
-                                     "message.ip=\"([\\w\\.]+)",
-                                     "message.hostname=\"([\\w\\.]+)",
-                                     "message.user_name=\"([\\w\\.\\@]+)",
-                                     "message\\.description=\"([\\w\\.\\s]+)"});
+                                     R"(search_name="([0-9A-Za-z\s\-\(\)]+))",
+                                     R"(message.ip="([\w\.]+))",
+                                     R"(message.hostname="([\w\.]+))",
+                                     R"(message.user_name="([\w\.\@]+))",
+                                     R"(message\.description="([\w\.\s]+))"});
 
   cudf::test::strings_column_wrapper strings(
     {"15162388.26, search_name=\"Test Search Name\", orig_time=\"1516238826\", "

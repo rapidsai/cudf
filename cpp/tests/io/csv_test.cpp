@@ -926,7 +926,7 @@ TEST_F(CsvReaderTest, Strings)
     outfile << names[0] << ',' << names[1] << ',' << '\n';
     outfile << "10,abc def ghi" << '\n';
     outfile << "20,\"jkl mno pqr\"" << '\n';
-    outfile << "30,stu \"\"vwx\"\" yz" << '\n';
+    outfile << R"(30,stu ""vwx"" yz)" << '\n';
   }
 
   cudf_io::csv_reader_options in_opts =
@@ -942,7 +942,7 @@ TEST_F(CsvReaderTest, Strings)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"},
+    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"},
     view.column(1));
 }
 
@@ -984,7 +984,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << names[0] << ',' << names[1] << ',' << '\n';
     outfile << "10,\"abcdef ghi\"" << '\n';
-    outfile << "20,\"jkl \"\"mno\"\" pqr\"" << '\n';
+    outfile << R"(20,"jkl ""mno"" pqr")" << '\n';
     outfile << "30,stu \"vwx\" yz" << '\n';
   }
 
@@ -1002,7 +1002,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"\"abcdef ghi\"", "\"jkl \"\"mno\"\" pqr\"", "stu \"vwx\" yz"},
+    std::vector<std::string>{"\"abcdef ghi\"", R"("jkl ""mno"" pqr")", "stu \"vwx\" yz"},
     view.column(1));
 }
 
@@ -1779,7 +1779,7 @@ TEST_F(CsvReaderTest, StringsWithWriter)
 
   auto int_column = column_wrapper<int32_t>{10, 20, 30};
   auto string_column =
-    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"};
+    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"};
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?

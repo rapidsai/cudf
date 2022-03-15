@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -353,11 +353,11 @@ TEST_F(StringsConvertTest, HexToInteger)
 
   {
     std::vector<int32_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-      if (*itr == nullptr)
+    for (auto const h_string : h_strings) {
+      if (h_string == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back(static_cast<int>(std::stol(std::string(*itr), 0, 16)));
+        h_expected.push_back(static_cast<int>(std::stol(std::string(h_string), nullptr, 16)));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
@@ -370,11 +370,11 @@ TEST_F(StringsConvertTest, HexToInteger)
   }
   {
     std::vector<int64_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-      if (*itr == nullptr)
+    for (auto const h_string : h_strings) {
+      if (h_string == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back(std::stol(std::string(*itr), 0, 16));
+        h_expected.push_back(std::stol(std::string(h_string), nullptr, 16));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),

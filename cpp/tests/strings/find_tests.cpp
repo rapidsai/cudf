@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,16 +293,16 @@ TEST_P(FindParmsTest, Find)
   {
     auto results = cudf::strings::find(strings_view, cudf::string_scalar("e"), position);
     std::vector<int32_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr)
-      h_expected.push_back((int32_t)(*itr).find("e", position));
+    for (auto& h_string : h_strings)
+      h_expected.push_back((int32_t)h_string.find("e", position));
     cudf::test::fixed_width_column_wrapper<int32_t> expected(h_expected.begin(), h_expected.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
     auto results = cudf::strings::rfind(strings_view, cudf::string_scalar("e"), 0, position + 1);
     std::vector<int32_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr)
-      h_expected.push_back((int32_t)(*itr).rfind("e", position));
+    for (auto& h_string : h_strings)
+      h_expected.push_back((int32_t)h_string.rfind("e", position));
     cudf::test::fixed_width_column_wrapper<int32_t> expected(h_expected.begin(), h_expected.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }

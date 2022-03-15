@@ -86,7 +86,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
                                           inf_args->dstSize,
                                           cudaMemcpyDeviceToHost,
                                           nullptr));
-    ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
+    ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(nullptr));
   }
 
   cudf::io::gpu_inflate_input_s* inf_args  = nullptr;

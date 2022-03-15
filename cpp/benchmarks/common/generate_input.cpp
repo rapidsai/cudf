@@ -662,7 +662,7 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
     return {static_cast<cudf::type_id>(id)};
 
   // if the value is larger that type_id::NUM_TYPE_IDS, it's a group id
-  type_group_id const group_id = static_cast<type_group_id>(id);
+  auto const group_id = static_cast<type_group_id>(id);
 
   using trait_fn       = bool (*)(cudf::data_type);
   trait_fn is_integral = [](cudf::data_type type) {

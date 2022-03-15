@@ -70,12 +70,12 @@ static void BM_ast_transform(benchmark::State& state)
   // Construct tree that chains additions like (((a + b) + c) + d)
   auto const op = cudf::ast::ast_operator::ADD;
   if (reuse_columns) {
-    expressions.push_back(cudf::ast::operation(op, column_refs.at(0), column_refs.at(0)));
+    expressions.emplace_back(op, column_refs.at(0), column_refs.at(0));
     for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-      expressions.push_back(cudf::ast::operation(op, expressions.back(), column_refs.at(0)));
+      expressions.emplace_back(op, expressions.back(), column_refs.at(0));
     }
   } else {
-    expressions.push_back(cudf::ast::operation(op, column_refs.at(0), column_refs.at(1)));
+    expressions.emplace_back(op, column_refs.at(0), column_refs.at(1));
     std::transform(std::next(column_refs.cbegin(), 2),
                    column_refs.cend(),
                    std::back_inserter(expressions),

@@ -92,7 +92,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 
   ReductionTest() {}
 
-  ~ReductionTest() {}
+  ~ReductionTest() override {}
 
   template <typename T_out>
   void reduction_test(const cudf::column_view underlying_column,

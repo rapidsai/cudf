@@ -80,8 +80,8 @@ TEST_F(StringsContainsTests, ContainsTest)
                                     "\n",
                                     "b.\\s*\n",
                                     ".*c",
-                                    "\\d\\d:\\d\\d:\\d\\d",
-                                    "\\d\\d?:\\d\\d?:\\d\\d?",
+                                    R"(\d\d:\d\d:\d\d)",
+                                    R"(\d\d?:\d\d?:\d\d?)",
                                     "[Hh]ello [Ww]orld",
                                     "\\bworld\\b",
                                     ".*"};

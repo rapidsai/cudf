@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,8 +90,7 @@ TEST_F(GatherTestStr, Gather)
 
   std::vector<const char*> h_expected;
   std::vector<int32_t> expected_validity;
-  for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
-    auto index = *itr;
+  for (int index : h_map) {
     if ((0 <= index) && (index < static_cast<decltype(index)>(h_strings.size()))) {
       h_expected.push_back(h_strings[index]);
       expected_validity.push_back(1);
@@ -119,8 +118,8 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
                                       cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
-  for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
-    h_expected.push_back(h_strings[*itr]);
+  for (int itr : h_map) {
+    h_expected.push_back(h_strings[itr]);
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);

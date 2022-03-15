@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,8 +112,7 @@ std::vector<std::vector<bool>> create_expected_validity(std::vector<cudf::size_t
   std::vector<cudf::size_type> indices  = splits_to_indices(splits, validity.size());
 
   for (unsigned long index = 0; index < indices.size(); index += 2) {
-    result.push_back(
-      std::vector<bool>(validity.begin() + indices[index], validity.begin() + indices[index + 1]));
+    result.emplace_back(validity.begin() + indices[index], validity.begin() + indices[index + 1]);
   }
 
   return result;
@@ -1399,8 +1398,8 @@ TEST_F(ContiguousSplitStringTableTest, EmptyInputColumn)
     auto result = cudf::contiguous_split(src_table, splits);
     CUDF_EXPECTS(result.size() == 5, "Incorrect returned contiguous_split result size!");
 
-    for (size_t idx = 0; idx < result.size(); idx++) {
-      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, result[idx].table);
+    for (auto& idx : result) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(src_table, idx.table);
     }
   }
 }
