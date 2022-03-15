@@ -339,13 +339,13 @@ class ReductionTest extends CudfTestBase {
     );
   }
 
-  private static Stream<Arguments> createTimestampResolutionParams(HostColumnVector.BasicType tpe) {
+  private static Stream<Arguments> createTimestampResolutionParams(HostColumnVector.BasicType type) {
     Long[] vals = new Long[]{-1L, 7L, 123L, null, 50L, 60L, 100L};
     return Stream.of(
-        Arguments.of(ReductionAggregation.max(), new Long[0], tpe, null),
-        Arguments.of(ReductionAggregation.max(), new Long[]{null, null, null}, tpe, null),
-        Arguments.of(ReductionAggregation.min(), vals, tpe, -1L),
-        Arguments.of(ReductionAggregation.max(), vals, tpe, 123L)
+        Arguments.of(ReductionAggregation.max(), new Long[0], type, null),
+        Arguments.of(ReductionAggregation.max(), new Long[]{null, null, null}, type, null),
+        Arguments.of(ReductionAggregation.min(), vals, type, -1L),
+        Arguments.of(ReductionAggregation.max(), vals, type, 123L)
     );
   }
 
@@ -429,8 +429,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createBooleanParams")
   void testBoolean(ReductionAggregation op, Boolean[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Double delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Double delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedBooleans(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -440,8 +440,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createByteParams")
   void testByte(ReductionAggregation op, Byte[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Double delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Double delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedBytes(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -451,8 +451,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createShortParams")
   void testShort(ReductionAggregation op, Short[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Double delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Double delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedShorts(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -462,8 +462,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createIntParams")
   void testInt(ReductionAggregation op, Integer[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Double delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Double delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedInts(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -473,8 +473,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createLongParams")
   void testLong(ReductionAggregation op, Long[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Double delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Double delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -484,8 +484,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createFloatParams")
   void testFloat(ReductionAggregation op, Float[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Float delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Float delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedFloats(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -495,8 +495,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createDoubleParams")
   void testDouble(ReductionAggregation op, Double[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Double delta) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject, Double delta) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedDoubles(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
@@ -506,8 +506,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createTimestampDaysParams")
   void testTimestampDays(ReductionAggregation op, Integer[] values,
-      HostColumnVector.DataType tpe, Object expectedObject) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.timestampDaysFromBoxedInts(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEquals(expected, result);
@@ -517,8 +517,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createTimestampSecondsParams")
   void testTimestampSeconds(ReductionAggregation op, Long[] values,
-      HostColumnVector.DataType tpe, Object expectedObject) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.timestampSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEquals(expected, result);
@@ -528,8 +528,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createTimestampMilliSecondsParams")
   void testTimestampMilliseconds(ReductionAggregation op, Long[] values,
-      HostColumnVector.DataType tpe, Object expectedObject) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.timestampMilliSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEquals(expected, result);
@@ -539,8 +539,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createTimestampMicroSecondsParams")
   void testTimestampMicroseconds(ReductionAggregation op, Long[] values,
-      HostColumnVector.DataType tpe, Object expectedObject) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.timestampMicroSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEquals(expected, result);
@@ -550,8 +550,8 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createTimestampNanoSecondsParams")
   void testTimestampNanoseconds(ReductionAggregation op, Long[] values,
-      HostColumnVector.DataType tpe, Object expectedObject) {
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+      HostColumnVector.DataType type, Object expectedObject) {
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.timestampNanoSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEquals(expected, result);
@@ -561,10 +561,10 @@ class ReductionTest extends CudfTestBase {
   @ParameterizedTest
   @MethodSource("createFloatArrayParams")
   void testFloatArray(ReductionAggregation op, List<Float>[] values,
-      HostColumnVector.DataType tpe, Object expectedObject, Float delta) {
+      HostColumnVector.DataType type, Object expectedObject, Float delta) {
     HostColumnVector.DataType listType = new HostColumnVector.ListType(
         true, new HostColumnVector.BasicType(true, DType.FLOAT32));
-    try (Scalar expected = buildExpectedScalar(op, tpe, expectedObject);
+    try (Scalar expected = buildExpectedScalar(op, type, expectedObject);
          ColumnVector v = ColumnVector.fromLists(listType, values);
          Scalar result = v.reduce(op, expected.getType())) {
       assertEqualsDelta(op, expected, result, delta);
