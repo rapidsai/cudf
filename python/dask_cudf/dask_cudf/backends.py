@@ -77,7 +77,7 @@ def _nonempty_index(idx):
 
 def _nest(x, n):
     """
-    Helper for _get_non_empty_data which created nested data
+    Helper for _get_non_empty_data which creates nested data
     """
     for _ in range(n):
         x = [x]
