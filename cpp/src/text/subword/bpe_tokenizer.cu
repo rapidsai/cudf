@@ -91,13 +91,16 @@ struct byte_pair_encoding_fn {
   __device__ thrust::pair<cudf::string_view, cudf::string_view> dissect_merge_pair(
     cudf::size_type idx)
   {
-    auto const d_pair   = d_merges.element<cudf::string_view>(idx);
-    auto const lhs      = d_pair.data();
-    auto const end_str  = d_pair.data() + d_pair.size_bytes();
-    auto const rhs      = thrust::find(thrust::seq, lhs, end_str, ' ') + 1;
-    auto const lhs_size = static_cast<cudf::size_type>(thrust::distance(lhs, rhs - 1));
-    auto const rhs_size = static_cast<cudf::size_type>(thrust::distance(rhs, end_str));
-    return thrust::make_pair(cudf::string_view(lhs, lhs_size), cudf::string_view(rhs, rhs_size));
+    auto const d_pair  = d_merges.element<cudf::string_view>(idx);
+    auto const lhs     = d_pair.data();
+    auto const end_str = d_pair.data() + d_pair.size_bytes();
+    auto const rhs     = thrust::find(thrust::seq, lhs, end_str, ' ');  // space always expected
+    // check for malformed pair entry to prevent segfault
+    if (rhs == end_str) { return thrust::make_pair(cudf::string_view{}, cudf::string_view{}); }
+    auto const lhs_size = static_cast<cudf::size_type>(thrust::distance(lhs, rhs));
+    auto const rhs_size = static_cast<cudf::size_type>(thrust::distance(rhs + 1, end_str));
+    return thrust::make_pair(cudf::string_view(lhs, lhs_size),
+                             cudf::string_view(rhs + 1, rhs_size));
   }
 
   /**
