@@ -424,7 +424,7 @@ class regex_parser {
       {
         if (*exprp < '0' || *exprp > '9') break;
         const char32_t* exprp_backup = exprp;  // in case '}' is not found
-        auto buff                    = std::array<char, 8>{};
+        char buff[8]                 = {0};
         for (int i = 0; i < 7 && *exprp != '}' && *exprp != ',' && *exprp != 0; i++, exprp++) {
           buff[i]     = *exprp;
           buff[i + 1] = 0;
