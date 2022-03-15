@@ -328,6 +328,12 @@ class IndexedFrame(Frame):
             self._index.copy(deep=False),
         )
 
+    @_cudf_nvtx_annotate
+    def equals(self, other):  # noqa: D102
+        if not super().equals(other):
+            return False
+        return self._index.equals(other._index)
+
     @property
     def index(self):
         """Get the labels for the rows."""

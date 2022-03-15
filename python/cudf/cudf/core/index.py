@@ -375,7 +375,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 other._step,
             ):
                 return True
-        return Int64Index._from_data(self._data).equals(other)
+        return self._as_int64().equals(other)
 
     @_cudf_nvtx_annotate
     def serialize(self):
@@ -921,22 +921,28 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if not isinstance(other, BaseIndex):
+        if (
+            other is None
+            or not isinstance(other, BaseIndex)
+            or len(self) != len(other)
+        ):
             return False
 
-        check_types = False
+        check_dtypes = False
 
         self_is_categorical = isinstance(self, CategoricalIndex)
         other_is_categorical = isinstance(other, CategoricalIndex)
         if self_is_categorical and not other_is_categorical:
             other = other.astype(self.dtype)
-            check_types = True
+            check_dtypes = True
         elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
-            check_types = True
+            check_dtypes = True
 
         try:
-            return super().equals(other, check_types=check_types)
+            return self._column.equals(
+                other._column, check_dtypes=check_dtypes
+            )
         except TypeError:
             return False
 
