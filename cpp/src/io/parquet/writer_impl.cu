@@ -878,8 +878,11 @@ void writer::impl::gather_fragment_statistics(
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
   gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
-  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
-    frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(frag_stats_chunk.data(),
+                                                                      frag_stats_group.data(),
+                                                                      num_fragments * num_columns,
+                                                                      stream,
+                                                                      int96_timestamps);
   stream.synchronize();
 }
 
