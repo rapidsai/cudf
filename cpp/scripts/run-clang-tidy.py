@@ -22,6 +22,10 @@ import shutil
 import subprocess
 
 
+EXPECTED_VERSIONS = ("11.1.0",)
+VERSION_REGEX = re.compile(r"clang version ([0-9.]+)")
+CMAKE_COMPILER_REGEX = re.compile(
+    r"^\s*CMAKE_CXX_COMPILER:FILEPATH=(.+)\s*$", re.MULTILINE)
 CLANG_COMPILER = "clang++"
 GPU_ARCH_REGEX = re.compile(r"sm_(\d+)")
 SPACES = re.compile(r"\s+")
@@ -57,6 +61,10 @@ def parse_args():
         # "-thrust_dir", type=str, default=None,
         "-thrust_dir", type=str, default="/home/cph/dev/rapids/cudf/cpp/build/cuda-11.5.0/clang-tidy-ci/release/_deps/thrust-src",
         help="Pass the directory to a THRUST git repo recent enough for clang.")
+    argparser.add_argument(
+        "-build_dir", type=str, default=None,
+        help="Directory from which compile commands should be called. "
+        "By default, directory of compile_commands.json file.")
     args = argparser.parse_args()
     if args.j <= 0:
         args.j = mp.cpu_count()
@@ -74,13 +82,35 @@ def parse_args():
     if args.thrust_dir is None:
         args.thrust_dir = os.path.join(
             os.path.dirname(args.cdb), "thrust_1.15", "src", "thrust_1.15")
+    if args.build_dir is None:
+        args.build_dir = os.path.dirname(args.cdb)
     if not os.path.isdir(args.thrust_dir):
         raise Exception("Cannot find custom thrust dir '%s" % args.thrust_dir)
     return args
 
 
+def get_gcc_root(args):
+    # first try to determine GCC based on CMakeCache
+    cmake_cache = os.path.join(args.build_dir, "CMakeCache.txt")
+    if os.path.isfile(cmake_cache):
+        with open(cmake_cache) as f:
+            content = f.read()
+        match = CMAKE_COMPILER_REGEX.search(content)
+        if match:
+            return os.path.dirname(os.path.dirname(match.group(1)))
+    # first fall-back to CONDA prefix if we have a build sysroot there
+    conda_prefix = os.environ.get("CONDA_PREFIX", "")
+    conda_sysroot = os.environ.get("CONDA_BUILD_SYSROOT", "")
+    if conda_prefix and conda_sysroot:
+        return conda_prefix
+    # second fall-back to default g++ install
+    default_gxx = shutil.which("g++")
+    if default_gxx:
+        return os.path.dirname(os.path.dirname(default_gxx))
+    raise Exception("Cannot find any g++ install on the system.")
+
 def get_all_commands(cdb):
-    with open(cdb) as fp:
+    with open(cdb, "r") as fp:
         return json.load(fp)
 
 
@@ -145,36 +175,42 @@ def get_tidy_args(cmd, args):
         command.extend(archs)
         # provide proper cuda path to clang
         add_cuda_path(command, cc_orig)
-        remove_items_plus_one(command, ["-gencode", "--generate-code"])
-        # "-x cuda" is the right usage in clang
-        remove_items_plus_one(command, ["--x", "-x"])
-        command.extend(["-x", "cuda"])
-        remove_items_plus_one(command, ["--compiler-bindir", "-ccbin"])
+  	        # remove all kinds of nvcc flags clang doesn't know about
+        remove_items_plus_one(command, [
+            "--generate-code",
+            "-gencode",
+            "--x",
+            "-x",
+            "--compiler-bindir",
+            "-ccbin",
+            "--diag_suppress",
+            "-diag-suppress",
+            "--default-stream",
+            "-default-stream",
+        ])
         remove_items(command, [
             "-extended-lambda",
             "--extended-lambda",
             "-expt-extended-lambda",
-            "--expt-extended-lambda"
+            "--expt-extended-lambda",
+            "-expt-relaxed-constexpr",
+            "--expt-relaxed-constexpr",
+            "--device-debug",
+            "-G",
+            "--generate-line-info",
+            "-lineinfo",
         ])
-        remove_items_plus_one(command, ["--diag_suppress", "-diag-suppress"])
-        # remove debug stuff which clang doesn't know about
-        remove_items(command, ["--device-debug", "-G"])
-        remove_items(command, ["--generate-line-info", "-lineinfo"])
+        # "-x cuda" is the right usage in clang
+        command.extend(["-x", "cuda"])
         # we remove -Xcompiler flags: here we basically have to hope for the
         # best that clang++ will accept any flags which nvcc passed to gcc
-        command = [XCOMPILER_FLAG.sub('', c) for c in command]
+        for i, c in reversed(list(enumerate(command))):
+            new_c = XCOMPILER_FLAG.sub('', c)
+            if new_c == c:
+                continue
+            command[i:i + 1] = new_c.split(',')
         # we also change -Xptxas to -Xcuda-ptxas, always adding space here
-        for i, c in list(enumerate(command))[::-1]:
-            if XPTXAS_FLAG.search(c):
-                if not c.endswith("=") and i < len(command) - 1:
-                    del command[i + 1]
-                command[i] = '-Xcuda-ptxas'
-                command.insert(i + 1, XPTXAS_FLAG.sub('', c))
-        # several options like isystem don't expect `=`
-        for opt in OPTIONS_NO_EQUAL_SIGN:
-            opt_eq = opt + '='
-            # make sure that we iterate from back to front here for insert
-            for i, c in list(enumerate(command))[::-1]:
+        for i, c in reversed(list(enumerate(command))):
                 if not c.startswith(opt_eq):
                     continue
                 x = c.split('=')
@@ -189,6 +225,12 @@ def get_tidy_args(cmd, args):
         "--forward-unknown-to-host-compiler",
         "-forward-unknown-to-host-compiler"
     ])
+    # do not treat warnings as errors here !
+    for i, x in reversed(list(enumerate(command))):
+        if x.startswith("-Werror"):
+            del command[i]
+    # try to figure out which GCC CMAKE used, and tell clang all about it
+    command.append("--gcc-toolchain=%s" % get_gcc_root(args))
     return command, is_cuda
 
 
