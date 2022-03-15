@@ -355,12 +355,10 @@ def _is_all_scan_aggregate(all_aggs):
         return agg.__name__ if callable(agg) else agg
 
     all_scan = all(
-        get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs
-        for aggs in all_aggs
+        get_name(agg_name) in _GROUPBY_SCANS for aggs in all_aggs for agg_name in aggs
     )
     any_scan = any(
-        get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs
-        for aggs in all_aggs
+        get_name(agg_name) in _GROUPBY_SCANS for aggs in all_aggs for agg_name in aggs
     )
 
     if not all_scan and any_scan:
