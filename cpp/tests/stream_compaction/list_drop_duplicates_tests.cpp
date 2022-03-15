@@ -45,7 +45,7 @@ TEST_F(ListDropDuplicatesTest, BasicList)
   auto const exp_val = lcw{{}, {1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
   auto const expect  = cudf::table_view({exp_idx, exp_val});
 
-  auto result        = cudf::unordered_drop_duplicates(input, {1});
+  auto result        = cudf::distinct(input, {1});
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);

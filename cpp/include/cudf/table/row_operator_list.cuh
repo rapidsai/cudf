@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -286,12 +287,13 @@ class element_hasher {
     auto size = end_off - start_off;
     hash      = hash_combine(hash, hash_function<decltype(size)>{}(size));
     for (int i = 0; i < size; ++i) {
-      hash = hash_combine(hash,
-                          type_dispatcher2(curr_col.type(),
-                                           element_hasher<hash_function, Nullate>{has_nulls},
-                                           curr_col,
-                                           start_off + i,
-                                           hash_combine));
+      hash = hash_combine(
+        hash,
+        type_dispatcher<non_nested_id_to_type>(curr_col.type(),
+                                               element_hasher<hash_function, Nullate>{has_nulls},
+                                               curr_col,
+                                               start_off + i,
+                                               hash_combine));
     }
     // printf("hash %d\n", hash);
     return hash;
@@ -322,19 +324,17 @@ class row_hasher {
 
   __device__ auto operator()(size_type row_index) const
   {
-    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
-    };
-
     // Hash the first column w/ the seed
-    auto const initial_hash = hash_combiner(
+    auto const initial_hash = cudf::detail::hash_combine(
       hash_value_type{0},
       type_dispatcher<dispatch_storage_type>(_table.column(0).type(),
                                              // TODO: revert back to using seed
                                              element_hasher<hash_function, Nullate>{_has_nulls},
                                              _table.column(0),
                                              row_index,
-                                             hash_combiner));
+                                             [](hash_value_type lhs, hash_value_type rhs) {
+                                               return cudf::detail::hash_combine(lhs, rhs);
+                                             }));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
@@ -343,7 +343,9 @@ class row_hasher {
         element_hasher<hash_function, Nullate>{_has_nulls},
         _table.column(column_index),
         row_index,
-        hash_combiner);
+        [](hash_value_type lhs, hash_value_type rhs) {
+          return cudf::detail::hash_combine(lhs, rhs);
+        });
     };
 
     // Hash each element and combine all the hash values together
@@ -354,7 +356,9 @@ class row_hasher {
       thrust::make_counting_iterator(_table.num_columns()),
       hasher,
       initial_hash,
-      hash_combiner);
+      [](hash_value_type lhs, hash_value_type rhs) {
+        return cudf::detail::hash_combine(lhs, rhs);
+      });
   }
 
  private:
