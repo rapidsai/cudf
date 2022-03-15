@@ -205,7 +205,7 @@ class IndexedFrame(Frame):
         return out
 
     @classmethod
-    @annotate("INDEXEDFRAME_FROM_COLUMNS", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def _from_columns(
         cls,
         columns: List[ColumnBase],
@@ -235,11 +235,7 @@ class IndexedFrame(Frame):
 
         return out
 
-    @annotate(
-        "INDEXEDFRAME_FROM_COLUMNS_LIKE_SELF",
-        color="green",
-        domain="cudf_python",
-    )
+    @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
