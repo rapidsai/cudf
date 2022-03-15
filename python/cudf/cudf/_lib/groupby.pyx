@@ -76,20 +76,20 @@ cdef _agg_result_from_columns(
     contains the same number of lists as the number of input columns. Result
     for an input column that has no applicable aggregations is an empty list.
     """
-    n_res_cols = c_result_columns.size()
+    cdef int n_res_cols = c_result_columns.size()
     # Note we are constructing a list of python columns in the reverse order
     # to the result in libcudf. This is because the line below requires popping
     # from this list in FIFO order. In python, popping from the end of the list
     # is O(1) but popping from head is O(N).
-    result_columns = [
-        [
-            Column.from_unique_ptr(
-                move(c_result_columns[n_res_cols - i - 1].results[j])
-            ) for j in range(
-                c_result_columns[n_res_cols - i - 1].results.size()
-            )
-        ] for i in range(n_res_cols)
-    ]
+    result_columns = []
+    cdef int i, j
+    cdef vector c_results_i
+    for i in range(1, n_res_cols + 1):
+        c_results_i = c_result_columns[n_res_cols - i].results
+        result_columns.append([
+            Column.from_unique_ptr(move(c_results_i[j]))
+            for j in range(c_results_i.size())
+        ])
 
     result_columns_with_padding = [
         result_columns.pop() if i in column_orders else [] for i in range(
