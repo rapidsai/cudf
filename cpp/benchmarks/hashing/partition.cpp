@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/partitioning.hpp>
-#include <cudf/table/table.hpp>
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/partitioning.hpp>
 
 #include <algorithm>
-#include <numeric>
-
-using cudf::test::fixed_width_column_wrapper;
 
 class Hashing : public cudf::benchmark {
 };
@@ -36,18 +33,9 @@ void BM_hash_partition(benchmark::State& state)
   auto const num_partitions = state.range(2);
 
   // Create owning columns
-  std::vector<fixed_width_column_wrapper<T>> columns(num_cols);
-  std::generate(columns.begin(), columns.end(), [num_rows]() {
-    auto iter = thrust::make_counting_iterator(0);
-    return fixed_width_column_wrapper<T>(iter, iter + num_rows);
-  });
-
-  // Create table view into columns
-  std::vector<cudf::column_view> views(columns.size());
-  std::transform(columns.begin(), columns.end(), views.begin(), [](auto const& col) {
-    return static_cast<cudf::column_view>(col);
-  });
-  auto input = cudf::table_view(views);
+  auto input_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
+                                           row_count{static_cast<cudf::size_type>(num_rows)});
+  auto input       = cudf::table_view(*input_table);
 
   auto columns_to_hash = std::vector<cudf::size_type>(num_cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
