@@ -38,7 +38,7 @@ class file_source : public datasource {
   {
   }
 
-  virtual ~file_source() = default;
+  ~file_source() override = default;
 
   [[nodiscard]] bool supports_device_read() const override { return _cufile_in != nullptr; }
 

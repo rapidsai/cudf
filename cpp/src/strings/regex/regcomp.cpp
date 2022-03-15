@@ -424,7 +424,7 @@ class regex_parser {
       {
         if (*exprp < '0' || *exprp > '9') break;
         const char32_t* exprp_backup = exprp;  // in case '}' is not found
-        char buff[8]                 = {0};
+        auto buff                    = std::array<char, 8>{};
         for (int i = 0; i < 7 && *exprp != '}' && *exprp != ',' && *exprp != 0; i++, exprp++) {
           buff[i]     = *exprp;
           buff[i + 1] = 0;
@@ -799,9 +799,8 @@ class regex_compiler {
     /* Start with a low priority operator to prime parser */
     pushator(START - 1);
 
-    for (int i = 0; i < static_cast<int>(items.size()); i++) {
-      regex_parser::Item item = items[i];
-      int token               = item.t;
+    for (auto const item : items) {
+      int token = item.t;
       if (token == CCLASS || token == NCCLASS)
         yyclass_id = item.d.yyclass_id;
       else
@@ -851,9 +850,9 @@ reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
 void reprog::optimize1()
 {
   // Treat non-capturing LBRAs/RBRAs as NOOP
-  for (int i = 0; i < static_cast<int>(_insts.size()); i++) {
-    if (_insts[i].type == LBRA || _insts[i].type == RBRA) {
-      if (_insts[i].u1.subid < 1) { _insts[i].type = NOP; }
+  for (auto& _inst : _insts) {
+    if (_inst.type == LBRA || _inst.type == RBRA) {
+      if (_inst.u1.subid < 1) { _inst.type = NOP; }
     }
   }
 
