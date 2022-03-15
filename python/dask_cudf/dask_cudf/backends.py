@@ -6,7 +6,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from nvtx import annotate
 
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
@@ -31,6 +30,7 @@ from dask.sizeof import sizeof as sizeof_dispatch
 
 import cudf
 from cudf.api.types import is_string_dtype
+from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 from .core import DataFrame, Index, Series
 
@@ -40,7 +40,7 @@ get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
 
 
 @meta_nonempty.register(cudf.BaseIndex)
-@annotate("_nonempty_index", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def _nonempty_index(idx):
     if isinstance(idx, cudf.core.index.RangeIndex):
         return cudf.core.index.RangeIndex(2, name=idx.name)
@@ -75,7 +75,7 @@ def _nonempty_index(idx):
     raise TypeError(f"Don't know how to handle index of type {type(idx)}")
 
 
-@annotate("_get_non_empty_data", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def _get_non_empty_data(s):
     if isinstance(s._column, cudf.core.column.CategoricalColumn):
         categories = (
@@ -103,7 +103,7 @@ def _get_non_empty_data(s):
 
 
 @meta_nonempty.register(cudf.Series)
-@annotate("_nonempty_series", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def _nonempty_series(s, idx=None):
     if idx is None:
         idx = _nonempty_index(s.index)
@@ -113,7 +113,7 @@ def _nonempty_series(s, idx=None):
 
 
 @meta_nonempty.register(cudf.DataFrame)
-@annotate("meta_nonempty_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
     columns_with_dtype = dict()
@@ -129,18 +129,18 @@ def meta_nonempty_cudf(x):
 
 
 @make_meta_dispatch.register((cudf.Series, cudf.DataFrame))
-@annotate("make_meta_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def make_meta_cudf(x, index=None):
     return x.head(0)
 
 
 @make_meta_dispatch.register(cudf.BaseIndex)
-@annotate("make_meta_cudf_index", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def make_meta_cudf_index(x, index=None):
     return x[:0]
 
 
-@annotate("_empty_series", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
         return cudf.Series(
@@ -150,7 +150,7 @@ def _empty_series(name, dtype, index=None):
 
 
 @make_meta_obj.register(object)
-@annotate("make_meta_object_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def make_meta_object_cudf(x, index=None):
     """Create an empty cudf object containing the desired metadata.
 
@@ -221,7 +221,7 @@ def make_meta_object_cudf(x, index=None):
 
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
-@annotate("concat_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def concat_cudf(
     dfs,
     axis=0,
@@ -246,13 +246,13 @@ def concat_cudf(
 @categorical_dtype_dispatch.register(
     (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
 )
-@annotate("categorical_dtype_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def categorical_dtype_cudf(categories=None, ordered=None):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
 @tolist_dispatch.register((cudf.Series, cudf.BaseIndex))
-@annotate("tolist_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def tolist_cudf(obj):
     return obj.to_arrow().to_pylist()
 
@@ -260,9 +260,7 @@ def tolist_cudf(obj):
 @is_categorical_dtype_dispatch.register(
     (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
 )
-@annotate(
-    "is_categorical_dtype_cudf", color="green", domain="dask_cudf_python"
-)
+@_dask_cudf_nvtx_annotate
 def is_categorical_dtype_cudf(obj):
     return cudf.api.types.is_categorical_dtype(obj)
 
@@ -276,7 +274,7 @@ try:
         )
 
     @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
-    @annotate("percentile_cudf", color="green", domain="dask_cudf_python")
+    @_dask_cudf_nvtx_annotate
     def percentile_cudf(a, q, interpolation="linear"):
         # Cudf dispatch to the equivalent of `np.percentile`:
         # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
@@ -321,7 +319,7 @@ except ImportError:
 
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
-@annotate("union_categoricals_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def union_categoricals_cudf(
     to_union, sort_categories=False, ignore_order=False
 ):
@@ -330,13 +328,13 @@ def union_categoricals_cudf(
     )
 
 
-@annotate("safe_hash", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def safe_hash(frame):
     return cudf.Series(frame.hash_values(), index=frame.index)
 
 
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
-@annotate("hash_object_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def hash_object_cudf(frame, index=True):
     if index:
         return safe_hash(frame.reset_index())
@@ -344,7 +342,7 @@ def hash_object_cudf(frame, index=True):
 
 
 @hash_object_dispatch.register(cudf.BaseIndex)
-@annotate("hash_object_cudf_index", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def hash_object_cudf_index(ind, index=None):
 
     if isinstance(ind, cudf.MultiIndex):
@@ -355,7 +353,7 @@ def hash_object_cudf_index(ind, index=None):
 
 
 @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
-@annotate("group_split_cudf", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def group_split_cudf(df, c, k, ignore_index=False):
     return dict(
         zip(
@@ -370,12 +368,12 @@ def group_split_cudf(df, c, k, ignore_index=False):
 
 
 @sizeof_dispatch.register(cudf.DataFrame)
-@annotate("sizeof_cudf_dataframe", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def sizeof_cudf_dataframe(df):
     return int(df.memory_usage().sum())
 
 
 @sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))
-@annotate("sizeof_cudf_series_index", color="green", domain="dask_cudf_python")
+@_dask_cudf_nvtx_annotate
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/sorting.hpp>
@@ -353,12 +354,13 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
+   * Behavior is undefined if called with incomparable column types.
    *
+   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
@@ -379,8 +381,6 @@ class row_lexicographic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
-                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**
@@ -499,18 +499,14 @@ class row_hasher {
 
   __device__ auto operator()(size_type row_index) const
   {
-    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
-    };
-
     // Hash the first column w/ the seed
-    auto const initial_hash =
-      hash_combiner(hash_value_type{0},
-                    type_dispatcher<dispatch_storage_type>(
-                      _table.column(0).type(),
-                      element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
-                      _table.column(0),
-                      row_index));
+    auto const initial_hash = cudf::detail::hash_combine(
+      hash_value_type{0},
+      type_dispatcher<dispatch_storage_type>(
+        _table.column(0).type(),
+        element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
+        _table.column(0),
+        row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
@@ -529,7 +525,9 @@ class row_hasher {
       thrust::make_counting_iterator(_table.num_columns()),
       hasher,
       initial_hash,
-      hash_combiner);
+      [](hash_value_type lhs, hash_value_type rhs) {
+        return cudf::detail::hash_combine(lhs, rhs);
+      });
   }
 
  private:
