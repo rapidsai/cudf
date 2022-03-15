@@ -34,13 +34,13 @@
  * @brief Generates a normal distribution between zero and upper_bound.
  */
 template <typename T>
-auto make_normal_dist(T upper_bound)
+auto make_normal_dist(T lower_bound, T upper_bound)
 {
   using realT    = std::conditional_t<cuda::std::is_floating_point_v<T>,
                                    T,
                                    std::conditional_t<sizeof(T) * 8 <= 23, float, double>>;
-  T const mean   = upper_bound / 2;
-  T const stddev = upper_bound / 6;
+  T const mean   = lower_bound + (upper_bound - lower_bound) / 2;
+  T const stddev = (upper_bound - lower_bound) / 6;
   return thrust::random::normal_distribution<realT>(mean, stddev);
 }
 
@@ -115,7 +115,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
 {
   switch (dist_id) {
     case distribution_id::NORMAL:
-      return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
+      return [lower_bound, upper_bound, dist = make_normal_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
         thrust::tabulate(thrust::device,
@@ -134,7 +134,7 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
       };
     case distribution_id::GEOMETRIC:
       // kind of exponential distribution from lower_bound to upper_bound.
-      return [lower_bound, upper_bound, dist = make_normal_dist(upper_bound - lower_bound)](
+      return [lower_bound, upper_bound, dist = make_normal_dist(lower_bound, upper_bound)](
                thrust::minstd_rand& engine, size_t size) -> rmm::device_uvector<T> {
         rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
         thrust::tabulate(thrust::device,

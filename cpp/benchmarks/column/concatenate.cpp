@@ -73,7 +73,7 @@ static void BM_concatenate_tables(benchmark::State& state)
   cudf::size_type const num_tables = state.range(2);
 
   std::vector<std::unique_ptr<cudf::table>> tables(num_tables);
-  std::generate_n(tables.begin(), num_tables, [&]() mutable {
+  std::generate_n(tables.begin(), num_tables, [&]() {
     return create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
                                  row_count{num_rows},
                                  Nullable ? std::optional<float>{2.0 / 3.0} : std::nullopt);

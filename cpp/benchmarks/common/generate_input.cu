@@ -181,7 +181,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_chrono<T>()>> {
       nanoseconds_gen = make_distribution<int64_t>(distribution_id::UNIFORM, 0l, 1000000000l);
     } else {
       // Don't need a random seconds generator for sub-second intervals
-      seconds_gen = [=](thrust::minstd_rand&, size_t size) {
+      seconds_gen = [range_s](thrust::minstd_rand&, size_t size) {
         rmm::device_uvector<int64_t> result(size, rmm::cuda_stream_default);
         thrust::fill(thrust::device, result.begin(), result.end(), range_s.second.count());
         return result;
@@ -243,7 +243,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
       std::mt19937 engine_scale(engine());
       scale = numeric::scale_type{scale_dist(engine_scale)};
     }
-    auto ints = dist(engine, size);
+    auto const ints = dist(engine, size);
     rmm::device_uvector<T> result(size, rmm::cuda_stream_default);
     // Clamp the generated random value to the specified range
     thrust::transform(thrust::device,
@@ -278,7 +278,6 @@ struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_
   auto operator()(thrust::minstd_rand& engine, unsigned size)
   {
     // Clamp the generated random value to the specified range
-    // return std::clamp(dist(engine), lower_bound, upper_bound);
     return dist(engine, size);
   }
 };
@@ -288,7 +287,7 @@ struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<std::is_same_v<T, bool>>> {
-  // bernoulli_distribution
+  // Bernoulli distribution
   distribution_fn<bool> dist;
 
   random_value_fn(distribution_params<bool> const& desc)
@@ -337,7 +336,7 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
       thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
     auto const samples_indices = sample_dist(engine, approx_run_len + 1);
     // This is gather.
-    auto avg_repeated_sample_indices = thrust::make_transform_iterator(
+    auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [rb              = run_lens.begin(),
        re              = run_lens.end(),
@@ -348,8 +347,8 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
     rmm::device_uvector<cudf::size_type> repeated_sample_indices(num_rows,
                                                                  rmm::cuda_stream_default);
     thrust::copy(thrust::device,
-                 avg_repeated_sample_indices,
-                 avg_repeated_sample_indices + num_rows,
+                 avg_repeated_sample_indices_iterator,
+                 avg_repeated_sample_indices_iterator + num_rows,
                  repeated_sample_indices.begin());
     return repeated_sample_indices;
   } else {
@@ -373,7 +372,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    thrust::minstd_rand& engine,
                                                    cudf::size_type num_rows)
 {
-  // bernoulli_distribution
+  // Bernoulli distribution
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency()});
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
@@ -719,7 +718,7 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
                "Null probability must be within the range [0.0, 1.0]");
   if (*null_probability == 0.0f) {
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_VALID), 0};
-  } else if (*null_probability >= 1.0f) {
+  } else if (*null_probability == 1.0f) {
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
