@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -396,4 +396,20 @@ def test_series_construction_with_nulls(dtype, input_obj):
 
     expect = pd.Series(np_data, dtype=np_dtypes_to_pandas_dtypes[dtype])
     got = cudf.Series(np_data, dtype=dtype).to_pandas(nullable=True)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data", [[True, False, True]],
+)
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
+def test_series_to_numeric_bool(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = pd.to_numeric(ps, downcast=downcast)
+    got = cudf.to_numeric(gs, downcast=downcast)
+
     assert_eq(expect, got)
