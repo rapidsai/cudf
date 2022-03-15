@@ -372,9 +372,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = self._frame._get_columns_by_index(arg[1])
-
-        columns_df._index = self._frame._index
+        columns_df = self._frame._from_data(
+            self._frame._data.select_by_index(arg[1]), self._frame._index
+        )
 
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
@@ -422,9 +422,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
-        columns = self._frame._get_columns_by_index(key[1])
-
-        for col in columns:
+        # TODO: Determine if this usage is prevalent enough to expose this
+        # selection logic at a higher level than ColumnAccessor.
+        for col in self._frame._data.get_labels_by_index(key[1]):
             self._frame[col].iloc[key[0]] = value
 
     def _getitem_scalar(self, arg):

@@ -476,17 +476,6 @@ class Frame(BinaryOperand, Scannable):
         """
         return self._data.select_by_label(labels)
 
-    @_cudf_nvtx_annotate
-    def _get_columns_by_index(self, indices):
-        """
-        Returns columns of the Frame specified by `labels`
-
-        """
-        data = self._data.select_by_index(indices)
-        return self.__class__._from_data(
-            data, columns=data.to_pandas_index(), index=self.index
-        )
-
     @property
     def values(self):
         """
