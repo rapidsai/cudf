@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import operator
 import pickle
 import warnings
 from collections import abc
@@ -2535,8 +2536,6 @@ class Frame(BinaryOperand, Scannable):
             A dict of columns constructed from the result of performing the
             requested operation on the operands.
         """
-        fn = fn[2:-2]
-
         # Now actually perform the binop on the columns in left and right.
         output = {}
         for (
@@ -2567,11 +2566,11 @@ class Frame(BinaryOperand, Scannable):
             # are not numerical using the new binops mixin.
 
             outcol = (
-                left_column.binary_operator(fn, right_column, reflect=reflect)
-                if right_column is not None
-                else column_empty(
-                    left_column.size, left_column.dtype, masked=True
-                )
+                column_empty(left_column.size, left_column.dtype, masked=True)
+                if right_column is None
+                else getattr(operator, fn)(right_column, left_column)
+                if reflect
+                else getattr(operator, fn)(left_column, right_column)
             )
 
             if output_mask is not None:
