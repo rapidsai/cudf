@@ -721,6 +721,10 @@ class Frame(BinaryOperand, Scannable):
         3    4
         dtype: int64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.clip is deprecated and will be removed.", FutureWarning,
+            )
 
         if axis != 1:
             raise NotImplementedError("`axis is not yet supported in clip`")
@@ -738,13 +742,10 @@ class Frame(BinaryOperand, Scannable):
 
         if len(lower) != self._num_columns:
             raise ValueError(
-                """Length of lower/upper should be
-                equal to number of columns in
-                DataFrame/Series/Index/MultiIndex"""
+                "Length of lower/upper should be equal to number of columns"
             )
 
-        output = self.copy(deep=False)
-        if output.ndim == 1:
+        if self.ndim == 1:
             # In case of series and Index,
             # swap lower and upper if lower > upper
             if (
@@ -754,11 +755,12 @@ class Frame(BinaryOperand, Scannable):
             ):
                 lower[0], upper[0] = upper[0], lower[0]
 
-        for i, name in enumerate(self._data):
-            output._data[name] = self._data[name].clip(lower[i], upper[i])
-
+        data = {
+            name: col.clip(lower[i], upper[i])
+            for i, (name, col) in enumerate(self._data.items())
+        }
+        output = self._from_data(data, self._index)
         output._copy_type_metadata(self, include_index=False)
-
         return self._mimic_inplace(output, inplace=inplace)
 
     @_cudf_nvtx_annotate
