@@ -62,6 +62,15 @@ struct bpe_merge_pairs {
  * e n
  * i t
  * i s
+ * e s
+ * en t
+ * c e
+ * es t
+ * en ce
+ * T h
+ * Th is
+ * t est
+ * s ent
  * ...
  * @endcode
  *
@@ -88,7 +97,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  * pairs before the result is joined to make the output string.
  *
  * @code{.pseudo}
- * mps = load_merges_file("merges.txt")
+ * mps = load_merges_file("merges.txt") // see doxygen for example contents
  * input = ["test sentence", "thisis test"]
  * result = byte_pair_encoding(input, mps)
  * result is now ["test sent ence", "this is test"]
