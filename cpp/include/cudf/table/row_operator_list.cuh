@@ -236,36 +236,26 @@ class row_equality_comparator {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
-  template <typename T,
-            typename hash_combiner,
-            CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view col,
-                                        size_type row_index,
-                                        hash_combiner const& hash_combine) const
+  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
   template <typename T,
-            typename hash_combiner,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
                            not std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view col,
-                                        size_type row_index,
-                                        hash_combiner const& hash_combine) const
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
   }
 
   template <typename T,
-            typename hash_combiner,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
                            std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view col,
-                                        size_type row_index,
-                                        hash_combiner const& hash_combine) const
+  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     auto hash                   = hash_value_type{0};
     column_device_view curr_col = col;
@@ -278,22 +268,21 @@ class element_hasher {
       for (int i = 0; i < size; ++i) {
         auto const child_size =
           offsets.element<size_type>(start_off + i + 1) - offsets.element<size_type>(start_off + i);
-        hash = hash_combine(hash, hash_function<decltype(child_size)>{}(child_size));
+        hash = cudf::detail::hash_combine(hash, hash_function<decltype(child_size)>{}(child_size));
       }
       curr_col  = curr_col.child(lists_column_view::child_column_index);
       start_off = offsets.element<size_type>(start_off);
       end_off   = offsets.element<size_type>(end_off);
     }
     auto size = end_off - start_off;
-    hash      = hash_combine(hash, hash_function<decltype(size)>{}(size));
+    hash      = cudf::detail::hash_combine(hash, hash_function<decltype(size)>{}(size));
     for (int i = 0; i < size; ++i) {
-      hash = hash_combine(
+      hash = cudf::detail::hash_combine(
         hash,
         type_dispatcher<non_nested_id_to_type>(curr_col.type(),
                                                element_hasher<hash_function, Nullate>{has_nulls},
                                                curr_col,
-                                               start_off + i,
-                                               hash_combine));
+                                               start_off + i));
     }
     // printf("hash %d\n", hash);
     return hash;
@@ -331,10 +320,7 @@ class row_hasher {
                                              // TODO: revert back to using seed
                                              element_hasher<hash_function, Nullate>{_has_nulls},
                                              _table.column(0),
-                                             row_index,
-                                             [](hash_value_type lhs, hash_value_type rhs) {
-                                               return cudf::detail::hash_combine(lhs, rhs);
-                                             }));
+                                             row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
@@ -342,10 +328,7 @@ class row_hasher {
         _table.column(column_index).type(),
         element_hasher<hash_function, Nullate>{_has_nulls},
         _table.column(column_index),
-        row_index,
-        [](hash_value_type lhs, hash_value_type rhs) {
-          return cudf::detail::hash_combine(lhs, rhs);
-        });
+        row_index);
     };
 
     // Hash each element and combine all the hash values together
