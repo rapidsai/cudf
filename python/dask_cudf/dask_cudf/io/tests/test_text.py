@@ -11,7 +11,7 @@ import cudf
 import dask_cudf
 
 cur_dir = os.path.dirname(__file__)
-text_file = os.path.join(cur_dir, "data/sample.pgn")
+text_file = os.path.join(cur_dir, "data/text/sample.pgn")
 
 
 @pytest.mark.parametrize("file", [text_file, [text_file]])

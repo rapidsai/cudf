@@ -15,7 +15,7 @@ import dask_cudf
 # import pyarrow.orc as orc
 
 cur_dir = os.path.dirname(__file__)
-sample_orc = os.path.join(cur_dir, "data/sample.orc")
+sample_orc = os.path.join(cur_dir, "data/orc/sample.orc")
 
 
 def test_read_orc_defaults():
