@@ -83,12 +83,12 @@ cdef _agg_result_from_columns(
     # is O(1) but popping from head is O(N).
     result_columns = []
     cdef int i, j
-    cdef vector c_results_i
+    cdef vector[unique_ptr[column]]* c_results_i
     for i in range(1, n_res_cols + 1):
-        c_results_i = c_result_columns[n_res_cols - i].results
+        c_results_i = &c_result_columns[n_res_cols - i].results
         result_columns.append([
-            Column.from_unique_ptr(move(c_results_i[j]))
-            for j in range(c_results_i.size())
+            Column.from_unique_ptr(move(c_results_i[0][j]))
+            for j in range(c_results_i[0].size())
         ])
 
     result_columns_with_padding = [
@@ -175,11 +175,11 @@ cdef class GroupBy:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregation.append(agg)
+                    included_aggregations_i.append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
-            included_aggregations.append(included_aggregation)
+            included_aggregations.append(included_aggregations_i)
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
@@ -239,18 +239,18 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
-            included_aggregation = []
+            included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.scan_request())
             for agg in aggs:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregation.append(agg)
+                    included_aggregations_i.append(agg)
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
-            included_aggregations.append(included_aggregation)
+            included_aggregations.append(included_aggregations_i)
             if not c_agg_request.aggregations.empty():
                 c_agg_request.values = col.view()
                 c_agg_requests.push_back(
