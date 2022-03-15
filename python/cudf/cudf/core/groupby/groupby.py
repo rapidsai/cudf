@@ -299,16 +299,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         for col_name, aggs, cols in zip(
             column_names, included_aggregations, result_columns
         ):
-            data.update(
-                {
-                    (
-                        (col_name, agg.__name__ if callable(agg) else agg)
-                        if multilevel
-                        else col_name
-                    ): col
-                    for agg, col in zip(aggs, cols)
-                }
-            )
+            for agg, col in zip(aggs, cols):
+                if multilevel:
+                    agg_name = agg.__name__ if callable(agg) else agg
+                    key = (col_name, agg_name)
+                else:
+                    key = col_name
+                data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
