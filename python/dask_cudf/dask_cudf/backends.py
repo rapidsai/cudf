@@ -103,7 +103,7 @@ def _get_non_empty_data(s):
         if is_string_dtype(leaf_type):
             data = ["cat", "dog"]
         else:
-            data = np.arange(start=0, stop=2, dtype=leaf_type).tolist()
+            data = np.array([0, 1], dtype=leaf_type).tolist()
         data = _nest_list_data(data, s.dtype) * 2
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif isinstance(s, cudf.core.column.StructColumn):

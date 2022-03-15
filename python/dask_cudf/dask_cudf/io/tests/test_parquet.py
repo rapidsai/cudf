@@ -516,7 +516,7 @@ def test_cudf_dtypes_from_pandas(tmpdir, data):
     dd.assert_eq(cudf.from_pandas(dfp), ddf2)
 
 
-def test_cudf_list_struct_write(tempdir):
+def test_cudf_list_struct_write(tmpdir):
     df = cudf.DataFrame(
         {
             "a": [1, 2, 3],
@@ -527,7 +527,7 @@ def test_cudf_list_struct_write(tempdir):
     df["d"] = df.to_struct()
 
     ddf = dask_cudf.from_cudf(df, 3)
-    temp_file = str(tempdir.join("list_struct.parquet"))
+    temp_file = str(tmpdir.join("list_struct.parquet"))
 
     ddf.to_parquet(temp_file)
     new_ddf = dask_cudf.read_parquet(temp_file)
