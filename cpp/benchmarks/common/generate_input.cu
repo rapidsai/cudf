@@ -275,11 +275,7 @@ struct random_value_fn<T, std::enable_if_t<!std::is_same_v<T, bool> && cudf::is_
   {
   }
 
-  auto operator()(thrust::minstd_rand& engine, unsigned size)
-  {
-    // Clamp the generated random value to the specified range
-    return dist(engine, size);
-  }
+  auto operator()(thrust::minstd_rand& engine, unsigned size) { return dist(engine, size); }
 };
 
 /**
