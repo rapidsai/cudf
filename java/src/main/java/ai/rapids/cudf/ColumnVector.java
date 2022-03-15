@@ -1209,6 +1209,17 @@ public final class ColumnVector extends ColumnView {
   /**
    * Create a new vector from the given values.
    */
+  public static ColumnVector fromBooleans(boolean... values) {
+    byte[] bytes = new byte[values.length];
+    for (int i = 0; i < values.length; i++) {
+      bytes[i] = values[i] ? (byte) 1 : (byte) 0;
+    }
+    return build(DType.BOOL8, values.length, (b) -> b.appendArray(bytes));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
   public static ColumnVector fromBytes(byte... values) {
     return build(DType.INT8, values.length, (b) -> b.appendArray(values));
   }
