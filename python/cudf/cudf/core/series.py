@@ -2744,18 +2744,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         0.75    3.25
         dtype: float64
         """
-        return_scalar = False
 
-        if cudf.api.types.is_list_like(q) or cudf.utils.dtypes.is_column_like(
-            q
-        ):
-            np_array_q = cudf.core.column.as_column(q).values_host
-        elif is_scalar(q):
-            return_scalar = True
+        return_scalar = is_scalar(q)
+        if return_scalar:
             np_array_q = np.asarray([float(q)])
         else:
-            raise TypeError(f"q must be a scalar or array-like, got {type(q)}")
-
+            try:
+                np_array_q = np.asarray(q)
+            except TypeError:
+                try:
+                    np_array_q = cudf.core.column.as_column(q).values_host
+                except TypeError:
+                    raise TypeError(
+                        f"q must be a scalar or array-like, got {type(q)}"
+                    )
         result = self._column.quantile(
             np_array_q, interpolation, exact, return_scalar=return_scalar
         )
