@@ -48,7 +48,7 @@ __global__ void valid_if_kernel(
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  std::size_t i = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
