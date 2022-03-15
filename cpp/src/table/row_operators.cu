@@ -28,9 +28,42 @@ namespace experimental {
 
 namespace {
 
-auto struct_lex_verticalize(table_view table,
-                            host_span<order const> column_order         = {},
-                            host_span<null_order const> null_precedence = {})
+/**
+ * @brief Linearizes all struct columns in a table.
+ *
+ * If a struct column is a tree with N leaves, then this function "linearizes" the tree into
+ * N "linear trees" (branch factor == 1) and prunes common parents. Also returns a vector of
+ * per-column `depth`s.
+ *
+ * A `depth` value is the number of nested levels as parent of the column in the original,
+ * non-linearized table, which are pruned during linearizing.
+ *
+ * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
+ *      S
+ *     / \
+ *    S   d
+ *   / \
+ *  i   f
+ * then after linearizing, we get three columns:
+ * `Struct<Struct<int>>`, `float`, and `decimal`.
+ * 0   2   1  <- depths
+ * S
+ * |
+ * S       d
+ * |
+ * i   f
+ * The depth of the first column is 0 because it contains all its parent levels, while the depth
+ * of the second column is 2 because two of its parent struct levels were pruned.
+ *
+ * @param table The table to linearize.
+ * @param column_order The per-column order if using linearized output with lexicographic comparison
+ * @param null_precedence The per-column null precedence
+ * @return A tuple containing a table with all struct columns linearized, new corresponding column
+ *         orders and null precedences and depths of the linearized branches
+ */
+auto struct_linearize(table_view table,
+                      host_span<order const> column_order         = {},
+                      host_span<null_order const> null_precedence = {})
 {
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
@@ -130,8 +163,8 @@ void check_lex_compatibility(table_view const& input)
         "Cannot lexicographic compare a table with a column of type " +
           jit::get_type_name(c.type()));
     }
-    for (int i = 0; i < c.num_children(); ++i) {
-      check_column(c.child(i));
+    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+      check_column(*child);
     }
   };
   for (column_view const& c : input) {
@@ -141,7 +174,7 @@ void check_lex_compatibility(table_view const& input)
 
 }  // namespace
 
-namespace lexicographic_comparison {
+namespace lex {
 
 preprocessed_table::preprocessed_table(table_view const& t,
                                        host_span<order const> column_order,
@@ -155,7 +188,7 @@ preprocessed_table::preprocessed_table(table_view const& t,
   check_lex_compatibility(t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    struct_lex_verticalize(t, column_order, null_precedence);
+    struct_linearize(t, column_order, null_precedence);
 
   d_t =
     std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
@@ -165,6 +198,6 @@ preprocessed_table::preprocessed_table(table_view const& t,
   d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 }
 
-}  // namespace lexicographic_comparison
+}  // namespace lex
 }  // namespace experimental
 }  // namespace cudf

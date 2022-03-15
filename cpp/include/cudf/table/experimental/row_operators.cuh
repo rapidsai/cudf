@@ -39,12 +39,23 @@
 namespace cudf {
 namespace experimental {
 
+/**
+ * @brief A map from cudf::type_id to cudf type that excludes LIST and STRUCT types.
+ *
+ * To be used with type_dispatcher in place of the default map, when it is required that STRUCT and
+ * LIST map to void.
+ *
+ * Usage:
+ * @code
+ * type_dispatcher<non_nested_id_to_type>(data_type(), functor{});
+ * @endcode
+ */
 template <cudf::type_id t>
 struct non_nested_id_to_type {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
-namespace lexicographic_comparison {
+namespace lex {
 
 /**
  * @brief Performs a relational comparison between two elements in two columns.
@@ -52,7 +63,7 @@ namespace lexicographic_comparison {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
-class element_relational_comparator {
+class element_comparator {
  public:
   /**
    * @brief Construct type-dispatched function object for performing a
@@ -66,19 +77,19 @@ class element_relational_comparator {
    * @param null_precedence Indicates how null values are ordered with other values
    * @param depth The depth of the column if part of a nested column @see preprocessed_table::depths
    */
-  __host__ __device__ element_relational_comparator(Nullate has_nulls,
-                                                    column_device_view lhs,
-                                                    column_device_view rhs,
-                                                    null_order null_precedence,
-                                                    int depth = 0)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}, depth{depth}
+  __host__ __device__ element_comparator(Nullate has_nulls,
+                                         column_device_view lhs,
+                                         column_device_view rhs,
+                                         null_order null_precedence,
+                                         int depth = 0)
+    : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}, _null_precedence{null_precedence}, _depth{depth}
   {
   }
 
-  __host__ __device__ element_relational_comparator(Nullate has_nulls,
-                                                    column_device_view lhs,
-                                                    column_device_view rhs)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}
+  __host__ __device__ element_comparator(Nullate has_nulls,
+                                         column_device_view lhs,
+                                         column_device_view rhs)
+    : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}
   {
   }
 
@@ -94,17 +105,18 @@ class element_relational_comparator {
   __device__ cuda::std::pair<weak_ordering, int> operator()(
     size_type lhs_element_index, size_type rhs_element_index) const noexcept
   {
-    if (nulls) {
-      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
+    if (_nulls) {
+      bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
 
       if (lhs_is_null or rhs_is_null) {  // at least one is null
-        return cuda::std::make_pair(null_compare(lhs_is_null, rhs_is_null, null_precedence), depth);
+        return cuda::std::make_pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence),
+                                    _depth);
       }
     }
 
-    return cuda::std::make_pair(relational_compare(lhs.element<Element>(lhs_element_index),
-                                                   rhs.element<Element>(rhs_element_index)),
+    return cuda::std::make_pair(relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                   _rhs.element<Element>(rhs_element_index)),
                                 std::numeric_limits<int>::max());
   }
 
@@ -126,33 +138,33 @@ class element_relational_comparator {
   {
     weak_ordering state{weak_ordering::EQUIVALENT};
 
-    column_device_view lcol = lhs;
-    column_device_view rcol = rhs;
+    column_device_view lcol = _lhs;
+    column_device_view rcol = _rhs;
     while (lcol.type().id() == type_id::STRUCT) {
       bool const lhs_is_null{lcol.is_null(lhs_element_index)};
       bool const rhs_is_null{rcol.is_null(rhs_element_index)};
 
       if (lhs_is_null or rhs_is_null) {  // atleast one is null
-        state = null_compare(lhs_is_null, rhs_is_null, null_precedence);
-        return cuda::std::make_pair(state, depth);
+        state = null_compare(lhs_is_null, rhs_is_null, _null_precedence);
+        return cuda::std::make_pair(state, _depth);
       }
 
       lcol = lcol.children()[0];
       rcol = rcol.children()[0];
-      ++depth;
+      ++_depth;
     }
 
-    auto comparator = element_relational_comparator{nulls, lcol, rcol, null_precedence, depth};
+    auto comparator = element_comparator{_nulls, lcol, rcol, _null_precedence, _depth};
     return cudf::type_dispatcher<non_nested_id_to_type>(
       lcol.type(), comparator, lhs_element_index, rhs_element_index);
   }
 
  private:
-  column_device_view lhs;
-  column_device_view rhs;
-  Nullate nulls;
-  null_order null_precedence{};
-  int depth{};
+  column_device_view _lhs;
+  column_device_view _rhs;
+  Nullate _nulls;
+  null_order _null_precedence{};
+  int _depth{};
 };
 
 /**
@@ -228,8 +240,8 @@ class device_row_comparator {
       null_order null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
-      auto comparator = element_relational_comparator{
-        _nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
+      auto comparator =
+        element_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
@@ -249,15 +261,14 @@ class device_row_comparator {
   std::optional<device_span<int const>> _depth;
   std::optional<device_span<order const>> _column_order;
   std::optional<device_span<null_order const>> _null_precedence;
-};  // class row_lexicographic_comparator
+};  // class device_row_comparator
 
 struct preprocessed_table {
   /**
    * @brief Preprocess table for use with lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
-   * be passed to the constructor of `lexicographic_comparison::self_comparator` to avoid
-   * preprocessing again.
+   * be passed to the constructor of `lex::self_comparator` to avoid preprocessing again.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
@@ -316,24 +327,7 @@ struct preprocessed_table {
   /**
    * @brief Get a device array containing the depth of each column in the preprocessed table
    *
-   * A `depth` value is the number of nested levels as parent of the column in the original,
-   * non-preprocessed table, which were pruned during preprocessing.
-   * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
-   *      S
-   *     / \
-   *    S   d
-   *   / \
-   *  i   f
-   * then after preprocessing, we get three columns:
-   * `Struct<Struct<int>>`, `float`, and `decimal`.
-   * 0   2   1  <- depths
-   * S
-   * |
-   * S       d
-   * |
-   * i   f
-   * The depth of the first column is 0 because it contains all its parent levels, while the depth
-   * of the second column is 2 because two of its parent struct levels were pruned.
+   * @see struct_linearize()
    *
    * @return std::optional<device_span<int const>> Device array containing respective column depths.
    * If there are no nested columns in the table then this will be `nullopt`.
@@ -427,6 +421,6 @@ class self_comparator {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
-}  // namespace lexicographic_comparison
+}  // namespace lex
 }  // namespace experimental
 }  // namespace cudf
