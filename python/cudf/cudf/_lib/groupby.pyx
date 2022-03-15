@@ -78,26 +78,19 @@ cdef _agg_result_from_columns(
     """
     cdef int n_res_cols = c_result_columns.size()
     result_columns = []
-    cdef int i, j
+    cdef int i, j, result_index = 0
     cdef vector[unique_ptr[column]]* c_results_i
-    # Note we are constructing a list of python columns in the reverse order
-    # to the result in libcudf. This is because the line below requires popping
-    # from this list in FIFO order. In python, popping from the end of the list
-    # is O(1) but popping from head is O(N).
-    for i in range(1, n_res_cols + 1):
-        c_results_i = &c_result_columns[n_res_cols - i].results
-        result_columns.append([
-            Column.from_unique_ptr(move(c_results_i[0][j]))
-            for j in range(c_results_i[0].size())
-        ])
-
-    result_columns_with_padding = [
-        result_columns.pop() if i in column_orders else [] for i in range(
-            n_input_columns
-        )
-    ]
-
-    return result_columns_with_padding
+    for i in range(n_input_columns):
+        if i in column_orders:
+            c_results_i = &c_result_columns[result_index].results
+            result_columns.append([
+                Column.from_unique_ptr(move(c_results_i[0][j]))
+                for j in range(c_results_i[0].size())
+            ])
+            result_index += 1
+        else:
+            result_columns.append([])
+    return result_columns
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
