@@ -20,17 +20,6 @@ from cudf.api.types import (
 from cudf.core.column import as_column
 from cudf.utils.dtypes import can_convert_to_column
 
-DOWNCAST_TYPE_MAP = {
-    "integer": list(np.typecodes["Integer"]),
-    "signed": list(np.typecodes["Integer"]),
-    "unsigned": list(np.typecodes["UnsignedInteger"]),
-}
-float_types = list(np.typecodes["Float"])
-# we only support float32 & float64
-min_idx = float_types.index(cudf.dtype(np.float32).char)
-max_idx = float_types.index(cudf.dtype(np.float64).char) + 1
-DOWNCAST_TYPE_MAP["float"] = float_types[min_idx:max_idx]
-
 
 def to_numeric(arg, errors="raise", downcast=None):
     """
@@ -155,7 +144,16 @@ def to_numeric(arg, errors="raise", downcast=None):
         col = col.as_numerical_column("d")
 
     if downcast:
-        type_set = DOWNCAST_TYPE_MAP[downcast]
+        if downcast == "float":
+            # we support only float32 & float64
+            type_set = [
+                cudf.dtype(np.float32).char,
+                cudf.dtype(np.float64).char,
+            ]
+        elif downcast in ("integer", "signed"):
+            type_set = list(np.typecodes["Integer"])
+        elif downcast == "unsigned":
+            type_set = list(np.typecodes["UnsignedInteger"])
 
         for t in type_set:
             downcast_dtype = cudf.dtype(t)
