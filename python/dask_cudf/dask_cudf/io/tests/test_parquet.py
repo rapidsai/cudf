@@ -3,7 +3,6 @@
 import glob
 import math
 import os
-from tempfile import tempdir
 
 import numpy as np
 import pandas as pd
@@ -517,7 +516,7 @@ def test_cudf_dtypes_from_pandas(tmpdir, data):
     dd.assert_eq(cudf.from_pandas(dfp), ddf2)
 
 
-def test_cudf_list_struct_write():
+def test_cudf_list_struct_write(tempdir):
     df = cudf.DataFrame(
         {
             "a": [1, 2, 3],

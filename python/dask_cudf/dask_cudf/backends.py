@@ -75,12 +75,14 @@ def _nonempty_index(idx):
     raise TypeError(f"Don't know how to handle index of type {type(idx)}")
 
 
-def _nest_list_data(data, n):
+def _nest_list_data(data, leaf_type):
     """
     Helper for _get_non_empty_data which creates
     nested list data
     """
-    for _ in range(n):
+    data = [data]
+    while isinstance(leaf_type, cudf.ListDtype):
+        leaf_type = leaf_type.element_type
         data = [data]
     return data
 
@@ -97,13 +99,12 @@ def _get_non_empty_data(s):
             categories=categories, codes=codes, ordered=ordered
         )
     elif isinstance(s, cudf.core.column.ListColumn):
-        nesting_levels = s.dtype.nesting_levels
         leaf_type = s.dtype.leaf_type
         if is_string_dtype(leaf_type):
             data = ["cat", "dog"]
         else:
             data = np.arange(start=0, stop=2, dtype=leaf_type).tolist()
-        data = _nest_list_data(data, nesting_levels) * 2
+        data = _nest_list_data(data, s.dtype) * 2
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif isinstance(s, cudf.core.column.StructColumn):
         struct_dtype = s.dtype
