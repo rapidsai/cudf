@@ -69,8 +69,8 @@ ctypedef const scalar constscalar
 
 cdef _agg_result_from_columns(
     vector[libcudf_groupby.aggregation_result]& c_result_columns,
-    column_orders,
-    n_input_columns
+    set column_orders,
+    int n_input_columns
 ):
     """Construct the list of result columns from libcudf result. The result
     contains the same number of lists as the number of input columns. Result
@@ -168,7 +168,7 @@ cdef class GroupBy:
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
             )
-            included_aggregation = []
+            included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
             for agg in aggs:
