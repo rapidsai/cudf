@@ -66,6 +66,39 @@ _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
 
+
+cdef _agg_result_from_columns(
+    vector[libcudf_groupby.aggregation_result]& c_result_columns,
+    column_orders,
+    n_input_columns
+):
+    """Construct the list of result columns from libcudf result. The result
+    contains the same number of lists as the number of input columns. Result
+    for an input column that has no applicable aggregations is an empty list.
+    """
+    n_res_cols = c_result_columns.size()
+    # Note we are constructing a list of python columns in the reverse order
+    # to the result in libcudf. This is because the line below requires popping
+    # from this list in FIFO order. In python, popping from the end of the list
+    # is O(1) but popping from head is O(N).
+    result_columns = [
+        [
+            Column.from_unique_ptr(
+                move(c_result_columns[n_res_cols - i - 1].results[j])
+            ) for j in range(
+                c_result_columns[n_res_cols - i - 1].results.size()
+            )
+        ] for i in range(n_res_cols)
+    ]
+
+    result_columns_with_padding = [
+        result_columns.pop() if i in column_orders else [] for i in range(
+            n_input_columns
+        )
+    ]
+
+    return result_columns_with_padding
+
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
@@ -122,7 +155,7 @@ cdef class GroupBy:
         allow_empty = all(len(v) == 0 for v in aggregations)
 
         included_aggregations = []
-        column_orders = []
+        column_orders = set()
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
@@ -152,7 +185,7 @@ cdef class GroupBy:
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-                column_orders.append(i)
+                column_orders.add(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 
@@ -167,18 +200,11 @@ cdef class GroupBy:
             move(c_result.first)
         )
 
-        result_columns = [
-            [
-                Column.from_unique_ptr(
-                    move(c_result.second[i].results[j])
-                ) for j in range(c_result.second[i].results.size())
-            ] for i in range(c_result.second.size())
-        ]
-        result_columns_with_padding = [[]] * len(included_aggregations)
-        for i, cols in enumerate(result_columns):
-            result_columns_with_padding[column_orders[i]] = cols
+        result_columns = _agg_result_from_columns(
+            c_result.second, column_orders, len(values)
+        )
 
-        return result_columns_with_padding, grouped_keys, included_aggregations
+        return result_columns, grouped_keys, included_aggregations
 
     def scan_internal(self, values, aggregations):
         """`values` is a list of columns and `aggregations` is a list of list
@@ -200,7 +226,7 @@ cdef class GroupBy:
         allow_empty = all(len(v) == 0 for v in aggregations)
 
         included_aggregations = []
-        column_orders = []
+        column_orders = set()
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
@@ -230,7 +256,7 @@ cdef class GroupBy:
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-                column_orders.append(i)
+                column_orders.add(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 
@@ -245,18 +271,11 @@ cdef class GroupBy:
             move(c_result.first)
         )
 
-        result_columns = [
-            [
-                Column.from_unique_ptr(
-                    move(c_result.second[i].results[j])
-                ) for j in range(c_result.second[i].results.size())
-            ] for i in range(c_result.second.size())
-        ]
-        result_columns_with_padding = [[]] * len(included_aggregations)
-        for i, cols in enumerate(result_columns):
-            result_columns_with_padding[column_orders[i]] = cols
+        result_columns = _agg_result_from_columns(
+            c_result.second, column_orders, len(values)
+        )
 
-        return result_columns_with_padding, grouped_keys, included_aggregations
+        return result_columns, grouped_keys, included_aggregations
 
     def aggregate(self, values, aggregations):
         """
