@@ -13,12 +13,13 @@
 # limitations under the License.
 #
 
-import re
-import os
-import subprocess
 import argparse
 import json
 import multiprocessing as mp
+import os
+import re
+import shutil
+import subprocess
 
 
 CLANG_COMPILER = "clang++"
@@ -117,16 +118,10 @@ def remove_items_plus_one(arr, item_options):
 
 
 def add_cuda_path(command, nvcc):
-    ret = subprocess.check_output("which %s 2>&1" % nvcc, shell=True)
-    ret = ret.decode("utf-8").strip()
-    if not ret:
+    nvcc_path = shutil.which(nvcc)
+    if not nvcc_path:
         raise Exception("Command %s has invalid compiler %s" % (command, nvcc))
-    cuda_root = os.path.dirname(os.path.dirname(ret))
-    # make sure that cuda root has version.txt
-    if not os.path.isfile(os.path.join(cuda_root, "version.txt")):
-        raise Exception(
-            "clang++ expects a `version.txt` file in your CUDA root path with "
-            "content `CUDA Version <major>.<minor>.<build>`")
+    cuda_root = os.path.dirname(os.path.dirname(nvcc_path))
     command.append('--cuda-path=%s' % cuda_root)
 
 
@@ -141,7 +136,6 @@ def get_tidy_args(cmd, args):
     # remove compilation and output targets from the original command
     remove_items_plus_one(command, ["--compile", "-c"])
     remove_items_plus_one(command, ["--output-file", "-o"])
-    command.extend(["-stdlib=libstdc++"])
     if is_cuda:
         # include our own cub before anything else
         # (left-most should have highest priority)
