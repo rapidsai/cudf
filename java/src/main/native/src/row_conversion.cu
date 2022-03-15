@@ -906,9 +906,9 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
   // participate in the memcpy of the string data.
   auto my_block = cooperative_groups::this_thread_block();
   auto my_tile = cooperative_groups::tiled_partition<32>(my_block);
-  #ifdef ASYNC_MEMCPY_SUPPORTED
+#ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
-  #endif
+#endif
 
   auto const start_row =
       blockIdx.x * NUM_STRING_ROWS_PER_BLOCK + my_tile.meta_group_rank() + batch_row_offset;
