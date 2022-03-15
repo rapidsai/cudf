@@ -270,6 +270,10 @@ class ListDtype(_BaseDtype):
 
     @property
     def nesting_levels(self):
+        """
+        Returns an integer specifying the level of nesting
+        present in this ListDtype.
+        """
         leaf_typ = self.element_type
         level = 1
         while isinstance(leaf_typ, ListDtype):

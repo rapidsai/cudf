@@ -75,13 +75,14 @@ def _nonempty_index(idx):
     raise TypeError(f"Don't know how to handle index of type {type(idx)}")
 
 
-def _nest(x, n):
+def _nest_list_data(data, n):
     """
-    Helper for _get_non_empty_data which creates nested data
+    Helper for _get_non_empty_data which creates
+    nested list data
     """
     for _ in range(n):
-        x = [x]
-    return x
+        data = [data]
+    return data
 
 
 @_dask_cudf_nvtx_annotate
@@ -102,7 +103,7 @@ def _get_non_empty_data(s):
             data = ["cat", "dog"]
         else:
             data = np.arange(start=0, stop=2, dtype=leaf_type).tolist()
-        data = _nest(data, nesting_levels) * 2
+        data = _nest_list_data(data, nesting_levels) * 2
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif isinstance(s, cudf.core.column.StructColumn):
         struct_dtype = s.dtype
@@ -141,6 +142,9 @@ def meta_nonempty_cudf(x):
     for col in x._data.names:
         dtype = str(x._data[col].dtype)
         if dtype in ("list", "struct"):
+            # Not possible to hash and store list & struct types
+            # as they can contain different levels of nesting or
+            # fields.
             res._data[col] = _get_non_empty_data(x._data[col])
         else:
             if dtype not in columns_with_dtype:
