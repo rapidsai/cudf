@@ -214,7 +214,6 @@ class Frame(BinaryOperand, Scannable):
                         result._data[col], inplace=True
                     )
             self._data = result._data
-            self._index = result._index
             return None
         else:
             return result
@@ -384,92 +383,6 @@ class Frame(BinaryOperand, Scannable):
 
     def __len__(self):
         return self._num_rows
-
-    @_cudf_nvtx_annotate
-    def copy(self: T, deep: bool = True) -> T:
-        """
-        Make a copy of this object's indices and data.
-
-        When ``deep=True`` (default), a new object will be created with a
-        copy of the calling object's data and indices. Modifications to
-        the data or indices of the copy will not be reflected in the
-        original object (see notes below).
-        When ``deep=False``, a new object will be created without copying
-        the calling object's data or index (only references to the data
-        and index are copied). Any changes to the data of the original
-        will be reflected in the shallow copy (and vice versa).
-
-        Parameters
-        ----------
-        deep : bool, default True
-            Make a deep copy, including a copy of the data and the indices.
-            With ``deep=False`` neither the indices nor the data are copied.
-
-        Returns
-        -------
-        copy : Series or DataFrame
-            Object type matches caller.
-
-        Examples
-        --------
-        >>> s = cudf.Series([1, 2], index=["a", "b"])
-        >>> s
-        a    1
-        b    2
-        dtype: int64
-        >>> s_copy = s.copy()
-        >>> s_copy
-        a    1
-        b    2
-        dtype: int64
-
-        **Shallow copy versus default (deep) copy:**
-
-        >>> s = cudf.Series([1, 2], index=["a", "b"])
-        >>> deep = s.copy()
-        >>> shallow = s.copy(deep=False)
-
-        Shallow copy shares data and index with original.
-
-        >>> s is shallow
-        False
-        >>> s._column is shallow._column and s.index is shallow.index
-        True
-
-        Deep copy has own copy of data and index.
-
-        >>> s is deep
-        False
-        >>> s.values is deep.values or s.index is deep.index
-        False
-
-        Updates to the data shared by shallow copy and original is reflected
-        in both; deep copy remains unchanged.
-
-        >>> s['a'] = 3
-        >>> shallow['b'] = 4
-        >>> s
-        a    3
-        b    4
-        dtype: int64
-        >>> shallow
-        a    3
-        b    4
-        dtype: int64
-        >>> deep
-        a    1
-        b    2
-        dtype: int64
-        """
-        new_frame = self.__class__.__new__(self.__class__)
-        new_frame._data = self._data.copy(deep=deep)
-
-        if self._index is not None:
-            new_frame._index = self._index.copy(deep=deep)
-        else:
-            new_frame._index = None
-
-        return new_frame
 
     @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):

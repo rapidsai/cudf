@@ -19,6 +19,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    cast,
 )
 from uuid import uuid4
 
@@ -251,6 +252,81 @@ class IndexedFrame(Frame):
             columns, column_names, index_names
         )
         return frame._copy_type_metadata(self, include_index=bool(index_names))
+
+    def _mimic_inplace(
+        self: T, result: Frame, inplace: bool = False
+    ) -> Optional[Frame]:
+        # TODO: Is there a better way to make mypy happy?
+        result = cast(IndexedFrame, result)
+        if inplace:
+            self._index = result._index
+        return super()._mimic_inplace(result, inplace)
+
+    def copy(self: T, deep: bool = True) -> T:
+        """Make a copy of this object's indices and data.
+
+        When ``deep=True`` (default), a new object will be created with a
+        copy of the calling object's data and indices. Modifications to
+        the data or indices of the copy will not be reflected in the
+        original object (see notes below).
+        When ``deep=False``, a new object will be created without copying
+        the calling object's data or index (only references to the data
+        and index are copied). Any changes to the data of the original
+        will be reflected in the shallow copy (and vice versa).
+
+        Parameters
+        ----------
+        deep : bool, default True
+            Make a deep copy, including a copy of the data and the indices.
+            With ``deep=False`` neither the indices nor the data are copied.
+
+        Returns
+        -------
+        copy : Series or DataFrame
+            Object type matches caller.
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> s
+        a    1
+        b    2
+        dtype: int64
+        >>> s_copy = s.copy()
+        >>> s_copy
+        a    1
+        b    2
+        dtype: int64
+
+        **Shallow copy versus default (deep) copy:**
+
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> deep = s.copy()
+        >>> shallow = s.copy(deep=False)
+
+        Updates to the data shared by shallow copy and original is reflected
+        in both; deep copy remains unchanged.
+
+        >>> s['a'] = 3
+        >>> shallow['b'] = 4
+        >>> s
+        a    3
+        b    4
+        dtype: int64
+        >>> shallow
+        a    3
+        b    4
+        dtype: int64
+        >>> deep
+        a    1
+        b    2
+        dtype: int64
+        """
+        return self._from_data(
+            self._data.copy(deep=deep),
+            # Indexes are immutable so copies can always be shallow.
+            self._index.copy(deep=False),
+        )
 
     @property
     def index(self):
