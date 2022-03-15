@@ -176,8 +176,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
           stripe_idx >= 0 and stripe_idx < static_cast<decltype(stripe_idx)>(
                                              per_file_metadata[src_file_idx].ff.stripes.size()),
           "Invalid stripe index");
-        stripe_infos.push_back(
-          std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+        stripe_infos.emplace_back(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr);
         row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
       }
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
@@ -205,8 +204,8 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
            ++stripe_idx) {
         count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         if (count > row_start || count == 0) {
-          stripe_infos.push_back(
-            std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+          stripe_infos.emplace_back(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx],
+                                    nullptr);
         } else {
           stripe_skip_rows = count;
         }

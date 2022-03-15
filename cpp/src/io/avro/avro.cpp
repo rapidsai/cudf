@@ -366,8 +366,8 @@ std::string schema_parser::get_str()
   const char* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
-  int32_t len = static_cast<int32_t>(cur - start - 1);
-  m_cur       = cur;
+  auto len = static_cast<int32_t>(cur - start - 1);
+  m_cur    = cur;
   return s.assign(start, std::max(len, 0));
 }
 

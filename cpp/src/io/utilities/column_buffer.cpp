@@ -66,8 +66,8 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
   switch (buffer.type.id()) {
     case type_id::STRING:
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"chars"});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("chars");
       }
       return make_strings_column(*buffer._strings, stream, mr);
 
@@ -78,8 +78,8 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("");
         child_info = &schema_info->children.back();
       }
 
@@ -107,7 +107,7 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
                      [&](column_buffer& col) {
                        column_name_info* child_info = nullptr;
                        if (schema_info != nullptr) {
-                         schema_info->children.push_back(column_name_info{""});
+                         schema_info->children.emplace_back("");
                          child_info = &schema_info->children.back();
                        }
                        return make_column(col, child_info, stream, mr);
@@ -148,8 +148,8 @@ std::unique_ptr<column> empty_like(column_buffer& buffer,
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
+        schema_info->children.emplace_back("offsets");
+        schema_info->children.emplace_back("");
         child_info = &schema_info->children.back();
       }
 
@@ -176,7 +176,7 @@ std::unique_ptr<column> empty_like(column_buffer& buffer,
                      [&](column_buffer& col) {
                        column_name_info* child_info = nullptr;
                        if (schema_info != nullptr) {
-                         schema_info->children.push_back(column_name_info{""});
+                         schema_info->children.emplace_back("");
                          child_info = &schema_info->children.back();
                        }
                        return empty_like(col, child_info, stream, mr);

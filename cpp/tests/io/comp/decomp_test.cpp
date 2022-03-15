@@ -68,21 +68,24 @@ struct DecompressTest : public cudf::test::BaseFixture {
                                           inf_args,
                                           sizeof(cudf::io::gpu_inflate_input_s),
                                           cudaMemcpyHostToDevice,
-                                          0));
+                                          nullptr));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_stat.data(),
                                           inf_stat,
                                           sizeof(cudf::io::gpu_inflate_status_s),
                                           cudaMemcpyHostToDevice,
-                                          0));
+                                          nullptr));
     ASSERT_CUDA_SUCCEEDED(
       static_cast<Decompressor*>(this)->dispatch(d_inf_args.data(), d_inf_stat.data()));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_stat,
                                           d_inf_stat.data(),
                                           sizeof(cudf::io::gpu_inflate_status_s),
                                           cudaMemcpyDeviceToHost,
-                                          0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-      decompressed->data(), inf_args->dstDevice, inf_args->dstSize, cudaMemcpyDeviceToHost, 0));
+                                          nullptr));
+    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(decompressed->data(),
+                                          inf_args->dstDevice,
+                                          inf_args->dstSize,
+                                          cudaMemcpyDeviceToHost,
+                                          nullptr));
     ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
   }
 

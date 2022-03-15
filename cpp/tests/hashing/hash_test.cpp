@@ -577,7 +577,7 @@ TEST_F(MD5HashTest, StringListsNulls)
       "MD5 hash function. This string needed to be longer.",
       " It needed to be even longer."},
      {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
-     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+     {R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`)", "{|}~"}});
 
   auto const input1 = cudf::table_view({strings_col});
   auto const input2 = cudf::table_view({strings_list_col});

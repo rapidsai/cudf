@@ -777,7 +777,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   scalar_2->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar_1);
-  scalar_vect.push_back(*scalar_2);
+  scalar_vect.emplace_back(*scalar_2);
   cudf::test::fixed_width_column_wrapper<T, int32_t> target_col1({2, 2, 3, 4, 11, 12, 7, 7, 10, 10},
                                                                  {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
   cudf::test::strings_column_wrapper target_col2(
@@ -806,7 +806,7 @@ TEST_F(BooleanMaskScatterScalarString, NoNUll)
   auto scalar = cudf::make_string_scalar("cudf");
   scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
-  scalar_vect.push_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
 
   cudf::test::strings_column_wrapper target({"is", "is", "a", "udf", "api"});
   cudf::test::fixed_width_column_wrapper<bool> mask({true, false, false, true, false});
@@ -825,7 +825,7 @@ TEST_F(BooleanMaskScatterScalarString, WithNUll)
   auto scalar = cudf::make_string_scalar("cudf");
   scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
-  scalar_vect.push_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
   cudf::test::strings_column_wrapper target({"is", "is", "a", "udf", "api"}, {1, 0, 0, 1, 1});
   cudf::test::fixed_width_column_wrapper<bool> mask({true, false, true, true, false});
 
@@ -846,7 +846,7 @@ TEST_F(BooleanMaskScatterScalarFails, SourceAndTargetTypeMismatch)
   auto scalar =
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<int32_t>()}));
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
-  scalar_vect.push_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
   cudf::test::fixed_width_column_wrapper<int64_t> target({2, 2, 3, 4, 11, 12, 7, 7, 10, 10});
   cudf::test::fixed_width_column_wrapper<bool> mask(
     {true, false, false, false, true, true, false, true, true, false});
@@ -860,7 +860,7 @@ TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTypeMismatch)
   auto scalar =
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<int32_t>()}));
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
-  scalar_vect.push_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
   cudf::test::fixed_width_column_wrapper<int32_t> target({2, 2, 3, 4, 11, 12, 7, 7, 10, 10});
   cudf::test::fixed_width_column_wrapper<int8_t> mask(
     {true, false, false, false, true, true, false, true, true, false});
@@ -874,7 +874,7 @@ TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTargetSizeMismatch)
   auto scalar =
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<int32_t>()}));
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
-  scalar_vect.push_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
   cudf::test::fixed_width_column_wrapper<int32_t> target({2, 2, 3, 4, 11, 12, 7, 7, 10, 10});
   cudf::test::fixed_width_column_wrapper<bool> mask(
     {true, false, false, false, true, true, false, true, true});
@@ -888,8 +888,8 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
   auto scalar =
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<int32_t>()}));
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
-  scalar_vect.push_back(*scalar);
-  scalar_vect.push_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
+  scalar_vect.emplace_back(*scalar);
   cudf::test::fixed_width_column_wrapper<int32_t> target({2, 2, 3, 4, 11, 12, 7, 7, 10, 10});
   cudf::test::fixed_width_column_wrapper<bool> mask(
     {true, false, false, false, true, true, false, true, true});

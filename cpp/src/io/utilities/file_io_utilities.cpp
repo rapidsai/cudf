@@ -65,7 +65,7 @@ class cufile_shim {
   decltype(cuFileDriverClose)* driver_close = nullptr;
 
   std::unique_ptr<cudf::logic_error> init_error;
-  auto is_valid() const noexcept { return init_error == nullptr; }
+  [[nodiscard]] auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
   cufile_shim(cufile_shim const&) = delete;

@@ -294,7 +294,7 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
  */
 std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int stream_type)
 {
-  const uint8_t* raw       = static_cast<const uint8_t*>(src);
+  const auto* raw          = static_cast<const uint8_t*>(src);
   const uint8_t* comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
@@ -319,7 +319,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
       if (OpenZipArchive(&za, raw, src_size)) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
-          const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(
+          const auto* cdfh = reinterpret_cast<const zip_cdfh_s*>(
             reinterpret_cast<const uint8_t*>(za.cdfh) + cdfh_ofs);
           int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
           if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x02014b50) {
@@ -328,8 +328,8 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
           }
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
-            size_t lfh_ofs       = cdfh->hdr_ofs;
-            const zip_lfh_s* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
+            size_t lfh_ofs  = cdfh->hdr_ofs;
+            const auto* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src_size && lfh->sig == 0x04034b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
@@ -353,7 +353,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
       if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
     case IO_UNCOMP_STREAM_TYPE_BZIP2:
       if (src_size > 4) {
-        const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
+        const auto* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {

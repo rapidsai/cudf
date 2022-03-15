@@ -268,7 +268,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
   // Get file-level statistics, statistics of each column of file
   for (auto const& stats : metadata.ff.statistics) {
-    result.file_stats.push_back(std::string(stats.cbegin(), stats.cend()));
+    result.file_stats.emplace_back(stats.cbegin(), stats.cend());
   }
 
   // Get stripe-level statistics
