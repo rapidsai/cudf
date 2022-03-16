@@ -9153,7 +9153,7 @@ def test_dataframe_iloc_inplace_update(key, value):
     "value_pdf",
     [pd.DataFrame({"x": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2]))],
 )
-def test_dataframe_loc_iloc_inplace_update_with_dataframe(
+def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
     loc_key, iloc_key, value_gdf, value_pdf
 ):
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
@@ -9166,3 +9166,24 @@ def test_dataframe_loc_iloc_inplace_update_with_dataframe(
     actual = gdf.iloc[iloc_key] = value_gdf
     expected = pdf.iloc[iloc_key] = value_pdf
     assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_with_invalid_RHS_columns():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
+    )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_shape_mismatch():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.loc[[0, 2], ["x", "y"]] = [[10, 30, 50], [20, 40, 60]]
+        gdf.iloc[[0, 2]] = [[10, 30, 50], [20, 40, 60]]

@@ -385,7 +385,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             f"{self._frame.loc[key[0]].shape} "
                         )
                     for col in columns_df._column_names:
-                        # breakpoint()
                         self._frame._data[col][key[0]] = value[
                             :, columns_df._column_names.index(col)
                         ]
