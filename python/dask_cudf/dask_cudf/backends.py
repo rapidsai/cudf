@@ -6,6 +6,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.api.types import is_scalar
 
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
@@ -22,11 +23,10 @@ from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
     _scalar_from_dtype,
-    is_arraylike,
-    is_scalar,
     make_meta_obj,
 )
 from dask.sizeof import sizeof as sizeof_dispatch
+from dask.utils import is_arraylike
 
 import cudf
 from cudf.api.types import is_string_dtype
