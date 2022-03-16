@@ -78,13 +78,13 @@ cdef _agg_result_from_columns(
     """
     cdef int i, j, result_index = 0, n_res_cols = c_result_columns.size()
     result_columns = []
-    cdef vector[unique_ptr[column]]* c_results_i
+    cdef vector[unique_ptr[column]]* c_result
     for i in range(n_input_columns):
         if i in column_included:
-            c_results_i = &c_result_columns[result_index].results
+            c_result = &c_result_columns[result_index].results
             result_columns.append([
-                Column.from_unique_ptr(move(c_results_i[0][j]))
-                for j in range(c_results_i[0].size())
+                Column.from_unique_ptr(move(c_result[0][j]))
+                for j in range(c_result[0].size())
             ])
             result_index += 1
         else:
