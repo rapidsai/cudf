@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import warnings
 
@@ -144,16 +144,16 @@ def to_numeric(arg, errors="raise", downcast=None):
         col = col.as_numerical_column("d")
 
     if downcast:
-        downcast_type_map = {
-            "integer": list(np.typecodes["Integer"]),
-            "signed": list(np.typecodes["Integer"]),
-            "unsigned": list(np.typecodes["UnsignedInteger"]),
-        }
-        float_types = list(np.typecodes["Float"])
-        idx = float_types.index(cudf.dtype(np.float32).char)
-        downcast_type_map["float"] = float_types[idx:]
-
-        type_set = downcast_type_map[downcast]
+        if downcast == "float":
+            # we support only float32 & float64
+            type_set = [
+                cudf.dtype(np.float32).char,
+                cudf.dtype(np.float64).char,
+            ]
+        elif downcast in ("integer", "signed"):
+            type_set = list(np.typecodes["Integer"])
+        elif downcast == "unsigned":
+            type_set = list(np.typecodes["UnsignedInteger"])
 
         for t in type_set:
             downcast_dtype = cudf.dtype(t)
@@ -165,7 +165,7 @@ def to_numeric(arg, errors="raise", downcast=None):
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
     else:
-        if col.has_nulls:
+        if col.has_nulls():
             # To match pandas, always return a floating type filled with nan.
             col = col.astype(float).fillna(np.nan)
         return col.values
@@ -244,6 +244,8 @@ def _proc_inf_strings(col):
     """Convert "inf/infinity" strings into "Inf", the native string
     representing infinity in libcudf
     """
+    # TODO: This can be handled by libcudf in
+    # future see StringColumn.as_numerical_column
     col = libstrings.replace_multi(
         col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
     )

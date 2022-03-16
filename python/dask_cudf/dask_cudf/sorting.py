@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 from collections.abc import Iterator
 
 import cupy
@@ -14,14 +15,17 @@ from dask.utils import M
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
+from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 
+@_dask_cudf_nvtx_annotate
 def set_index_post(df, index_name, drop, column_dtype):
     df2 = df.set_index(index_name, drop=drop)
     df2.columns = df2.columns.astype(column_dtype)
     return df2
 
 
+@_dask_cudf_nvtx_annotate
 def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     if ascending:
         partitions = divisions.searchsorted(s, side="right") - 1
@@ -38,6 +42,7 @@ def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     return partitions
 
 
+@_dask_cudf_nvtx_annotate
 def _quantile(a, q):
     n = len(a)
     if not len(a):
@@ -45,6 +50,7 @@ def _quantile(a, q):
     return (a.quantiles(q=q.tolist(), interpolation="nearest"), n)
 
 
+@_dask_cudf_nvtx_annotate
 def merge_quantiles(finalq, qs, vals):
     """Combine several quantile calculations of different data.
     [NOTE: Same logic as dask.array merge_percentiles]
@@ -107,6 +113,7 @@ def merge_quantiles(finalq, qs, vals):
     return rv.reset_index(drop=True)
 
 
+@_dask_cudf_nvtx_annotate
 def _approximate_quantile(df, q):
     """Approximate quantiles of DataFrame or Series.
     [NOTE: Same logic as dask.dataframe Series quantile]
@@ -180,6 +187,7 @@ def _approximate_quantile(df, q):
     return df
 
 
+@_dask_cudf_nvtx_annotate
 def quantile_divisions(df, by, npartitions):
     qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
     divisions = _approximate_quantile(df[by], qn).compute()
@@ -213,6 +221,7 @@ def quantile_divisions(df, by, npartitions):
     return divisions
 
 
+@_dask_cudf_nvtx_annotate
 def sort_values(
     df,
     by,
@@ -222,8 +231,12 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
+    sort_function=None,
+    sort_function_kwargs=None,
 ):
     """Sort by the given list/tuple of column names."""
+    if not isinstance(ascending, bool):
+        raise ValueError("ascending must be either True or False")
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
 
@@ -232,6 +245,21 @@ def sort_values(
         by = list(by)
     elif not isinstance(by, list):
         by = [by]
+
+    # parse custom sort function / kwargs if provided
+    sort_kwargs = {
+        "by": by,
+        "ascending": ascending,
+        "na_position": na_position,
+    }
+    if sort_function is None:
+        sort_function = M.sort_values
+    if sort_function_kwargs is not None:
+        sort_kwargs.update(sort_function_kwargs)
+
+    # handle single partition case
+    if npartitions == 1:
+        return df.map_partitions(sort_function, **sort_kwargs)
 
     # Step 1 - Calculate new divisions (if necessary)
     if divisions is None:
@@ -263,9 +291,7 @@ def sort_values(
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
-    df4 = df3.map_partitions(
-        M.sort_values, by, ascending=ascending, na_position=na_position
-    )
+    df4 = df3.map_partitions(sort_function, **sort_kwargs)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)

@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_major=cuda_version.split('.')[0] %}
 
 package:
   name: libcudf
@@ -13,7 +14,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: cuda{{ cuda_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -21,13 +22,15 @@ build:
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
     - PROJECT_FLASH
-    - CCACHE_DIR
-    - CCACHE_NOHASHDIR
-    - CCACHE_COMPILERCHECK
     - CMAKE_GENERATOR
     - CMAKE_C_COMPILER_LAUNCHER
     - CMAKE_CXX_COMPILER_LAUNCHER
     - CMAKE_CUDA_COMPILER_LAUNCHER
+    - SCCACHE_S3_KEY_PREFIX=libcudf-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=libcudf-linux64 # [linux64]
+    - SCCACHE_BUCKET=rapids-sccache
+    - SCCACHE_REGION=us-west-2
+    - SCCACHE_IDLE_TIMEOUT=32768
   run_exports:
     - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
@@ -37,11 +40,11 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 5.0.0 *cuda
+    - arrow-cpp 6.0.1 *cuda
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:
-    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - arrow-cpp * *cuda
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('dlpack', max_pin='x.x') }}
@@ -55,7 +58,6 @@ test:
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
     - test -f $PREFIX/include/cudf/ast/expressions.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
-    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
@@ -66,6 +68,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
     - test -f $PREFIX/include/cudf/detail/label_bins.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
+    - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
     - test -f $PREFIX/include/cudf/detail/datetime.hpp
@@ -116,6 +119,7 @@ test:
     - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
+    - test -f $PREFIX/include/cudf/fixed_point/temporary.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
@@ -133,6 +137,7 @@ test:
     - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
+    - test -f $PREFIX/include/cudf/io/text/byte_range_info.hpp
     - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
     - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
     - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
@@ -142,9 +147,12 @@ test:
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/contains.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
@@ -155,6 +163,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
+    - test -f $PREFIX/include/cudf/lists/filling.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
     - test -f $PREFIX/include/cudf/lists/gather.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
@@ -188,6 +197,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
@@ -196,6 +206,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
     - test -f $PREFIX/include/cudf/strings/detail/json.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/utf8.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
@@ -203,11 +214,13 @@ test:
     - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
     - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
+    - test -f $PREFIX/include/cudf/strings/regex/flags.hpp
     - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp
+    - test -f $PREFIX/include/cudf/strings/split/split_re.hpp
     - test -f $PREFIX/include/cudf/strings/string_view.hpp
     - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp
     - test -f $PREFIX/include/cudf/strings/strip.hpp

@@ -299,7 +299,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[key_tuple], gdf.loc[key_tuple])
+    assert_eq(pdf.loc[key_tuple].sort_index(), gdf.loc[key_tuple].sort_index())
 
 
 @pytest.mark.parametrize(
@@ -738,9 +738,9 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 )
 @pytest.mark.parametrize("deep", [True, False])
 def test_multiindex_copy_deep(data, deep):
-    """Test memory idendity for deep copy
+    """Test memory identity for deep copy
     Case1: Constructed from GroupBy, StringColumns
-    Case2: Constrcuted from MultiIndex, NumericColumns
+    Case2: Constructed from MultiIndex, NumericColumns
     """
     same_ref = not deep
 
@@ -768,19 +768,19 @@ def test_multiindex_copy_deep(data, deep):
         mi1 = data
         mi2 = mi1.copy(deep=deep)
 
-        # Assert ._levels idendity
+        # Assert ._levels identity
         lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
         rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
 
         assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
-        # Assert ._codes idendity
+        # Assert ._codes identity
         lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
         rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
 
         assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
-        # Assert ._data idendity
+        # Assert ._data identity
         lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
         rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
 
@@ -828,6 +828,19 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         )
     else:
         assert_eq(presult, gresult, check_index_type=False, check_dtype=False)
+
+
+def test_multiindex_iloc_scalar():
+    arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
+    tuples = list(zip(*arrays))
+    idx = cudf.MultiIndex.from_tuples(tuples)
+    gdf = cudf.DataFrame(
+        {"first": cp.random.rand(4), "second": cp.random.rand(4)}
+    )
+    gdf.index = idx
+
+    pdf = gdf.to_pandas()
+    assert_eq(pdf.iloc[3], gdf.iloc[3])
 
 
 @pytest.mark.parametrize(
@@ -966,26 +979,34 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[("a",), :], gdf.loc[("a",), :])
-    assert_eq(pdf.loc[(("a"), ("store")), :], gdf.loc[(("a"), ("store")), :])
+    assert_eq(pdf.loc[("a",), :].sort_index(), gdf.loc[("a",), :].sort_index())
     assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm")), :],
-        gdf.loc[(("a"), ("store"), ("storm")), :],
+        pdf.loc[(("a"), ("store")), :].sort_index(),
+        gdf.loc[(("a"), ("store")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
-        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
+        pdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
+        gdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), "store"), :], gdf.loc[(slice(None), "store"), :]
+        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
+        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), slice(None), "storm"), :],
-        gdf.loc[(slice(None), slice(None), "storm"), :],
+        pdf.loc[(slice(None), "store"), :].sort_index(),
+        gdf.loc[(slice(None), "store"), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
-        gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
+        pdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+        gdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+    )
+    assert_eq(
+        pdf.loc[
+            (slice(None), slice(None), slice(None), "smoke"), :
+        ].sort_index(),
+        gdf.loc[
+            (slice(None), slice(None), slice(None), "smoke"), :
+        ].sort_index(),
     )
 
 
@@ -1734,3 +1755,15 @@ def test_multiIndex_type_methods(pidx, func):
         assert_eq(False, actual)
     else:
         assert_eq(expected, actual)
+
+
+def test_multiindex_index_single_row():
+    arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
+    tuples = list(zip(*arrays))
+    idx = cudf.MultiIndex.from_tuples(tuples)
+    gdf = cudf.DataFrame(
+        {"first": cp.random.rand(4), "second": cp.random.rand(4)}
+    )
+    gdf.index = idx
+    pdf = gdf.to_pandas()
+    assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])

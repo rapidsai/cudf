@@ -28,12 +28,11 @@
 struct StringsCharsTest : public cudf::test::BaseFixture {
 };
 
-class StringsCharsTestTypes
-  : public StringsCharsTest,
-    public testing::WithParamInterface<cudf::strings::string_character_types> {
+class CharsTypes : public StringsCharsTest,
+                   public testing::WithParamInterface<cudf::strings::string_character_types> {
 };
 
-TEST_P(StringsCharsTestTypes, AllTypes)
+TEST_P(CharsTypes, AllTypes)
 {
   std::vector<const char*> h_strings{"Héllo",
                                      "thesé",
@@ -52,13 +51,20 @@ TEST_P(StringsCharsTestTypes, AllTypes)
                                      "de",
                                      "\t\r\n\f "};
 
-  bool expecteds[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,   // decimal
-                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0,   // numeric
-                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0,   // digit
-                      1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,   // alpha
-                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,   // space
-                      0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   // upper
-                      0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};  // lower
+  bool expecteds[] = {false, false, false, false, false, false, false, false,
+                      false, false, false, false, false, true,  false, false,  // decimal
+                      false, false, false, false, false, false, false, false,
+                      false, true,  false, true,  false, true,  false, false,  // numeric
+                      false, false, false, false, false, false, false, false,
+                      false, false, false, true,  false, true,  false, false,  // digit
+                      true,  true,  false, true,  false, false, false, false,
+                      false, false, false, false, false, false, true,  false,  // alpha
+                      false, false, false, false, false, false, false, false,
+                      false, false, false, false, false, false, false, true,  // space
+                      false, false, false, true,  false, false, false, false,
+                      false, false, false, false, false, false, false, false,  // upper
+                      false, true,  false, false, false, false, false, false,
+                      false, false, false, false, false, false, true,  false};  // lower
 
   auto is_parm = GetParam();
 
@@ -84,8 +90,8 @@ TEST_P(StringsCharsTestTypes, AllTypes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-INSTANTIATE_TEST_CASE_P(StringsCharsTestAllTypes,
-                        StringsCharsTestTypes,
+INSTANTIATE_TEST_CASE_P(StringsCharsTest,
+                        CharsTypes,
                         testing::ValuesIn(std::array<cudf::strings::string_character_types, 7>{
                           cudf::strings::string_character_types::DECIMAL,
                           cudf::strings::string_character_types::NUMERIC,

@@ -70,8 +70,7 @@ class Column:
     def nullable(self) -> bool:
         ...
 
-    @property
-    def has_nulls(self) -> bool:
+    def has_nulls(self, include_nan: bool=False) -> bool:
         ...
 
     @property

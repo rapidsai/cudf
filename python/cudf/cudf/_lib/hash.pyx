@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
 from libcpp cimport bool
@@ -10,7 +10,7 @@ from libcpp.vector cimport vector
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.hash cimport hash as cpp_hash
+from cudf._lib.cpp.hash cimport hash as cpp_hash, hash_id as cpp_hash_id
 from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -54,26 +54,25 @@ def hash_partition(source_table, object columns_to_hash,
     )
 
 
-def hash(source_table, str method, object initial_hash=None, int seed=0):
-    cdef vector[uint32_t] c_initial_hash = initial_hash or []
+def hash(source_table, str method, int seed=0):
     cdef table_view c_source_view = table_view_from_table(
         source_table, ignore_index=True)
     cdef unique_ptr[column] c_result
-    cdef libcudf_types.hash_id c_hash_function
+    cdef cpp_hash_id c_hash_function
     if method == "murmur3":
-        c_hash_function = libcudf_types.hash_id.HASH_MURMUR3
+        c_hash_function = cpp_hash_id.HASH_MURMUR3
     elif method == "md5":
-        c_hash_function = libcudf_types.hash_id.HASH_MD5
+        c_hash_function = cpp_hash_id.HASH_MD5
     elif method == "sha1":
-        c_hash_function = libcudf_types.hash_id.HASH_SHA1
+        c_hash_function = cpp_hash_id.HASH_SHA1
     elif method == "sha224":
-        c_hash_function = libcudf_types.hash_id.HASH_SHA224
+        c_hash_function = cpp_hash_id.HASH_SHA224
     elif method == "sha256":
-        c_hash_function = libcudf_types.hash_id.HASH_SHA256
+        c_hash_function = cpp_hash_id.HASH_SHA256
     elif method == "sha384":
-        c_hash_function = libcudf_types.hash_id.HASH_SHA384
+        c_hash_function = cpp_hash_id.HASH_SHA384
     elif method == "sha512":
-        c_hash_function = libcudf_types.hash_id.HASH_SHA512
+        c_hash_function = cpp_hash_id.HASH_SHA512
     else:
         raise ValueError(f"Unsupported hash function: {method}")
     with nogil:
@@ -81,7 +80,6 @@ def hash(source_table, str method, object initial_hash=None, int seed=0):
             cpp_hash(
                 c_source_view,
                 c_hash_function,
-                c_initial_hash,
                 seed
             )
         )

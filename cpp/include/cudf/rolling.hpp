@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -451,7 +451,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *      should be the exact same type (`INT32`).
  *
  * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
+ * Example: Consider a motor-racing statistics dataset, containing the following columns:
  *   1. driver_name:   (STRING) Name of the car driver
  *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
  *   3. lap_number:    (INT32)  The number of the lap

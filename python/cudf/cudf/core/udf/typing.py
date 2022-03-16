@@ -18,7 +18,12 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
 from cudf.core.udf import api
-from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
+from cudf.core.udf._ops import (
+    arith_ops,
+    bitwise_ops,
+    comparison_ops,
+    unary_ops,
+)
 
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
@@ -37,9 +42,18 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if not isinstance(value, SUPPORTED_NUMBA_TYPES):
-            raise TypeError("value_type must be a numeric scalar type")
-        self.value_type = value
+        if isinstance(value, SUPPORTED_NUMBA_TYPES):
+            self.value_type = value
+        else:
+            # Unsupported Dtype. Numba tends to print out the type info
+            # for whatever operands and operation failed to type and then
+            # output its own error message. Putting the message in the repr
+            # then is one way of getting the true cause to the user
+            self.value_type = types.Poison(
+                "\n\n\n Unsupported MaskedType. This is usually caused by "
+                "attempting to use a column of unsupported dtype in a UDF. "
+                f"Supported dtypes are {SUPPORTED_NUMBA_TYPES}"
+            )
         super().__init__(name=f"Masked{self.value_type}")
 
     def __hash__(self):
@@ -53,7 +67,7 @@ class MaskedType(types.Type):
         """
         Often within a UDF an instance arises where a variable could
         be a `MaskedType`, an `NAType`, or a literal based off
-        the data at runtime, for examplem the variable `ret` here:
+        the data at runtime, for example the variable `ret` here:
 
         def f(x):
             if x == 1:
@@ -119,8 +133,8 @@ def typeof_masked(val, c):
 class MaskedConstructor(ConcreteTemplate):
     key = api.Masked
     units = ["ns", "ms", "us", "s"]
-    datetime_cases = set(types.NPDatetime(u) for u in units)
-    timedelta_cases = set(types.NPTimedelta(u) for u in units)
+    datetime_cases = {types.NPDatetime(u) for u in units}
+    timedelta_cases = {types.NPTimedelta(u) for u in units}
     cases = [
         nb_signature(MaskedType(t), t, types.boolean)
         for t in (
@@ -171,7 +185,7 @@ class NAType(types.Type):
     """
     A type for handling ops against nulls
     Exists so we can:
-    1. Teach numba that all occurances of `cudf.NA` are
+    1. Teach numba that all occurrences of `cudf.NA` are
        to be read as instances of this type instead
     2. Define ops like `if x is cudf.NA` where `x` is of
        type `Masked` to mean `if x.valid is False`
@@ -270,6 +284,7 @@ class MaskedScalarScalarOp(AbstractTemplate):
         """
         # In the case of op(Masked, scalar), we resolve the type between
         # the Masked value_type and the scalar's type directly
+        to_resolve_types = None
         if isinstance(args[0], MaskedType) and isinstance(
             args[1], SUPPORTED_NUMBA_TYPES
         ):
@@ -278,6 +293,9 @@ class MaskedScalarScalarOp(AbstractTemplate):
             args[1], MaskedType
         ):
             to_resolve_types = (args[1].value_type, args[0])
+        else:
+            # fail typing
+            return None
         return_type = self.context.resolve_function_type(
             self.key, to_resolve_types, kws
         ).return_type
@@ -328,7 +346,7 @@ class UnpackReturnToMasked(AbstractTemplate):
             return nb_signature(return_type, args[0])
 
 
-for binary_op in arith_ops + comparison_ops:
+for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
     cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)

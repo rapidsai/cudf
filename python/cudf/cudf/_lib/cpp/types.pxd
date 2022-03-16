@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, uint32_t
 
@@ -79,18 +79,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DURATION_NANOSECONDS   "cudf::type_id::DURATION_NANOSECONDS"
         DECIMAL32              "cudf::type_id::DECIMAL32"
         DECIMAL64              "cudf::type_id::DECIMAL64"
-
-    ctypedef enum hash_id "cudf::hash_id":
-        HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
-        HASH_MURMUR3 "cudf::hash_id::HASH_MURMUR3"
-        HASH_MD5 "cudf::hash_id::HASH_MD5"
-        HASH_SERIAL_MURMUR3 "cudf::hash_id::HASH_SERIAL_MURMUR3"
-        HASH_SPARK_MURMUR3 "cudf::hash_id::HASH_SPARK_MURMUR3"
-        HASH_SHA1 "cudf::hash_id::HASH_SHA1"
-        HASH_SHA224 "cudf::hash_id::HASH_SHA224"
-        HASH_SHA256 "cudf::hash_id::HASH_SHA256"
-        HASH_SHA384 "cudf::hash_id::HASH_SHA384"
-        HASH_SHA512 "cudf::hash_id::HASH_SHA512"
+        DECIMAL128             "cudf::type_id::DECIMAL128"
 
     cdef cppclass data_type:
         data_type() except +
@@ -107,3 +96,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HIGHER "cudf::interpolation::HIGHER"
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
+
+    # A Hack to let cython compile with __int128_t symbol
+    # https://stackoverflow.com/a/27609033
+    ctypedef int int128 "__int128_t"

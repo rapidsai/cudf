@@ -38,7 +38,7 @@ struct QuantilesTest : public BaseFixture {
 
 using TestTypes = AllTypes;
 
-TYPED_TEST_CASE(QuantilesTest, TestTypes);
+TYPED_TEST_SUITE(QuantilesTest, TestTypes);
 
 TYPED_TEST(QuantilesTest, TestZeroColumns)
 {

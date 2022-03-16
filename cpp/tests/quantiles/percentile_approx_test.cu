@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <arrow/util/tdigest.h>
 
 #include <cudf/detail/tdigest/tdigest.hpp>
@@ -21,9 +36,8 @@ using namespace cudf;
 using namespace cudf::tdigest;
 
 struct tdigest_gen {
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys, column_view const& values, int delta)
   {
     cudf::table_view t({keys});
@@ -36,9 +50,8 @@ struct tdigest_gen {
     return std::move(result.second[0].results[0]);
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys, column_view const& values, int delta)
   {
     CUDF_FAIL("Invalid tdigest test type");
@@ -89,9 +102,8 @@ std::unique_ptr<column> arrow_percentile_approx(column_view const& _values,
 }
 
 struct percentile_approx_dispatch {
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys,
                                      column_view const& values,
                                      int delta,
@@ -127,9 +139,8 @@ struct percentile_approx_dispatch {
     return result;
   }
 
-  template <
-    typename T,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& keys,
                                      column_view const& values,
                                      int delta,
@@ -306,7 +317,7 @@ using PercentileApproxTypes =
 template <typename T>
 struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(PercentileApproxInputTypesTest, PercentileApproxTypes);
+TYPED_TEST_SUITE(PercentileApproxInputTypesTest, PercentileApproxTypes);
 
 TYPED_TEST(PercentileApproxInputTypesTest, Simple)
 {
@@ -374,7 +385,7 @@ TEST_F(PercentileApproxTest, EmptyInput)
   auto expected =
     cudf::make_lists_column(3,
                             offsets.release(),
-                            cudf::make_empty_column(data_type{type_id::FLOAT64}),
+                            cudf::make_empty_column(type_id::FLOAT64),
                             3,
                             cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
 
@@ -403,7 +414,7 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
   auto expected = cudf::make_lists_column(2,
                                           offsets.release(),
-                                          cudf::make_empty_column(data_type{type_id::FLOAT64}),
+                                          cudf::make_empty_column(type_id::FLOAT64),
                                           2,
                                           cudf::detail::create_null_mask(2, mask_state::ALL_NULL));
 

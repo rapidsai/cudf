@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,12 +184,12 @@ struct DeviceFloor {
 
 struct DeviceAbs {
   template <typename T>
-  std::enable_if_t<std::is_signed<T>::value, T> __device__ operator()(T data)
+  std::enable_if_t<std::is_signed_v<T>, T> __device__ operator()(T data)
   {
     return std::abs(data);
   }
   template <typename T>
-  std::enable_if_t<!std::is_signed<T>::value, T> __device__ operator()(T data)
+  std::enable_if_t<!std::is_signed_v<T>, T> __device__ operator()(T data)
   {
     return data;
   }
@@ -197,14 +197,14 @@ struct DeviceAbs {
 
 struct DeviceRInt {
   template <typename T>
-  std::enable_if_t<std::is_floating_point<T>::value, T> __device__ operator()(T data)
+  std::enable_if_t<std::is_floating_point_v<T>, T> __device__ operator()(T data)
   {
     return std::rint(data);
   }
 
   // Dummy to handle other types, will never be executed
   template <typename T>
-  std::enable_if_t<!std::is_floating_point<T>::value, T> __device__ operator()(T data)
+  std::enable_if_t<!std::is_floating_point_v<T>, T> __device__ operator()(T data)
   {
     return data;
   }
@@ -271,7 +271,7 @@ struct fixed_point_floor {
 template <typename T>
 struct fixed_point_abs {
   T n;
-  __device__ T operator()(T data) { return std::abs(data); }
+  __device__ T operator()(T data) { return numeric::detail::abs(data); }
 };
 
 template <typename T, template <typename> typename FixedPointFunctor>
@@ -284,8 +284,8 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
 
   // When scale is >= 0 and unary_operator is CEIL or FLOOR, the unary_operation is a no-op
   if (input.type().scale() >= 0 &&
-      (std::is_same<FixedPointUnaryOpFunctor, fixed_point_ceil<Type>>::value ||
-       std::is_same<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>::value))
+      (std::is_same_v<FixedPointUnaryOpFunctor, fixed_point_ceil<Type>> ||
+       std::is_same_v<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>))
     return std::make_unique<cudf::column>(input, stream, mr);
 
   auto result = cudf::make_fixed_width_column(
@@ -348,7 +348,7 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
 
 template <typename UFN>
 struct MathOpDispatcher {
-  template <typename T, typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -362,7 +362,7 @@ struct MathOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
@@ -371,16 +371,15 @@ struct MathOpDispatcher {
     }
 
     template <typename T, typename... Args>
-    std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<cudf::column>> operator()(
-      Args&&...)
+    std::enable_if_t<!std::is_arithmetic_v<T>, std::unique_ptr<cudf::column>> operator()(Args&&...)
     {
       CUDF_FAIL("dictionary keys must be numeric for this operation");
     }
   };
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_arithmetic<T>::value and
-                                      std::is_same_v<T, dictionary32>>* = nullptr>
+  template <
+    typename T,
+    std::enable_if_t<!std::is_arithmetic_v<T> and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -392,7 +391,7 @@ struct MathOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value and !std::is_same_v<T, dictionary32>,
+  std::enable_if_t<!std::is_arithmetic_v<T> and !std::is_same_v<T, dictionary32>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -402,7 +401,7 @@ struct MathOpDispatcher {
 
 template <typename UFN>
 struct BitwiseOpDispatcher {
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -416,7 +415,7 @@ struct BitwiseOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+    template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
@@ -425,16 +424,14 @@ struct BitwiseOpDispatcher {
     }
 
     template <typename T, typename... Args>
-    std::enable_if_t<!std::is_integral<T>::value, std::unique_ptr<cudf::column>> operator()(
-      Args&&...)
+    std::enable_if_t<!std::is_integral_v<T>, std::unique_ptr<cudf::column>> operator()(Args&&...)
     {
       CUDF_FAIL("dictionary keys type not supported for this operation");
     }
   };
 
   template <typename T,
-            typename std::enable_if_t<!std::is_integral<T>::value and
-                                      std::is_same_v<T, dictionary32>>* = nullptr>
+            std::enable_if_t<!std::is_integral_v<T> and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -446,7 +443,7 @@ struct BitwiseOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_integral<T>::value and !std::is_same_v<T, dictionary32>,
+  std::enable_if_t<!std::is_integral_v<T> and !std::is_same_v<T, dictionary32>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -460,11 +457,11 @@ struct LogicalOpDispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic<T>::value || std::is_same_v<T, bool>;
+    return std::is_arithmetic_v<T> || std::is_same_v<T, bool>;
   }
 
  public:
-  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
@@ -479,7 +476,7 @@ struct LogicalOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+    template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
@@ -501,9 +498,8 @@ struct LogicalOpDispatcher {
     }
   };
 
-  template <
-    typename T,
-    typename std::enable_if_t<!is_supported<T>() and std::is_same_v<T, dictionary32>>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!is_supported<T>() and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)

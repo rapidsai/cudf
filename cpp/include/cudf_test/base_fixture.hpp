@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,9 @@
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/file_utilities.hpp>
 
+#include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/binning_memory_resource.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -48,6 +50,7 @@ class BaseFixture : public ::testing::Test {
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheriting from this fixture
+   * @return pointer to memory resource
    */
   rmm::mr::device_memory_resource* mr() { return _mr; }
 };
@@ -56,7 +59,7 @@ template <typename T, typename Enable = void>
 struct uniform_distribution_impl {
 };
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral<T>::value>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral_v<T>>> {
   using type = std::uniform_int_distribution<T>;
 };
 
@@ -66,7 +69,7 @@ struct uniform_distribution_impl<bool> {
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point_v<T>>> {
   using type = std::uniform_real_distribution<T>;
 };
 
@@ -168,6 +171,7 @@ class UniformRandomGenerator {
 
   /**
    * @brief Returns the next random number.
+   * @return generated random number
    */
   template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
   T generate()
@@ -209,6 +213,7 @@ class TempDirTestEnvironment : public ::testing::Environment {
   /**
    * @brief Get a temporary filepath to use for the specified filename
    *
+   * @param filename name of the file to be placed in temporary directory.
    * @return std::string The temporary filepath
    */
   std::string get_temp_filepath(std::string filename) { return tmpdir.path() + filename; }
@@ -217,11 +222,18 @@ class TempDirTestEnvironment : public ::testing::Environment {
 /// MR factory functions
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
+inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
+
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+
+inline auto make_arena()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
 }
 
 inline auto make_binning()
@@ -253,7 +265,9 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 {
   if (allocation_mode == "binning") return make_binning();
   if (allocation_mode == "cuda") return make_cuda();
+  if (allocation_mode == "async") return make_async();
   if (allocation_mode == "pool") return make_pool();
+  if (allocation_mode == "arena") return make_arena();
   if (allocation_mode == "managed") return make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }

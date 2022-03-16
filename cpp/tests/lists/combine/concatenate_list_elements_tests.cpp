@@ -64,7 +64,7 @@ struct ConcatenateListElementsTypedTest : public cudf::test::BaseFixture {
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                         cudf::test::FloatingPointTypes,
                                         cudf::test::FixedPointTypes>;
-TYPED_TEST_CASE(ConcatenateListElementsTypedTest, TypesForTest);
+TYPED_TEST_SUITE(ConcatenateListElementsTypedTest, TypesForTest);
 
 TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputNoNull)
 {

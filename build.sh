@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -17,8 +17,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l] [--cmake-args=\\\"<args>\\\"]
+VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
@@ -32,11 +32,12 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    -v                            - verbose build mode
    -g                            - build for debug
    -n                            - no install step
-   -l                            - build legacy tests
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --show_depr_warn              - show cmake deprecation warnings
    --ptds                        - enable per-thread default stream
+   --build_metrics               - generate build metrics report for libcudf
+   --incl_cache_stats            - include cache statistics in build metrics report
    --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
    -h | --h[elp]                 - print this text
 
@@ -61,6 +62,8 @@ BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
+BUILD_REPORT_METRICS=OFF
+BUILD_REPORT_INCL_CACHE_STATS=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -144,6 +147,14 @@ fi
 if hasArg --ptds; then
     BUILD_PER_THREAD_DEFAULT_STREAM=ON
 fi
+if hasArg --build_metrics; then
+    BUILD_REPORT_METRICS=ON
+fi
+
+if hasArg --incl_cache_stats; then
+    BUILD_REPORT_INCL_CACHE_STATS=ON
+fi
+
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -157,6 +168,10 @@ if hasArg clean; then
         rmdir ${bd} || true
     fi
     done
+
+    # Cleaning up python artifacts
+    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so$)"  | xargs rm -rf
+
 fi
 
 
@@ -172,6 +187,12 @@ if buildAll || hasArg libcudf; then
         echo "Building for *ALL* supported GPU architectures..."
     fi
 
+    # get the current count before the compile starts
+    if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
+        # zero the sccache statistics
+        sccache --zero-stats
+    fi
+
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
@@ -185,7 +206,33 @@ if buildAll || hasArg libcudf; then
 
     cd ${LIB_BUILD_DIR}
 
+    compile_start=$(date +%s)
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    compile_end=$(date +%s)
+    compile_total=$(( compile_end - compile_start ))
+
+    # Record build times
+    if [[ "$BUILD_REPORT_METRICS" == "ON" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+        echo "Formatting build metrics"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
+        MSG="<p>"
+        # get some sccache stats after the compile
+        if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
+           COMPILE_REQUESTS=$(sccache -s | grep "Compile requests \+ [0-9]\+$" | awk '{ print $NF }')
+           CACHE_HITS=$(sccache -s | grep "Cache hits \+ [0-9]\+$" | awk '{ print $NF }')
+           HIT_RATE=$(echo - | awk "{printf \"%.2f\n\", $CACHE_HITS / $COMPILE_REQUESTS * 100}")
+           MSG="${MSG}<br/>cache hit rate ${HIT_RATE} %"
+        fi
+        MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
+        MSG="${MSG}<br/>parallel build time: $compile_total seconds"
+        if [[ -f "${LIB_BUILD_DIR}/libcudf.so" ]]; then
+           LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
+           MSG="${MSG}<br/>libcudf.so size: $LIBCUDF_FS"
+        fi
+        echo "$MSG"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${LIB_BUILD_DIR}/ninja_log.html
+        cp ${LIB_BUILD_DIR}/.ninja_log ${LIB_BUILD_DIR}/ninja.log
+    fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}

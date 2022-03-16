@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ template <typename T>
 struct CsvFixedPointWriterTest : public CsvWriterTest {
 };
 
-TYPED_TEST_CASE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
 
 // Base test fixture for tests
 struct CsvReaderTest : public cudf::test::BaseFixture {
@@ -94,7 +94,7 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 
 // Declare typed test cases
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
-TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
+TYPED_TEST_SUITE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
 // Typed test to be instantiated for numeric::decimal32 and numeric::decimal64
 template <typename DecimalType>
@@ -125,7 +125,7 @@ struct CsvFixedPointReaderTest : public CsvReaderTest {
   }
 };
 
-TYPED_TEST_CASE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -138,7 +138,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 
@@ -262,7 +262,7 @@ void check_string_column(cudf::column_view const& col_lhs,
 }
 
 // Helper function to compare two floating-point column contents
-template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
 {
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first,
@@ -270,7 +270,7 @@ void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const
 }
 
 // Helper function to compare two column contents
-template <typename T, typename std::enable_if_t<!std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_floating_point_v<T>>* = nullptr>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
 {
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs));
@@ -1901,7 +1901,7 @@ class TestSource : public cudf::io::datasource {
     return read_size;
   }
 
-  size_t size() const override { return str.size(); }
+  [[nodiscard]] size_t size() const override { return str.size(); }
 };
 
 TEST_F(CsvReaderTest, UserImplementedSource)

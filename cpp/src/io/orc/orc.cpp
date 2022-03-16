@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,14 @@
  */
 
 #include "orc.h"
-#include <string>
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
+
+#include <cudf/lists/lists_column_view.hpp>
+
+#include <thrust/tabulate.h>
+
+#include <string>
 
 namespace cudf {
 namespace io {
@@ -33,10 +38,10 @@ uint32_t ProtobufReader::read_field_size(const uint8_t* end)
 void ProtobufReader::skip_struct_field(int t)
 {
   switch (t) {
-    case PB_TYPE_VARINT: get<uint32_t>(); break;
-    case PB_TYPE_FIXED64: skip_bytes(8); break;
-    case PB_TYPE_FIXEDLEN: skip_bytes(get<uint32_t>()); break;
-    case PB_TYPE_FIXED32: skip_bytes(4); break;
+    case ProtofType::VARINT: get<uint32_t>(); break;
+    case ProtofType::FIXED64: skip_bytes(8); break;
+    case ProtofType::FIXEDLEN: skip_bytes(get<uint32_t>()); break;
+    case ProtofType::FIXED32: skip_bytes(4); break;
     default: break;
   }
 }
@@ -204,43 +209,54 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          int32_t data_ofs,
                                          int32_t data2_blk,
                                          int32_t data2_ofs,
-                                         TypeKind kind)
+                                         TypeKind kind,
+                                         ColStatsBlob const* stats)
 {
   size_t sz = 0, lpos;
-  putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:RowIndex.entry
   lpos = m_buf->size();
-  putb(0xcd);                      // sz+2
-  putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:positions[packed=true]
-  putb(0xcd);                      // sz
+  put_byte(0xcd);                                          // sz+2
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
+  put_byte(0xcd);                                          // sz
   if (present_blk >= 0) sz += put_uint(present_blk);
   if (present_ofs >= 0) {
-    sz += put_uint(present_ofs) + 2;
-    putb(0);  // run pos = 0
-    putb(0);  // bit pos = 0
+    sz += put_uint(present_ofs);
+    sz += put_byte(0);  // run pos = 0
+    sz += put_byte(0);  // bit pos = 0
   }
   if (data_blk >= 0) { sz += put_uint(data_blk); }
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
     if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
-      putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
-      sz++;
+      // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      sz += put_byte(0);
       if (kind == BOOLEAN) {
-        putb(0);  // bit position in byte, always zero
-        sz++;
+        // bit position in byte, always zero
+        sz += put_byte(0);
       }
     }
   }
-  if (kind !=
-      INT)  // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
-  {
+  // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
+  if (kind != INT) {
     if (data2_blk >= 0) { sz += put_uint(data2_blk); }
     if (data2_ofs >= 0) {
-      sz += put_uint(data2_ofs) + 1;
-      putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      sz += put_uint(data2_ofs);
+      // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+      sz += put_byte(0);
     }
   }
-  m_buf->data()[lpos]     = (uint8_t)(sz + 2);
+  // size of the field 1
   m_buf->data()[lpos + 2] = (uint8_t)(sz);
+
+  if (stats != nullptr) {
+    sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
+    // Statistics field contains its length as varint and dtype specific data (encoded on the GPU)
+    sz += put_uint(stats->size());
+    sz += put_bytes<typename ColStatsBlob::value_type>(*stats);
+  }
+
+  // size of the whole row index entry
+  m_buf->data()[lpos] = (uint8_t)(sz + 2);
 }
 
 size_t ProtobufWriter::write(const PostScript& s)
@@ -251,7 +267,7 @@ size_t ProtobufWriter::write(const PostScript& s)
   if (s.compression != NONE) { w.field_uint(3, s.compressionBlockSize); }
   w.field_packed_uint(4, s.version);
   w.field_uint(5, s.metadataLength);
-  w.field_string(8000, s.magic);
+  w.field_blob(8000, s.magic);
   return w.value();
 }
 
@@ -295,8 +311,8 @@ size_t ProtobufWriter::write(const SchemaType& s)
 size_t ProtobufWriter::write(const UserMetadataItem& s)
 {
   ProtobufFieldWriter w(this);
-  w.field_string(1, s.name);
-  w.field_string(2, s.value);
+  w.field_blob(1, s.name);
+  w.field_blob(2, s.value);
   return w.value();
 }
 
@@ -305,7 +321,7 @@ size_t ProtobufWriter::write(const StripeFooter& s)
   ProtobufFieldWriter w(this);
   w.field_repeated_struct(1, s.streams);
   w.field_repeated_struct(2, s.columns);
-  if (s.writerTimezone != "") { w.field_string(3, s.writerTimezone); }
+  if (s.writerTimezone != "") { w.field_blob(3, s.writerTimezone); }
   return w.value();
 }
 
@@ -459,48 +475,52 @@ metadata::metadata(datasource* const src) : source(src)
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::ProtobufReader(md_data, md_length).read(md);
 
-  // Initialize the column names
+  init_parent_descriptors();
   init_column_names();
 }
 
-void metadata::init_column_names() const
+void metadata::init_column_names()
 {
-  auto const schema_idxs = get_schema_indexes();
-  auto const& types      = ff.types;
-  for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
-    std::string col_name;
-    if (schema_idxs[col_id].parent >= 0 and schema_idxs[col_id].field >= 0) {
-      auto const parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
-      auto const field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
-      if (field_idx < types[parent_idx].fieldNames.size()) {
-        col_name = types[parent_idx].fieldNames[field_idx];
-      }
+  column_names.resize(get_num_columns());
+  thrust::tabulate(column_names.begin(), column_names.end(), [&](auto col_id) {
+    if (not column_has_parent(col_id)) return std::string{};
+    auto const& parent_field_names = ff.types[parent_id(col_id)].fieldNames;
+    if (field_index(col_id) < static_cast<size_type>(parent_field_names.size())) {
+      return parent_field_names[field_index(col_id)];
     }
-    // If we have no name (root column), generate a name
-    column_names.push_back(col_name.empty() ? "col" + std::to_string(col_id) : col_name);
-  }
+
+    // Generate names for list and map child columns
+    if (ff.types[parent_id(col_id)].subtypes.size() == 1) {
+      return std::to_string(lists_column_view::child_column_index);
+    } else {
+      return std::to_string(field_index(col_id));
+    }
+  });
+
+  column_paths.resize(get_num_columns());
+  thrust::tabulate(column_paths.begin(), column_paths.end(), [&](auto col_id) {
+    if (not column_has_parent(col_id)) return std::string{};
+    // Don't include ORC root column name in path
+    return (parent_id(col_id) == 0 ? "" : column_paths[parent_id(col_id)] + ".") +
+           column_names[col_id];
+  });
 }
 
-std::vector<metadata::schema_indexes> metadata::get_schema_indexes() const
+void metadata::init_parent_descriptors()
 {
-  std::vector<schema_indexes> result(ff.types.size());
+  auto const num_columns = static_cast<size_type>(ff.types.size());
+  parents.resize(num_columns);
 
-  auto const schema_size = static_cast<uint32_t>(result.size());
-  for (uint32_t i = 0; i < schema_size; i++) {
-    auto const& subtypes    = ff.types[i].subtypes;
-    auto const num_children = static_cast<uint32_t>(subtypes.size());
-    if (result[i].parent == -1) {  // Not initialized
-      result[i].parent = i;        // set root node as its own parent
-    }
-    for (uint32_t j = 0; j < num_children; j++) {
-      auto const column_id = subtypes[j];
-      CUDF_EXPECTS(column_id > i && column_id < schema_size, "Invalid column id");
-      CUDF_EXPECTS(result[column_id].parent == -1, "Same node referenced twice");
-      result[column_id].parent = i;
-      result[column_id].field  = j;
+  for (size_type col_id = 0; col_id < num_columns; ++col_id) {
+    auto const& subtypes    = ff.types[col_id].subtypes;
+    auto const num_children = static_cast<size_type>(subtypes.size());
+    for (size_type field_idx = 0; field_idx < num_children; ++field_idx) {
+      auto const child_id = static_cast<size_type>(subtypes[field_idx]);
+      CUDF_EXPECTS(child_id > col_id && child_id < num_columns, "Invalid column id");
+      CUDF_EXPECTS(not column_has_parent(child_id), "Same node referenced twice");
+      parents[child_id] = {col_id, field_idx};
     }
   }
-  return result;
 }
 
 }  // namespace orc

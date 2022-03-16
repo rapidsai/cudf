@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
@@ -42,7 +43,7 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.dataframe import DataFrame, from_pandas, merge
+from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut
@@ -51,6 +52,7 @@ from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
     Decimal32Dtype,
+    Decimal128Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
@@ -98,8 +100,20 @@ from cudf.io import (
     read_parquet,
     read_text,
 )
+from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
+
+try:
+    from ptxcompiler.patch import patch_numba_codegen_if_needed
+except ImportError:
+    pass
+else:
+    # Patch Numba to support CUDA enhanced compatibility.
+    # See https://github.com/rapidsai/ptxcompiler for
+    # details.
+    patch_numba_codegen_if_needed()
+    del patch_numba_codegen_if_needed
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
@@ -114,3 +128,66 @@ del numba_config
 
 __version__ = get_versions()["version"]
 del get_versions
+
+__all__ = [
+    "BaseIndex",
+    "CategoricalDtype",
+    "CategoricalIndex",
+    "DataFrame",
+    "DateOffset",
+    "DatetimeIndex",
+    "Decimal32Dtype",
+    "Decimal64Dtype",
+    "Float32Index",
+    "Float64Index",
+    "GenericIndex",
+    "Grouper",
+    "Index",
+    "Int16Index",
+    "Int32Index",
+    "Int64Index",
+    "Int8Index",
+    "IntervalDtype",
+    "IntervalIndex",
+    "ListDtype",
+    "MultiIndex",
+    "NA",
+    "RangeIndex",
+    "Scalar",
+    "Series",
+    "StringIndex",
+    "StructDtype",
+    "TimedeltaIndex",
+    "UInt16Index",
+    "UInt32Index",
+    "UInt64Index",
+    "UInt8Index",
+    "api",
+    "concat",
+    "cut",
+    "date_range",
+    "factorize",
+    "from_dataframe",
+    "from_dlpack",
+    "from_pandas",
+    "get_dummies",
+    "interval_range",
+    "isclose",
+    "melt",
+    "merge",
+    "merge_sorted",
+    "pivot",
+    "read_avro",
+    "read_csv",
+    "read_feather",
+    "read_hdf",
+    "read_json",
+    "read_orc",
+    "read_parquet",
+    "read_text",
+    "set_allocator",
+    "testing",
+    "to_datetime",
+    "to_numeric",
+    "unstack",
+]

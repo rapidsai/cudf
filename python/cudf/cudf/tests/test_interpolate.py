@@ -50,7 +50,9 @@ def test_interpolate_series(data, method, axis):
     expect = psr.interpolate(method=method, axis=axis)
     got = gsr.interpolate(method=method, axis=axis)
 
-    assert_eq(expect, got)
+    assert_eq(
+        expect, got, check_dtype=False if psr.dtype == "object" else True
+    )
 
 
 @pytest.mark.parametrize(
@@ -88,7 +90,9 @@ def test_interpolate_series_values_or_index(data, index, method):
     expect = psr.interpolate(method=method)
     got = gsr.interpolate(method=method)
 
-    assert_eq(expect, got)
+    assert_eq(
+        expect, got, check_dtype=False if psr.dtype == "object" else True
+    )
 
 
 @pytest.mark.parametrize(

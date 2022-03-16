@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,15 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace {
 struct scalar_construction_helper {
   template <typename T,
-            typename ScalarType = scalar_type_t<T>,
-            typename std::enable_if_t<is_fixed_width<T>() and not is_fixed_point<T>()>* = nullptr>
+            typename ScalarType                                                = scalar_type_t<T>,
+            std::enable_if_t<is_fixed_width<T>() and not is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
@@ -38,8 +39,8 @@ struct scalar_construction_helper {
   }
 
   template <typename T,
-            typename ScalarType                             = scalar_type_t<T>,
-            typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+            typename ScalarType                    = scalar_type_t<T>,
+            std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
@@ -48,9 +49,7 @@ struct scalar_construction_helper {
     return std::unique_ptr<scalar>(s);
   }
 
-  template <typename T,
-            typename... Args,
-            typename std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename... Args, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<scalar> operator()(Args... args) const
   {
     CUDF_FAIL("Invalid type.");
@@ -123,14 +122,14 @@ namespace {
 struct default_scalar_functor {
   data_type type;
 
-  template <typename T, typename std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
     return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
   }
 
-  template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
@@ -184,10 +183,12 @@ std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
 {
   std::unique_ptr<scalar> result;
   switch (column.type().id()) {
-    case type_id::LIST:
-      result = make_list_scalar(empty_like(column)->view(), stream, mr);
+    case type_id::LIST: {
+      auto const empty_child = empty_like(lists_column_view(column).child());
+      result                 = make_list_scalar(empty_child->view(), stream, mr);
       result->set_valid_async(false, stream);
       break;
+    }
     case type_id::STRUCT:
       // The input column must have at least 1 row to extract a scalar (row) from it.
       result = detail::get_element(column, 0, stream, mr);

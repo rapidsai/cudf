@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ struct reduce_dispatch_functor {
   }
 
   template <aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const& agg)
+  std::unique_ptr<scalar> operator()(std::unique_ptr<reduce_aggregation> const& agg)
   {
     switch (k) {
       case aggregation::SUM: return reduction::sum(col, output_dtype, stream, mr); break;
@@ -102,6 +102,22 @@ struct reduce_dispatch_functor {
         auto nth_agg = dynamic_cast<nth_element_aggregation const*>(agg.get());
         return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, stream, mr);
       } break;
+      case aggregation::COLLECT_LIST: {
+        auto col_agg = dynamic_cast<collect_list_aggregation const*>(agg.get());
+        return reduction::collect_list(col, col_agg->_null_handling, stream, mr);
+      } break;
+      case aggregation::COLLECT_SET: {
+        auto col_agg = dynamic_cast<collect_set_aggregation const*>(agg.get());
+        return reduction::collect_set(
+          col, col_agg->_null_handling, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
+      } break;
+      case aggregation::MERGE_LISTS: {
+        return reduction::merge_lists(col, stream, mr);
+      } break;
+      case aggregation::MERGE_SETS: {
+        auto col_agg = dynamic_cast<merge_sets_aggregation const*>(agg.get());
+        return reduction::merge_sets(col, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
+      } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
@@ -109,7 +125,7 @@ struct reduce_dispatch_functor {
 
 std::unique_ptr<scalar> reduce(
   column_view const& col,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -129,7 +145,7 @@ std::unique_ptr<scalar> reduce(
 }  // namespace detail
 
 std::unique_ptr<scalar> reduce(column_view const& col,
-                               std::unique_ptr<aggregation> const& agg,
+                               std::unique_ptr<reduce_aggregation> const& agg,
                                data_type output_dtype,
                                rmm::mr::device_memory_resource* mr)
 {

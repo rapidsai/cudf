@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,14 +33,14 @@ namespace detail {
 namespace {
 struct nunique_functor {
   template <typename T>
-  typename std::enable_if_t<cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
-  operator()(column_view const& values,
-             cudf::device_span<size_type const> group_labels,
-             size_type const num_groups,
-             cudf::device_span<size_type const> group_offsets,
-             null_policy null_handling,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>> operator()(
+    column_view const& values,
+    cudf::device_span<size_type const> group_labels,
+    size_type const num_groups,
+    cudf::device_span<size_type const> group_offsets,
+    null_policy null_handling,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto result = make_numeric_column(
       data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -49,7 +49,7 @@ struct nunique_functor {
 
     auto values_view = column_device_view::create(values, stream);
     if (values.has_nulls()) {
-      auto equal              = element_equality_comparator<true>{*values_view, *values_view};
+      auto equal = element_equality_comparator{nullate::YES{}, *values_view, *values_view};
       auto is_unique_iterator = thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
         [v = *values_view,
@@ -72,7 +72,7 @@ struct nunique_functor {
                             thrust::make_discard_iterator(),
                             result->mutable_view().begin<size_type>());
     } else {
-      auto equal              = element_equality_comparator<false>{*values_view, *values_view};
+      auto equal = element_equality_comparator{nullate::NO{}, *values_view, *values_view};
       auto is_unique_iterator = thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
         [v = *values_view,
@@ -94,8 +94,8 @@ struct nunique_functor {
   }
 
   template <typename T, typename... Args>
-  typename std::enable_if_t<!cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::enable_if_t<!cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>> operator()(
+    Args&&...)
   {
     CUDF_FAIL("list_view group_nunique not supported yet");
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ struct quantile_functor {
   rmm::mr::device_memory_resource* mr;
 
   template <typename T>
-  std::enable_if_t<not std::is_arithmetic<T>::value and not cudf::is_fixed_point<T>(),
+  std::enable_if_t<not std::is_arithmetic_v<T> and not cudf::is_fixed_point<T>(),
                    std::unique_ptr<column>>
   operator()(column_view const& input)
   {
@@ -59,8 +59,7 @@ struct quantile_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value or cudf::is_fixed_point<T>(),
-                   std::unique_ptr<column>>
+  std::enable_if_t<std::is_arithmetic_v<T> or cudf::is_fixed_point<T>(), std::unique_ptr<column>>
   operator()(column_view const& input)
   {
     using StorageType   = cudf::device_storage_type_t<T>;
@@ -80,14 +79,14 @@ struct quantile_functor {
     }
 
     auto d_input  = column_device_view::create(input, stream);
-    auto d_output = mutable_column_device_view::create(output->mutable_view());
+    auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
-    auto q_device = cudf::detail::make_device_uvector_sync(q);
+    auto q_device = cudf::detail::make_device_uvector_sync(q, stream);
 
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
         thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
-      thrust::transform(rmm::exec_policy(),
+      thrust::transform(rmm::exec_policy(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
@@ -97,7 +96,7 @@ struct quantile_functor {
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
-      thrust::transform(rmm::exec_policy(),
+      thrust::transform(rmm::exec_policy(stream),
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),

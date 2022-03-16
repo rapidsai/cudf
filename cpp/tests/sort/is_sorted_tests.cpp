@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,48 +36,45 @@ namespace testdata {
 // ----- most numerics
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same_v<T, bool>,
-                        fixed_width_column_wrapper<T>>::type
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, fixed_width_column_wrapper<T>>
 ascending()
 {
-  return std::is_signed<T>::value ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
-                                                                   T(-100),
-                                                                   T(-10),
-                                                                   T(-1),
-                                                                   T(0),
-                                                                   T(1),
-                                                                   T(10),
-                                                                   T(100),
-                                                                   std::numeric_limits<T>::max()})
-                                  : fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
-                                                                   T(0),
-                                                                   T(1),
-                                                                   T(10),
-                                                                   T(100),
-                                                                   std::numeric_limits<T>::max()});
+  return std::is_signed_v<T> ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
+                                                              T(-100),
+                                                              T(-10),
+                                                              T(-1),
+                                                              T(0),
+                                                              T(1),
+                                                              T(10),
+                                                              T(100),
+                                                              std::numeric_limits<T>::max()})
+                             : fixed_width_column_wrapper<T>({std::numeric_limits<T>::lowest(),
+                                                              T(0),
+                                                              T(1),
+                                                              T(10),
+                                                              T(100),
+                                                              std::numeric_limits<T>::max()});
 }
 
 template <typename T>
-typename std::enable_if<std::is_arithmetic<T>::value && !std::is_same_v<T, bool>,
-                        fixed_width_column_wrapper<T>>::type
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, fixed_width_column_wrapper<T>>
 descending()
 {
-  return std::is_signed<T>::value
-           ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
-                                            T(100),
-                                            T(10),
-                                            T(1),
-                                            T(0),
-                                            T(-1),
-                                            T(-10),
-                                            T(-100),
-                                            std::numeric_limits<T>::lowest()})
-           : fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
-                                            T(100),
-                                            T(10),
-                                            T(1),
-                                            T(0),
-                                            std::numeric_limits<T>::lowest()});
+  return std::is_signed_v<T> ? fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
+                                                              T(100),
+                                                              T(10),
+                                                              T(1),
+                                                              T(0),
+                                                              T(-1),
+                                                              T(-10),
+                                                              T(-100),
+                                                              std::numeric_limits<T>::lowest()})
+                             : fixed_width_column_wrapper<T>({std::numeric_limits<T>::max(),
+                                                              T(100),
+                                                              T(10),
+                                                              T(1),
+                                                              T(0),
+                                                              std::numeric_limits<T>::lowest()});
 }
 
 template <typename T>
@@ -101,14 +98,13 @@ auto nulls_before()
 // ----- bool
 
 template <typename T>
-typename std::enable_if<std::is_same_v<T, bool>, fixed_width_column_wrapper<bool>>::type ascending()
+std::enable_if_t<std::is_same_v<T, bool>, fixed_width_column_wrapper<bool>> ascending()
 {
   return fixed_width_column_wrapper<bool>({false, false, true, true});
 }
 
 template <typename T>
-typename std::enable_if<std::is_same_v<T, bool>, fixed_width_column_wrapper<bool>>::type
-descending()
+std::enable_if_t<std::is_same_v<T, bool>, fixed_width_column_wrapper<bool>> descending()
 {
   return fixed_width_column_wrapper<bool>({true, true, false, false});
 }
@@ -116,13 +112,13 @@ descending()
 // ----- chrono types
 
 template <typename T>
-typename std::enable_if<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>>::type ascending()
+std::enable_if_t<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>> ascending()
 {
   return fixed_width_column_wrapper<T>({T::min(), T::max()});
 }
 
 template <typename T>
-typename std::enable_if<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>>::type descending()
+std::enable_if_t<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>> descending()
 {
   return fixed_width_column_wrapper<T>({T::max(), T::min()});
 }
@@ -130,15 +126,13 @@ typename std::enable_if<cudf::is_chrono<T>(), fixed_width_column_wrapper<T>>::ty
 // ----- string_view
 
 template <typename T>
-typename std::enable_if<std::is_same_v<T, cudf::string_view>, strings_column_wrapper>::type
-ascending()
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, strings_column_wrapper> ascending()
 {
   return strings_column_wrapper({"A", "B"});
 }
 
 template <typename T>
-typename std::enable_if<std::is_same_v<T, cudf::string_view>, strings_column_wrapper>::type
-descending()
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, strings_column_wrapper> descending()
 {
   return strings_column_wrapper({"B", "A"});
 }
@@ -164,8 +158,7 @@ auto nulls_before<cudf::string_view>()
 // ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
 
 template <typename T>
-typename std::enable_if<std::is_same_v<T, cudf::struct_view>, structs_column_wrapper>::type
-ascending()
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, structs_column_wrapper> ascending()
 {
   using T1           = int32_t;
   auto int_col       = fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::lowest(),
@@ -183,8 +176,7 @@ ascending()
 }
 
 template <typename T>
-typename std::enable_if<std::is_same_v<T, cudf::struct_view>, structs_column_wrapper>::type
-descending()
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, structs_column_wrapper> descending()
 {
   using T1           = int32_t;
   auto int_col       = fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
@@ -239,7 +231,7 @@ struct IsSortedTest : public BaseFixture {
 };
 
 using SupportedTypes = Concat<ComparableTypes, cudf::test::Types<cudf::struct_view>>;
-TYPED_TEST_CASE(IsSortedTest, SupportedTypes);
+TYPED_TEST_SUITE(IsSortedTest, SupportedTypes);
 
 TYPED_TEST(IsSortedTest, NoColumns)
 {
@@ -449,6 +441,6 @@ template <typename T>
 struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
 
 CUDF_TEST_PROGRAM_MAIN()

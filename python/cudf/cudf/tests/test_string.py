@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import json
 import re
@@ -183,7 +183,19 @@ def test_string_astype(dtype):
     ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
-        data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
+        data = [
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            None,
+            "5.0",
+            "nan",
+            "-INF",
+            "NaN",
+            "inF",
+            "NAn",
+        ]
     elif dtype.startswith("bool"):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
@@ -217,9 +229,13 @@ def test_string_astype(dtype):
         ([], 0, 5),
     ],
 )
-def test_string_to_decimal(data, scale, precision):
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
+)
+def test_string_to_decimal(data, scale, precision, decimal_dtype):
     gs = cudf.Series(data, dtype="str")
-    fp = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    fp = gs.astype(decimal_dtype(scale=scale, precision=precision))
     got = fp.astype("str")
     assert_eq(gs, got)
 
@@ -244,7 +260,11 @@ def test_string_empty_to_decimal():
         ([], 0, 5),
     ],
 )
-def test_string_from_decimal(data, scale, precision):
+@pytest.mark.parametrize(
+    "decimal_dtype",
+    [cudf.Decimal128Dtype, cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+)
+def test_string_from_decimal(data, scale, precision, decimal_dtype):
     decimal_data = []
     for d in data:
         if d is None:
@@ -252,11 +272,10 @@ def test_string_from_decimal(data, scale, precision):
         else:
             decimal_data.append(Decimal(d))
     fp = cudf.Series(
-        decimal_data,
-        dtype=cudf.Decimal64Dtype(scale=scale, precision=precision),
+        decimal_data, dtype=decimal_dtype(scale=scale, precision=precision),
     )
     gs = fp.astype("str")
-    got = gs.astype(cudf.Decimal64Dtype(scale=scale, precision=precision))
+    got = gs.astype(decimal_dtype(scale=scale, precision=precision))
     assert_eq(fp, got)
 
 
@@ -513,12 +532,7 @@ def _cat_convert_seq_to_cudf(others):
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
 @pytest.mark.parametrize(
-    "index",
-    [
-        ["1", "2", "3", "4", "5"],
-        pd.Series(["1", "2", "3", "4", "5"]),
-        pd.Index(["1", "2", "3", "4", "5"]),
-    ],
+    "index", [["1", "2", "3", "4", "5"]],
 )
 def test_string_cat(ps_gs, others, sep, na_rep, index):
     ps, gs = ps_gs
@@ -810,7 +824,9 @@ def test_string_join(ps_gs, sep):
 
 @pytest.mark.parametrize("pat", [r"(a)", r"(f)", r"([a-z])", r"([A-Z])"])
 @pytest.mark.parametrize("expand", [True, False])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)]
+)
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
     expectation = raise_builder([flags_raise], NotImplementedError)
@@ -834,12 +850,17 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise",
+    [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
+)
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
-    expectation = raise_builder([flags_raise, na_raise], NotImplementedError)
+    expectation = does_not_raise()
+    if flags_raise or na_raise:
+        expectation = pytest.raises(NotImplementedError)
 
     with expectation:
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
@@ -873,7 +894,7 @@ def test_string_repeat(data, repeats):
     assert_eq(expect, got)
 
 
-# Pandas isn't respect the `n` parameter so ignoring it in test parameters
+# Pandas doesn't respect the `n` parameter so ignoring it in test parameters
 @pytest.mark.parametrize(
     "pat,regex",
     [("a", False), ("f", False), (r"[a-z]", True), (r"[A-Z]", True)],
@@ -931,6 +952,29 @@ def test_string_split(data, pat, n, expand):
 
     expect = ps.str.split(pat=pat, n=n, expand=expand)
     got = gs.str.split(pat=pat, n=n, expand=expand)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a b", " c ", "   d", "e   ", "f"],
+        ["a-b", "-c-", "---d", "e---", "f"],
+        ["ab", "c", "d", "e", "f"],
+        [None, None, None, None, None],
+    ],
+)
+@pytest.mark.parametrize("pat", [None, " ", "\\-+", "\\s+"])
+@pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("expand", [True, False, None])
+def test_string_split_re(data, pat, n, expand):
+    ps = pd.Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
+
+    # Pandas does not support the regex parameter until 1.4.0
+    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
 
     assert_eq(expect, got)
 
@@ -1486,6 +1530,26 @@ def test_strings_rsplit(data, n, expand):
     )
 
 
+@pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("expand", [True, False, None])
+def test_string_rsplit_re(n, expand):
+    data = ["a b", " c ", "   d", "e   ", "f"]
+    ps = pd.Series(data, dtype="str")
+    gs = cudf.Series(data, dtype="str")
+
+    # Pandas does not yet support the regex parameter for rsplit
+    import inspect
+
+    assert (
+        "regex"
+        not in inspect.signature(pd.Series.str.rsplit).parameters.keys()
+    )
+
+    expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
+    got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1727,28 +1791,45 @@ def test_string_wrap(data, width):
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
-        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-        ["line to be wrapped", "another line to be wrapped"],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat", "cat\ndog"],
+        ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
-@pytest.mark.parametrize("pat", ["a", " ", "\t", "another", "0", r"\$"])
-def test_string_count(data, pat):
+@pytest.mark.parametrize(
+    "pat",
+    ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be", "cat$"],
+)
+@pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
+def test_string_count(data, pat, flags):
     gs = cudf.Series(data)
     ps = pd.Series(data)
 
-    assert_eq(gs.str.count(pat=pat), ps.str.count(pat=pat), check_dtype=False)
+    assert_eq(
+        gs.str.count(pat=pat, flags=flags),
+        ps.str.count(pat=pat, flags=flags),
+        check_dtype=False,
+    )
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
 def test_string_findall():
-    ps = pd.Series(["Lion", "Monkey", "Rabbit"])
-    gs = cudf.Series(["Lion", "Monkey", "Rabbit"])
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    ps = pd.Series(test_data)
+    gs = cudf.Series(test_data)
 
     assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
     assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
     assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
-    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
     assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
+    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
+    assert_eq(
+        ps.str.findall("on$", re.MULTILINE)[3][0],
+        gs.str.findall("on$", re.MULTILINE)[0][3],
+    )
+    assert_eq(
+        ps.str.findall("o.*k", re.DOTALL)[3][0],
+        gs.str.findall("o.*k", re.DOTALL)[0][3],
+    )
 
 
 def test_string_replace_multi():
@@ -1785,6 +1866,7 @@ def test_string_replace_multi():
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
+        re.compile("([A-Z])(\\d)"),
     ],
 )
 @pytest.mark.parametrize(
@@ -2089,6 +2171,32 @@ def test_string_contains_multi(data, sub, expect):
     got = gs.str.contains(sub)
     expect = cudf.Series(expect)
     assert_eq(expect, got, check_dtype=False)
+
+
+# Pandas does not allow 'case' or 'flags' if 'pat' is re.Pattern
+# This covers contains, match, count, and replace
+@pytest.mark.parametrize(
+    "pat", [re.compile("[n-z]"), re.compile("[A-Z]"), re.compile("de"), "A"],
+)
+@pytest.mark.parametrize("repl", ["xyz", "", " "])
+def test_string_compiled_re(ps_gs, pat, repl):
+    ps, gs = ps_gs
+
+    expect = ps.str.contains(pat, regex=True)
+    got = gs.str.contains(pat, regex=True)
+    assert_eq(expect, got)
+
+    expect = ps.str.match(pat)
+    got = gs.str.match(pat)
+    assert_eq(expect, got)
+
+    expect = ps.str.count(pat)
+    got = gs.str.count(pat)
+    assert_eq(expect, got, check_dtype=False)
+
+    expect = ps.str.replace(pat, repl, regex=True)
+    got = gs.str.replace(pat, repl, regex=True)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

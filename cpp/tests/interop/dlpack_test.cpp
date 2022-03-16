@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,11 @@ DLDataType get_dtype()
 {
   uint8_t const bits{sizeof(T) * 8};
   uint16_t const lanes{1};
-  if (std::is_floating_point<T>::value) {
+  if (std::is_floating_point_v<T>) {
     return DLDataType{kDLFloat, bits, lanes};
-  } else if (std::is_signed<T>::value) {
+  } else if (std::is_signed_v<T>) {
     return DLDataType{kDLInt, bits, lanes};
-  } else if (std::is_unsigned<T>::value) {
+  } else if (std::is_unsigned_v<T>) {
     return DLDataType{kDLUInt, bits, lanes};
   } else {
     static_assert(true, "unsupported type");
@@ -50,9 +50,9 @@ template <typename T>
 void validate_dtype(DLDataType const& dtype)
 {
   switch (dtype.code) {
-    case kDLInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_signed<T>::value); break;
-    case kDLUInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_unsigned<T>::value); break;
-    case kDLFloat: EXPECT_TRUE(std::is_floating_point<T>::value); break;
+    case kDLInt: EXPECT_TRUE(std::is_integral_v<T> && std::is_signed_v<T>); break;
+    case kDLUInt: EXPECT_TRUE(std::is_integral_v<T> && std::is_unsigned_v<T>); break;
+    case kDLFloat: EXPECT_TRUE(std::is_floating_point_v<T>); break;
     default: FAIL();
   }
   EXPECT_EQ(1, dtype.lanes);
@@ -210,7 +210,7 @@ template <typename T>
 class DLPackTimestampTests : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DLPackTimestampTests, ChronoTypes);
+TYPED_TEST_SUITE(DLPackTimestampTests, ChronoTypes);
 
 TYPED_TEST(DLPackTimestampTests, ChronoTypesToDlpack)
 {
@@ -227,7 +227,7 @@ class DLPackNumericTests : public BaseFixture {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5353
 using SupportedTypes =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, cudf::test::NumericTypes>;
-TYPED_TEST_CASE(DLPackNumericTests, SupportedTypes);
+TYPED_TEST_SUITE(DLPackNumericTests, SupportedTypes);
 
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {

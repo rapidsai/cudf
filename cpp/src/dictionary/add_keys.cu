@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -57,26 +58,28 @@ std::unique_ptr<column> add_keys(
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys =
     cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
-  // sort and remove any duplicates from the combined keys
-  // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{combined_keys->view()}},
-                                                  std::vector<size_type>{0},  // only one key column
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  null_order::BEFORE,
-                                                  stream,
-                                                  mr)
-                      ->release();
-  std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+
+  // Drop duplicates from the combined keys, then sort the result.
+  // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
+  auto table_keys = cudf::detail::distinct(table_view{{combined_keys->view()}},
+                                           std::vector<size_type>{0},  // only one key column
+                                           null_equality::EQUAL,
+                                           stream,
+                                           mr);
+  std::vector<order> column_order{order::ASCENDING};
+  std::vector<null_order> null_precedence{null_order::AFTER};  // should be no nulls here
+  auto sorted_keys =
+    cudf::detail::sort(table_keys->view(), column_order, null_precedence, stream, mr)->release();
+
+  std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
   // create a map for the indices
   // lower_bound([a,b,c,d,e,f],[a,b,c,d,f]) = [0,1,2,3,5]
-  auto map_indices = cudf::detail::lower_bound(
-    table_view{{keys_column->view()}},
-    table_view{{old_keys}},
-    std::vector<order>{order::ASCENDING},
-    std::vector<null_order>{null_order::AFTER},  // should be no nulls here
-    stream,
-    mr);
+  auto map_indices = cudf::detail::lower_bound(table_view{{keys_column->view()}},
+                                               table_view{{old_keys}},
+                                               column_order,
+                                               null_precedence,
+                                               stream,
+                                               mr);
   // now create the indices column -- map old values to the new ones
   // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
   column_view indices_view(dictionary_column.indices().type(),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <memory>
 #include <numeric>
+#include <utility>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -38,29 +41,23 @@ namespace detail {
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   table_view const& input_table, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  std::vector<size_type> drop_keys(input_table.num_columns());
+  auto const num_cols = input_table.num_columns();
+
+  std::vector<size_type> drop_keys(num_cols);
   std::iota(drop_keys.begin(), drop_keys.end(), 0);
 
-  // side effects of this function we are now dependent on:
-  // - resulting column elements are sorted ascending
-  // - nulls are sorted to the beginning
-  auto keys_table = cudf::detail::drop_duplicates(input_table,
-                                                  drop_keys,
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  null_order::AFTER,
-                                                  stream,
-                                                  mr);
+  auto distinct_keys =
+    cudf::detail::distinct(input_table, drop_keys, null_equality::EQUAL, stream, mr);
 
-  auto indices_column =
-    cudf::detail::lower_bound(keys_table->view(),
-                              input_table,
-                              std::vector<order>(input_table.num_columns(), order::ASCENDING),
-                              std::vector<null_order>(input_table.num_columns(), null_order::AFTER),
-                              stream,
-                              mr);
+  std::vector<order> column_order(num_cols, order::ASCENDING);
+  std::vector<null_order> null_precedence(num_cols, null_order::AFTER);
+  auto sorted_unique_keys =
+    cudf::detail::sort(distinct_keys->view(), column_order, null_precedence, stream, mr);
 
-  return std::make_pair(std::move(keys_table), std::move(indices_column));
+  auto indices_column = cudf::detail::lower_bound(
+    sorted_unique_keys->view(), input_table, column_order, null_precedence, stream, mr);
+
+  return std::make_pair(std::move(sorted_unique_keys), std::move(indices_column));
 }
 
 }  // namespace detail

@@ -63,9 +63,7 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
 
     cuda_version = None
 
-    with open(
-        os.path.join(cuda_include_dir, "cuda.h"), "r", encoding="utf-8"
-    ) as f:
+    with open(os.path.join(cuda_include_dir, "cuda.h"), encoding="utf-8") as f:
         for line in f.readlines():
             if re.search(r"#define CUDA_VERSION ", line) is not None:
                 cuda_version = line
@@ -209,7 +207,7 @@ extensions = [
             os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx",
+                "rapids/libcudacxx",
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),

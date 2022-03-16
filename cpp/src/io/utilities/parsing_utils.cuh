@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
-  parse_options_view view()
+  [[nodiscard]] parse_options_view view() const
   {
     return {delimiter,
             terminator,
@@ -98,7 +98,7 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -119,7 +119,7 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -177,7 +177,7 @@ constexpr T parse_numeric(const char* begin,
   int32_t sign = (*begin == '-') ? -1 : 1;
 
   // Handle infinity
-  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
+  if (std::is_floating_point_v<T> && is_infinity(begin, end)) {
     return sign * std::numeric_limits<T>::infinity();
   }
   if (*begin == '-' || *begin == '+') begin++;
@@ -199,7 +199,7 @@ constexpr T parse_numeric(const char* begin,
     ++begin;
   }
 
-  if (std::is_floating_point<T>::value) {
+  if (std::is_floating_point_v<T>) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
     while (begin < end) {
@@ -391,8 +391,8 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
-                                  const std::vector<char>& keys,
+cudf::size_type find_all_from_set(device_span<char const> data,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream);
@@ -415,8 +415,7 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const char* h_data,
-                                  size_t h_size,
+cudf::size_type find_all_from_set(host_span<char const> data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
                                   T* positions,
@@ -432,8 +431,8 @@ cudf::size_type find_all_from_set(const char* h_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
-                                   const std::vector<char>& keys,
+cudf::size_type count_all_from_set(device_span<char const> data,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -450,8 +449,7 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const char* h_data,
-                                   size_t h_size,
+cudf::size_type count_all_from_set(host_span<char const> data,
                                    const std::vector<char>& keys,
                                    rmm::cuda_stream_view stream);
 

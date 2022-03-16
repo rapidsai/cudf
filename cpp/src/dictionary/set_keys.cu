@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -31,9 +32,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <algorithm>
 #include <iterator>
+#include <thrust/binary_search.h>
 
 namespace cudf {
 namespace dictionary {
@@ -49,8 +50,7 @@ namespace {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
              column_view const& new_keys,
              rmm::cuda_stream_view stream,
@@ -99,8 +99,7 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(Args&&...)
   {
     CUDF_FAIL("dictionary set_keys not supported for this column type");
@@ -120,16 +119,17 @@ std::unique_ptr<column> set_keys(
   auto keys = dictionary_column.keys();
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
-  // copy the keys -- use drop_duplicates to make sure they are sorted and unique
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{new_keys}},
-                                                  std::vector<size_type>{0},
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  null_order::BEFORE,
-                                                  stream,
-                                                  mr)
-                      ->release();
-  std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+  // copy the keys -- use cudf::distinct to make sure there are no duplicates,
+  // then sort the results.
+  auto distinct_keys = cudf::detail::distinct(
+    table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
+  auto sorted_keys = cudf::detail::sort(distinct_keys->view(),
+                                        std::vector<order>{order::ASCENDING},
+                                        std::vector<null_order>{null_order::BEFORE},
+                                        stream,
+                                        mr)
+                       ->release();
+  std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // compute the new nulls
   auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);

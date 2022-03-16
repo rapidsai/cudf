@@ -1,17 +1,17 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
-from nvtx import annotate
 from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
-@annotate("READ_CSV", color="purple", domain="cudf_python")
+@_cudf_nvtx_annotate
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -59,17 +59,10 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
-    # Only need to pass byte_ranges to get_filepath_or_buffer
-    # if `use_python_file_object=False`
-    byte_ranges = None
-    if not use_python_file_object and byte_range:
-        byte_ranges = [byte_range]
-
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
-        byte_ranges=byte_ranges,
         use_python_file_object=use_python_file_object,
         **kwargs,
     )
@@ -113,7 +106,7 @@ def read_csv(
     )
 
 
-@annotate("WRITE_CSV", color="purple", domain="cudf_python")
+@_cudf_nvtx_annotate
 @ioutils.doc_to_csv()
 def to_csv(
     df,

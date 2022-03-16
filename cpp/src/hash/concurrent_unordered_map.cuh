@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,8 +73,8 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 constexpr bool is_packable()
 {
-  return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
-         not std::is_void<packed_t<pair_type>>::value and
+  return std::is_integral_v<key_type> and std::is_integral_v<value_type> and
+         not std::is_void_v<packed_t<pair_type>> and
          std::has_unique_object_representations_v<pair_type>;
 }
 
@@ -242,7 +242,7 @@ class concurrent_unordered_map {
 
   __host__ __device__ mapped_type get_unused_element() const { return m_unused_element; }
 
-  __host__ __device__ size_type capacity() const { return m_capacity; }
+  [[nodiscard]] __host__ __device__ size_type capacity() const { return m_capacity; }
 
  private:
   /**
@@ -538,8 +538,11 @@ class concurrent_unordered_map {
       }
     }
 
-    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
-      m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+    if (m_capacity > 0) {
+      init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
+        m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+    }
+
     CUDA_TRY(cudaGetLastError());
   }
 };

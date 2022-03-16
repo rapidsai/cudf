@@ -22,7 +22,7 @@ package ai.rapids.cudf;
 import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 
 public class UnaryOpTest extends CudfTestBase {
   private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null, Double.NaN, Double.POSITIVE_INFINITY, 1/9.0, Double.NEGATIVE_INFINITY, 500.0, -500.0};

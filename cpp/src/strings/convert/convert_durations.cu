@@ -156,7 +156,7 @@ struct format_compiler {
 
   format_item const* compiled_format_items() { return d_items.data(); }
 
-  size_type items_count() const { return static_cast<size_type>(d_items.size()); }
+  [[nodiscard]] size_type items_count() const { return static_cast<size_type>(d_items.size()); }
 };
 
 template <typename T>
@@ -701,7 +701,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(
     durations.type(), dispatch_from_durations_fn{}, durations, format, stream, mr);

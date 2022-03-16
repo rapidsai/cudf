@@ -205,9 +205,17 @@ def test_dataframe_to_struct():
     df["a"][0] = 5
     assert_eq(got, expect)
 
+    # check that a non-string (but convertible to string) named column can be
+    # converted to struct
+    df = cudf.DataFrame([[1, 2], [3, 4]], columns=[(1, "b"), 0])
+    expect = cudf.Series([{"(1, 'b')": 1, "0": 2}, {"(1, 'b')": 3, "0": 4}])
+    with pytest.warns(UserWarning, match="will be casted"):
+        got = df.to_struct()
+    assert_eq(got, expect)
+
 
 @pytest.mark.parametrize(
-    "series, start, end",
+    "series, slce",
     [
         (
             [
@@ -216,8 +224,7 @@ def test_dataframe_to_struct():
                 {},
                 None,
             ],
-            1,
-            None,
+            slice(1, None),
         ),
         (
             [
@@ -229,8 +236,7 @@ def test_dataframe_to_struct():
                 None,
                 cudf.NA,
             ],
-            1,
-            5,
+            slice(1, 5),
         ),
         (
             [
@@ -242,22 +248,15 @@ def test_dataframe_to_struct():
                 None,
                 cudf.NA,
             ],
-            None,
-            4,
+            slice(None, 4),
         ),
+        ([{"a": {"b": 42, "c": -1}}, {"a": {"b": 0, "c": None}}], slice(0, 1)),
     ],
 )
-def test_struct_slice(series, start, end):
-    sr = cudf.Series(series)
-    if not end:
-        expected = cudf.Series(series[start:])
-        assert sr[start:].to_arrow() == expected.to_arrow()
-    elif not start:
-        expected = cudf.Series(series[:end])
-        assert sr[:end].to_arrow() == expected.to_arrow()
-    else:
-        expected = cudf.Series(series[start:end])
-        assert sr[start:end].to_arrow() == expected.to_arrow()
+def test_struct_slice(series, slce):
+    got = cudf.Series(series)[slce]
+    expected = cudf.Series(series[slce])
+    assert got.to_arrow() == expected.to_arrow()
 
 
 def test_struct_slice_nested_struct():
@@ -268,8 +267,7 @@ def test_struct_slice_nested_struct():
 
     got = cudf.Series(data)[0:1]
     expect = cudf.Series(data[0:1])
-    assert got.__repr__() == expect.__repr__()
-    assert got.dtype.to_arrow() == expect.dtype.to_arrow()
+    assert got.to_arrow() == expect.to_arrow()
 
 
 @pytest.mark.parametrize(

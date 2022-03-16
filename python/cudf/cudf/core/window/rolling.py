@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION
+# Copyright (c) 2020-2022, NVIDIA CORPORATION
 
 import itertools
 
@@ -11,11 +11,12 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
 from cudf.core import column
 from cudf.core.column.column import as_column
+from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling(GetAttrGetItemMixin):
+class Rolling(GetAttrGetItemMixin, Reducible):
     """
     Rolling window calculations.
 
@@ -163,6 +164,15 @@ class Rolling(GetAttrGetItemMixin):
 
     _time_window = False
 
+    _VALID_REDUCTIONS = {
+        "sum",
+        "min",
+        "max",
+        "mean",
+        "var",
+        "std",
+    }
+
     def __init__(
         self,
         obj,
@@ -198,8 +208,7 @@ class Rolling(GetAttrGetItemMixin):
             center=self.center,
         )
 
-    def _apply_agg_series(self, sr, agg_name):
-        source_column = sr._column
+    def _apply_agg_column(self, source_column, agg_name):
         min_periods = self.min_periods or 1
         if isinstance(self.window, int):
             preceding_window = None
@@ -230,7 +239,7 @@ class Rolling(GetAttrGetItemMixin):
             )
             window = None
 
-        result_col = libcudf.rolling.rolling(
+        return libcudf.rolling.rolling(
             source_column=source_column,
             pre_column_window=preceding_window,
             fwd_column_window=following_window,
@@ -240,33 +249,40 @@ class Rolling(GetAttrGetItemMixin):
             op=agg_name,
             agg_params=self.agg_params,
         )
-        return sr._from_data({sr.name: result_col}, sr._index)
 
     def _apply_agg_dataframe(self, df, agg_name):
-        result_df = cudf.DataFrame({})
-        for i, col_name in enumerate(df.columns):
-            result_col = self._apply_agg_series(df[col_name], agg_name)
-            result_df.insert(i, col_name, result_col)
-        result_df.index = df.index
-        return result_df
+        return cudf.DataFrame._from_data(
+            {
+                col_name: self._apply_agg_column(col, agg_name)
+                for col_name, col in df._data.items()
+            },
+            index=df.index,
+        )
 
     def _apply_agg(self, agg_name):
         if isinstance(self.obj, cudf.Series):
-            return self._apply_agg_series(self.obj, agg_name)
+            return cudf.Series._from_data(
+                {
+                    self.obj.name: self._apply_agg_column(
+                        self.obj._column, agg_name
+                    )
+                },
+                index=self.obj.index,
+            )
         else:
             return self._apply_agg_dataframe(self.obj, agg_name)
 
-    def sum(self):
-        return self._apply_agg("sum")
+    def _reduce(
+        self, op: str, *args, **kwargs,
+    ):
+        """Calculate the rolling {op}.
 
-    def min(self):
-        return self._apply_agg("min")
-
-    def max(self):
-        return self._apply_agg("max")
-
-    def mean(self):
-        return self._apply_agg("mean")
+        Returns
+        -------
+        Series or DataFrame
+            Return type is the same as the original object.
+        """
+        return self._apply_agg(op)
 
     def var(self, ddof=1):
         self.agg_params["ddof"] = ddof
@@ -288,6 +304,10 @@ class Rolling(GetAttrGetItemMixin):
         ----------
         func : function
             A user defined function that takes an 1D array as input
+        args : tuple
+            unsupported.
+        kwargs
+            unsupported
 
         See also
         --------
@@ -298,10 +318,31 @@ class Rolling(GetAttrGetItemMixin):
         -----
         See notes of the :meth:`cudf.Series.applymap`
 
+        Examples
+        --------
+
+        >>> import cudf
+        >>> def count_if_gt_3(window):
+        ...     count = 0
+        ...     for i in window:
+        ...             if i > 3:
+        ...                     count += 1
+        ...     return count
+        ...
+        >>> s = cudf.Series([0, 1.1, 5.8, 3.1, 6.2, 2.0, 1.5])
+        >>> s.rolling(3, min_periods=1).apply(count_if_gt_3)
+        0    0
+        1    0
+        2    1
+        3    2
+        4    3
+        5    2
+        6    1
+        dtype: int64
         """
         has_nulls = False
         if isinstance(self.obj, cudf.Series):
-            if self.obj._column.has_nulls:
+            if self.obj._column.has_nulls():
                 has_nulls = True
         else:
             for col in self.obj._data:
@@ -403,9 +444,9 @@ class RollingGroupby(Rolling):
         # of `groupby.grouping.keys` and `groupby.obj`.
         # As an optimization, avoid gathering those twice.
         self._group_keys = groupby.grouping.keys.take(sort_order)
-        obj = groupby.obj.drop(
-            columns=groupby.grouping._key_column_names_from_obj
-        ).take(sort_order)
+        obj = groupby.obj.drop(columns=groupby.grouping._named_columns).take(
+            sort_order
+        )
 
         gb_size = groupby.size().sort_index()
         self._group_starts = (

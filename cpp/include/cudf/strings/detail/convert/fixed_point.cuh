@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf/fixed_point/temporary.hpp>
+
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 
-#include <type_traits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {
@@ -46,7 +48,7 @@ __device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
   constexpr UnsignedDecimalType decimal_max =
     (std::numeric_limits<UnsignedDecimalType>::max() - 9L) / 10L;
 
-  uint64_t value     = 0;  // for checking overflow
+  __uint128_t value  = 0;  // for checking overflow
   int32_t exp_offset = 0;
   bool decimal_found = false;
 
@@ -137,7 +139,7 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   // if string begins with a sign, continue with next character
   if (sign != 0) ++iter;
 
-  using UnsignedDecimalType = std::make_unsigned_t<DecimalType>;
+  using UnsignedDecimalType = cuda::std::make_unsigned_t<DecimalType>;
   auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
   if (value == 0) { return DecimalType{0}; }
 
@@ -150,11 +152,11 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   exp_ten += exp_offset;
 
   // shift the output value based on the exp_ten and the scale values
-  if (exp_ten < scale) {
-    value = value / static_cast<UnsignedDecimalType>(exp10(static_cast<double>(scale - exp_ten)));
-  } else {
-    value = value * static_cast<UnsignedDecimalType>(exp10(static_cast<double>(exp_ten - scale)));
-  }
+  auto const shift_adjust =
+    abs(scale - exp_ten) > cuda::std::numeric_limits<UnsignedDecimalType>::digits10
+      ? cuda::std::numeric_limits<UnsignedDecimalType>::max()
+      : numeric::detail::exp10<UnsignedDecimalType>(abs(scale - exp_ten));
+  value = exp_ten < scale ? value / shift_adjust : value * shift_adjust;
 
   return static_cast<DecimalType>(value) * (sign == 0 ? 1 : sign);
 }

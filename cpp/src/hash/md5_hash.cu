@@ -60,12 +60,12 @@ const __constant__ uint32_t md5_hash_constants[64] = {
 struct MD5Hasher {
   static constexpr int message_chunk_size = 64;
 
-  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
+  __device__ inline MD5Hasher(char* result_location)
     : result_location(result_location), buffer(md5_hash_step{hash_values})
   {
   }
 
-  CUDA_DEVICE_CALLABLE ~MD5Hasher()
+  __device__ inline ~MD5Hasher()
   {
     // On destruction, finalize the message buffer and write out the current
     // hexadecimal hash value to the result location.
@@ -90,7 +90,7 @@ struct MD5Hasher {
   MD5Hasher& operator=(MD5Hasher&&) = delete;
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE process(Element const& element)
+  void __device__ inline process(Element const& element)
   {
     auto const normalized_element  = normalize_nans_and_zeros(element);
     auto const [element_ptr, size] = get_element_pointer_and_size(normalized_element);
@@ -105,7 +105,7 @@ struct MD5Hasher {
   struct md5_hash_step {
     uint32_t (&hash_values)[4];
 
-    void CUDA_DEVICE_CALLABLE operator()(const uint8_t (&buffer)[message_chunk_size])
+    void __device__ inline operator()(const uint8_t (&buffer)[message_chunk_size])
     {
       uint32_t A = hash_values[0];
       uint32_t B = hash_values[1];
@@ -162,18 +162,19 @@ struct HasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
-  CUDA_DEVICE_CALLABLE HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+  __device__ inline HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
     : hasher{hasher}, input_col{input_col}
   {
   }
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE operator()(size_type const row_index) const
+  void __device__ inline operator()(size_type const row_index) const
   {
     if constexpr ((is_fixed_width<Element>() && !is_chrono<Element>()) ||
                   std::is_same_v<Element, string_view>) {
       hasher->process(input_col.element<Element>(row_index));
     } else {
+      (void)row_index;
       cudf_assert(false && "Unsupported type for hash function.");
     }
   }
@@ -184,14 +185,13 @@ struct ListHasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
-  CUDA_DEVICE_CALLABLE ListHasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+  __device__ inline ListHasherDispatcher(Hasher* hasher, column_device_view const& input_col)
     : hasher{hasher}, input_col{input_col}
   {
   }
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE operator()(size_type const offset_begin,
-                                       size_type const offset_end) const
+  void __device__ inline operator()(size_type const offset_begin, size_type const offset_end) const
   {
     if constexpr ((is_fixed_width<Element>() && !is_chrono<Element>()) ||
                   std::is_same_v<Element, string_view>) {
@@ -199,6 +199,8 @@ struct ListHasherDispatcher {
         if (input_col.is_valid(i)) { hasher->process(input_col.element<Element>(i)); }
       }
     } else {
+      (void)offset_begin;
+      (void)offset_end;
       cudf_assert(false && "Unsupported type for hash function.");
     }
   }

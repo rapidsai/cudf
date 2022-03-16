@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1004,7 +1004,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
     std::size_t const size_gold = 0;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.inner_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{};
     column_wrapper<int32_t> col_gold_1{};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1043,7 +1043,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
     std::size_t const size_gold = 5;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.left_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1082,7 +1082,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
     std::size_t const size_gold = 5;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.full_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1310,7 +1310,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     std::size_t const size_gold = 9;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.full_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
     column_wrapper<int32_t> col_gold_1{{0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1330,7 +1330,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     std::size_t const size_gold = 5;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.left_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1350,7 +1350,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     std::size_t const size_gold = 3;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.inner_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
     column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1390,7 +1390,7 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   {
     auto output_size = hash_join.left_join_size(t0);
     EXPECT_EQ(5, output_size);
-    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, output_size);
+    auto result = hash_join.left_join(t0, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{0, NoneValue, 2, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1400,7 +1400,7 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   {
     auto output_size = hash_join.inner_join_size(t0);
     EXPECT_EQ(2, output_size);
-    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, output_size);
+    auto result = hash_join.inner_join(t0, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 2}};
     column_wrapper<int32_t> col_gold_1{{0, 2}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1410,12 +1410,25 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   {
     auto output_size = hash_join.full_join_size(t0);
     EXPECT_EQ(8, output_size);
-    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, output_size);
+    auto result = hash_join.full_join(t0, output_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, 0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{1, 3, 4, 0, NoneValue, 2, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
   }
+}
+
+TEST_F(JoinTest, HashJoinLargeOutputSize)
+{
+  // self-join a table of zeroes to generate an output row count that would overflow int32_t
+  std::size_t col_size = 65567;
+  rmm::device_buffer zeroes(col_size * sizeof(int32_t), rmm::cuda_stream_default);
+  CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
+  cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
+  cudf::table_view tview{{col_zeros}};
+  cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);
+  std::size_t output_size = hash_join.inner_join_size(tview);
+  EXPECT_EQ(col_size * col_size, output_size);
 }
 
 struct JoinDictionaryTest : public cudf::test::BaseFixture {
@@ -1437,21 +1450,25 @@ TEST_F(JoinDictionaryTest, LeftJoinNoNulls)
   auto t1 = cudf::table_view({col1_0, col1_1->view(), col1_2});
   auto g0 = cudf::table_view({col0_0, col0_1_w, col0_2});
   auto g1 = cudf::table_view({col1_0, col1_1_w, col1_2});
-  {
-    auto result      = cudf::left_join(t0, t1, {0}, {0});
-    auto result_view = result->view();
-    auto decoded1    = cudf::dictionary::decode(result_view.column(1));
-    auto decoded4    = cudf::dictionary::decode(result_view.column(4));
-    std::vector<cudf::column_view> result_decoded({result_view.column(0),
-                                                   decoded1->view(),
-                                                   result_view.column(2),
-                                                   result_view.column(3),
-                                                   decoded4->view(),
-                                                   result_view.column(5)});
 
-    auto gold = cudf::left_join(g0, g1, {0}, {0});
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
-  }
+  auto result      = cudf::left_join(t0, t1, {0}, {0});
+  auto result_view = result->view();
+  auto decoded1    = cudf::dictionary::decode(result_view.column(1));
+  auto decoded4    = cudf::dictionary::decode(result_view.column(4));
+  std::vector<cudf::column_view> result_decoded({result_view.column(0),
+                                                 decoded1->view(),
+                                                 result_view.column(2),
+                                                 result_view.column(3),
+                                                 decoded4->view(),
+                                                 result_view.column(5)});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
+
+  auto gold            = cudf::left_join(g0, g1, {0}, {0});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinDictionaryTest, LeftJoinWithNulls)
@@ -1479,11 +1496,16 @@ TEST_F(JoinDictionaryTest, LeftJoinWithNulls)
                                                  result_view.column(3),
                                                  result_view.column(4),
                                                  decoded5->view()});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
 
-  auto g0   = cudf::table_view({col0_0, col0_1, col0_2_w});
-  auto g1   = cudf::table_view({col1_0, col1_1, col1_2_w});
-  auto gold = cudf::left_join(g0, g1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
+  auto g0              = cudf::table_view({col0_0, col0_1, col0_2_w});
+  auto g1              = cudf::table_view({col1_0, col1_1, col1_2_w});
+  auto gold            = cudf::left_join(g0, g1, {0, 1}, {0, 1});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
@@ -1511,11 +1533,16 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
                                                  result_view.column(3),
                                                  decoded4->view(),
                                                  result_view.column(5)});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
 
-  auto g0   = cudf::table_view({col0_0, col0_1_w, col0_2});
-  auto g1   = cudf::table_view({col1_0, col1_1_w, col1_2});
-  auto gold = cudf::inner_join(g0, g1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
+  auto g0              = cudf::table_view({col0_0, col0_1_w, col0_2});
+  auto g1              = cudf::table_view({col1_0, col1_1_w, col1_2});
+  auto gold            = cudf::inner_join(g0, g1, {0, 1}, {0, 1});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
@@ -1543,11 +1570,16 @@ TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
                                                  result_view.column(3),
                                                  result_view.column(4),
                                                  decoded5->view()});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
 
-  auto g0   = cudf::table_view({col0_0, col0_1, col0_2_w});
-  auto g1   = cudf::table_view({col1_0, col1_1, col1_2_w});
-  auto gold = cudf::inner_join(g0, g1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
+  auto g0              = cudf::table_view({col0_0, col0_1, col0_2_w});
+  auto g1              = cudf::table_view({col1_0, col1_1, col1_2_w});
+  auto gold            = cudf::inner_join(g0, g1, {0, 1}, {0, 1});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinDictionaryTest, FullJoinNoNulls)
@@ -1575,11 +1607,16 @@ TEST_F(JoinDictionaryTest, FullJoinNoNulls)
                                                  result_view.column(3),
                                                  decoded4->view(),
                                                  result_view.column(5)});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
 
-  auto g0   = cudf::table_view({col0_0, col0_1_w, col0_2});
-  auto g1   = cudf::table_view({col1_0, col1_1_w, col1_2});
-  auto gold = cudf::full_join(g0, g1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
+  auto g0              = cudf::table_view({col0_0, col0_1_w, col0_2});
+  auto g1              = cudf::table_view({col1_0, col1_1_w, col1_2});
+  auto gold            = cudf::full_join(g0, g1, {0, 1}, {0, 1});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinDictionaryTest, FullJoinWithNulls)
@@ -1607,11 +1644,16 @@ TEST_F(JoinDictionaryTest, FullJoinWithNulls)
                                                  decoded3->view(),
                                                  result_view.column(4),
                                                  result_view.column(5)});
+  auto result_sort_order = cudf::sorted_order(cudf::table_view(result_decoded));
+  auto sorted_result     = cudf::gather(cudf::table_view(result_decoded), *result_sort_order);
 
-  auto g0   = cudf::table_view({col0_0_w, col0_1, col0_2});
-  auto g1   = cudf::table_view({col1_0_w, col1_1, col1_2});
-  auto gold = cudf::full_join(g0, g1, {0, 1}, {0, 1});
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*gold, cudf::table_view(result_decoded));
+  auto g0              = cudf::table_view({col0_0_w, col0_1, col0_2});
+  auto g1              = cudf::table_view({col1_0_w, col1_1, col1_2});
+  auto gold            = cudf::full_join(g0, g1, {0, 1}, {0, 1});
+  auto gold_sort_order = cudf::sorted_order(gold->view());
+  auto sorted_gold     = cudf::gather(gold->view(), *gold_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
 TEST_F(JoinTest, FullJoinWithStructsAndNulls)

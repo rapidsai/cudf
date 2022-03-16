@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/row_operators.cuh>
@@ -33,31 +34,31 @@ namespace {
 /**
  * @brief generate row ranks or dense ranks using a row comparison then scan the results
  *
- * @tparam has_nulls if the order_by column has nulls
  * @tparam value_resolver flag value resolver with boolean first and row number arguments
  * @tparam scan_operator scan function ran on the flag values
  * @param order_by input column to generate ranks for
+ * @param has_nulls if the order_by column has nested nulls
  * @param resolver flag value resolver
  * @param scan_op scan operation ran on the flag results
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> rank values
  */
-template <bool has_nulls, typename value_resolver, typename scan_operator>
+template <typename value_resolver, typename scan_operator>
 std::unique_ptr<column> rank_generator(column_view const& order_by,
+                                       bool has_nulls,
                                        value_resolver resolver,
                                        scan_operator scan_op,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
-  table_view const order_table{{std::get<0>(superimposed)}};
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    order_table, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+    table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
+  row_equality_comparator comparator(
+    nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
-                                       order_table.num_rows(),
+                                       flattened.flattened_columns().num_rows(),
                                        mask_state::UNALLOCATED,
                                        stream,
                                        mr);
@@ -87,17 +88,10 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
 {
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in dense_rank scan.");
-  if (has_nested_nulls(table_view{{order_by}})) {
-    return rank_generator<true>(
-      order_by,
-      [] __device__(bool equality, auto row_index) { return equality; },
-      DeviceSum{},
-      stream,
-      mr);
-  }
-  return rank_generator<false>(
+  return rank_generator(
     order_by,
-    [] __device__(bool equality, auto row_index) { return equality; },
+    has_nested_nulls(table_view{{order_by}}),
+    [] __device__(bool const unequal, size_type const) { return unequal ? 1 : 0; },
     DeviceSum{},
     stream,
     mr);
@@ -109,20 +103,36 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
 {
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in rank scan.");
-  if (has_nested_nulls(table_view{{order_by}})) {
-    return rank_generator<true>(
-      order_by,
-      [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
-      DeviceMax{},
-      stream,
-      mr);
-  }
-  return rank_generator<false>(
+  return rank_generator(
     order_by,
-    [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
+    has_nested_nulls(table_view{{order_by}}),
+    [] __device__(bool unequal, auto row_index) { return unequal ? row_index + 1 : 0; },
     DeviceMax{},
     stream,
     mr);
+}
+
+std::unique_ptr<column> inclusive_percent_rank_scan(column_view const& order_by,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto const rank_column =
+    inclusive_rank_scan(order_by, stream, rmm::mr::get_current_device_resource());
+  auto const rank_view = rank_column->view();
+
+  // Result type for PERCENT_RANK is independent of input type.
+  using result_type = cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+  auto percent_rank_result = cudf::make_fixed_width_column(
+    data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
+
+  thrust::transform(rmm::exec_policy(stream),
+                    rank_view.begin<size_type>(),
+                    rank_view.end<size_type>(),
+                    percent_rank_result->mutable_view().begin<result_type>(),
+                    [n_rows = rank_view.size()] __device__(auto const rank) {
+                      return n_rows == 1 ? 0.0 : ((rank - 1.0) / (n_rows - 1));
+                    });
+  return percent_rank_result;
 }
 
 }  // namespace detail

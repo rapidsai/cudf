@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include "file_io_utilities.hpp"
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -48,46 +49,7 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-std::string getenv_or(std::string const& env_var_name, std::string const& default_val)
-{
-  auto const env_val = std::getenv(env_var_name.c_str());
-  return (env_val == nullptr) ? default_val : std::string(env_val);
-}
-
 #ifdef CUFILE_FOUND
-
-cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
-{
-  if (is_enabled()) {
-    // Modify the config file based on the policy
-    auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
-    std::ifstream user_config_file(config_file_path);
-    // Modified config file is stored in a temporary directory
-    auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
-    std::ofstream cudf_config_file(cudf_config_path);
-
-    std::string line;
-    while (std::getline(user_config_file, line)) {
-      std::string const tag = "\"allow_compat_mode\"";
-      if (line.find(tag) != std::string::npos) {
-        // TODO: only replace the true/false value
-        // Enable compatiblity mode when cuDF does not fall back to host path
-        cudf_config_file << tag << ": " << (is_required() ? "true" : "false") << ",\n";
-      } else {
-        cudf_config_file << line << '\n';
-      }
-
-      // Point libcufile to the modified config file
-      CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
-                   "Failed to set the cuFile config file environment variable.");
-    }
-  }
-}
-cufile_config const* cufile_config::instance()
-{
-  static cufile_config _instance;
-  return &_instance;
-}
 
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
@@ -95,6 +57,8 @@ cufile_config const* cufile_config::instance()
 class cufile_shim {
  private:
   cufile_shim();
+  void modify_cufile_json() const;
+  void load_cufile_lib();
 
   void* cf_lib                              = nullptr;
   decltype(cuFileDriverOpen)* driver_open   = nullptr;
@@ -111,8 +75,8 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    driver_close();
-    dlclose(cf_lib);
+    if (driver_close != nullptr) driver_close();
+    if (cf_lib != nullptr) dlclose(cf_lib);
   }
 
   decltype(cuFileHandleRegister)* handle_register     = nullptr;
@@ -121,25 +85,61 @@ class cufile_shim {
   decltype(cuFileWrite)* write                        = nullptr;
 };
 
+void cufile_shim::modify_cufile_json() const
+{
+  std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
+  static temp_directory tmp_config_dir{"cudf_cufile_config"};
+
+  // Modify the config file based on the policy
+  auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
+  std::ifstream user_config_file(config_file_path);
+  // Modified config file is stored in a temporary directory
+  auto const cudf_config_path = tmp_config_dir.path() + "cufile.json";
+  std::ofstream cudf_config_file(cudf_config_path);
+
+  std::string line;
+  while (std::getline(user_config_file, line)) {
+    std::string const tag = "\"allow_compat_mode\"";
+    if (line.find(tag) != std::string::npos) {
+      // TODO: only replace the true/false value instead of replacing the whole line
+      // Enable compatibility mode when cuDF does not fall back to host path
+      cudf_config_file << tag << ": "
+                       << (cufile_integration::is_always_enabled() ? "true" : "false") << ",\n";
+    } else {
+      cudf_config_file << line << '\n';
+    }
+
+    // Point libcufile to the modified config file
+    CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
+                 "Failed to set the cuFile config file environment variable.");
+  }
+}
+
+void cufile_shim::load_cufile_lib()
+{
+  cf_lib = dlopen("libcufile.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
+  CUDF_EXPECTS(cf_lib != nullptr, "Failed to load cuFile library");
+  driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
+  CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
+  driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
+  CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile cuFileDriverClose symbol");
+  handle_register =
+    reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
+  CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile cuFileHandleRegister symbol");
+  handle_deregister =
+    reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
+  CUDF_EXPECTS(handle_deregister != nullptr, "could not find cuFile cuFileHandleDeregister symbol");
+  read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
+  CUDF_EXPECTS(read != nullptr, "could not find cuFile cuFileRead symbol");
+  write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
+  CUDF_EXPECTS(write != nullptr, "could not find cuFile cuFileWrite symbol");
+}
+
 cufile_shim::cufile_shim()
 {
   try {
-    cf_lib      = dlopen("libcufile.so", RTLD_NOW);
-    driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
-    CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
-    driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
-    CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile cuFileDriverClose symbol");
-    handle_register =
-      reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
-    CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile cuFileHandleRegister symbol");
-    handle_deregister =
-      reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
-    CUDF_EXPECTS(handle_deregister != nullptr,
-                 "could not find cuFile cuFileHandleDeregister symbol");
-    read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
-    CUDF_EXPECTS(read != nullptr, "could not find cuFile cuFileRead symbol");
-    write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
-    CUDF_EXPECTS(write != nullptr, "could not find cuFile cuFileWrite symbol");
+    modify_cufile_json();
+    load_cufile_lib();
 
     CUDF_EXPECTS(driver_open().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
   } catch (cudf::logic_error const& err) {
@@ -170,7 +170,8 @@ cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_h
 cufile_input_impl::cufile_input_impl(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_RDONLY | O_DIRECT),
-    pool(16)  // The benefit from multithreaded read plateaus around 16 threads
+    // The benefit from multithreaded read plateaus around 16 threads
+    pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
   pool.sleep_duration = 10;
 }
@@ -193,18 +194,13 @@ template <typename DataT,
 std::vector<std::future<ResultT>> make_sliced_tasks(
   F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
 {
+  constexpr size_t default_max_slice_size = 4 * 1024 * 1024;
+  static auto const max_slice_size = getenv_or("LIBCUDF_CUFILE_SLICE_SIZE", default_max_slice_size);
+  auto const slices                = make_file_io_slices(size, max_slice_size);
   std::vector<std::future<ResultT>> slice_tasks;
-  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_offset              = 0;
-  for (size_t t = 0; t < n_slices; ++t) {
-    DataT* ptr_slice = ptr + slice_offset;
-
-    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
-    slice_tasks.push_back(pool.submit(function, ptr_slice, slice_size, offset + slice_offset));
-
-    slice_offset += slice_size;
-  }
+  std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
+    return pool.submit(function, ptr + slice.offset, slice.size, offset + slice.offset);
+  });
   return slice_tasks;
 }
 
@@ -250,7 +246,7 @@ size_t cufile_input_impl::read(size_t offset,
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664),
-    pool(16)
+    pool(getenv_or("LIBCUDF_CUFILE_THREAD_COUNT", 16))
 {
 }
 
@@ -290,11 +286,11 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath)
 {
 #ifdef CUFILE_FOUND
-  if (cufile_config::instance()->is_enabled()) {
+  if (cufile_integration::is_gds_enabled()) {
     try {
       return std::make_unique<cufile_input_impl>(filepath);
     } catch (...) {
-      if (cufile_config::instance()->is_required()) throw;
+      if (cufile_integration::is_always_enabled()) throw;
     }
   }
 #endif
@@ -304,15 +300,30 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
 #ifdef CUFILE_FOUND
-  if (cufile_config::instance()->is_enabled()) {
+  if (cufile_integration::is_gds_enabled()) {
     try {
       return std::make_unique<cufile_output_impl>(filepath);
     } catch (...) {
-      if (cufile_config::instance()->is_required()) throw;
+      if (cufile_integration::is_always_enabled()) throw;
     }
   }
 #endif
   return nullptr;
+}
+
+std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size)
+{
+  max_slice_size      = std::max(1024ul, max_slice_size);
+  auto const n_slices = util::div_rounding_up_safe(size, max_slice_size);
+  std::vector<file_io_slice> slices;
+  slices.reserve(n_slices);
+  std::generate_n(std::back_inserter(slices), n_slices, [&, idx = 0]() mutable {
+    auto const slice_offset = idx++ * max_slice_size;
+    auto const slice_size   = std::min(size - slice_offset, max_slice_size);
+    return file_io_slice{slice_offset, slice_size};
+  });
+
+  return slices;
 }
 
 }  // namespace detail

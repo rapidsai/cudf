@@ -1,4 +1,3 @@
 # Configuration file for Python coverage tests
 [run]
-include = cudf/*
-omit = cudf/tests/*
+source = cudf

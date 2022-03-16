@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,9 @@
 #pragma once
 
 #ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE      __device__ inline
+#define CUDF_HOST_DEVICE __host__ __device__
 #else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE      inline
+#define CUDF_HOST_DEVICE
 #endif
 
 #include <cassert>
@@ -228,6 +226,7 @@ enum class type_id : int32_t {
   LIST,                    ///< List elements
   DECIMAL32,               ///< Fixed-point type with int32_t
   DECIMAL64,               ///< Fixed-point type with int64_t
+  DECIMAL128,              ///< Fixed-point type with __int128_t
   STRUCT,                  ///< Struct elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
@@ -263,18 +262,18 @@ class data_type {
    */
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
-    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64 || id == type_id::DECIMAL128);
   }
 
   /**
    * @brief Returns the type identifier
    */
-  constexpr type_id id() const noexcept { return _id; }
+  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    */
-  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -326,27 +325,6 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
-
-/**
- *  @brief Identifies the hash function to be used
- */
-enum class hash_id {
-  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,         ///< Murmur3 hash function
-  HASH_MD5,             ///< MD5 hash function
-  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3,   ///< Spark Murmur3 hash function
-  HASH_SHA1,            ///< SHA-1 hash function
-  HASH_SHA224,          ///< SHA-224 hash function
-  HASH_SHA256,          ///< SHA-256 hash function
-  HASH_SHA384,          ///< SHA-384 hash function
-  HASH_SHA512           ///< SHA-512 hash function
-};
-
-/**
- * @brief The default seed value for hash functions
- */
-static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

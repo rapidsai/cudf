@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,17 +32,15 @@ namespace detail {
  */
 std::unique_ptr<column> hash(
   table_view const& input,
-  hash_id hash_function                        = hash_id::HASH_MURMUR3,
-  cudf::host_span<uint32_t const> initial_hash = {},
-  uint32_t seed                                = 0,
-  rmm::cuda_stream_view stream                 = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr          = rmm::mr::get_current_device_resource());
+  hash_id hash_function               = hash_id::HASH_MURMUR3,
+  uint32_t seed                       = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
-  cudf::host_span<uint32_t const> initial_hash = {},
-  rmm::cuda_stream_view stream                 = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr          = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
@@ -88,20 +86,41 @@ std::unique_ptr<column> sha512_hash(
  * http://www.boost.org/LICENSE_1_0.txt)
  */
 /**
- * @brief Combines two hashed values into a single hashed value.
+ * @brief Combines two hash values into a single hash value.
  *
- * Adapted from Boost hash_combine function, modified for 64-bit
+ * Taken from the Boost hash_combine function.
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
  *
- * @param lhs The first hashed value
- * @param rhs The second hashed value
+ * @param lhs The first hash value
+ * @param rhs The second hash value
+ * @return Combined hash value
+ */
+constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
+{
+  return lhs ^ (rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2));
+}
+
+/* Copyright 2005-2014 Daniel James.
+ *
+ * Use, modification and distribution is subject to the Boost Software
+ * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+ * http://www.boost.org/LICENSE_1_0.txt)
+ */
+/**
+ * @brief Combines two hash values into a single hash value.
+ *
+ * Adapted from Boost hash_combine function and modified for 64-bit.
+ * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+ *
+ * @param lhs The first hash value
+ * @param rhs The second hash value
  * @return Combined hash value
  */
 constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
 {
-  lhs ^= rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2);
-  return lhs;
+  return lhs ^ (rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2));
 }
+
 }  // namespace detail
 }  // namespace cudf
 

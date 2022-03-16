@@ -67,21 +67,31 @@ reprog_device::reprog_device(reprog& prog)
     _num_capturing_groups{prog.groups_count()},
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
-    _classes_count{prog.classes_count()},
-    _relists_mem{nullptr}
+    _classes_count{prog.classes_count()}
 {
+}
+
+std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
+  std::string const& pattern,
+  uint8_t const* codepoint_flags,
+  size_type strings_count,
+  rmm::cuda_stream_view stream)
+{
+  return reprog_device::create(
+    pattern, regex_flags::MULTILINE, codepoint_flags, strings_count, stream);
 }
 
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   std::string const& pattern,
+  regex_flags const flags,
   uint8_t const* codepoint_flags,
-  int32_t strings_count,
+  size_type strings_count,
   rmm::cuda_stream_view stream)
 {
   std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
   // compile pattern into host object
-  reprog h_prog = reprog::create_from(pattern32.data());
+  reprog h_prog = reprog::create_from(pattern32.data(), flags);
   // compute size to hold all the member data
   auto insts_count   = h_prog.insts_count();
   auto classes_count = h_prog.classes_count();

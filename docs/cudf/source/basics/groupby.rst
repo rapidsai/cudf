@@ -1,3 +1,5 @@
+.. _basics.groupby:
+
 GroupBy
 =======
 
@@ -127,6 +129,13 @@ Aggregations on groups is supported via the ``agg`` method:
     a
     1   4   1  2.0
     2   5   2  4.5
+    >>> df.groupby("a").corr(method="pearson")
+              b          c
+    a                      
+    1 b  1.000000  0.866025
+      c  0.866025  1.000000
+    2 b  1.000000  1.000000
+      c  1.000000  1.000000
 
 The following table summarizes the available aggregations and the types
 that support them:
@@ -169,6 +178,10 @@ that support them:
    +------------------------------------+-----------+------------+----------+---------------+--------+----------+------------+-----------+
    | unique                             | ✅        | ✅         | ✅       | ✅            |        |          |            |           |
    +------------------------------------+-----------+------------+----------+---------------+--------+----------+------------+-----------+
+   | corr                               | ✅        |            |          |               |        |          |            | ✅        |
+   +------------------------------------+-----------+------------+----------+---------------+--------+----------+------------+-----------+
+   | cov                                | ✅        |            |          |               |        |          |            | ✅        |
+   +------------------------------------+-----------+------------+----------+---------------+--------+----------+------------+-----------+
 
 GroupBy apply
 -------------
@@ -209,6 +222,27 @@ Limitations
 
  .. |describe| replace:: ``describe``
  .. _describe: https://pandas.pydata.org/pandas-docs/stable/user_guide/groupby.html#flexible-apply
+
+
+Transform
+---------
+
+The ``.transform()`` method aggregates per group, and broadcasts the
+result to the group size, resulting in a Series/DataFrame that is of
+the same size as the input Series/DataFrame.
+
+.. code:: python
+
+     >>> import cudf
+     >>> df = cudf.DataFrame({'a': [2, 1, 1, 2, 2], 'b': [1, 2, 3, 4, 5]})
+     >>> df.groupby('a').transform('max')
+        b
+     0  5
+     1  3
+     2  3
+     3  5
+     4  5
+
 
 Rolling window calculations
 ---------------------------

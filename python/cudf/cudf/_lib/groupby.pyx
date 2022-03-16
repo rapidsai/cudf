@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from collections import defaultdict
 
@@ -54,7 +54,7 @@ _CATEGORICAL_AGGS = {"COUNT", "SIZE", "NUNIQUE", "UNIQUE"}
 _STRING_AGGS = {"COUNT", "SIZE", "MAX", "MIN", "NUNIQUE", "NTH", "COLLECT",
                 "UNIQUE"}
 _LIST_AGGS = {"COLLECT"}
-_STRUCT_AGGS = set()
+_STRUCT_AGGS = {"CORRELATION", "COVARIANCE"}
 _INTERVAL_AGGS = set()
 _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
                  "NTH", "COLLECT"}

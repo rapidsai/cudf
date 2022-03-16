@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ public final class DType {
 
   public static final int DECIMAL32_MAX_PRECISION = 9;
   public static final int DECIMAL64_MAX_PRECISION = 18;
+  public static final int DECIMAL128_MAX_PRECISION = 38;
 
   /* enum representing various types. Whenever a new non-decimal type is added please make sure
   below sections are updated as well:
@@ -77,7 +78,8 @@ public final class DType {
     LIST(0, 24),
     DECIMAL32(4, 25),
     DECIMAL64(8, 26),
-    STRUCT(0, 27);
+    DECIMAL128(16, 27),
+    STRUCT(0, 28);
 
     final int sizeInBytes;
     final int nativeId;
@@ -167,8 +169,40 @@ public final class DType {
       LIST,
       null, // DECIMAL32
       null, // DECIMAL64
+      null, // DECIMAL128
       STRUCT
   };
+
+  /**
+   * Returns max precision for Decimal Type.
+   * @return max precision this Decimal Type can hold
+   */
+  public int getDecimalMaxPrecision() {
+    if (!isDecimalType()) {
+      throw new IllegalArgumentException("not a decimal type: " + this);
+    }
+    if (typeId == DTypeEnum.DECIMAL32) return DECIMAL32_MAX_PRECISION;
+    if (typeId == DTypeEnum.DECIMAL64) return DECIMAL64_MAX_PRECISION;
+    return DType.DECIMAL128_MAX_PRECISION;
+  }
+
+  /**
+   * Get the number of decimal places needed to hold the Integral Type.
+   * NOTE: this method is NOT for Decimal Type but for Integral Type.
+   * @return the minimum decimal precision (places) for Integral Type
+   */
+  public int getPrecisionForInt() {
+    // -128 to 127
+    if (typeId == DTypeEnum.INT8) return 3;
+    // -32768 to 32767
+    if (typeId == DTypeEnum.INT16) return 5;
+    // -2147483648 to 2147483647
+    if (typeId == DTypeEnum.INT32) return 10;
+    // -9223372036854775808 to 9223372036854775807
+    if (typeId == DTypeEnum.INT64) return 19;
+
+    throw new IllegalArgumentException("not an integral type: " + this);
+  }
 
   /**
    * This only works for fixed width types. Variable width types like strings the value is
@@ -276,6 +310,13 @@ public final class DType {
         }
         return new DType(DTypeEnum.DECIMAL64, scale);
       }
+      if (nativeId == DTypeEnum.DECIMAL128.nativeId) {
+        if (-scale > DECIMAL128_MAX_PRECISION) {
+          throw new IllegalArgumentException(
+              "Scale " + (-scale) + " exceeds DECIMAL128_MAX_PRECISION " + DECIMAL128_MAX_PRECISION);
+        }
+        return new DType(DTypeEnum.DECIMAL128, scale);
+      }
     }
     throw new IllegalArgumentException("Could not translate " + nativeId + " into a DType");
   }
@@ -293,9 +334,11 @@ public final class DType {
       return new DType(DTypeEnum.DECIMAL32, -dec.scale());
     } else if (dec.precision() <= DECIMAL64_MAX_PRECISION) {
       return new DType(DTypeEnum.DECIMAL64, -dec.scale());
+    } else if (dec.precision() <= DECIMAL128_MAX_PRECISION) {
+      return new DType(DTypeEnum.DECIMAL128, -dec.scale());
     }
     throw new IllegalArgumentException("Precision " + dec.precision() +
-        " exceeds max precision cuDF can support " + DECIMAL64_MAX_PRECISION);
+        " exceeds max precision cuDF can support " + DECIMAL128_MAX_PRECISION);
   }
 
   /**
@@ -450,7 +493,8 @@ public final class DType {
 
   private static final EnumSet<DTypeEnum> DECIMALS = EnumSet.of(
       DTypeEnum.DECIMAL32,
-      DTypeEnum.DECIMAL64
+      DTypeEnum.DECIMAL64,
+      DTypeEnum.DECIMAL128
   );
 
   private static final EnumSet<DTypeEnum> NESTED_TYPE = EnumSet.of(

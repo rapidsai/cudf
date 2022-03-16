@@ -79,10 +79,8 @@ def _pick_initial_a_b(data, max_constant, init_bins):
         longest = _new_bin_length(_longest_bin_length(bins))
 
         if score <= max_constant and longest <= MAX_SIZE_FOR_INITIAL_BIN:
-            print(
-                "Attempting to build table using {:.6f}n space".format(score)
-            )
-            print("Longest bin was {}".format(longest))
+            print(f"Attempting to build table using {score:.6f}n space")
+            print(f"Longest bin was {longest}")
             break
 
     return bins, a, b
@@ -170,7 +168,7 @@ def _pack_keys_and_values(flattened_hash_table, original_dict):
 
 def _load_vocab_dict(path):
     vocab = {}
-    with open(path, mode="r") as f:
+    with open(path, encoding="utf-8") as f:
         counter = 0
         for line in f:
             vocab[line.strip()] = counter
@@ -193,17 +191,17 @@ def _store_func(
 ):
 
     with open(out_name, mode="w+") as f:
-        f.write("{}\n".format(outer_a))
-        f.write("{}\n".format(outer_b))
-        f.write("{}\n".format(num_outer_bins))
+        f.write(f"{outer_a}\n")
+        f.write(f"{outer_b}\n")
+        f.write(f"{num_outer_bins}\n")
         f.writelines(
-            "{} {}\n".format(coeff, offset)
+            f"{coeff} {offset}\n"
             for coeff, offset in zip(inner_table_coeffs, offsets_into_ht)
         )
-        f.write("{}\n".format(len(hash_table)))
-        f.writelines("{}\n".format(kv) for kv in hash_table)
+        f.write(f"{len(hash_table)}\n")
+        f.writelines(f"{kv}\n" for kv in hash_table)
         f.writelines(
-            "{}\n".format(tok_id)
+            f"{tok_id}\n"
             for tok_id in [unk_tok_id, first_token_id, sep_token_id]
         )
 
@@ -295,6 +293,6 @@ def hash_vocab(
         )
         assert (
             val == value
-        ), "Incorrect value found. Got {} expected {}".format(val, value)
+        ), f"Incorrect value found. Got {val} expected {value}"
 
     print("All present tokens return correct value.")

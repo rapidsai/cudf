@@ -1,6 +1,6 @@
 # Regex Features
 
-This page specifies which regex features are currently supported by libcudf strings column APIs that accept regex patterns:
+This page specifies which regular expression (regex) features are currently supported by libcudf strings column APIs that accept regex patterns:
 
 - cudf::strings::contains_re()
 - cudf::strings::matches_re()
@@ -14,6 +14,13 @@ The details are based on features documented at https://www.regular-expressions.
 
 **Note:** The alternation character is the pipe character `|` and not the character included in the tables on this page. There is an issue including the pipe character inside the table markdown that is rendered by doxygen.
 
+**Invalid regex patterns will result in undefined behavior**. This includes but is not limited to the following:
+- Unescaped special characters (listed in the third row of the Characters table below) when they are intended to match as literals.
+- Unmatched paired special characters like `()`, `[]`, and `{}`.
+- Empty groups, classes, or quantifiers. That is, `()` and `[]` without an enclosing expression and `{}` without a valid integer.
+- Incomplete ranges in character classes like `[-z]`, `[a-]`, and `[-]`.
+- Unqualified quantifiers. That is, a quantifier with no preceding item to match like `*a`, `a⎮?`, `(+)`, `{2}a`, etc.
+
 ## Features Supported
 
 ### Characters
@@ -23,7 +30,7 @@ The details are based on features documented at https://www.regular-expressions.
 | Literal character | Any character except `[\^$.⎮?*+()` | All characters except the listed special characters match a single instance of themselves | `a` matches `a` |
 | Literal curly braces | `{` and `}` | `{` and `}` are literal characters, unless they are part of a valid regular expression token such as a quantifier `{3}` | `{` matches `{` |
 | Backslash escapes a metacharacter | `\` followed by any of `[\^$.⎮?*+(){}` | A backslash escapes special characters to suppress their special meaning | `\*` matches `*` |
-| Hexadecimal escape | `\xFF` where `FF` are 2 hexadecimal digits | Matches the character at the specified position in the code page | `\xA9` matches `©` |
+| Hexadecimal escape | `\xFF` where `FF` are 2 hexadecimal digits | Matches the character at the specified position in the ASCII table | `\x40` matches `@` |
 | Character escape | `\n`, `\r` and `\t` | Match an line-feed (LF) character, carriage return (CR) character and a tab character respectively | `\r\n` matches a Windows CRLF line break |
 | Character escape | `\a` | Match the "alert" or "bell" control character (ASCII 0x07) | |
 | Character escape | `\f` | Match the form-feed control character (ASCII 0x0C) | |

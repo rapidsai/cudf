@@ -19,9 +19,9 @@
 #include "parquet.hpp"
 #include "parquet_common.hpp"
 
-#include <stddef.h>
-#include <stdint.h>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 

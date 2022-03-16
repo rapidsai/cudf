@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
     cudf::column_view offsets_view(
-      cudf::data_type{cudf::type_id::INT32}, strings_count + 1, strings.offsets().data<int32_t>());
+      cudf::data_type{cudf::type_id::INT32}, strings_count + 1, strings.offsets_begin());
     auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {

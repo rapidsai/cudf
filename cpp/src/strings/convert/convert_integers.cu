@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ struct string_to_integer_check_fn {
     if (!p.second || p.first.empty()) { return false; }
 
     auto const d_str = p.first.data();
-    if (d_str[0] == '-' && std::is_unsigned<IntegerType>::value) { return false; }
+    if (d_str[0] == '-' && std::is_unsigned_v<IntegerType>) { return false; }
 
     auto iter           = d_str + static_cast<int>((d_str[0] == '-' || d_str[0] == '+'));
     auto const iter_end = d_str + p.first.size_bytes();
@@ -82,7 +82,7 @@ struct string_to_integer_check_fn {
  * @brief The dispatch functions for checking if strings are valid integers.
  */
 struct dispatch_is_integer_fn {
-  template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -116,7 +116,7 @@ struct dispatch_is_integer_fn {
     return results;
   }
 
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -169,7 +169,7 @@ std::unique_ptr<column> is_integer(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) { return cudf::make_empty_column(data_type{type_id::BOOL8}); }
+  if (strings.is_empty()) { return cudf::make_empty_column(type_id::BOOL8); }
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
 }
 
@@ -217,7 +217,7 @@ struct string_to_integer_fn {
  * The output_column is expected to be one of the integer types only.
  */
 struct dispatch_to_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
+  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -229,7 +229,7 @@ struct dispatch_to_integers_fn {
                       string_to_integer_fn<IntegerType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_integers must be an integral type.");
@@ -329,7 +329,7 @@ struct integer_to_string_fn {
  * The template function declaration ensures only integer types are used.
  */
 struct dispatch_from_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
+  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& integers,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -366,7 +366,7 @@ struct dispatch_from_integers_fn {
   }
 
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -390,7 +390,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, mr);
 }

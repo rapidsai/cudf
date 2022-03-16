@@ -75,9 +75,12 @@ Binary operator functions
 
    DataFrame.add
    DataFrame.sub
+   DataFrame.subtract
    DataFrame.mul
-   DataFrame.div
+   DataFrame.multiply
    DataFrame.truediv
+   DataFrame.div
+   DataFrame.divide
    DataFrame.floordiv
    DataFrame.mod
    DataFrame.pow
@@ -89,6 +92,14 @@ Binary operator functions
    DataFrame.rfloordiv
    DataFrame.rmod
    DataFrame.rpow
+   DataFrame.round
+   DataFrame.lt
+   DataFrame.gt
+   DataFrame.le
+   DataFrame.ge
+   DataFrame.ne
+   DataFrame.eq
+   DataFrame.product
 
 Function application, GroupBy & window
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -143,6 +154,8 @@ Reindexing / selection / label manipulation
 .. autosummary::
    :toctree: api/
 
+   DataFrame.add_prefix
+   DataFrame.add_suffix
    DataFrame.drop
    DataFrame.drop_duplicates
    DataFrame.equals
@@ -196,8 +209,8 @@ Reshaping, sorting, transposing
    DataFrame.T
    DataFrame.transpose
 
-Combining / comparing / joining / merging / encoding
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Combining / comparing / joining / merging
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
 
@@ -206,8 +219,6 @@ Combining / comparing / joining / merging / encoding
    DataFrame.join
    DataFrame.merge
    DataFrame.update
-   DataFrame.label_encoding
-   DataFrame.one_hot_encoding
 
 Numerical operations
 ~~~~~~~~~~~~~~~~~~~~
@@ -236,12 +247,9 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
-   DataFrame.as_gpu_matrix
-   DataFrame.as_matrix
    DataFrame.from_arrow
    DataFrame.from_pandas
    DataFrame.from_records
-   DataFrame.hash_columns
    DataFrame.hash_values
    DataFrame.to_arrow
    DataFrame.to_dlpack

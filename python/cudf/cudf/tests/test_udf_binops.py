@@ -1,16 +1,24 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-from __future__ import division
 
 import numpy as np
 import pytest
 from numba.cuda import compile_ptx
 from numba.np import numpy_support
 
+import rmm
+
 import cudf
 from cudf import Series, _lib as libcudf
 from cudf.utils import dtypes as dtypeutils
 
+_driver_version = rmm._cuda.gpu.driverGetVersion()
+_runtime_version = rmm._cuda.gpu.runtimeGetVersion()
+_CUDA_JIT128INT_SUPPORTED = (_driver_version >= 11050) and (
+    _runtime_version >= 11050
+)
 
+
+@pytest.mark.skipif(not _CUDA_JIT128INT_SUPPORTED, reason="requires CUDA 11.5")
 @pytest.mark.parametrize(
     "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int8"}))
 )
@@ -40,4 +48,4 @@ def test_generic_ptx(dtype):
 
     result = lhs_arr ** 3 + rhs_arr
 
-    np.testing.assert_almost_equal(result, out_col.to_array())
+    np.testing.assert_almost_equal(result, out_col.values_host)

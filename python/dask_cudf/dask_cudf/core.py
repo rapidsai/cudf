@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import math
 import warnings
@@ -25,6 +25,7 @@ from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
@@ -57,6 +58,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
     def __dask_postpersist__(self):
         return type(self), (self._name, self._meta, self.divisions)
 
+    @_dask_cudf_nvtx_annotate
     def __init__(self, dsk, name, meta, divisions):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
@@ -82,6 +84,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
         return s % (type(self).__name__, len(self.dask), self.npartitions)
 
+    @_dask_cudf_nvtx_annotate
     def to_dask_dataframe(self, **kwargs):
         """Create a dask.dataframe object from a dask_cudf object"""
         nullable_pd_dtype = kwargs.get("nullable_pd_dtype", False)
@@ -99,6 +102,7 @@ normalize_token.register(_Frame, lambda a: a._name)
 class DataFrame(_Frame, dd.core.DataFrame):
     _partition_type = cudf.DataFrame
 
+    @_dask_cudf_nvtx_annotate
     def _assign_column(self, k, v):
         def assigner(df, k, v):
             out = df.copy()
@@ -108,6 +112,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         meta = assigner(self._meta, k, dask_make_meta(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
+    @_dask_cudf_nvtx_annotate
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
         import uuid
 
@@ -127,6 +132,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             do_apply_rows, func, incols, outcols, kwargs, meta=meta
         )
 
+    @_dask_cudf_nvtx_annotate
     def merge(self, other, **kwargs):
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
@@ -138,6 +144,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             on = list(on)
         return super().merge(other, on=on, shuffle="tasks", **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def join(self, other, **kwargs):
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
@@ -155,6 +162,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             on = list(on)
         return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def set_index(self, other, sorted=False, divisions=None, **kwargs):
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
@@ -226,6 +234,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             **kwargs,
         )
 
+    @_dask_cudf_nvtx_annotate
     def sort_values(
         self,
         by,
@@ -235,6 +244,8 @@ class DataFrame(_Frame, dd.core.DataFrame):
         set_divisions=False,
         ascending=True,
         na_position="last",
+        sort_function=None,
+        sort_function_kwargs=None,
         **kwargs,
     ):
         if kwargs:
@@ -242,32 +253,31 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 f"Unsupported input arguments passed : {list(kwargs.keys())}"
             )
 
-        if self.npartitions == 1:
-            df = self.map_partitions(
-                M.sort_values, by, ascending=ascending, na_position=na_position
-            )
-        else:
-            df = sorting.sort_values(
-                self,
-                by,
-                max_branch=max_branch,
-                divisions=divisions,
-                set_divisions=set_divisions,
-                ignore_index=ignore_index,
-                ascending=ascending,
-                na_position=na_position,
-            )
+        df = sorting.sort_values(
+            self,
+            by,
+            max_branch=max_branch,
+            divisions=divisions,
+            set_divisions=set_divisions,
+            ignore_index=ignore_index,
+            ascending=ascending,
+            na_position=na_position,
+            sort_function=sort_function,
+            sort_function_kwargs=sort_function_kwargs,
+        )
 
         if ignore_index:
             return df.reset_index(drop=True)
         return df
 
+    @_dask_cudf_nvtx_annotate
     def to_parquet(self, path, *args, **kwargs):
         """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
         from dask_cudf.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def to_orc(self, path, **kwargs):
         """Calls dask_cudf.io.to_orc"""
         from dask_cudf.io import to_orc
@@ -275,6 +285,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return to_orc(self, path, **kwargs)
 
     @derived_from(pd.DataFrame)
+    @_dask_cudf_nvtx_annotate
     def var(
         self,
         axis=None,
@@ -303,6 +314,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
 
+    @_dask_cudf_nvtx_annotate
     def repartition(self, *args, **kwargs):
         """Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
@@ -325,6 +337,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
         return super().repartition(*args, **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def shuffle(self, *args, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
         shuffle_arg = kwargs.pop("shuffle", None)
@@ -332,18 +345,21 @@ class DataFrame(_Frame, dd.core.DataFrame):
             raise ValueError("dask_cudf does not support disk-based shuffle.")
         return super().shuffle(*args, shuffle="tasks", **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def groupby(self, by=None, **kwargs):
         from .groupby import CudfDataFrameGroupBy
 
         return CudfDataFrameGroupBy(self, by=by, **kwargs)
 
 
+@_dask_cudf_nvtx_annotate
 def sum_of_squares(x):
     x = x.astype("f8")._column
     outcol = libcudf.reduce.reduce("sum_of_squares", x)
     return cudf.Series(outcol)
 
 
+@_dask_cudf_nvtx_annotate
 def var_aggregate(x2, x, n, ddof):
     try:
         with warnings.catch_warnings(record=True):
@@ -356,10 +372,12 @@ def var_aggregate(x2, x, n, ddof):
         return np.float64(np.nan)
 
 
+@_dask_cudf_nvtx_annotate
 def nlargest_agg(x, **kwargs):
     return cudf.concat(x).nlargest(**kwargs)
 
 
+@_dask_cudf_nvtx_annotate
 def nsmallest_agg(x, **kwargs):
     return cudf.concat(x).nsmallest(**kwargs)
 
@@ -367,6 +385,7 @@ def nsmallest_agg(x, **kwargs):
 class Series(_Frame, dd.core.Series):
     _partition_type = cudf.Series
 
+    @_dask_cudf_nvtx_annotate
     def count(self, split_every=False):
         return reduction(
             [self],
@@ -376,12 +395,14 @@ class Series(_Frame, dd.core.Series):
             meta="i8",
         )
 
+    @_dask_cudf_nvtx_annotate
     def mean(self, split_every=False):
         sum = self.sum(split_every=split_every)
         n = self.count(split_every=split_every)
         return sum / n
 
     @derived_from(pd.DataFrame)
+    @_dask_cudf_nvtx_annotate
     def var(
         self,
         axis=None,
@@ -410,16 +431,19 @@ class Series(_Frame, dd.core.Series):
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
 
+    @_dask_cudf_nvtx_annotate
     def groupby(self, *args, **kwargs):
         from .groupby import CudfSeriesGroupBy
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
 
     @property
+    @_dask_cudf_nvtx_annotate
     def list(self):
         return ListMethods(self)
 
     @property
+    @_dask_cudf_nvtx_annotate
     def struct(self):
         return StructMethods(self)
 
@@ -428,6 +452,7 @@ class Index(Series, dd.core.Index):
     _partition_type = cudf.Index  # type: ignore
 
 
+@_dask_cudf_nvtx_annotate
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     num = ddf._get_numeric_data()
     x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
@@ -442,6 +467,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     return handle_out(out, result)
 
 
+@_dask_cudf_nvtx_annotate
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         if skipna:
@@ -508,6 +534,7 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
     return handle_out(out, result)
 
 
+@_dask_cudf_nvtx_annotate
 def _extract_meta(x):
     """
     Extract internal cache data (``_meta``) from dask_cudf objects
@@ -517,12 +544,13 @@ def _extract_meta(x):
     elif isinstance(x, list):
         return [_extract_meta(_x) for _x in x]
     elif isinstance(x, tuple):
-        return tuple([_extract_meta(_x) for _x in x])
+        return tuple(_extract_meta(_x) for _x in x)
     elif isinstance(x, dict):
         return {k: _extract_meta(v) for k, v in x.items()}
     return x
 
 
+@_dask_cudf_nvtx_annotate
 def _emulate(func, *args, **kwargs):
     """
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
@@ -532,6 +560,7 @@ def _emulate(func, *args, **kwargs):
         return func(*_extract_meta(args), **_extract_meta(kwargs))
 
 
+@_dask_cudf_nvtx_annotate
 def align_partitions(args):
     """Align partitions between dask_cudf objects.
 
@@ -547,6 +576,7 @@ def align_partitions(args):
     return args
 
 
+@_dask_cudf_nvtx_annotate
 def reduction(
     args,
     chunk=None,
@@ -612,9 +642,7 @@ def reduction(
     if not isinstance(args, (tuple, list)):
         args = [args]
 
-    npartitions = set(
-        arg.npartitions for arg in args if isinstance(arg, _Frame)
-    )
+    npartitions = {arg.npartitions for arg in args if isinstance(arg, _Frame)}
     if len(npartitions) > 1:
         raise ValueError("All arguments must have same number of partitions")
     npartitions = npartitions.pop()
@@ -637,7 +665,7 @@ def reduction(
     )
 
     # Chunk
-    a = "{0}-chunk-{1}".format(token or funcname(chunk), token_key)
+    a = f"{token or funcname(chunk)}-chunk-{token_key}"
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
         dsk = {
             (a, 0, i): (chunk, key)
@@ -655,7 +683,7 @@ def reduction(
         }
 
     # Combine
-    b = "{0}-combine-{1}".format(token or funcname(combine), token_key)
+    b = f"{token or funcname(combine)}-combine-{token_key}"
     k = npartitions
     depth = 0
     while k > split_every:
@@ -671,7 +699,7 @@ def reduction(
         depth += 1
 
     # Aggregate
-    b = "{0}-agg-{1}".format(token or funcname(aggregate), token_key)
+    b = f"{token or funcname(aggregate)}-agg-{token_key}"
     conc = (list, [(a, depth, i) for i in range(k)])
     if aggregate_kwargs:
         dsk[(b, 0)] = (apply, aggregate, [conc], aggregate_kwargs)
@@ -687,6 +715,7 @@ def reduction(
     return dd.core.new_dd_object(graph, b, meta, (None, None))
 
 
+@_dask_cudf_nvtx_annotate
 def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
     if isinstance(getattr(data, "index", None), cudf.MultiIndex):
         raise NotImplementedError(
@@ -708,6 +737,7 @@ from_cudf.__doc__ = (
 )
 
 
+@_dask_cudf_nvtx_annotate
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
 

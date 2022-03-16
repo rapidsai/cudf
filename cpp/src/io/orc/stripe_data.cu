@@ -45,11 +45,6 @@ inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
 
-struct int128_s {
-  uint64_t lo;
-  int64_t hi;
-};
-
 struct orc_bytestream_s {
   const uint8_t* base;
   uint32_t pos;
@@ -127,12 +122,14 @@ struct orcdec_state_s {
     orc_rowdec_state_s rowdec;
   } u;
   union values {
-    uint8_t u8[block_size * 8];
-    uint32_t u32[block_size * 2];
-    int32_t i32[block_size * 2];
-    uint64_t u64[block_size];
-    int64_t i64[block_size];
-    double f64[block_size];
+    uint8_t u8[block_size * 16];
+    uint32_t u32[block_size * 4];
+    int32_t i32[block_size * 4];
+    uint64_t u64[block_size * 2];
+    int64_t i64[block_size * 2];
+    double f64[block_size * 2];
+    __int128_t i128[block_size];
+    __uint128_t u128[block_size];
   } vals;
 };
 
@@ -412,7 +409,7 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
         if (b > 0x7f) {
           b = bytestream_readbyte(bs, pos++);
           v = (v & 0x0fffffff) | (b << 28);
-          if (sizeof(T) > 4) {
+          if constexpr (sizeof(T) > 4) {
             uint32_t lo = v;
             uint64_t hi;
             v = b >> 4;
@@ -451,29 +448,18 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
 /**
  * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
  */
-inline __device__ int128_s decode_varint128(volatile orc_bytestream_s* bs, int pos)
+inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
 {
-  uint32_t b        = bytestream_readbyte(bs, pos++);
-  int64_t sign_mask = -(int32_t)(b & 1);
-  uint64_t v        = (b >> 1) & 0x3f;
-  uint32_t bitpos   = 6;
-  uint64_t lo       = v;
-  uint64_t hi       = 0;
-  while (b > 0x7f && bitpos < 128) {
-    b = bytestream_readbyte(bs, pos++);
-    v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
-    if (bitpos == 62) {  // 6 + 7 * 8 = 62
-      lo = v;
-      v  = (b & 0x7f) >> 2;  // 64 - 62
-    }
+  auto byte                  = bytestream_readbyte(bs, pos++);
+  __int128_t const sign_mask = -(int32_t)(byte & 1);
+  __int128_t value           = (byte >> 1) & 0x3f;
+  uint32_t bitpos            = 6;
+  while (byte & 0x80 && bitpos < 128) {
+    byte = bytestream_readbyte(bs, pos++);
+    value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
     bitpos += 7;
   }
-  if (bitpos >= 64) {
-    hi = v;
-  } else {
-    lo = v;
-  }
-  return {(uint64_t)(lo ^ sign_mask), (int64_t)(hi ^ sign_mask)};
+  return value ^ sign_mask;
 }
 
 /**
@@ -664,13 +650,11 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
                                          int t,
                                          bool has_buffered_values = false)
 {
-  uint32_t numvals, numruns;
-  int r, tr;
-
   if (t == 0) {
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
     uint32_t lastpos = bs->pos;
-    numvals = numruns = 0;
+    auto numvals     = 0;
+    auto numruns     = 0;
     // Find the length and start location of each run
     while (numvals < maxvals) {
       uint32_t pos   = lastpos;
@@ -727,9 +711,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
   }
   __syncthreads();
   // Process the runs, 1 warp per run
-  numruns = rle->num_runs;
-  r       = t >> 5;
-  tr      = t & 0x1f;
+  auto const numruns = rle->num_runs;
+  auto const r       = t >> 5;
+  auto const tr      = t & 0x1f;
   for (uint32_t run = r; run < numruns; run += num_warps) {
     uint32_t base, pos, w, n;
     int mode;
@@ -745,7 +729,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         w = 8 + (byte0 & 0x38);  // 8 to 64 bits
         n = 3 + (byte0 & 7);     // 3 to 10 values
         bytestream_readbe(bs, pos * 8, w, baseval);
-        if (sizeof(T) <= 4) {
+        if constexpr (sizeof(T) <= 4) {
           rle->baseval.u32[r] = baseval;
         } else {
           rle->baseval.u64[r] = baseval;
@@ -760,7 +744,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             uint32_t byte3 = bytestream_readbyte(bs, pos++);
             uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
             uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
-            if (sizeof(T) <= 4) {
+            if constexpr (sizeof(T) <= 4) {
               uint32_t baseval, mask;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
               mask                = (1 << (bw * 8 - 1)) - 1;
@@ -780,7 +764,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             int64_t delta;
             // Delta
             pos = decode_varint(bs, pos, baseval);
-            if (sizeof(T) <= 4) {
+            if constexpr (sizeof(T) <= 4) {
               rle->baseval.u32[r] = baseval;
             } else {
               rle->baseval.u64[r] = baseval;
@@ -796,8 +780,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     pos  = shuffle(pos);
     n    = shuffle(n);
     w    = shuffle(w);
+    __syncwarp();  // Not required, included to fix the racecheck warning
     for (uint32_t i = tr; i < n; i += 32) {
-      if (sizeof(T) <= 4) {
+      if constexpr (sizeof(T) <= 4) {
         if (mode == 0) {
           vals[base + i] = rle->baseval.u32[r];
         } else if (mode == 1) {
@@ -874,7 +859,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
           if (j & i) vals[base + j] += vals[base + ((j & ~i) | (i - 1))];
         }
       }
-      if (sizeof(T) <= 4)
+      if constexpr (sizeof(T) <= 4)
         baseval = rle->baseval.u32[r];
       else
         baseval = rle->baseval.u64[r];
@@ -882,6 +867,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         vals[base + j] += baseval;
       }
     }
+    __syncwarp();
   }
   __syncthreads();
   return rle->num_vals;
@@ -1031,6 +1017,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
+                                      type_id dtype_id,
                                       int col_scale,
                                       int t)
 {
@@ -1046,8 +1033,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         uint32_t pos = lastpos;
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
-        vals.i64[n] = lastpos;
-        lastpos     = pos;
+        vals.i64[2 * n] = lastpos;
+        lastpos         = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1055,43 +1042,36 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
     if (t >= num_vals_read and t < num_vals_to_read) {
-      auto const pos = static_cast<int>(vals.i64[t]);
-      int128_s v     = decode_varint128(bs, pos);
+      auto const pos = static_cast<int>(vals.i64[2 * t]);
+      __int128_t v   = decode_varint128(bs, pos);
 
-      if (col_scale & orc_decimal2float64_scale) {
-        double f      = Int128ToDouble_rn(v.lo, v.hi);
+      if (dtype_id == type_id::FLOAT64) {
+        double f      = v;
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
           vals.f64[t] = f / kPow10[min(scale, 39)];
         else
           vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
-        // Since cuDF column stores just one scale, value needs to
-        // be adjusted to col_scale from val_scale. So the difference
-        // of them will be used to add 0s or remove digits.
-        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-        if (scale >= 0) {
-          scale       = min(scale, 27);
-          vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
-        } else  // if (scale < 0)
-        {
-          bool is_negative = (v.hi < 0);
-          uint64_t hi = v.hi, lo = v.lo;
-          scale = min(-scale, 27);
-          if (is_negative) {
-            hi = (~hi) + (lo == 0);
-            lo = (~lo) + 1;
+        auto const scaled_value = [&]() {
+          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+          // val_scale. So the difference of them will be used to add 0s or remove digits.
+          int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
+          if (scale >= 0) {
+            scale = min(scale, 27);
+            return (v * kPow5i[scale]) << scale;
+          } else  // if (scale < 0)
+          {
+            scale = min(-scale, 27);
+            return (v / kPow5i[scale]) >> scale;
           }
-          lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
-          hi >>= (int32_t)scale;
-          if (hi != 0) {
-            // Use intermediate float
-            lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
-            hi = 0;
-          } else {
-            lo /= kPow5i[scale];
-          }
-          vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
+        }();
+        if (dtype_id == type_id::DECIMAL32) {
+          vals.i32[t] = scaled_value;
+        } else if (dtype_id == type_id::DECIMAL64) {
+          vals.i64[t] = scaled_value;
+        } else {
+          vals.i128[t] = scaled_value;
         }
       }
     }
@@ -1199,7 +1179,7 @@ __global__ void __launch_bounds__(block_size)
 
       row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
-          s->chunk.valid_map_base != NULL) {
+          s->chunk.valid_map_base != nullptr) {
         int64_t dst_row   = row_in - first_row;
         int64_t dst_pos   = max(dst_row, (int64_t)0);
         uint32_t startbit = -static_cast<int32_t>(min(dst_row, (int64_t)0));
@@ -1345,14 +1325,14 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
     uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
-    if (s->chunk.valid_map_base != NULL) {
+    if (s->chunk.valid_map_base != nullptr) {
       // We have a present stream
       uint32_t rmax  = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
-      uint32_t r     = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
+      auto r         = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
       uint32_t valid = (t < nrows && r < rmax)
                          ? (((const uint8_t*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
                          : 0;
-      volatile uint16_t* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
+      volatile auto* row_ofs_plus1 = (volatile uint16_t*)&s->u.rowdec.row[s->u.rowdec.nz_count];
       uint32_t nz_pos, row_plus1, nz_count = s->u.rowdec.nz_count, last_row;
       if (t < nrows) { row_ofs_plus1[t] = valid; }
       lengths_to_positions<uint16_t>(row_ofs_plus1, nrows, t);
@@ -1653,8 +1633,14 @@ __global__ void __launch_bounds__(block_size)
           }
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
-          numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
+          numvals = Decode_Decimals(&s->bs,
+                                    &s->u.rle8,
+                                    s->vals,
+                                    val_scale,
+                                    numvals,
+                                    s->chunk.dtype_id,
+                                    s->chunk.decimal_scale,
+                                    t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
@@ -1693,11 +1679,12 @@ __global__ void __launch_bounds__(block_size)
           }
         }
       }
-      if (t == 0 && numvals + vals_skipped > 0 && numvals < s->top.data.max_vals) {
-        if (s->chunk.type_kind == TIMESTAMP) {
-          s->top.data.buffered_count = s->top.data.max_vals - numvals;
+      if (t == 0 && numvals + vals_skipped > 0) {
+        auto const max_vals = s->top.data.max_vals;
+        if (max_vals > numvals) {
+          if (s->chunk.type_kind == TIMESTAMP) { s->top.data.buffered_count = max_vals - numvals; }
+          s->top.data.max_vals = numvals;
         }
-        s->top.data.max_vals = numvals;
       }
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
@@ -1720,9 +1707,17 @@ __global__ void __launch_bounds__(block_size)
             case FLOAT:
             case INT: static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
             case DOUBLE:
-            case LONG:
+            case LONG: static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped]; break;
             case DECIMAL:
-              static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              if (s->chunk.dtype_id == type_id::DECIMAL32) {
+                static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
+              } else if (s->chunk.dtype_id == type_id::FLOAT64 or
+                         s->chunk.dtype_id == type_id::DECIMAL64) {
+                static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              } else {
+                // decimal128
+                static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              }
               break;
             case MAP:
             case LIST: {

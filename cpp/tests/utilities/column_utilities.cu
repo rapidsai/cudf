@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -35,16 +36,17 @@
 
 #include <jit/type.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/sequence.h>
 
 #include <numeric>
 #include <sstream>
-#include "cudf/detail/utilities/vector_factories.hpp"
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 
@@ -325,11 +327,13 @@ class corresponding_rows_unequal {
                              column_device_view lhs_row_indices_,
                              column_device_view rhs_row_indices_,
                              size_type /*fp_ulps*/)
-    : comp(d_lhs, d_rhs), lhs_row_indices(lhs_row_indices_), rhs_row_indices(rhs_row_indices_)
+    : comp(cudf::nullate::YES{}, d_lhs, d_rhs, cudf::null_equality::EQUAL),
+      lhs_row_indices(lhs_row_indices_),
+      rhs_row_indices(rhs_row_indices_)
   {
   }
 
-  cudf::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
   __device__ bool operator()(size_type index)
   {
@@ -358,7 +362,7 @@ class corresponding_rows_not_equivalent {
                                     size_type fp_ulps_)
     : d_lhs(d_lhs),
       d_rhs(d_rhs),
-      comp(d_lhs, d_rhs),
+      comp(cudf::nullate::YES{}, d_lhs, d_rhs, null_equality::EQUAL),
       lhs_row_indices(lhs_row_indices_),
       rhs_row_indices(rhs_row_indices_),
       fp_ulps(fp_ulps_)
@@ -369,7 +373,7 @@ class corresponding_rows_not_equivalent {
 
   struct typed_element_not_equivalent {
     template <typename T>
-    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool> operator()(
+    __device__ std::enable_if_t<std::is_floating_point_v<T>, bool> operator()(
       column_device_view const& lhs,
       column_device_view const& rhs,
       size_type lhs_index,
@@ -397,14 +401,14 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args...)
+    __device__ std::enable_if_t<not std::is_floating_point_v<T>, bool> operator()(Args...)
     {
       // Non-floating point inequality is checked already
       return true;
     }
   };
 
-  cudf::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
   __device__ bool operator()(size_type index)
   {
@@ -809,7 +813,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
   if (c.nullable()) {
-    auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
+    auto num_bitmasks = num_bitmask_words(c.size());
     std::vector<bitmask_type> host_bitmask(num_bitmasks);
     if (c.offset() == 0) {
       CUDA_TRY(cudaMemcpy(host_bitmask.data(),
@@ -832,13 +836,13 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 
 namespace {
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 static auto numeric_to_string_precise(T value)
 {
   return std::to_string(value);
 }
 
-template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
 static auto numeric_to_string_precise(T value)
 {
   std::ostringstream o;
@@ -911,7 +915,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 }
 
 struct column_view_printer {
-  template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
@@ -935,22 +939,33 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<is_timestamp<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    //
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
-    //
-    auto col_as_strings = cudf::strings::from_timestamps(col);
+    std::string format = [&]() {
+      if constexpr (std::is_same_v<cudf::timestamp_s, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_ms, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_us, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_ns, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
+      }
+      return std::string{"%Y-%m-%d"};
+    }();
+
+    auto col_as_strings = cudf::strings::from_timestamps(col, format);
     if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
 
-  template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
@@ -972,7 +987,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
@@ -993,7 +1008,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::dictionary32>>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
@@ -1014,7 +1029,7 @@ struct column_view_printer {
   }
 
   // Print the tick counts with the units
-  template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
+  template <typename Element, std::enable_if_t<is_duration<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
@@ -1039,8 +1054,7 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
+  template <typename Element, std::enable_if_t<std::is_same_v<Element, cudf::list_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)
@@ -1069,7 +1083,7 @@ struct column_view_printer {
   }
 
   template <typename Element,
-            typename std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::struct_view>>* = nullptr>
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent)

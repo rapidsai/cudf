@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -35,7 +35,6 @@ PARQUET_META_TYPE_MAP = {
     str(cudf_dtype): str(pandas_dtype)
     for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
-
 
 cdef table_view table_view_from_columns(columns) except*:
     """Create a cudf::table_view from an iterable of Columns."""
@@ -191,6 +190,7 @@ cpdef generate_pandas_metadata(table, index):
             col_meta["name"] in table._column_names
             and table._data[col_meta["name"]].nullable
             and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
+            and col_meta["pandas_type"] != "decimal"
         ):
             col_meta["numpy_type"] = PARQUET_META_TYPE_MAP[
                 col_meta["numpy_type"]
@@ -219,6 +219,32 @@ def _index_level_name(index_name, level, column_names):
         return index_name
     else:
         return f"__index_level_{level}__"
+
+
+cdef columns_from_unique_ptr(
+    unique_ptr[table] c_tbl
+):
+    """Convert a libcudf table into list of columns.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+        The libcudf table whose columns will be extracted
+
+    Returns
+    -------
+    list[Column]
+        A list of columns.
+    """
+    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
+
+    cdef size_t i
+
+    columns = [Column.from_unique_ptr(move(dereference(it+i)))
+               for i in range(c_columns.size())]
+
+    return columns
 
 
 cdef data_from_unique_ptr(
@@ -255,13 +281,8 @@ cdef data_from_unique_ptr(
     tuple(Dict[str, Column], Optional[Index])
         A dict of the columns in the output table.
     """
-    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
-    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
 
-    cdef size_t i
-
-    columns = [Column.from_unique_ptr(move(dereference(it+i)))
-               for i in range(c_columns.size())]
+    columns = columns_from_unique_ptr(move(c_tbl))
 
     # First construct the index, if any
     index = (
@@ -290,6 +311,24 @@ cdef data_from_unique_ptr(
     }
     return data, index
 
+cdef columns_from_table_view(
+    table_view tv,
+    object owners,
+):
+    """
+    Given a ``cudf::table_view``, construsts a list of columns from it,
+    along with referencing an ``owner`` Python object that owns the memory
+    lifetime. ``owner`` must be either None or a list of column. If ``owner``
+    is a list of columns, the owner of the `i`th ``cudf::column_view`` in the
+    table view is ``owners[i]``. For more about memory ownership,
+    see ``Column.from_column_view``.
+    """
+
+    return [
+        Column.from_column_view(
+            tv.column(i), owners[i] if isinstance(owners, list) else None
+        ) for i in range(tv.num_columns())
+    ]
 
 cdef data_from_table_view(
     table_view tv,

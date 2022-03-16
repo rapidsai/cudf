@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ using void_t = void;
  * Example:
  * \code{cpp}
  * // This function will participate in overload resolution only if T is an integral type
- * template <typename T, CUDF_ENABLE_IF(std::is_integral<T>::value)>
+ * template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> )>
  * void foo();
  * \endcode
  *
@@ -177,7 +177,7 @@ inline bool is_equality_comparable(data_type type)
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return std::is_integral<T>::value or std::is_floating_point<T>::value;
+  return cuda::std::is_arithmetic<T>();
 }
 
 struct is_numeric_impl {
@@ -218,7 +218,7 @@ constexpr inline bool is_numeric(data_type type)
 template <typename T>
 constexpr inline bool is_index_type()
 {
-  return std::is_integral<T>::value and not std::is_same_v<T, bool>;
+  return std::is_integral_v<T> and not std::is_same_v<T, bool>;
 }
 
 struct is_index_type_impl {
@@ -255,7 +255,7 @@ constexpr inline bool is_index_type(data_type type)
 template <typename T>
 constexpr inline bool is_unsigned()
 {
-  return std::is_unsigned<T>::value;
+  return std::is_unsigned_v<T>;
 }
 
 struct is_unsigned_impl {
@@ -288,7 +288,7 @@ constexpr inline bool is_unsigned(data_type type)
 template <typename Iterator>
 constexpr inline bool is_signed_iterator()
 {
-  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
+  return std::is_signed_v<typename std::iterator_traits<Iterator>::value_type>;
 }
 
 /**
@@ -301,7 +301,7 @@ constexpr inline bool is_signed_iterator()
 template <typename T>
 constexpr inline bool is_floating_point()
 {
-  return std::is_floating_point<T>::value;
+  return std::is_floating_point_v<T>;
 }
 
 struct is_floating_point_impl {
@@ -404,7 +404,8 @@ constexpr inline bool is_timestamp(data_type type)
 template <typename T>
 constexpr inline bool is_fixed_point()
 {
-  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T>;
+  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T> ||
+         std::is_same_v<numeric::decimal128, T>;
 }
 
 struct is_fixed_point_impl {
@@ -675,13 +676,13 @@ constexpr inline bool is_nested(data_type type)
 
 template <typename FromType>
 struct is_bit_castable_to_impl {
-  template <typename ToType, typename std::enable_if_t<is_compound<ToType>()>* = nullptr>
+  template <typename ToType, std::enable_if_t<is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
     return false;
   }
 
-  template <typename ToType, typename std::enable_if_t<not is_compound<ToType>()>* = nullptr>
+  template <typename ToType, std::enable_if_t<not is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
     if (not cuda::std::is_trivially_copyable_v<FromType> ||
@@ -695,13 +696,13 @@ struct is_bit_castable_to_impl {
 };
 
 struct is_bit_castable_from_impl {
-  template <typename FromType, typename std::enable_if_t<is_compound<FromType>()>* = nullptr>
+  template <typename FromType, std::enable_if_t<is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type)
   {
     return false;
   }
 
-  template <typename FromType, typename std::enable_if_t<not is_compound<FromType>()>* = nullptr>
+  template <typename FromType, std::enable_if_t<not is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type to)
   {
     return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});

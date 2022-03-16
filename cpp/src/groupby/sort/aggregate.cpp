@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <quantiles/tdigest/tdigest.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -538,9 +540,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  */
 auto column_view_with_common_nulls(column_view const& column_0, column_view const& column_1)
 {
-  rmm::device_buffer new_nullmask = cudf::bitmask_and(table_view{{column_0, column_1}});
-  auto null_count                 = cudf::count_unset_bits(
-    static_cast<cudf::bitmask_type const*>(new_nullmask.data()), 0, column_0.size());
+  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}});
   if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
   auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
     return column_view(col.type(),
@@ -561,7 +561,7 @@ auto column_view_with_common_nulls(column_view const& column_0, column_view cons
 }
 
 /**
- * @brief Perform covariance betweeen two child columns of non-nullable struct column.
+ * @brief Perform covariance between two child columns of non-nullable struct column.
  *
  */
 template <>
@@ -573,6 +573,7 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
   CUDF_EXPECTS(values.num_children() == 2,
                "Input to `groupby covariance` must be a structs column having 2 children columns.");
 
+  auto const& cov_agg = dynamic_cast<cudf::detail::covariance_aggregation const&>(agg);
   // Covariance only for valid values in both columns.
   // in non-identical null mask cases, this prevents caching of the results - STD, MEAN, COUNT.
   auto [_, values_child0, values_child1] =
@@ -596,12 +597,14 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
                                             count,
                                             mean0,
                                             mean1,
+                                            cov_agg._min_periods,
+                                            cov_agg._ddof,
                                             stream,
                                             mr));
 };
 
 /**
- * @brief Perform correlation betweeen two child columns of non-nullable struct column.
+ * @brief Perform correlation between two child columns of non-nullable struct column.
  *
  */
 template <>
@@ -629,28 +632,33 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
   aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
 
-  auto const stddev0 = cache.get_result(values_child0, *std_agg);
-  auto const stddev1 = cache.get_result(values_child1, *std_agg);
-
-  auto mean_agg    = make_mean_aggregation();
-  auto const mean0 = cache.get_result(values_child0, *mean_agg);
-  auto const mean1 = cache.get_result(values_child1, *mean_agg);
-  auto count_agg   = make_count_aggregation();
-  auto const count = cache.get_result(values_child0, *count_agg);
-
   // Compute covariance here to avoid repeated computation of mean & count
-  auto cov_agg = make_covariance_aggregation();
-  cache.add_result(values,
-                   *cov_agg,
-                   detail::group_covariance(get_grouped_values().child(0),
-                                            get_grouped_values().child(1),
-                                            helper.group_labels(stream),
-                                            helper.num_groups(stream),
-                                            count,
-                                            mean0,
-                                            mean1,
-                                            stream,
-                                            mr));
+  auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
+  if (not cache.has_result(values, *cov_agg)) {
+    auto mean_agg    = make_mean_aggregation();
+    auto const mean0 = cache.get_result(values_child0, *mean_agg);
+    auto const mean1 = cache.get_result(values_child1, *mean_agg);
+    auto count_agg   = make_count_aggregation();
+    auto const count = cache.get_result(values_child0, *count_agg);
+
+    auto const& cov_agg_obj = dynamic_cast<cudf::detail::covariance_aggregation const&>(*cov_agg);
+    cache.add_result(values,
+                     *cov_agg,
+                     detail::group_covariance(get_grouped_values().child(0),
+                                              get_grouped_values().child(1),
+                                              helper.group_labels(stream),
+                                              helper.num_groups(stream),
+                                              count,
+                                              mean0,
+                                              mean1,
+                                              cov_agg_obj._min_periods,
+                                              cov_agg_obj._ddof,
+                                              stream,
+                                              mr));
+  }
+
+  auto const stddev0    = cache.get_result(values_child0, *std_agg);
+  auto const stddev1    = cache.get_result(values_child1, *std_agg);
   auto const covariance = cache.get_result(values, *cov_agg);
   cache.add_result(
     values, agg, detail::group_correlation(covariance, stddev0, stddev1, stream, mr));
@@ -694,7 +702,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   detail::group_tdigest(
+                   cudf::detail::tdigest::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -738,13 +746,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   detail::group_merge_tdigest(get_grouped_values(),
-                                               helper.group_offsets(stream),
-                                               helper.group_labels(stream),
-                                               helper.num_groups(stream),
-                                               max_centroids,
-                                               stream,
-                                               mr));
+                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                                                              helper.group_offsets(stream),
+                                                              helper.group_labels(stream),
+                                                              helper.num_groups(stream),
+                                                              max_centroids,
+                                                              stream,
+                                                              mr));
 };
 
 }  // namespace detail
@@ -769,7 +777,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
     }
   }
 
-  auto results = detail::extract_results(requests, cache);
+  auto results = detail::extract_results(requests, cache, stream, mr);
 
   return std::make_pair(helper().unique_keys(stream, mr), std::move(results));
 }

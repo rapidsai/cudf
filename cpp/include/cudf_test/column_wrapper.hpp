@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
 
@@ -92,21 +93,21 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT                                                   = From,
-            typename ToT                                                     = To,
-            typename std::enable_if<std::is_same_v<FromT, ToT>, void>::type* = nullptr>
+  template <typename FromT                                      = From,
+            typename ToT                                        = To,
+            std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT                       = From,
-            typename ToT                         = To,
-            typename std::enable_if<!std::is_same_v<FromT, ToT> &&
-                                      (cudf::is_convertible<FromT, ToT>::value ||
-                                       std::is_constructible<ToT, FromT>::value),
-                                    void>::type* = nullptr>
+  template <
+    typename FromT          = From,
+    typename ToT            = To,
+    std::enable_if_t<!std::is_same_v<FromT, ToT> && (cudf::is_convertible<FromT, ToT>::value ||
+                                                     std::is_constructible_v<ToT, FromT>),
+                     void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return static_cast<ToT>(element);
@@ -114,10 +115,9 @@ struct fixed_width_type_converter {
 
   // Convert integral values to timestamps
   template <
-    typename FromT                       = From,
-    typename ToT                         = To,
-    typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
-                            void>::type* = nullptr>
+    typename FromT                                                                  = From,
+    typename ToT                                                                    = To,
+    std::enable_if_t<std::is_integral_v<FromT> && cudf::is_timestamp<ToT>(), void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return ToT{typename ToT::duration{element}};
@@ -137,7 +137,7 @@ struct fixed_width_type_converter {
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
@@ -162,8 +162,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
+                           cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using RepType        = typename ElementTo::rep;
@@ -187,8 +187,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
+                           cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
@@ -509,11 +509,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same_v<Rep, int32_t>;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,
@@ -574,11 +573,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same_v<Rep, int32_t>;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,
@@ -868,7 +866,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    */
   dictionary_column_wrapper() : column_wrapper{}
   {
-    wrapped = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
+    wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
   }
 
   /**
@@ -1042,11 +1040,13 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
 
   /**
    * @brief Access keys column view
+   * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
 
@@ -1401,7 +1401,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   lists_column_wrapper() : column_wrapper{}
   {
-    build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
+    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
   }
 
   /**
@@ -1501,11 +1501,8 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(std::cbegin(cols),
-                    std::cend(cols),
-                    valids,  // stencil
-                    std::back_inserter(children),
-                    thrust::identity<bool>{});
+    thrust::copy_if(
+      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 

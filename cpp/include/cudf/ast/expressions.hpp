@@ -38,14 +38,14 @@ class expression_parser;
 struct expression {
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 
-  bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
+  [[nodiscard]] bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
   {
     return may_evaluate_null(left, left, stream);
   }
 
-  virtual bool may_evaluate_null(table_view const& left,
-                                 table_view const& right,
-                                 rmm::cuda_stream_view stream) const = 0;
+  [[nodiscard]] virtual bool may_evaluate_null(table_view const& left,
+                                               table_view const& right,
+                                               rmm::cuda_stream_view stream) const = 0;
 
   virtual ~expression() {}
 };
@@ -88,29 +88,32 @@ enum class ast_operator {
                      ///< NULL_LOGICAL_OR(null, false) is null, and NULL_LOGICAL_OR(valid, valid) ==
                      ///< LOGICAL_OR(valid, valid)
   // Unary operators
-  IDENTITY,    ///< Identity function
-  SIN,         ///< Trigonometric sine
-  COS,         ///< Trigonometric cosine
-  TAN,         ///< Trigonometric tangent
-  ARCSIN,      ///< Trigonometric sine inverse
-  ARCCOS,      ///< Trigonometric cosine inverse
-  ARCTAN,      ///< Trigonometric tangent inverse
-  SINH,        ///< Hyperbolic sine
-  COSH,        ///< Hyperbolic cosine
-  TANH,        ///< Hyperbolic tangent
-  ARCSINH,     ///< Hyperbolic sine inverse
-  ARCCOSH,     ///< Hyperbolic cosine inverse
-  ARCTANH,     ///< Hyperbolic tangent inverse
-  EXP,         ///< Exponential (base e, Euler number)
-  LOG,         ///< Natural Logarithm (base e)
-  SQRT,        ///< Square-root (x^0.5)
-  CBRT,        ///< Cube-root (x^(1.0/3))
-  CEIL,        ///< Smallest integer value not less than arg
-  FLOOR,       ///< largest integer value not greater than arg
-  ABS,         ///< Absolute value
-  RINT,        ///< Rounds the floating-point argument arg to an integer value
-  BIT_INVERT,  ///< Bitwise Not (~)
-  NOT          ///< Logical Not (!)
+  IDENTITY,        ///< Identity function
+  SIN,             ///< Trigonometric sine
+  COS,             ///< Trigonometric cosine
+  TAN,             ///< Trigonometric tangent
+  ARCSIN,          ///< Trigonometric sine inverse
+  ARCCOS,          ///< Trigonometric cosine inverse
+  ARCTAN,          ///< Trigonometric tangent inverse
+  SINH,            ///< Hyperbolic sine
+  COSH,            ///< Hyperbolic cosine
+  TANH,            ///< Hyperbolic tangent
+  ARCSINH,         ///< Hyperbolic sine inverse
+  ARCCOSH,         ///< Hyperbolic cosine inverse
+  ARCTANH,         ///< Hyperbolic tangent inverse
+  EXP,             ///< Exponential (base e, Euler number)
+  LOG,             ///< Natural Logarithm (base e)
+  SQRT,            ///< Square-root (x^0.5)
+  CBRT,            ///< Cube-root (x^(1.0/3))
+  CEIL,            ///< Smallest integer value not less than arg
+  FLOOR,           ///< largest integer value not greater than arg
+  ABS,             ///< Absolute value
+  RINT,            ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,      ///< Bitwise Not (~)
+  NOT,             ///< Logical Not (!)
+  CAST_TO_INT64,   ///< Cast value to int64_t
+  CAST_TO_UINT64,  ///< Cast value to uint64_t
+  CAST_TO_FLOAT64  ///< Cast value to double
 };
 
 /**
@@ -119,9 +122,9 @@ enum class ast_operator {
  * This determines which table to use in cases with two tables (e.g. joins).
  */
 enum class table_reference {
-  LEFT,   // Column index in the left table
-  RIGHT,  // Column index in the right table
-  OUTPUT  // Column index in the output table
+  LEFT,   ///< Column index in the left table
+  RIGHT,  ///< Column index in the right table
+  OUTPUT  ///< Column index in the output table
 };
 
 /**
@@ -170,14 +173,17 @@ class literal : public expression {
    *
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type() const { return get_value().type(); }
+  [[nodiscard]] cudf::data_type get_data_type() const { return get_value().type(); }
 
   /**
    * @brief Get the value object.
    *
    * @return cudf::detail::fixed_width_scalar_device_view_base
    */
-  cudf::detail::fixed_width_scalar_device_view_base get_value() const { return value; }
+  [[nodiscard]] cudf::detail::fixed_width_scalar_device_view_base get_value() const
+  {
+    return value;
+  }
 
   /**
    * @brief Accepts a visitor class.
@@ -187,9 +193,9 @@ class literal : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return !is_valid(stream);
   }
@@ -199,7 +205,10 @@ class literal : public expression {
    *
    * @return bool
    */
-  bool is_valid(rmm::cuda_stream_view stream) const { return scalar.is_valid(stream); }
+  [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream) const
+  {
+    return scalar.is_valid(stream);
+  }
 
  private:
   cudf::scalar const& scalar;
@@ -229,14 +238,14 @@ class column_reference : public expression {
    *
    * @return cudf::size_type
    */
-  cudf::size_type get_column_index() const { return column_index; }
+  [[nodiscard]] cudf::size_type get_column_index() const { return column_index; }
 
   /**
    * @brief Get the table source.
    *
    * @return table_reference
    */
-  table_reference get_table_source() const { return table_source; }
+  [[nodiscard]] table_reference get_table_source() const { return table_source; }
 
   /**
    * @brief Get the data type.
@@ -244,7 +253,7 @@ class column_reference : public expression {
    * @param table Table used to determine types.
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type(table_view const& table) const
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const
   {
     return table.column(get_column_index()).type();
   }
@@ -256,7 +265,8 @@ class column_reference : public expression {
    * @param right_table Right table used to determine types.
    * @return cudf::data_type
    */
-  cudf::data_type get_data_type(table_view const& left_table, table_view const& right_table) const
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& left_table,
+                                              table_view const& right_table) const
   {
     auto const table = [&] {
       if (get_table_source() == table_reference::LEFT) {
@@ -278,9 +288,9 @@ class column_reference : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
@@ -324,7 +334,7 @@ class operation : public expression {
    *
    * @return ast_operator
    */
-  ast_operator get_operator() const { return op; }
+  [[nodiscard]] ast_operator get_operator() const { return op; }
 
   /**
    * @brief Get the operands.
@@ -341,9 +351,9 @@ class operation : public expression {
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return std::any_of(operands.cbegin(),
                        operands.cend(),

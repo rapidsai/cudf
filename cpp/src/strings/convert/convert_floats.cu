@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ namespace {
  * @brief This function converts the given string into a
  * floating point double value.
  *
- * This will also map strings containing "NaN", "Inf" and "-Inf"
+ * This will also map strings containing "NaN", "Inf", etc.
  * to the appropriate float values.
  *
  * This function will also handle scientific notation format.
@@ -55,14 +55,17 @@ __device__ inline double stod(string_view const& d_str)
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
-  // special strings
-  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<double>::quiet_NaN();
-  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<double>::infinity();
-  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<double>::infinity();
   double sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
+  }
+
+  // special strings: NaN, Inf
+  if ((in_ptr < end) && *in_ptr > '9') {
+    auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
+    if (string::is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
+    if (string::is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
   }
 
   // Parse and store the mantissa as much as we can,
@@ -155,8 +158,7 @@ struct string_to_float_fn {
  * The output_column is expected to be one of the float types only.
  */
 struct dispatch_to_floats_fn {
-  template <typename FloatType,
-            std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
+  template <typename FloatType, std::enable_if_t<std::is_floating_point_v<FloatType>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -169,7 +171,7 @@ struct dispatch_to_floats_fn {
                       string_to_float_fn<FloatType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_floats must be a float type.");
@@ -471,8 +473,7 @@ struct float_to_string_fn {
  * The template function declaration ensures only float types are allowed.
  */
 struct dispatch_from_floats_fn {
-  template <typename FloatType,
-            std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
+  template <typename FloatType, std::enable_if_t<std::is_floating_point_v<FloatType>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& floats,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -509,7 +510,7 @@ struct dispatch_from_floats_fn {
   }
 
   // non-float types throw an exception
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -526,7 +527,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = floats.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, stream, mr);
 }
