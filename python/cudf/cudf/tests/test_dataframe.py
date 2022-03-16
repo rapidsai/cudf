@@ -9109,13 +9109,13 @@ def test_dataframe_pct_change(data, periods, fill_method):
     assert_eq(expected, actual)
 
 
-# @pytest.mark.parametrize(
-#     ("key, value"),
-#     [
-#         ( [0], ["x", "y"], [10, 20]),
-#         ( [0,2], ["x", "y"], [[10, 30], [20, 40]]),
-#     ]
-# )
+@pytest.mark.parametrize(
+    ("key, value"),
+    [
+        (([0], ["x", "y"]), [10, 20],),
+        (([0, 2], ["x", "y"]), [[10, 30], [20, 40]],),
+    ],
+)
 def test_dataframe_loc_inplace_update(key, value):
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()
@@ -9126,15 +9126,43 @@ def test_dataframe_loc_inplace_update(key, value):
     assert_eq(expected, actual)
 
 
-def test_dataframe_iloc_inplace_update():
+@pytest.mark.parametrize(
+    ("key, value"), [([0], [10, 20]), ([0, 2], [[10, 30], [20, 40]])],
+)
+def test_dataframe_iloc_inplace_update(key, value):
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()
 
-    actual = gdf.iloc[[0]] = [10, 20]
-    actual2 = gdf.iloc[[0, 2]] = [[10, 30], [20, 40]]
-
-    expected = pdf.iloc[[0]] = [10, 20]
-    expected2 = pdf.iloc[[0, 2]] = [[10, 30], [20, 40]]
+    actual = gdf.iloc[key] = value
+    expected = pdf.iloc[key] = value
 
     assert_eq(expected, actual)
-    assert_eq(expected2, actual2)
+
+
+@pytest.mark.parametrize(
+    "loc_key", [([0, 2], ["x", "y"])],
+)
+@pytest.mark.parametrize(
+    "iloc_key", [[0, 2]],
+)
+@pytest.mark.parametrize(
+    "value_gdf",
+    [cudf.DataFrame({"x": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2]))],
+)
+@pytest.mark.parametrize(
+    "value_pdf",
+    [pd.DataFrame({"x": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2]))],
+)
+def test_dataframe_loc_iloc_inplace_update_with_dataframe(
+    loc_key, iloc_key, value_gdf, value_pdf
+):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[loc_key] = value_gdf
+    expected = pdf.loc[loc_key] = value_pdf
+    assert_eq(expected, actual)
+
+    actual = gdf.iloc[iloc_key] = value_gdf
+    expected = pdf.iloc[iloc_key] = value_pdf
+    assert_eq(expected, actual)
