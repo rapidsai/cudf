@@ -175,7 +175,7 @@ def get_tidy_args(cmd, args):
         command.extend(archs)
         # provide proper cuda path to clang
         add_cuda_path(command, cc_orig)
-  	        # remove all kinds of nvcc flags clang doesn't know about
+  	    # remove all kinds of nvcc flags clang doesn't know about
         remove_items_plus_one(command, [
             "--generate-code",
             "-gencode",
@@ -285,9 +285,6 @@ def print_result(passed, stdout, file, errors):
 def run_clang_tidy(cmd, args):
     command, is_cuda = get_tidy_args(cmd, args)
     header_filter = "-header-filter='.*cudf/cpp/(include|src|test)/.*(?!brotli_dict).*'"
-    # print(header_path_any)
-    # print(header_filter)
-    # breakpoint()
     tidy_cmd = [args.exe, header_filter, cmd["file"], "--"]
     tidy_cmd.extend(command)
     status = True
