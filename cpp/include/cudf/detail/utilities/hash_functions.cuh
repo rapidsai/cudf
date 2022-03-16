@@ -48,19 +48,19 @@ T __device__ inline normalize_nans_and_zeros(T const& key)
   return key;
 }
 
-__device__ inline uint32_t rotate_bits_left(uint32_t x, int8_t r)
+__device__ inline uint32_t rotate_bits_left(uint32_t x, uint32_t r)
 {
   // This function is equivalent to (x << r) | (x >> (32 - r))
   return __funnelshift_l(x, x, r);
 }
 
-__device__ inline uint32_t rotate_bits_right(uint32_t x, int8_t r)
+__device__ inline uint32_t rotate_bits_right(uint32_t x, uint32_t r)
 {
   // This function is equivalent to (x >> r) | (x << (32 - r))
   return __funnelshift_r(x, x, r);
 }
 
-__device__ inline uint64_t rotate_bits_right(uint64_t x, int8_t r)
+__device__ inline uint64_t rotate_bits_right(uint64_t x, uint32_t r)
 {
   return (x >> r) | (x << (64 - r));
 }
@@ -191,11 +191,6 @@ struct MurmurHash3_32 {
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
-  {
-    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
-  }
-
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
@@ -257,10 +252,10 @@ struct MurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
+      h1 = rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -272,7 +267,7 @@ struct MurmurHash3_32 {
       case 1:
         k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = rotl32(k1, rot_c1);
+        k1 = rotate_bits_left(k1, rot_c1);
         k1 *= c2;
         h1 ^= k1;
     };
@@ -358,11 +353,6 @@ struct SparkMurmurHash3_32 {
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, uint32_t r) const
-  {
-    return __funnelshift_l(x, x, r);  // Equivalent to (x << r) | (x >> (32 - r))
-  }
-
   __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
@@ -416,10 +406,10 @@ struct SparkMurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
+      h1 = rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -432,10 +422,10 @@ struct SparkMurmurHash3_32 {
       // signedness when casting byte-to-int, but C++ does not.
       uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
+      h1 = rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
