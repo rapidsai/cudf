@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -219,7 +219,7 @@ endif()
 
 add_library(
   cudfjni SHARED
-  src/row_conversion.cu
+  src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
   src/CudfJni.cpp
   src/CudaJni.cpp
@@ -236,7 +236,10 @@ add_library(
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp
+  src/aggregation128_utils.cu
   src/map_lookup.cu
+  src/maps_column_view.cu
+  src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )
 

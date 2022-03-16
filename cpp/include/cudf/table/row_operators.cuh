@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/sorting.hpp>
@@ -80,7 +81,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
-template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   if (isnan(lhs) and isnan(rhs)) {
@@ -123,7 +124,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
-template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   return detail::compare_elements(lhs, rhs);
@@ -137,7 +138,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @param rhs second element
  * @return `true` if `lhs` == `rhs` else `false`.
  */
-template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
 __device__ bool equality_compare(Element lhs, Element rhs)
 {
   if (isnan(lhs) and isnan(rhs)) { return true; }
@@ -152,7 +153,7 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  * @param rhs second element
  * @return `true` if `lhs` == `rhs` else `false`.
  */
-template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
 {
   return lhs == rhs;
@@ -233,7 +234,7 @@ class row_equality_comparator {
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
-                          null_equality nulls_are_equal = true)
+                          null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
@@ -355,12 +356,13 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
+   * Behavior is undefined if called with incomparable column types.
    *
+   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
@@ -381,8 +383,6 @@ class row_lexicographic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
-                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**
@@ -465,7 +465,7 @@ class element_hasher_with_seed {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return _null_hash; }
+    if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
@@ -503,18 +503,14 @@ class row_hasher {
 
   __device__ auto operator()(size_type row_index) const
   {
-    auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
-      return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
-    };
-
     // Hash the first column w/ the seed
-    auto const initial_hash =
-      hash_combiner(hash_value_type{0},
-                    type_dispatcher<dispatch_storage_type>(
-                      _table.column(0).type(),
-                      element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
-                      _table.column(0),
-                      row_index));
+    auto const initial_hash = cudf::detail::hash_combine(
+      hash_value_type{0},
+      type_dispatcher<dispatch_storage_type>(
+        _table.column(0).type(),
+        element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
+        _table.column(0),
+        row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
@@ -533,7 +529,9 @@ class row_hasher {
       thrust::make_counting_iterator(_table.num_columns()),
       hasher,
       initial_hash,
-      hash_combiner);
+      [](hash_value_type lhs, hash_value_type rhs) {
+        return cudf::detail::hash_combine(lhs, rhs);
+      });
   }
 
  private:

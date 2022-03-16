@@ -68,8 +68,7 @@ public final class ColumnVector extends ColumnView {
     long viewHandle = initViewHandle(
         type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer, offsetBuffer, null);
-    return new OffHeapState(type, (int) rows, dataBuffer, validityBuffer,
-        offsetBuffer, null, viewHandle);
+    return new OffHeapState(dataBuffer, validityBuffer, offsetBuffer, null, viewHandle);
   }
 
   /**
@@ -108,8 +107,7 @@ public final class ColumnVector extends ColumnView {
     long viewHandle = initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer,
         offsetBuffer, childHandles);
-    return new OffHeapState(type, (int) rows, dataBuffer, validityBuffer, offsetBuffer,
-        toClose, viewHandle);
+    return new OffHeapState(dataBuffer, validityBuffer, offsetBuffer, toClose, viewHandle);
   }
 
   /**
@@ -968,12 +966,12 @@ public final class ColumnVector extends ColumnView {
     }
 
     /**
-     * Create a cudf::column_view from device side data.
+     * Create from existing cudf::column_view and buffers.
      */
-    public OffHeapState(DType type, int rows,
-                        DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
+    public OffHeapState(DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
                         List<DeviceMemoryBuffer> buffers,
                         long viewHandle) {
+      assert(viewHandle != 0);
       if (data != null) {
         this.toClose.add(data);
       }
@@ -986,15 +984,11 @@ public final class ColumnVector extends ColumnView {
       if (buffers != null) {
         toClose.addAll(buffers);
       }
-      if (rows == 0 && !type.isNestedType()) {
-        this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
-      } else {
-        this.viewHandle = viewHandle;
-      }
+      this.viewHandle = viewHandle;
     }
 
     /**
-     * Create a cudf::column_view from contiguous device side data.
+     * Create from existing cudf::column_view and contiguous buffer.
      */
     public OffHeapState(long viewHandle, DeviceMemoryBuffer contiguousBuffer) {
       assert viewHandle != 0;
@@ -1210,6 +1204,17 @@ public final class ColumnVector extends ColumnView {
     try (HostColumnVector host = HostColumnVector.emptyStructs(dataType, numRows)) {
       return host.copyToDevice();
     }
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector fromBooleans(boolean... values) {
+    byte[] bytes = new byte[values.length];
+    for (int i = 0; i < values.length; i++) {
+      bytes[i] = values[i] ? (byte) 1 : (byte) 0;
+    }
+    return build(DType.BOOL8, values.length, (b) -> b.appendArray(bytes));
   }
 
   /**

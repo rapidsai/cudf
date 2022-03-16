@@ -1,6 +1,8 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import itertools
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from decimal import Decimal
@@ -45,7 +47,7 @@ def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
     probs = [null_probability, 1 - null_probability]
     rng = np.random.default_rng(seed=seed)
     mask = rng.choice([False, True], size=len(series), p=probs)
-    series[mask] = None
+    series.iloc[mask] = None
 
 
 # TODO: This function should be removed. Anywhere that it is being used should
@@ -109,7 +111,15 @@ def assert_eq(left, right, **kwargs):
     if isinstance(left, pd.DataFrame):
         tm.assert_frame_equal(left, right, **kwargs)
     elif isinstance(left, pd.Series):
-        tm.assert_series_equal(left, right, **kwargs)
+        # TODO: A warning is emitted from the function
+        # pandas.testing.assert_series_equal for some inputs:
+        # "DeprecationWarning: elementwise comparison failed; this will raise
+        # an error in the future."
+        # This warning comes from a call from pandas to numpy. It is ignored
+        # here because it cannot be fixed within cudf.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            tm.assert_series_equal(left, right, **kwargs)
     elif isinstance(left, pd.Index):
         tm.assert_index_equal(left, right, **kwargs)
     elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
@@ -321,3 +331,38 @@ def does_not_raise():
 
 def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
+
+
+def assert_column_memory_eq(
+    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
+):
+    """Assert the memory location and size of `lhs` and `rhs` are equivalent.
+
+    Both data pointer and mask pointer are checked. Also recursively check for
+    children to the same contarints. Also fails check if the number of children
+    mismatches at any level.
+    """
+    assert lhs.base_data_ptr == rhs.base_data_ptr
+    assert lhs.base_mask_ptr == rhs.base_mask_ptr
+    assert lhs.base_size == rhs.base_size
+    assert lhs.offset == rhs.offset
+    assert lhs.size == rhs.size
+    assert len(lhs.base_children) == len(rhs.base_children)
+    for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
+        assert_column_memory_eq(lhs_child, rhs_child)
+
+
+def assert_column_memory_ne(
+    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
+):
+    try:
+        assert_column_memory_eq(lhs, rhs)
+    except AssertionError:
+        return
+    raise AssertionError("lhs and rhs holds the same memory.")
+
+
+parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
+)

@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 from collections.abc import Iterator
 
 import cupy
@@ -14,14 +15,17 @@ from dask.utils import M
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
+from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 
+@_dask_cudf_nvtx_annotate
 def set_index_post(df, index_name, drop, column_dtype):
     df2 = df.set_index(index_name, drop=drop)
     df2.columns = df2.columns.astype(column_dtype)
     return df2
 
 
+@_dask_cudf_nvtx_annotate
 def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     if ascending:
         partitions = divisions.searchsorted(s, side="right") - 1
@@ -38,6 +42,7 @@ def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     return partitions
 
 
+@_dask_cudf_nvtx_annotate
 def _quantile(a, q):
     n = len(a)
     if not len(a):
@@ -45,6 +50,7 @@ def _quantile(a, q):
     return (a.quantiles(q=q.tolist(), interpolation="nearest"), n)
 
 
+@_dask_cudf_nvtx_annotate
 def merge_quantiles(finalq, qs, vals):
     """Combine several quantile calculations of different data.
     [NOTE: Same logic as dask.array merge_percentiles]
@@ -107,6 +113,7 @@ def merge_quantiles(finalq, qs, vals):
     return rv.reset_index(drop=True)
 
 
+@_dask_cudf_nvtx_annotate
 def _approximate_quantile(df, q):
     """Approximate quantiles of DataFrame or Series.
     [NOTE: Same logic as dask.dataframe Series quantile]
@@ -180,6 +187,7 @@ def _approximate_quantile(df, q):
     return df
 
 
+@_dask_cudf_nvtx_annotate
 def quantile_divisions(df, by, npartitions):
     qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
     divisions = _approximate_quantile(df[by], qn).compute()
@@ -213,6 +221,7 @@ def quantile_divisions(df, by, npartitions):
     return divisions
 
 
+@_dask_cudf_nvtx_annotate
 def sort_values(
     df,
     by,

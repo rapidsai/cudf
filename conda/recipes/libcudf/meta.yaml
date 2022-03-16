@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -40,7 +40,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 5.0.0 *cuda
+    - arrow-cpp 6.0.1 *cuda
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:
@@ -137,6 +137,7 @@ test:
     - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
+    - test -f $PREFIX/include/cudf/io/text/byte_range_info.hpp
     - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
     - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
     - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
@@ -149,7 +150,9 @@ test:
     - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/contains.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
@@ -203,6 +206,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
     - test -f $PREFIX/include/cudf/strings/detail/json.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/utf8.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
@@ -216,6 +220,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp
+    - test -f $PREFIX/include/cudf/strings/split/split_re.hpp
     - test -f $PREFIX/include/cudf/strings/string_view.hpp
     - test -f $PREFIX/include/cudf/strings/strings_column_view.hpp
     - test -f $PREFIX/include/cudf/strings/strip.hpp

@@ -2,12 +2,16 @@
 
 import decimal
 import functools
-from collections.abc import Sequence
+import hashlib
+import os
+import traceback
+from functools import partial
 from typing import FrozenSet, Set, Union
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import rmm
 
@@ -22,12 +26,6 @@ mask_bitsize = mask_dtype.itemsize * 8
 
 
 _EQUALITY_OPS = {
-    "eq",
-    "ne",
-    "lt",
-    "gt",
-    "le",
-    "ge",
     "__eq__",
     "__ne__",
     "__lt__",
@@ -36,7 +34,64 @@ _EQUALITY_OPS = {
     "__ge__",
 }
 
+_NVTX_COLORS = ["green", "blue", "purple", "rapids"]
 
+# The test root is set by pytest to support situations where tests are run from
+# a source tree on a built version of cudf.
+NO_EXTERNAL_ONLY_APIS = os.getenv("NO_EXTERNAL_ONLY_APIS")
+
+_cudf_root = os.path.dirname(cudf.__file__)
+# If the environment variable for the test root is not set, we default to
+# using the path relative to the cudf root directory.
+_tests_root = os.getenv("_CUDF_TEST_ROOT") or os.path.join(_cudf_root, "tests")
+
+
+def _external_only_api(func, alternative=""):
+    """Decorator to indicate that a function should not be used internally.
+
+    cudf contains many APIs that exist for pandas compatibility but are
+    intrinsically inefficient. For some of these cudf has internal
+    equivalents that are much faster. Usage of the slow public APIs inside
+    our implementation can lead to unnecessary performance bottlenecks.
+    Applying this decorator to such functions and setting the environment
+    variable NO_EXTERNAL_ONLY_APIS will cause such functions to raise
+    exceptions if they are called from anywhere inside cudf, making it easy
+    to identify and excise such usage.
+
+    The `alternative` should be a complete phrase or sentence since it will
+    be used verbatim in error messages.
+    """
+
+    # If the first arg is a string then an alternative function to use in
+    # place of this API was provided, so we pass that to a subsequent call.
+    # It would be cleaner to implement this pattern by using a class
+    # decorator with a factory method, but there is no way to generically
+    # wrap docstrings on a class (we would need the docstring to be on the
+    # class itself, not instances, because that's what `help` looks at) and
+    # there is also no way to make mypy happy with that approach.
+    if isinstance(func, str):
+        return lambda actual_func: _external_only_api(actual_func, func)
+
+    if not NO_EXTERNAL_ONLY_APIS:
+        return func
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Check the immediately preceding frame to see if it's in cudf.
+        frame, lineno = next(traceback.walk_stack(None))
+        fn = frame.f_code.co_filename
+        if _cudf_root in fn and _tests_root not in fn:
+            raise RuntimeError(
+                f"External-only API called in {fn} at line {lineno}. "
+                f"{alternative}"
+            )
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+# TODO: We should evaluate whether calls to this could be more easily replaced
+# with column.full, which appears to be significantly faster in simple cases.
 def scalar_broadcast_to(scalar, size, dtype=None):
 
     if isinstance(size, (tuple, list)):
@@ -67,15 +122,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
 
-    if cudf.dtype(dtype).kind in ("O", "U"):
-        gather_map = column.full(size, 0, dtype="int32")
-        scalar_str_col = column.as_column([scalar], dtype="str")
-        return scalar_str_col[gather_map]
-    else:
-        out_col = column.column_empty(size, dtype=dtype)
-        if out_col.size != 0:
-            out_col.data_array_view[:] = scalar
-        return out_col
+    return cudf.core.column.full(size=size, fill_value=scalar, dtype=dtype)
 
 
 def initfunc(f):
@@ -144,28 +191,6 @@ def set_allocator(
 IS_NEP18_ACTIVE = _is_nep18_active()
 
 
-class cached_property:
-    """
-    Like @property, but only evaluated upon first invocation.
-    To force re-evaluation of a cached_property, simply delete
-    it with `del`.
-    """
-
-    # TODO: Can be replaced with functools.cached_property when we drop support
-    # for Python 3.7.
-
-    def __init__(self, func):
-        self.func = func
-
-    def __get__(self, instance, cls):
-        if instance is None:
-            return self
-        else:
-            value = self.func(instance)
-            object.__setattr__(instance, self.func.__name__, value)
-            return value
-
-
 class GetAttrGetItemMixin:
     """This mixin changes `__getattr__` to attempt a `__getitem__` call.
 
@@ -204,12 +229,13 @@ class GetAttrGetItemMixin:
             )
 
 
-def raise_iteration_error(obj):
-    raise TypeError(
-        f"{obj.__class__.__name__} object is not iterable. "
-        f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-        f"if you wish to iterate over the values."
-    )
+class NotIterable:
+    def __iter__(self):
+        raise TypeError(
+            f"{self.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        )
 
 
 def pa_mask_buffer_to_mask(mask_buf, size):
@@ -292,133 +318,6 @@ def search_range(start, stop, x, step=1, side="left"):
 
     length = (stop - start) // step
     return max(min(length, i), 0)
-
-
-_UFUNC_ALIASES = {
-    "power": "pow",
-    "equal": "eq",
-    "not_equal": "ne",
-    "less": "lt",
-    "less_equal": "le",
-    "greater": "gt",
-    "greater_equal": "ge",
-    "absolute": "abs",
-}
-# For op(., cudf.Series) -> cudf.Series.__r{op}__
-_REVERSED_NAMES = {
-    "lt": "__gt__",
-    "le": "__ge__",
-    "gt": "__lt__",
-    "ge": "__le__",
-    "eq": "__eq__",
-    "ne": "__ne__",
-}
-
-
-# todo: can probably be used to remove cudf/core/ops.py
-def _get_cudf_series_ufunc(fname, args, kwargs, cudf_ser_submodule):
-    if isinstance(args[0], cudf.Series):
-        cudf_ser_func = getattr(cudf_ser_submodule, fname)
-        return cudf_ser_func(*args, **kwargs)
-    elif len(args) == 2 and isinstance(args[1], cudf.Series):
-        rev_name = _REVERSED_NAMES.get(fname, f"__r{fname}__")
-        cudf_ser_func = getattr(cudf_ser_submodule, rev_name)
-        return cudf_ser_func(args[1], args[0], **kwargs)
-    return NotImplemented
-
-
-# Utils for using appropriate dispatch for array functions
-def get_appropriate_dispatched_func(
-    cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
-):
-    if kwargs.get("out") is None:
-        fname = func.__name__
-        # Dispatch these functions to appropiate alias from the _UFUNC_ALIASES
-        is_ufunc = fname in _UFUNC_ALIASES
-        fname = _UFUNC_ALIASES.get(fname, fname)
-
-        if hasattr(cudf_submodule, fname):
-            cudf_func = getattr(cudf_submodule, fname)
-            return cudf_func(*args, **kwargs)
-
-        elif hasattr(cudf_ser_submodule, fname):
-            if is_ufunc:
-                return _get_cudf_series_ufunc(
-                    fname, args, kwargs, cudf_ser_submodule
-                )
-            else:
-                cudf_ser_func = getattr(cudf_ser_submodule, fname)
-                return cudf_ser_func(*args, **kwargs)
-
-        elif hasattr(cupy_submodule, fname):
-            cupy_func = getattr(cupy_submodule, fname)
-            # Handle case if cupy implements it as a numpy function
-            # Unsure if needed
-            if cupy_func is func:
-                return NotImplemented
-
-            cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
-            if cupy_compatible_args:
-                cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-                return _cast_to_appropriate_cudf_type(cupy_output, index)
-
-    return NotImplemented
-
-
-def _cast_to_appropriate_cudf_type(val, index=None):
-    # Handle scalar
-    if val.ndim == 0:
-        return to_cudf_compatible_scalar(val)
-    # 1D array
-    elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
-        # if index is not None and is of a different length
-        # than the index, cupy dispatching behaviour is undefined
-        # so we don't implement it
-        if (index is None) or (len(index) == len(val)):
-            return cudf.Series(val, index=index)
-
-    return NotImplemented
-
-
-def _get_cupy_compatible_args_index(args, ser_index=None):
-    """
-    This function returns cupy compatible arguments and output index
-    if conversion is not possible it returns None
-    """
-
-    casted_ls = []
-    for arg in args:
-        if isinstance(arg, cp.ndarray):
-            casted_ls.append(arg)
-        elif isinstance(arg, cudf.Series):
-            # check if indexes can be aligned
-            if (ser_index is None) or (ser_index.equals(arg.index)):
-                ser_index = arg.index
-                casted_ls.append(arg.values)
-            else:
-                # this throws a value-error if indexes are not aligned
-                # following pandas behavior for ufunc numpy dispatching
-                raise ValueError(
-                    "Can only compare identically-labeled Series objects"
-                )
-        elif isinstance(arg, Sequence):
-            # we dont handle list of inputs for functions as
-            # these form inputs for functions like
-            # np.concatenate, vstack have ambiguity around index alignment
-            return None, ser_index
-        else:
-            casted_ls.append(arg)
-    return casted_ls, ser_index
-
-
-def get_relevant_submodule(func, module):
-    # point to the correct submodule
-    for submodule in func.__module__.split(".")[1:]:
-        if hasattr(module, submodule):
-            module = getattr(module, submodule)
-        else:
-            return None
-    return module
 
 
 def _categorical_scalar_broadcast_to(cat_scalar, size):
@@ -505,3 +404,25 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
     if (indices == cp.arange(start, stop, step)).all():
         return slice(start, stop, step)
     return indices
+
+
+def _get_color_for_nvtx(name):
+    m = hashlib.sha256()
+    m.update(name.encode())
+    hash_value = int(m.hexdigest(), 16)
+    idx = hash_value % len(_NVTX_COLORS)
+    return _NVTX_COLORS[idx]
+
+
+def _cudf_nvtx_annotate(func, domain="cudf_python"):
+    """Decorator for applying nvtx annotations to methods in cudf."""
+    return annotate(
+        message=func.__qualname__,
+        color=_get_color_for_nvtx(func.__qualname__),
+        domain=domain,
+    )(func)
+
+
+_dask_cudf_nvtx_annotate = partial(
+    _cudf_nvtx_annotate, domain="dask_cudf_python"
+)

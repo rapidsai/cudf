@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,8 +73,8 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 constexpr bool is_packable()
 {
-  return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
-         not std::is_void<packed_t<pair_type>>::value and
+  return std::is_integral_v<key_type> and std::is_integral_v<value_type> and
+         not std::is_void_v<packed_t<pair_type>> and
          std::has_unique_object_representations_v<pair_type>;
 }
 
