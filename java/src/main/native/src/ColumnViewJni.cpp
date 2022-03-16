@@ -75,6 +75,7 @@
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
 #include "map_lookup.hpp"
+#include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
@@ -1361,12 +1362,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
                                                                  jlong map_column_view,
                                                                  jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup key is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_lookup(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.get_values_for(*scalar_key));
   }
   CATCH_STD(env, 0);
 }
@@ -1375,12 +1377,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, 
                                                                    jlong map_column_view,
                                                                    jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup key is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_contains(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.contains(*scalar_key));
   }
   CATCH_STD(env, 0);
 }
