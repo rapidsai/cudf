@@ -1402,6 +1402,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
 
+    def pct_change(self):
+        pass
+
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
     ) -> DataFrameOrSeries:
