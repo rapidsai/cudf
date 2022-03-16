@@ -400,8 +400,8 @@ struct get_indices_of_unique_entries_dispatch {
     auto const flattened_entries = cudf::structs::detail::flatten_nested_columns(
       table_view{{all_lists_entries}}, {order::ASCENDING}, {null_order::AFTER}, {});
     auto const dview_ptr = table_device_view::create(flattened_entries, stream);
-    // search through children of all levels for null values
-    bool nested_has_nulls = has_nulls(flattened_entries.flattened_columns());
+    // Search through children of all levels for nulls.
+    auto const nested_has_nulls = has_nulls(flattened_entries.flattened_columns());
 
     auto const comp = table_row_comparator_fn{list_indices,
                                               *dview_ptr,
