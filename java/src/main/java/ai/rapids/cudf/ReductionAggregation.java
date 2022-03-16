@@ -209,4 +209,18 @@ public final class ReductionAggregation {
   public static ReductionAggregation nth(int offset, NullPolicy nullPolicy) {
     return new ReductionAggregation(Aggregation.nth(offset, nullPolicy));
   }
+
+  /**
+   * tDigest reduction.
+   */
+  public static ReductionAggregation createTDigest(int delta) {
+    return new ReductionAggregation(Aggregation.createTDigest(delta));
+  }
+
+  /**
+   * tDigest merge reduction.
+   */
+  public static ReductionAggregation mergeTDigest(int delta) {
+    return new ReductionAggregation(Aggregation.mergeTDigest(delta));
+  }
 }
