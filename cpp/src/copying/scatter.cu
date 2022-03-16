@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
                                        MapIterator scatter_map,
                                        size_type num_scatter_rows)
 {
-  size_type row = threadIdx.x + blockIdx.x * blockDim.x;
+  std::size_t row = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (row < num_scatter_rows) {
     size_type const output_row = scatter_map[row];
@@ -351,8 +351,10 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
 
   // Transform negative indices to index + target size
   auto scatter_rows = indices.size();
+  // note: the intermediate ((in % n_rows) + n_rows) will overflow a size_type for any value of `in` > (2^31)/2, 
+  // but the end result after the final (% n_rows) will fit. so we'll do the computation using a signed 64 bit value.
   auto scatter_iter = thrust::make_transform_iterator(
-    map_begin, [n_rows] __device__(size_type in) { return ((in % n_rows) + n_rows) % n_rows; });
+    map_begin, [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type { return ((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows; });
 
   // Dispatch over data type per column
   auto result          = std::vector<std::unique_ptr<column>>(target.num_columns());
