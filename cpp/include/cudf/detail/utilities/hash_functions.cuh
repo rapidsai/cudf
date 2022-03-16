@@ -252,10 +252,10 @@ struct MurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = detail::rotate_bits_left(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = detail::rotate_bits_left(h1, rot_c2);
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -267,7 +267,7 @@ struct MurmurHash3_32 {
       case 1:
         k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = detail::rotate_bits_left(k1, rot_c1);
+        k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
         k1 *= c2;
         h1 ^= k1;
     };
@@ -406,10 +406,10 @@ struct SparkMurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = detail::rotate_bits_left(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = detail::rotate_bits_left(h1, rot_c2);
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -422,10 +422,10 @@ struct SparkMurmurHash3_32 {
       // signedness when casting byte-to-int, but C++ does not.
       uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = detail::rotate_bits_left(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = detail::rotate_bits_left(h1, rot_c2);
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
