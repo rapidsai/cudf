@@ -5,7 +5,7 @@ import itertools
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Iterable
 
 import numpy as np
 
@@ -429,7 +429,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _normalize_aggs(
         self, aggs: Any
-    ) -> Tuple[Tuple[Any], Tuple[ColumnBase], List[List[Any]]]:
+    ) -> Tuple[Iterable[Any], Tuple[ColumnBase], List[List[Any]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support three
@@ -450,7 +450,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns = values._columns
             aggs_per_column = (aggs,) * len(columns)
         else:
-            column_names, aggs_per_column = list(zip(*aggs.items()))
+            column_names, aggs_per_column = zip(*aggs.items())
             columns = tuple(self.obj._data[col] for col in column_names)
 
         normalized_aggs = [
