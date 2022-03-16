@@ -23,7 +23,6 @@
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
-#include <initializer_list>
 #include <limits>
 
 namespace cudf {
