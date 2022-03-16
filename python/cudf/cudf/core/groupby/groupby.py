@@ -5,7 +5,7 @@ import itertools
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
 
@@ -38,6 +38,10 @@ def _quantile_75(x):
 
 
 class GroupBy(Serializable, Reducible, Scannable):
+
+    # Pandas Index object supports groupby, but only trivially return a dict
+    # of grouped values.
+    obj: cudf.core.indexed_frame.IndexedFrame
 
     _VALID_REDUCTIONS = {
         "sum",
@@ -429,7 +433,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def _normalize_aggs(
         self, aggs: MultiColumnAggType
-    ) -> Tuple[Iterable[Any], Tuple[ColumnBase], List[List[AggType]]]:
+    ) -> Tuple[Iterable[Any], Tuple[ColumnBase, ...], List[List[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support three
@@ -444,18 +448,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         Each agg can be string or lambda functions.
         """
 
-        if not isinstance(aggs, dict):
+        aggs_per_column: Iterable[Union[AggType, List[AggType]]]
+        if isinstance(aggs, dict):
+            column_names, aggs_per_column = aggs.keys(), aggs.values()
+            columns = tuple(self.obj._data[col] for col in column_names)
+        else:
             values = self.grouping.values
             column_names = values._column_names
             columns = values._columns
             aggs_per_column = (aggs,) * len(columns)
-        else:
-            column_names, aggs_per_column = zip(*aggs.items())
-            columns = tuple(self.obj._data[col] for col in column_names)
 
         normalized_aggs = [
-            [agg] if isinstance(agg, str) or callable(agg) else agg
-            for agg in aggs_per_column
+            agg if isinstance(agg, list) else [agg] for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs
 
@@ -1703,7 +1707,7 @@ class _Grouping(Serializable):
             )
 
     @property
-    def values(self):
+    def values(self) -> cudf.core.frame.Frame:
         """Return value columns as a frame.
 
         Note that in aggregation, value columns can be arbitrarily
