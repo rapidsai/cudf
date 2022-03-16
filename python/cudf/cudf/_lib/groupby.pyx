@@ -69,7 +69,7 @@ ctypedef const scalar constscalar
 
 cdef _agg_result_from_columns(
     vector[libcudf_groupby.aggregation_result]& c_result_columns,
-    set column_orders,
+    set column_included,
     int n_input_columns
 ):
     """Construct the list of result columns from libcudf result. The result
@@ -81,7 +81,7 @@ cdef _agg_result_from_columns(
     cdef int i, j, result_index = 0
     cdef vector[unique_ptr[column]]* c_results_i
     for i in range(n_input_columns):
-        if i in column_orders:
+        if i in column_included:
             c_results_i = &c_result_columns[result_index].results
             result_columns.append([
                 Column.from_unique_ptr(move(c_results_i[0][j]))
@@ -148,7 +148,7 @@ cdef class GroupBy:
         allow_empty = all(len(v) == 0 for v in aggregations)
 
         included_aggregations = []
-        column_orders = set()
+        column_included = set()
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
@@ -178,7 +178,7 @@ cdef class GroupBy:
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-                column_orders.add(i)
+                column_included.add(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 
@@ -194,7 +194,7 @@ cdef class GroupBy:
         )
 
         result_columns = _agg_result_from_columns(
-            c_result.second, column_orders, len(values)
+            c_result.second, column_included, len(values)
         )
 
         return result_columns, grouped_keys, included_aggregations
@@ -219,7 +219,7 @@ cdef class GroupBy:
         allow_empty = all(len(v) == 0 for v in aggregations)
 
         included_aggregations = []
-        column_orders = set()
+        column_included = set()
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
@@ -249,7 +249,7 @@ cdef class GroupBy:
                 c_agg_requests.push_back(
                     move(c_agg_request)
                 )
-                column_orders.add(i)
+                column_included.add(i)
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 
@@ -265,7 +265,7 @@ cdef class GroupBy:
         )
 
         result_columns = _agg_result_from_columns(
-            c_result.second, column_orders, len(values)
+            c_result.second, column_included, len(values)
         )
 
         return result_columns, grouped_keys, included_aggregations
