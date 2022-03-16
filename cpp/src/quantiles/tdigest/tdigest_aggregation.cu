@@ -37,8 +37,8 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
-namespace groupby {
 namespace detail {
+namespace tdigest {
 
 using namespace cudf::tdigest;
 
@@ -1008,6 +1008,6 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                           mr);
 }
 
+}  // namespace tdigest
 }  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

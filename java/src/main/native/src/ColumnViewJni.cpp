@@ -75,6 +75,7 @@
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
 #include "map_lookup.hpp"
+#include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
@@ -262,6 +263,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
                      std::unique_ptr<cudf::reduce_aggregation>(
                          dynamic_cast<cudf::reduce_aggregation *>(agg->clone().release())),
                      out_dtype));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(
+    JNIEnv *env, jclass, jlong j_data_view, jlong j_offsets_view, jlong j_agg,
+    jboolean include_nulls, jint j_dtype, jint scale) {
+  JNI_NULL_CHECK(env, j_data_view, "data column view is null", 0);
+  JNI_NULL_CHECK(env, j_offsets_view, "offsets column view is null", 0);
+  JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto data = reinterpret_cast<cudf::column_view *>(j_data_view);
+    auto offsets = reinterpret_cast<cudf::column_view *>(j_offsets_view);
+    auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
+    auto s_agg = dynamic_cast<cudf::segmented_reduce_aggregation *>(agg);
+    JNI_ARG_CHECK(env, s_agg != nullptr, "agg is not a cudf::segmented_reduce_aggregation", 0)
+    auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
+    cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    return release_as_jlong(
+        cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -1340,12 +1362,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
                                                                  jlong map_column_view,
                                                                  jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup key is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_lookup(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.get_values_for(*scalar_key));
   }
   CATCH_STD(env, 0);
 }
@@ -1354,12 +1377,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, 
                                                                    jlong map_column_view,
                                                                    jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup key is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_contains(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.contains(*scalar_key));
   }
   CATCH_STD(env, 0);
 }
@@ -1779,6 +1803,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getChildCvPointer(JNIEnv 
     auto const is_list = column->type().id() == cudf::type_id::LIST;
     auto const child = column->child(child_index + (is_list ? 1 : 0));
     return ptr_as_jlong(new cudf::column_view(child));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getListOffsetCvPointer(JNIEnv *env,
+                                                                              jobject j_object,
+                                                                              jlong handle) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::lists_column_view view = cudf::lists_column_view(*column);
+    cudf::column_view offsets_view = view.offsets();
+    return ptr_as_jlong(new cudf::column_view(offsets_view));
   }
   CATCH_STD(env, 0);
 }

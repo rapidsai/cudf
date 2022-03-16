@@ -265,7 +265,6 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
-  src/groupby/sort/group_tdigest.cu
   src/groupby/sort/sort_helper.cu
   src/hash/hashing.cu
   src/hash/md5_hash.cu
@@ -357,6 +356,7 @@ add_library(
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
   src/quantiles/tdigest/tdigest.cu
+  src/quantiles/tdigest/tdigest_aggregation.cu
   src/quantiles/tdigest/tdigest_column_view.cpp
   src/quantiles/quantile.cu
   src/quantiles/quantiles.cu
@@ -408,10 +408,12 @@ add_library(
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/stream_compaction/apply_boolean_mask.cu
+  src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/drop_duplicates.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/unique.cu
+  src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
