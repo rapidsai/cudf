@@ -1543,6 +1543,8 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     Captive      210.0
     """
 
+    obj: "cudf.core.dataframe.DataFrame"
+
     _PROTECTED_KEYS = frozenset(("obj",))
 
     def __getitem__(self, key):
@@ -1610,6 +1612,8 @@ class SeriesGroupBy(GroupBy):
     True     370.0
     Name: Max Speed, dtype: float64
     """
+
+    obj: "cudf.core.series.Series"
 
     def agg(self, func):
         result = super().agg(func)
