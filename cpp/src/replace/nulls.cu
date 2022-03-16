@@ -63,7 +63,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
                                       cudf::size_type* valid_counter)
 {
   cudf::size_type nrows = input.size();
-  cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
+  std::size_t i     = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -115,7 +115,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
                               cudf::size_type* output_valid_count)
 {
   cudf::size_type nrows = input.size();
-  cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
+  std::size_t i     = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -247,6 +247,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
 
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
+
   auto offsets_view = offsets->mutable_view();
 
   auto const bytes =
