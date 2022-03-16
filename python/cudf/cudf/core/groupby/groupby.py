@@ -5,14 +5,14 @@ import itertools
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, List, Tuple, Iterable
+from typing import Any, Iterable, List, Tuple
 
 import numpy as np
 
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.reshape import interleave_columns
-from cudf._typing import DataFrameOrSeries
+from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, arange, as_column
@@ -428,8 +428,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
-        self, aggs: Any
-    ) -> Tuple[Iterable[Any], Tuple[ColumnBase], List[List[Any]]]:
+        self, aggs: MultiColumnAggType
+    ) -> Tuple[Iterable[Any], Tuple[ColumnBase], List[List[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
         is a list of aggregations for column `self.obj[i]`. We support three
@@ -444,7 +444,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Each agg can be string or lambda functions.
         """
 
-        if not isinstance(aggs, collections.abc.Mapping):
+        if not isinstance(aggs, dict):
             values = self.grouping.values
             column_names = values._column_names
             columns = values._columns
@@ -454,7 +454,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             columns = tuple(self.obj._data[col] for col in column_names)
 
         normalized_aggs = [
-            [agg] if not is_list_like(agg) else list(agg)
+            [agg] if isinstance(agg, str) or callable(agg) else agg
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs
