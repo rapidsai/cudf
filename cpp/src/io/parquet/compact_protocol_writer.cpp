@@ -145,10 +145,11 @@ size_t CompactProtocolWriter::write(const SchemaElement& s)
     }
   }
   auto const isset = s.logical_type.isset;
-  if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or
-      isset.TIME or isset.TIMESTAMP or isset.INTEGER or isset.UNKNOWN or isset.JSON or isset.BSON) {
-    c.field_struct(10, s.logical_type);
-  }
+  // TODO: add handling for all logical types
+  // if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or
+  //    isset.TIME or isset.TIMESTAMP or isset.INTEGER or isset.UNKNOWN or isset.JSON or isset.BSON)
+  //    {
+  if (isset.TIMESTAMP) { c.field_struct(10, s.logical_type); }
   return c.value();
 }
 
