@@ -737,9 +737,12 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsHaveNull)
 TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfNestedStructsHaveNull)
 {
   using ColWrapper    = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  auto constexpr XXX  = int32_t{0};  // nulls at the parent structs column level
-  auto constexpr YYY  = int32_t{0};  // nulls at the parent structs column level
   auto constexpr null = int32_t{0};  // nulls at the children columns level
+  // XXX and YY are int placeholders for nulls at parent structs column level.
+  // We bring up two placeholders of different values to create intra null structs with
+  // children of different values, so as to test whether null_equality::EQUAL works or not.
+  auto constexpr XXX = int32_t{5};
+  auto constexpr YYY = int32_t{6};
 
   auto const get_nested_structs = [] {
     auto grandchild1 = ColWrapper{{
