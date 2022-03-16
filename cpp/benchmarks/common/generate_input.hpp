@@ -216,10 +216,10 @@ class data_profile {
     cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
 
-  double bool_probability        = 0.5;
-  double null_frequency          = 0.01;
-  cudf::size_type cardinality    = 2000;
-  cudf::size_type avg_run_length = 4;
+  double bool_probability              = 0.5;
+  std::optional<double> null_frequency = 0.01;
+  cudf::size_type cardinality          = 2000;
+  cudf::size_type avg_run_length       = 4;
 
  public:
   template <typename T,
@@ -353,7 +353,7 @@ class data_profile {
   }
 
   void set_bool_probability(double p) { bool_probability = p; }
-  void set_null_frequency(double f) { null_frequency = f; }
+  void set_null_frequency(std::optional<double> f) { null_frequency = f; }
   void set_cardinality(cudf::size_type c) { cardinality = c; }
   void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
 

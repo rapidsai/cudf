@@ -34,7 +34,7 @@ void BM_reduction_dictionary(benchmark::State& state,
 
   // int column and encoded dictionary column
   data_profile profile;
-  profile.set_null_frequency(-1);
+  profile.set_null_frequency(std::nullopt);
   profile.set_cardinality(0);
   profile.set_distribution_params<long>(cudf::type_to_id<long>(),
                                         distribution_id::UNIFORM,

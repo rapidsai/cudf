@@ -39,7 +39,7 @@ void BM_repeat(benchmark::State& state)
   // repeat counts
   using sizeT = cudf::size_type;
   data_profile profile;
-  profile.set_null_frequency(-1);
+  profile.set_null_frequency(std::nullopt);
   profile.set_cardinality(0);
   profile.set_distribution_params<sizeT>(cudf::type_to_id<sizeT>(), distribution_id::UNIFORM, 0, 3);
   auto repeat_table = create_random_table({cudf::type_to_id<sizeT>()}, row_count{n_rows}, profile);

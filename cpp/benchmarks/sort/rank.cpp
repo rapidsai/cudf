@@ -38,7 +38,7 @@ static void BM_rank(benchmark::State& state, bool nulls)
 
   // Create columns with values in the range [0,100)
   data_profile profile;
-  profile.set_null_frequency(nulls ? 0.01 : -0.01);
+  profile.set_null_frequency(nulls ? std::optional{0.01} : std::nullopt);
   profile.set_cardinality(0);
   profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
   auto keys_table = create_random_table({cudf::type_to_id<Type>()}, row_count{n_rows}, profile);

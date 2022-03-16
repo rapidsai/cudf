@@ -163,7 +163,7 @@ auto build_json_string_column(int desired_bytes, int num_rows)
 {
   data_profile profile;
   profile.set_cardinality(0);
-  profile.set_null_frequency(-1);
+  profile.set_null_frequency(std::nullopt);
   profile.set_distribution_params<float>(
     cudf::type_id::FLOAT32, distribution_id::UNIFORM, 0.0, 1.0);
   auto float_2bool_columns =
