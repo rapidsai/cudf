@@ -4149,6 +4149,30 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testCreateTDigestReduction() {
+    try (Table t1 = new Table.TestBuilder()
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Scalar tdigest = t1.getColumn(0)
+            .reduce(ReductionAggregation.createTDigest(1000), DType.STRUCT)) {
+      assertEquals(DType.STRUCT, tdigest.getType());
+      ColumnView[] columns = tdigest.getChildrenFromStructScalar();
+      assertEquals(3, columns.length);
+      try (HostColumnVector centroids = columns[0].copyToHost();
+          HostColumnVector min = columns[1].copyToHost();
+          HostColumnVector max = columns[2].copyToHost()) {
+        assertEquals(DType.LIST, centroids.getType());
+        assertEquals(DType.FLOAT64, min.getType());
+        assertEquals(DType.FLOAT64, max.getType());
+        assertEquals(1, min.getRowCount());
+        assertEquals(1, max.getRowCount());
+        assertEquals(70, min.getDouble(0));
+        assertEquals(160, max.getDouble(0));
+      }
+    }
+  }
+
+  @Test
   void testGroupByMinMaxDecimal() {
     try (Table t1 = new Table.TestBuilder()
         .column( "1",  "1", "1", "1", "2")
