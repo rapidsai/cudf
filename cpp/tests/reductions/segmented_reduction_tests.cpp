@@ -396,7 +396,7 @@ struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
   {
     std::vector<typename T::rep> result(input.size());
     std::transform(input.begin(), input.end(), result.begin(), [&exponent](auto x) {
-      return x * pow10(exponent);
+      return exponent >= 0 ? x * pow10(exponent) : x / pow10(-exponent);
     });
     return result;
   }
@@ -404,7 +404,7 @@ struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(SegmentedReductionFixedPointTest, ProductIncludeNullsZeroInputScale)
+TYPED_TEST(SegmentedReductionFixedPointTest, ProductIncludeNulls)
 {
   // [1, 2, 3], [1], [], [2, NULL, 3], [NULL], [NULL, NULL] | scale: 0
   // values:  {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX}
