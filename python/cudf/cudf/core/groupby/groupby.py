@@ -448,7 +448,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         Each agg can be string or lambda functions.
         """
 
-        aggs_per_column: Iterable[Union[AggType, List[AggType]]]
+        aggs_per_column: Iterable[Union[AggType, Iterable[AggType]]]
         if isinstance(aggs, dict):
             column_names, aggs_per_column = aggs.keys(), aggs.values()
             columns = tuple(self.obj._data[col] for col in column_names)
@@ -459,7 +459,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             aggs_per_column = (aggs,) * len(columns)
 
         normalized_aggs = [
-            agg if isinstance(agg, list) else [agg] for agg in aggs_per_column
+            list(agg) if is_list_like(agg) else [agg]
+            for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs
 

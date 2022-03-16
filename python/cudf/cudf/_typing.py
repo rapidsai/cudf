@@ -1,6 +1,6 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp
@@ -35,4 +35,6 @@ SeriesOrSingleColumnIndex = Union[
 
 # Groupby aggregation
 AggType = Union[str, Callable]
-MultiColumnAggType = Union[AggType, List[AggType], Dict[Any, List[AggType]]]
+MultiColumnAggType = Union[
+    AggType, Iterable[AggType], Dict[Any, Iterable[AggType]]
+]
