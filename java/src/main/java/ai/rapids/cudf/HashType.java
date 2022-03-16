@@ -34,7 +34,7 @@ public enum HashType {
   HashType(int nativeId) {
     this.nativeId = nativeId;
   }
-  
+
   public int getNativeId() {
     return nativeId;
   }

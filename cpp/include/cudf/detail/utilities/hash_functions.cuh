@@ -48,6 +48,107 @@ T __device__ inline normalize_nans_and_zeros(T const& key)
   return key;
 }
 
+__device__ inline uint32_t rotate_bits_left(uint32_t x, int8_t r)
+{
+  // This function is equivalent to (x << r) | (x >> (32 - r))
+  return __funnelshift_l(x, x, r);
+}
+
+__device__ inline uint32_t rotate_bits_right(uint32_t x, int8_t r)
+{
+  // This function is equivalent to (x >> r) | (x << (32 - r))
+  return __funnelshift_r(x, x, r);
+}
+
+__device__ inline uint64_t rotate_bits_right(uint64_t x, int8_t r)
+{
+  return (x >> r) | (x << (64 - r));
+}
+
+// Swap the endianness of a 32 bit value
+__device__ inline uint32_t swap_endian(uint32_t x)
+{
+  // The selector 0x0123 reverses the byte order
+  return __byte_perm(x, 0, 0x0123);
+}
+
+// Swap the endianness of a 64 bit value
+// There is no CUDA intrinsic for permuting bytes in 64 bit integers
+__device__ inline uint64_t swap_endian(uint64_t x)
+{
+  // Reverse the endianness of each 32 bit section
+  uint32_t low_bits  = swap_endian(static_cast<uint32_t>(x));
+  uint32_t high_bits = swap_endian(static_cast<uint32_t>(x >> 32));
+  // Reassemble a 64 bit result, swapping the low bits and high bits
+  return (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
+};
+
+template <int capacity, typename hash_step_callable>
+struct hash_circular_buffer {
+  uint8_t storage[capacity];
+  uint8_t* cur;
+  int available_space{capacity};
+  hash_step_callable hash_step;
+
+  __device__ inline hash_circular_buffer(hash_step_callable hash_step)
+    : cur{storage}, hash_step{hash_step}
+  {
+  }
+
+  __device__ inline void put(uint8_t const* in, int size)
+  {
+    int copy_start = 0;
+    while (size >= available_space) {
+      // The buffer will be filled by this chunk of data. Copy a chunk of the
+      // data to fill the buffer and trigger a hash step.
+      memcpy(cur, in + copy_start, available_space);
+      hash_step(storage);
+      size -= available_space;
+      copy_start += available_space;
+      cur             = storage;
+      available_space = capacity;
+    }
+    // The buffer will not be filled by the remaining data. That is, `size >= 0
+    // && size < capacity`. We copy the remaining data into the buffer but do
+    // not trigger a hash step.
+    memcpy(cur, in + copy_start, size);
+    cur += size;
+    available_space -= size;
+  }
+
+  __device__ inline void pad(int const space_to_leave)
+  {
+    if (space_to_leave > available_space) {
+      memset(cur, 0x00, available_space);
+      hash_step(storage);
+      cur             = storage;
+      available_space = capacity;
+    }
+    memset(cur, 0x00, available_space - space_to_leave);
+    cur += available_space - space_to_leave;
+    available_space = space_to_leave;
+  }
+
+  __device__ inline const uint8_t& operator[](int idx) const { return storage[idx]; }
+};
+
+// Get a uint8_t pointer to a column element and its size as a pair.
+template <typename Element>
+auto __device__ inline get_element_pointer_and_size(Element const& element)
+{
+  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
+  } else {
+    cudf_assert(false && "Unsupported type.");
+  }
+}
+
+template <>
+auto __device__ inline get_element_pointer_and_size(string_view const& element)
+{
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
+}
+
 /**
  * Modified GPU implementation of
  * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
