@@ -904,6 +904,18 @@ class IndexedFrame(Frame):
             for i in range(len(splits) + 1)
         ]
 
+    @_cudf_nvtx_annotate
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):  # noqa: D102
+        old_index = self._index
+        ret = super().fillna(value, method, axis, inplace, limit)
+        if inplace:
+            self._index = old_index
+        else:
+            ret._index = old_index
+        return ret
+
     def add_prefix(self, prefix):
         """
         Prefix labels with string `prefix`.

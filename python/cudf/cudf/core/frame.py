@@ -1037,7 +1037,7 @@ class Frame(BinaryOperand, Scannable):
 
         Returns
         -------
-        result : DataFrame
+        result : DataFrame, Series, or Index
             Copy with nulls filled.
 
         Examples
@@ -1165,18 +1165,9 @@ class Frame(BinaryOperand, Scannable):
             else:
                 filled_data[col_name] = col.copy(deep=True)
 
-        # TODO: This logic needs to move into the IndexedFrame class.
-        old_index = self._index
-        ret = self._mimic_inplace(
+        return self._mimic_inplace(
             self._from_data(data=filled_data), inplace=inplace,
         )
-        # TODO: Split this logic into the IndexedFrame class.
-        if isinstance(self, cudf.core.indexed_frame.IndexedFrame):
-            if inplace:
-                self._index = old_index
-            else:
-                ret._index = old_index
-        return ret
 
     @_cudf_nvtx_annotate
     def _drop_column(self, name):
