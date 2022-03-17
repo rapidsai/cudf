@@ -302,8 +302,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
       // If the list contains any null values, the result null mask must be
       // combined with the list's null mask.
       if (list_null_count > 0) {
-        if (result_null_mask.data() == nullptr) {
-          // The result null mask is not initialized. Use the list's output null mask.
+        if (result_null_count == 0) {
+          // The result has no nulls. Use the list's output null mask.
           result_null_mask  = std::move(list_null_mask);
           result_null_count = list_null_count;
         } else {
