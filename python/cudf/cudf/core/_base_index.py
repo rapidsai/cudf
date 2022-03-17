@@ -1084,7 +1084,13 @@ class BaseIndex(Serializable):
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
 
-        indices = self.argsort(ascending=ascending, na_position=na_position)
+        indices = (
+            self._as_int64().argsort(
+                ascending=ascending, na_position=na_position
+            )
+            if isinstance(self, cudf.RangeIndex)
+            else self.argsort(ascending=ascending, na_position=na_position)
+        )
         index_sorted = self.take(indices)
 
         if return_indexer:
