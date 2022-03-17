@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -235,8 +235,7 @@ def test_groupby_split_out(split_out, column):
 @pytest.mark.parametrize(
     "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
 )
-def test_groupby_dropna(dropna, by):
-
+def test_groupby_dropna_cudf(dropna, by):
     # NOTE: This test is borrowed from upstream dask
     #       (dask/dask/dataframe/tests/test_groupby.py)
     df = cudf.DataFrame(
@@ -263,6 +262,46 @@ def test_groupby_dropna(dropna, by):
         dask_result.index.name = cudf_result.index.name
 
     dd.assert_eq(dask_result, cudf_result)
+
+
+@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.parametrize(
+    "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
+)
+def test_groupby_dropna_dask(dropna, by):
+    # see https://github.com/dask/dask/issues/8817
+    if len(by) > 1 and dropna is False:
+        pytest.skip("Multi-column dropna support is broken for Dask CPU")
+    if by == "d" or "d" in by:
+        pytest.skip(
+            "Dask CPU doesn't have support for dropna with categorical columns"
+        )
+
+    # NOTE: This test is borrowed from upstream dask
+    #       (dask/dask/dataframe/tests/test_groupby.py)
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, None, 1, 3, None, 3, 1, 3],
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    df["b"] = df["b"].astype("datetime64[ns]")
+    df["d"] = df["c"].astype("category")
+
+    gdf = cudf.from_pandas(df)
+    ddf = dd.from_pandas(df, npartitions=3)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=3)
+
+    if dropna is None:
+        dask_cudf_result = gddf.groupby(by).e.sum()
+        dask_result = ddf.groupby(by).e.sum()
+    else:
+        dask_cudf_result = gddf.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+
+    dd.assert_eq(dask_cudf_result, dask_result)
 
 
 @pytest.mark.parametrize("myindex", [[1, 2] * 4, ["s1", "s2"] * 4])
