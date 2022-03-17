@@ -381,10 +381,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             f"to indexing result of shape "
                             f"{self._frame.loc[key[0]].shape} "
                         )
-                    for col in columns_df._column_names:
-                        self._frame._data[col][key[0]] = value[
-                            :, columns_df._column_names.index(col)
-                        ]
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame._data[col][key[0]] = value[:, i]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
