@@ -231,7 +231,6 @@ class IndexedFrame(Frame):
             if isinstance(out._index, cudf.MultiIndex):
                 out._index.names = index_names
             else:
-                assert len(index_names) == 1
                 out._index.name = index_names[0]
 
         return out

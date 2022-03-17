@@ -1171,11 +1171,8 @@ class Frame(BinaryOperand, Scannable):
             self._from_data(data=filled_data), inplace=inplace,
         )
         # TODO: Split this logic into the IndexedFrame class.
-        if isinstance(self, cudf.core.indexed_frame.IndexedFrame):
-            if inplace:
-                self._index = old_index
-            else:
-                ret._index = old_index
+        if isinstance(self, cudf.core.indexed_frame.IndexedFrame) and not inplace:
+            ret._index = old_index
         return ret
 
     @_cudf_nvtx_annotate
