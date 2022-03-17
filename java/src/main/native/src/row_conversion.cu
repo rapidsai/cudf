@@ -72,6 +72,8 @@ constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
 constexpr auto NUM_STRING_ROWS_PER_BLOCK = 16;
 constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
+constexpr auto NUM_THREADS = 256;
+
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
 
@@ -188,9 +190,9 @@ struct tile_info {
  *
  */
 struct row_batch {
-  size_type num_bytes;                   // number of bytes in this batch
-  size_type row_count;                   // number of rows in the batch
-  device_uvector<size_type> row_offsets; // offsets column of output cudf column
+  size_type num_bytes;                     // number of bytes in this batch
+  size_type row_count;                     // number of rows in the batch
+  device_uvector<offset_type> row_offsets; // offsets column of output cudf column
 };
 
 /**
@@ -925,8 +927,8 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
         // write the offset/length to column
         uint32_t *output_dest = reinterpret_cast<uint32_t *>(
             &output_data[base_row_offset + variable_col_output_offsets[col]]);
-        *output_dest++ = offset;
-        *output_dest++ = string_length;
+        output_dest[0] = offset;
+        output_dest[1] = string_length;
       }
       auto string_output_dest = &output_data[base_row_offset + offset];
       auto string_output_src = &variable_input_data[col][string_start_offset];
@@ -1389,7 +1391,7 @@ struct column_info_s {
  */
 template <typename iterator>
 column_info_s compute_column_information(iterator begin, iterator end) {
-  int fixed_width_size_per_row = 0;
+  size_type fixed_width_size_per_row = 0;
   std::vector<size_type> fixed_width_column_starts;
   std::vector<size_type> fixed_width_column_sizes;
   std::vector<size_type> variable_width_column_starts;
@@ -1400,11 +1402,11 @@ column_info_s compute_column_information(iterator begin, iterator end) {
 
     // a list or string column will write a single uint64
     // of data here for offset/length
-    auto col_size = compound_type ? 8 : size_of(col_type);
+    auto const col_size = compound_type ? sizeof(uint32_t) + sizeof(uint32_t) : size_of(col_type);
 
     // align size for this type - They are the same for fixed width types and 4 bytes for variable
     // width length/offset combos
-    size_type const alignment_needed = compound_type ? 4 : col_size;
+    size_type const alignment_needed = compound_type ? __alignof(uint32_t) : col_size;
     fixed_width_size_per_row = util::round_up_unsafe(fixed_width_size_per_row, alignment_needed);
     if (compound_type) {
       variable_width_column_starts.push_back(fixed_width_size_per_row);
@@ -1851,7 +1853,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
   // blast through the entire table and convert it
   dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_TO_ROWS));
-  dim3 threads(256);
+  dim3 threads(NUM_THREADS);
 
   // build validity tiles for ALL columns, variable and fixed width.
   auto validity_tile_infos = detail::build_validity_tile_infos(
@@ -1897,7 +1899,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
     auto dev_variable_col_output_offsets =
         make_device_uvector_async(column_info.variable_width_column_starts, stream);
 
-    dim3 string_threads(256);
+    dim3 string_threads(NUM_THREADS);
     for (uint i = 0; i < batch_info.row_batches.size(); i++) {
       auto const batch_row_offset = batch_info.batch_row_boundaries[i];
       auto const batch_num_rows = batch_info.row_batches[i].row_count;
@@ -2173,7 +2175,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
       });
 
   dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_FROM_ROWS));
-  dim3 threads(std::min(std::min(256, shmem_limit_per_tile / 8), static_cast<int>(child.size())));
+  dim3 threads(
+      std::min(std::min(NUM_THREADS, shmem_limit_per_tile / 8), static_cast<int>(child.size())));
 
   auto validity_tile_infos =
       detail::build_validity_tile_infos(num_columns, num_rows, shmem_limit_per_tile, row_batches);
