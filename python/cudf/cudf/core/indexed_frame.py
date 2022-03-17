@@ -642,7 +642,7 @@ class IndexedFrame(Frame):
 
         return self._from_columns_like_self(
             libcudf.copying.gather(
-                list(self._index._columns + self._columns)
+                list(self._index._as_int64()._columns + self._columns)
                 if keep_index
                 else list(self._columns),
                 gather_map,
