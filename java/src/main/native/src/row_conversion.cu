@@ -1396,7 +1396,7 @@ column_info_s compute_column_information(iterator begin, iterator end) {
 
   for (auto cv = begin; cv != end; ++cv) {
     auto col_type = std::get<0>(*cv);
-    bool compound_type = is_compound(col_type);
+    bool const compound_type = is_compound(col_type);
 
     // a list or string column will write a single uint64
     // of data here for offset/length
