@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -276,10 +277,60 @@ std::unique_ptr<column> md5_hash(table_view const& input,
       }
     });
 
-  rmm::device_buffer null_mask{0, stream, mr};
+  // Build an output null mask from the logical AND of all input columns' null masks.
+  auto [result_null_mask, result_null_count] = cudf::detail::bitmask_and(input, stream);
 
-  return make_strings_column(
-    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
+  // Update the null mask with the child null mask of any input list columns.
+  for (auto const& col : input) {
+    if (col.type().id() == type_id::LIST) {
+      // Compute the list's output null mask.
+      auto const lists_col               = lists_column_view(col);
+      auto const bitmask                 = lists_col.child().null_mask();
+      auto const offsets                 = device_span<size_type const>(lists_col.offsets());
+      auto const first_bit_indices_begin = offsets.begin();
+      auto const first_bit_indices_end   = offsets.end() - 1;
+      auto const last_bit_indices_begin  = first_bit_indices_begin + 1;
+      auto [list_null_mask, list_null_count] =
+        cudf::detail::segmented_null_mask_reduction(bitmask,
+                                                    first_bit_indices_begin,
+                                                    first_bit_indices_end,
+                                                    last_bit_indices_begin,
+                                                    null_policy::INCLUDE,
+                                                    stream,
+                                                    mr);
+
+      // If the list contains any null values, the result null mask must be
+      // combined with the list's null mask.
+      if (list_null_count > 0) {
+        if (result_null_mask.data() == nullptr) {
+          // The result null mask is not initialized. Use the list's output null mask.
+          result_null_mask  = std::move(list_null_mask);
+          result_null_count = list_null_count;
+        } else {
+          // Compute the logical AND of the list's output null mask and the
+          // result null mask to update the result null mask and null count.
+          std::vector<bitmask_type const*> masks{
+            static_cast<bitmask_type const*>(result_null_mask.data()),
+            static_cast<bitmask_type const*>(list_null_mask.data())};
+          std::vector<size_type> begin_bits{0, 0};
+          auto const valid_count = cudf::detail::inplace_bitmask_and(
+            device_span<bitmask_type>(static_cast<bitmask_type*>(result_null_mask.data()),
+                                      num_bitmask_words(input.num_rows())),
+            masks,
+            begin_bits,
+            input.num_rows(),
+            stream,
+            mr);
+          result_null_count = input.num_rows() - valid_count;
+        }
+      }
+    }
+  }
+  return make_strings_column(input.num_rows(),
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             result_null_count,
+                             std::move(result_null_mask));
 }
 
 }  // namespace detail

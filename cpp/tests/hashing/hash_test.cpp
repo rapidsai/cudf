@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -533,7 +533,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
      "Very different... but null",
      "All work and no play makes Jack a dull boy",
      ""},
-    {1, 0, 0, 1, 1});  // empty string is equivalent to null
+    {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
@@ -563,11 +563,12 @@ TEST_F(MD5HashTest, StringListsNulls)
 
   strings_column_wrapper const strings_col(
     {"",
-     "A 60 character string to test MD5's message padding algorithm",
+     "A 60 character string to test MD5's message padding algorithm",  // null
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "MD5 hash function. This string needed to be longer. It needed to be even longer.",
      "All work and no play makes Jack a dull boy",
-     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
+     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"},
+    {1, 0, 1, 1, 1});
 
   lists_column_wrapper<cudf::string_view> strings_list_col(
     {{""},
@@ -577,7 +578,7 @@ TEST_F(MD5HashTest, StringListsNulls)
       "MD5 hash function. This string needed to be longer.",
       " It needed to be even longer."},
      {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
-     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+     {R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`)", R"({|}~)"}});
 
   auto const input1 = cudf::table_view({strings_col});
   auto const input2 = cudf::table_view({strings_list_col});
@@ -627,16 +628,13 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
 
 TEST_F(MD5HashTest, TestBoolListsWithNulls)
 {
-  fixed_width_column_wrapper<bool> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
-                                              {1, 0, 0, 0, 1, 1, 1, 0, 0});
-  fixed_width_column_wrapper<bool> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
-                                              {1, 0, 0, 1, 0, 1, 0, 1, 0});
-  fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
-                                              {1, 0, 0, 1, 1, 0, 0, 0, 1});
+  fixed_width_column_wrapper<bool> const col1({0, 1, 1, 1}, {1, 0, 1, 1});
+  fixed_width_column_wrapper<bool> const col2({0, 1, 1, 1}, {1, 0, 1, 0});
+  fixed_width_column_wrapper<bool> const col3({0, 1, 1, 1}, {1, 0, 1, 1});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
-  lists_column_wrapper<bool> const list_col(
-    {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
+  lists_column_wrapper<bool> const list_col({{0, 0, 0}, {1}, {1, 1, 1}, {{1, 1, 1}, validity}},
+                                            validity);
 
   auto const input1 = cudf::table_view({col1, col2, col3});
   auto const input2 = cudf::table_view({list_col});
@@ -659,17 +657,13 @@ TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
 {
   using T = TypeParam;
 
-  fixed_width_column_wrapper<T> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
-                                           {1, 0, 0, 0, 1, 1, 1, 0, 0});
-  fixed_width_column_wrapper<T> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
-                                           {1, 0, 0, 1, 0, 1, 0, 1, 0});
-  fixed_width_column_wrapper<T> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
-                                           {1, 0, 0, 1, 1, 0, 0, 0, 1});
+  fixed_width_column_wrapper<T> const col1({0, 127, 23, 32}, {1, 0, 1, 1});
+  fixed_width_column_wrapper<T> const col2({0, 127, 49, 127}, {1, 0, 1, 0});
+  fixed_width_column_wrapper<T> const col3({0, 127, 18, 64}, {1, 0, 1, 1});
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });
   lists_column_wrapper<T> const list_col(
-    {{0, 0, 0}, {127}, {}, {{32, 127, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
-    validity);
+    {{0, 0, 0}, {127}, {23, 49, 18}, {{32, 127, 64}, validity}}, validity);
 
   auto const input1 = cudf::table_view({col1, col2, col3});
   auto const input2 = cudf::table_view({list_col});
