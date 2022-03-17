@@ -5603,7 +5603,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
-        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        name_index = cudf.DataFrame._from_data({0: self._column_names}).tile(
+            self.shape[0]
+        )
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
         if isinstance(self._index, MultiIndex):
             index_names = self._index.names + [None]
