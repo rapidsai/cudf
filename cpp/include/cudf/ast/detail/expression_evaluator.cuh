@@ -179,8 +179,6 @@ struct mutable_column_expression_result
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
     CUDF_UNREACHABLE("This method is not implemented.");
-    // Unreachable return used to silence compiler warnings.
-    return {};
   }
 
   /**

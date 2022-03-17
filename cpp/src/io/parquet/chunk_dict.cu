@@ -78,17 +78,12 @@ struct map_insert_fn {
 struct map_find_fn {
   map_type::device_view& map;
 
-  template <typename T>
+  template <typename T, std::enable_if_t<column_device_view::has_element_accessor<T>()>* = nullptr>
   __device__ auto operator()(column_device_view const& col, size_type i)
   {
-    if constexpr (column_device_view::has_element_accessor<T>()) {
-      auto hash_fn     = hash_functor<T>{col};
-      auto equality_fn = equality_functor<T>{col};
-      return map.find(i, hash_fn, equality_fn);
-    } else {
-      CUDF_UNREACHABLE("Unsupported type to insert in map");
-    }
-    return map.end();
+    auto hash_fn     = hash_functor<T>{col};
+    auto equality_fn = equality_functor<T>{col};
+    return map.find(i, hash_fn, equality_fn);
   }
 };
 
