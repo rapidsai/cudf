@@ -367,13 +367,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             f"to indexing result of shape "
                             f"{self._frame.loc[key[0]].shape}"
                         )
-                    for col in self._frame._column_names:
-                        if col in value:
-                            self._frame._data[col][key[0]] = value.iloc[
-                                :, columns_df._column_names.index(col)
-                            ]
-                        else:
-                            self._frame._data[col][key[0]] = cudf.NA
+                    value_column_names = set(value._column_names)
+                    
+                    for col in columns_df._column_names:
+                        columns_df[col][key[0]] = value._data[col] if col in value_column_names else cudf.NA
                 else:
                     value = np.array(value)
                     value = value.reshape((-1, value.shape[0]))
