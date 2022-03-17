@@ -262,31 +262,29 @@ class element_hasher {
     int start_off               = row_index;
     int end_off                 = row_index + 1;
     while (curr_col.type().id() == type_id::LIST) {
-      auto size = end_off - start_off;
-
+      if (has_nulls) {
+        for (int i = start_off; i < end_off; ++i) {
+          hash = detail::hash_combine(
+            hash, curr_col.is_null(i) ? std::numeric_limits<hash_value_type>::max() : 0);
+        }
+      }
       auto offsets = curr_col.child(lists_column_view::offsets_column_index);
-      for (int i = 0; i < size; ++i) {
-        auto const child_size =
-          offsets.element<size_type>(start_off + i + 1) - offsets.element<size_type>(start_off + i);
+      for (int i = start_off; i < end_off; ++i) {
+        auto const child_size = offsets.element<size_type>(i + 1) - offsets.element<size_type>(i);
         hash = cudf::detail::hash_combine(hash, hash_function<decltype(child_size)>{}(child_size));
       }
       curr_col  = curr_col.child(lists_column_view::child_column_index);
       start_off = offsets.element<size_type>(start_off);
       end_off   = offsets.element<size_type>(end_off);
     }
-    auto size = end_off - start_off;
-    hash      = cudf::detail::hash_combine(hash, hash_function<decltype(size)>{}(size));
-    for (int i = 0; i < size; ++i) {
+    for (int i = start_off; i < end_off; ++i) {
       hash = cudf::detail::hash_combine(
         hash,
-        type_dispatcher<non_nested_id_to_type>(curr_col.type(),
-                                               element_hasher<hash_function, Nullate>{has_nulls},
-                                               curr_col,
-                                               start_off + i));
+        type_dispatcher<non_nested_id_to_type>(
+          curr_col.type(), element_hasher<hash_function, Nullate>{has_nulls}, curr_col, i));
     }
-    // printf("hash %d\n", hash);
+    // printf("row_index, %d, hash %d\n", row_index, hash);
     return hash;
-    // return hash_value_type{0};
   }
 
   Nullate has_nulls;

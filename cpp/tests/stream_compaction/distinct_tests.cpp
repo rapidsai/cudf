@@ -138,3 +138,49 @@ TEST_F(Distinct, WithNull)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unequal, sorted_unequal->view());
 }
+
+TEST_F(Distinct, BasicList)
+{
+  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
+  using icw = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  // clang-format off
+  auto const idx = icw{ 0,  0,   1,      2,   1,      3,      4,   5,   5,      6,      4,     4 };
+  auto const col = lcw{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+  // clang-format on
+  auto const input = cudf::table_view({idx, col});
+
+  auto const exp_idx = icw{0, 1, 2, 3, 4, 5, 6};
+  auto const exp_val = lcw{{}, {1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+  auto const expect  = cudf::table_view({exp_idx, exp_val});
+
+  auto result        = cudf::distinct(input, {1});
+  auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
+}
+
+TEST_F(Distinct, NullableList)
+{
+  using lcw  = cudf::test::lists_column_wrapper<uint64_t>;
+  using icw  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using mask = std::vector<bool>;
+
+  // clang-format off
+  auto const idx    = icw {  0,  0,   1,   1,      4,   5,   5,  6,       4,     4,  6};
+  auto const valids = mask{  1,  1,   1,   1,      1,   1,   1,  0,       1,     1,  0};
+  auto const col    = lcw {{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
+
+  auto const exp_idx    = icw {  0,   1,      4,   5,  6};
+  auto const exp_valids = mask{  1,   1,      1,   1,  0};
+  auto const exp_val    = lcw {{{}, {1}, {2, 2}, {2}, {}}, exp_valids.begin()};
+
+  // clang-format on
+  auto const input  = cudf::table_view({idx, col});
+  auto const expect = cudf::table_view({exp_idx, exp_val});
+
+  auto result        = cudf::distinct(input, {1});
+  auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
+}
