@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf_test/column_utilities.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -404,14 +405,14 @@ struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(SegmentedReductionFixedPointTest, ProductIncludeNulls)
+TYPED_TEST(SegmentedReductionFixedPointTest, MaxIncludeNullsScaleZero)
 {
   // [1, 2, 3], [1], [], [2, NULL, 3], [NULL], [NULL, NULL] | scale: 0
   // values:  {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX}
-  // offsets: {0, 3, 4, 4, 7, 8, 10}
   // nullmask:{1, 1, 1, 1, 1, 0, 1, 0, 0, 0}
+  // offsets: {0, 3, 4, 4, 7, 8, 10}
   // output_dtype: decimalXX, scale: -1, 0, 1
-  // outputs: {6, 1, XXX, XXX, XXX, XXX}
+  // outputs: {3, 1, XXX, XXX, XXX, XXX}
   // output nullmask: {1, 1, 0, 0, 0, 0}
 
   using DecimalXX = TypeParam;
@@ -425,7 +426,7 @@ TYPED_TEST(SegmentedReductionFixedPointTest, ProductIncludeNulls)
 
     data_type output_dtype{type_to_id<DecimalXX>(), numeric::scale_type{output_scale}};
 
-    auto result_rep = this->scale_list_by_pow10({6, 1, XXX, XXX, XXX, XXX}, -output_scale);
+    auto result_rep = this->scale_list_by_pow10({3, 1, XXX, XXX, XXX, XXX}, -output_scale);
     fixed_point_column_wrapper<typename DecimalXX::rep> expect{
       result_rep.begin(),
       result_rep.end(),
@@ -434,11 +435,42 @@ TYPED_TEST(SegmentedReductionFixedPointTest, ProductIncludeNulls)
 
     auto res = segmented_reduce(input,
                                 column_view(offsets),
-                                *make_product_aggregation<segmented_reduce_aggregation>(),
+                                *make_max_aggregation<segmented_reduce_aggregation>(),
                                 output_dtype,
                                 null_policy::INCLUDE);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
   }
+}
+
+struct SegmentedReductionStringTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
+{
+  // ['world'], ['cudf', NULL, 'cuml'], ['hello', 'rapids', 'ai'], [], [NULL], [NULL, NULL]
+  // values:  {"world", "cudf", XXX, "cuml", "hello", "rapids", "ai", XXX, XXX, XXX}
+  // nullmask:{1, 1, 0, 1, 1, 1, 1, 0, 0, 0}
+  // offsets: {0, 1, 4, 7, 7, 8, 10}
+  // output_dtype: string dtype
+  // outputs: {"world", XXX, "rapids", XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+
+  strings_column_wrapper input{
+    {"world", "cudf", XXX, "cuml", "hello", "rapids", "ai", XXX, XXX, XXX},
+    {true, true, false, true, true, true, true, false, false, false}};
+  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 7, 8, 10};
+  data_type output_dtype{type_id::STRING};
+
+  strings_column_wrapper expect{{"world", XXX, "rapids", XXX, XXX, XXX},
+                                {true, false, true, false, false, false}};
+
+  auto res = segmented_reduce(input,
+                              column_view(offsets),
+                              *make_max_aggregation<segmented_reduce_aggregation>(),
+                              output_dtype,
+                              null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
 }
 
 #undef XXX
