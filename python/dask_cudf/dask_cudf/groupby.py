@@ -57,6 +57,20 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return g
 
     @_dask_cudf_nvtx_annotate
+    def count(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "count" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -64,7 +78,77 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             {c: "mean" for c in self.obj.columns if c not in self.by},
             split_every=split_every,
             split_out=split_out,
-            dropna=self.dropna,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def std(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "std" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def var(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "var" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def sum(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "sum" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def min(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "min" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def max(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "max" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
@@ -78,7 +162,35 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             {c: "collect" for c in self.obj.columns if c not in self.by},
             split_every=split_every,
             split_out=split_out,
-            dropna=self.dropna,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def first(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "first" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
+    @_dask_cudf_nvtx_annotate
+    def last(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {c: "last" for c in self.obj.columns if c not in self.by},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
@@ -112,7 +224,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 arg,
                 split_every=split_every,
                 split_out=split_out,
-                dropna=self.dropna,
+                **self.dropna,
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
@@ -131,6 +243,20 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         super().__init__(*args, **kwargs)
 
     @_dask_cudf_nvtx_annotate
+    def count(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "count"},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -138,7 +264,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             {self._slice: "mean"},
             split_every=split_every,
             split_out=split_out,
-            dropna=self.dropna,
+            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
@@ -152,7 +278,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             {self._slice: "std"},
             split_every=split_every,
             split_out=split_out,
-            dropna=self.dropna,
+            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
@@ -166,7 +292,49 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             {self._slice: "var"},
             split_every=split_every,
             split_out=split_out,
-            dropna=self.dropna,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    def sum(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "sum"},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    def min(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "min"},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    def max(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "max"},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
@@ -180,7 +348,35 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             {self._slice: "collect"},
             split_every=split_every,
             split_out=split_out,
-            dropna=self.dropna,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    def first(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "first"},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    @_dask_cudf_nvtx_annotate
+    def last(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.by,
+            {self._slice: "last"},
+            split_every=split_every,
+            split_out=split_out,
+            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
@@ -206,7 +402,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
                 arg,
                 split_every=split_every,
                 split_out=split_out,
-                dropna=self.dropna,
+                **self.dropna,
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
