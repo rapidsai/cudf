@@ -48,6 +48,9 @@
  * to indicate that a function does not need to return a default value because
  * it has already exhausted all possible cases in a `switch` statement.
  *
+ * The assert in this macro can be used when compiling in debug mode to help
+ * debug functions that may reach the supposedly unreachable code.
+ *
  * Example usage:
  * ```
  * CUDF_UNREACHABLE("Invalid type_id.");
