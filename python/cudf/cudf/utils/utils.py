@@ -24,6 +24,90 @@ from cudf.utils.dtypes import to_cudf_compatible_scalar
 mask_dtype = cudf.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
+# Mapping from ufuncs to the corresponding binary operators.
+_ufunc_binary_operations = {
+    # Arithmetic binary operations.
+    "add": "add",
+    "subtract": "sub",
+    "multiply": "mul",
+    "matmul": "matmul",
+    "divide": "truediv",
+    "true_divide": "truediv",
+    "floor_divide": "floordiv",
+    "power": "pow",
+    "float_power": "pow",
+    "remainder": "mod",
+    "mod": "mod",
+    "fmod": "mod",
+    # Bitwise binary operations.
+    "bitwise_and": "and",
+    "bitwise_or": "or",
+    "bitwise_xor": "xor",
+    # Comparison binary operators
+    "greater": "gt",
+    "greater_equal": "ge",
+    "less": "lt",
+    "less_equal": "le",
+    "not_equal": "ne",
+    "equal": "eq",
+}
+
+# These operators need to be mapped to their inverses when performing a
+# reflected ufunc operation because no reflected version of the operators
+# themselves exist. When these operators are invoked directly (not via
+# __array_ufunc__) Python takes care of calling the inverse operation.
+_ops_without_reflection = {
+    "gt": "lt",
+    "ge": "le",
+    "lt": "gt",
+    "le": "ge",
+    # ne and eq are symmetric, so they are their own inverse op
+    "ne": "ne",
+    "eq": "eq",
+}
+
+
+# This is the implementation of __array_ufunc__ used for Frame and Column.
+# For more detail on this function and how it should work, see
+# https://numpy.org/doc/stable/reference/ufuncs.html
+def _array_ufunc(obj, ufunc, method, inputs, kwargs):
+    # We don't currently support reduction, accumulation, etc. We also
+    # don't support any special kwargs or higher arity ufuncs than binary.
+    if method != "__call__" or kwargs or ufunc.nin > 2:
+        return NotImplemented
+
+    fname = ufunc.__name__
+    if fname in _ufunc_binary_operations:
+        reflect = obj is not inputs[0]
+        other = inputs[0] if reflect else inputs[1]
+
+        op = _ufunc_binary_operations[fname]
+        if reflect and op in _ops_without_reflection:
+            op = _ops_without_reflection[op]
+            reflect = False
+        op = f"__{'r' if reflect else ''}{op}__"
+
+        # Float_power returns float irrespective of the input type.
+        if fname == "float_power":
+            return getattr(obj, op)(other).astype(float)
+        return getattr(obj, op)(other)
+
+    # Special handling for various unary operations.
+    if fname == "negative":
+        return obj * -1
+    if fname == "positive":
+        return obj.copy(deep=True)
+    if fname == "invert":
+        return ~obj
+    if fname == "absolute":
+        # TODO: Make sure all obj (mainly Column) implement abs.
+        return abs(obj)
+    if fname == "fabs":
+        return abs(obj).astype(np.float64)
+
+    # None is a sentinel used by subclasses to trigger cupy dispatch.
+    return None
+
 
 _EQUALITY_OPS = {
     "__eq__",
