@@ -51,7 +51,7 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
                                 FollowingWindowType following_window_begin,
                                 cudf::size_type min_periods)
 {
-  cudf::size_type i      = blockIdx.x * blockDim.x + threadIdx.x;
+  std::size_t i          = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::size_type stride = blockDim.x * gridDim.x;
 
   cudf::size_type warp_valid_count{0};
@@ -66,8 +66,8 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
     cudf::size_type following_window = get_window(following_window_begin, i);
 
     // compute bounds
-    cudf::size_type start       = min(nrows, max(0, i - preceding_window + 1));
-    cudf::size_type end         = min(nrows, max(0, i + following_window + 1));
+    cudf::size_type start       = min(nrows, max(0, static_cast<size_type>(i) - preceding_window + 1));
+    cudf::size_type end         = min(nrows, max(0, static_cast<size_type>(i) + following_window + 1));
     cudf::size_type start_index = min(start, end);
     cudf::size_type end_index   = max(start, end);
 
