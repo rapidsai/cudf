@@ -1008,7 +1008,7 @@ __launch_bounds__(block_size) __global__
                    PrecedingWindowIterator preceding_window_begin,
                    FollowingWindowIterator following_window_begin)
 {
-  std::size_t i      = blockIdx.x * block_size + threadIdx.x;
+  std::size_t i    = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
 
   size_type warp_valid_count{0};
@@ -1020,10 +1020,12 @@ __launch_bounds__(block_size) __global__
     int64_t following_window = following_window_begin[i];
 
     // compute bounds
-    auto start = static_cast<size_type>(
-      min(static_cast<int64_t>(input.size()), max(0L, static_cast<cudf::size_type>(i) - preceding_window + 1)));
-    auto end = static_cast<size_type>(
-      min(static_cast<int64_t>(input.size()), max(0L, static_cast<cudf::size_type>(i) + following_window + 1)));
+    auto start =
+      static_cast<size_type>(min(static_cast<int64_t>(input.size()),
+                                 max(0L, static_cast<cudf::size_type>(i) - preceding_window + 1)));
+    auto end =
+      static_cast<size_type>(min(static_cast<int64_t>(input.size()),
+                                 max(0L, static_cast<cudf::size_type>(i) + following_window + 1)));
     size_type start_index = min(start, end);
     size_type end_index   = max(start, end);
 

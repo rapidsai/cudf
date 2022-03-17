@@ -66,8 +66,8 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
     cudf::size_type following_window = get_window(following_window_begin, i);
 
     // compute bounds
-    cudf::size_type start       = min(nrows, max(0, static_cast<size_type>(i) - preceding_window + 1));
-    cudf::size_type end         = min(nrows, max(0, static_cast<size_type>(i) + following_window + 1));
+    cudf::size_type start = min(nrows, max(0, static_cast<size_type>(i) - preceding_window + 1));
+    cudf::size_type end   = min(nrows, max(0, static_cast<size_type>(i) + following_window + 1));
     cudf::size_type start_index = min(start, end);
     cudf::size_type end_index   = max(start, end);
 

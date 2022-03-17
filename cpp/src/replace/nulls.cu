@@ -63,7 +63,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
                                       cudf::size_type* valid_counter)
 {
   cudf::size_type nrows = input.size();
-  std::size_t i     = blockIdx.x * blockDim.x + threadIdx.x;
+  std::size_t i         = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -115,7 +115,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
                               cudf::size_type* output_valid_count)
 {
   cudf::size_type nrows = input.size();
-  std::size_t i     = blockIdx.x * blockDim.x + threadIdx.x;
+  std::size_t i         = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
