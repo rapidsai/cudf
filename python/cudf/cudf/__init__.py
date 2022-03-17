@@ -58,26 +58,6 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.groupby import Grouper
-from cudf.core.ops import (
-    add,
-    arccos,
-    arcsin,
-    arctan,
-    cos,
-    exp,
-    floor_divide,
-    log,
-    logical_and,
-    logical_not,
-    logical_or,
-    multiply,
-    remainder,
-    sin,
-    sqrt,
-    subtract,
-    tan,
-    true_divide,
-)
 from cudf.core.reshape import (
     concat,
     get_dummies,

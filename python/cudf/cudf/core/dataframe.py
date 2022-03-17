@@ -2014,16 +2014,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return iter(self._column_names)
 
     @_cudf_nvtx_annotate
-    def iteritems(self):
-        """Iterate over column names and series pairs"""
-        warnings.warn(
-            "iteritems is deprecated and will be removed in a future version. "
-            "Use .items instead.",
-            FutureWarning,
-        )
-        return self.items()
-
-    @_cudf_nvtx_annotate
     def items(self):
         """Iterate over column names and series pairs"""
         for k in self:

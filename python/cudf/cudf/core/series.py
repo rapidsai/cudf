@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
-import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
@@ -1176,38 +1175,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
         return operands, lhs._index
-
-    @_cudf_nvtx_annotate
-    def logical_and(self, other):
-        warnings.warn(
-            "Series.logical_and is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._binaryop(other, "__l_and__").astype(np.bool_)
-
-    @_cudf_nvtx_annotate
-    def remainder(self, other):
-        warnings.warn(
-            "Series.remainder is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._binaryop(other, "__mod__")
-
-    @_cudf_nvtx_annotate
-    def logical_or(self, other):
-        warnings.warn(
-            "Series.logical_or is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._binaryop(other, "__l_or__").astype(np.bool_)
-
-    @_cudf_nvtx_annotate
-    def logical_not(self):
-        warnings.warn(
-            "Series.logical_not is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._unaryop("not")
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
@@ -3135,58 +3102,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
-
-    @_cudf_nvtx_annotate
-    def merge(
-        self,
-        other,
-        on=None,
-        left_on=None,
-        right_on=None,
-        left_index=False,
-        right_index=False,
-        how="inner",
-        sort=False,
-        lsuffix=None,
-        rsuffix=None,
-        method="hash",
-        suffixes=("_x", "_y"),
-    ):
-        warnings.warn(
-            "Series.merge is deprecated and will be removed in a future "
-            "release. Use cudf.merge instead.",
-            FutureWarning,
-        )
-        if left_on not in (self.name, None):
-            raise ValueError(
-                "Series to other merge uses series name as key implicitly"
-            )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
-
-        result = super()._merge(
-            other,
-            on=on,
-            left_on=left_on,
-            right_on=right_on,
-            left_index=left_index,
-            right_index=right_index,
-            how=how,
-            sort=sort,
-            indicator=False,
-            suffixes=suffixes,
-        )
-
-        return result
 
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):

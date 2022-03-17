@@ -2068,8 +2068,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-            -   ``warn`` : prints last exceptions as warnings and
-                return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
@@ -2157,25 +2155,14 @@ class IndexedFrame(Frame):
         1     2
         dtype: int64
         """
-        if errors not in ("ignore", "warn", "raise"):
+        if errors not in ("ignore", "raise"):
             raise ValueError("invalid error value specified")
-        elif errors == "warn":
-            warnings.warn(
-                "Specifying errors='warn' is deprecated and will be removed "
-                "in a future release.",
-                FutureWarning,
-            )
 
         try:
             data = super().astype(dtype, copy, **kwargs)
         except Exception as e:
             if errors == "raise":
                 raise e
-            elif errors == "warn":
-                import traceback
-
-                tb = traceback.format_exc()
-                warnings.warn(tb)
             return self
 
         return self._from_data(data, index=self._index)

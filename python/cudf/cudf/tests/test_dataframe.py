@@ -2087,13 +2087,12 @@ def test_unaryops_df(pdf, gdf, unaryop):
     assert_eq(d, g)
 
 
-@pytest.mark.parametrize("unary_func", ["abs", "floor", "ceil"])
-def test_unary_func_df(pdf, unary_func):
+def test_df_abs(pdf):
     np.random.seed(0)
     disturbance = pd.Series(np.random.rand(10))
     pdf = pdf - 5 + disturbance
-    d = pdf.apply(getattr(np, unary_func))
-    g = getattr(cudf.from_pandas(pdf), unary_func)()
+    d = pdf.apply(np.abs)
+    g = cudf.from_pandas(pdf).abs()
     assert_eq(d, g)
 
 
@@ -4540,9 +4539,6 @@ def test_empty_df_astype(dtype, args):
         ),
         pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
         "ignore",
-        pytest.param(
-            "warn", marks=pytest.mark.filterwarnings("ignore:Traceback")
-        ),
     ],
 )
 def test_series_astype_error_handling(errors):
