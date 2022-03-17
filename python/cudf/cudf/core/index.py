@@ -841,7 +841,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     @classmethod
     @_cudf_nvtx_annotate
     def _from_data(
-        cls, data: MutableMapping, name: Any = None, *args, **kwargs
+        cls, data: MutableMapping, name: Any = None
     ) -> GenericIndex:
         out = super()._from_data(data=data)
         if name is not None:

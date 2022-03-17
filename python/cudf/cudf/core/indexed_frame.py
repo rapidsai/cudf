@@ -19,7 +19,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 from uuid import uuid4
 
@@ -195,13 +194,9 @@ class IndexedFrame(Frame):
 
     @classmethod
     def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[BaseIndex] = None,
-        *args,
-        **kwargs,
+        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
     ):
-        out = super()._from_data(data, *args, **kwargs)
+        out = super()._from_data(data)
         out._index = RangeIndex(out._data.nrows) if index is None else index
         return out
 
@@ -253,10 +248,8 @@ class IndexedFrame(Frame):
         return frame._copy_type_metadata(self, include_index=bool(index_names))
 
     def _mimic_inplace(
-        self: T, result: Frame, inplace: bool = False
+        self: T, result: T, inplace: bool = False
     ) -> Optional[Frame]:
-        # TODO: Is there a better way to make mypy happy?
-        result = cast(IndexedFrame, result)
         if inplace:
             self._index = result._index
         return super()._mimic_inplace(result, inplace)

@@ -3,16 +3,7 @@
 
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Dict,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -66,20 +57,6 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         return super()._scan(op, axis=axis, *args, **kwargs)
-
-    @classmethod
-    @_cudf_nvtx_annotate
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
-        name: Any = None,
-    ):
-
-        out = super()._from_data(data, index)
-        if name is not None:
-            out.name = name
-        return out
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

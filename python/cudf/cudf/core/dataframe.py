@@ -860,8 +860,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
         columns: Any = None,
-        *args,
-        **kwargs,
     ) -> DataFrame:
         out = super()._from_data(data=data, index=index)
         if columns is not None:

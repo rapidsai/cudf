@@ -458,8 +458,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         data: MutableMapping,
         index: Optional[BaseIndex] = None,
         name: Any = None,
-        *args,
-        **kwargs,
     ) -> Series:
         out = super()._from_data(data=data, index=index)
         if name is not None:
