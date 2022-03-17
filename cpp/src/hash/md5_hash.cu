@@ -276,14 +276,10 @@ std::unique_ptr<column> md5_hash(table_view const& input,
       }
     });
 
-  // Build an output null mask from the logical AND of all input columns' null masks.
-  auto [null_mask, null_count] = cudf::detail::bitmask_and(input, stream);
+  rmm::device_buffer null_mask{0, stream, mr};
 
-  return make_strings_column(input.num_rows(),
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
 }
 
 }  // namespace detail
