@@ -43,7 +43,11 @@ namespace experimental {
  * @brief A map from cudf::type_id to cudf type that excludes LIST and STRUCT types.
  *
  * To be used with type_dispatcher in place of the default map, when it is required that STRUCT and
- * LIST map to void.
+ * LIST map to void. This is useful when we want to avoid recursion in a functor. For example, in
+ * element_comparator, we have a specialization for STRUCT but the type_dispatcher in it is only
+ * used to dispatch to the same functor for non-nested types. Even when we're guaranteed to not have
+ * non-nested types at that point, the compiler doesn't know this and would try to create recursive
+ * code which is very slow.
  *
  * Usage:
  * @code
@@ -77,19 +81,12 @@ class element_comparator {
    * @param null_precedence Indicates how null values are ordered with other values
    * @param depth The depth of the column if part of a nested column @see preprocessed_table::depths
    */
-  __host__ __device__ element_comparator(Nullate has_nulls,
-                                         column_device_view lhs,
-                                         column_device_view rhs,
-                                         null_order null_precedence,
-                                         int depth = 0)
+  CUDF_HOST_DEVICE element_comparator(Nullate has_nulls,
+                                      column_device_view lhs,
+                                      column_device_view rhs,
+                                      null_order null_precedence = null_order::BEFORE,
+                                      int depth                  = 0)
     : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}, _null_precedence{null_precedence}, _depth{depth}
-  {
-  }
-
-  __host__ __device__ element_comparator(Nullate has_nulls,
-                                         column_device_view lhs,
-                                         column_device_view rhs)
-    : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}
   {
   }
 
@@ -103,7 +100,7 @@ class element_comparator {
    */
   template <typename Element, CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
   __device__ cuda::std::pair<weak_ordering, int> operator()(
-    size_type lhs_element_index, size_type rhs_element_index) const noexcept
+    size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
   {
     if (_nulls) {
       bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
@@ -126,6 +123,7 @@ class element_comparator {
   __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                             size_type rhs_element_index)
   {
+    // TODO: make this CUDF_UNREACHABLE
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
     return cuda::std::make_pair(weak_ordering::LESS, std::numeric_limits<int>::max());
   }
@@ -136,35 +134,35 @@ class element_comparator {
   __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                             size_type rhs_element_index)
   {
-    weak_ordering state{weak_ordering::EQUIVALENT};
-
     column_device_view lcol = _lhs;
     column_device_view rcol = _rhs;
+    int depth               = _depth;
     while (lcol.type().id() == type_id::STRUCT) {
       bool const lhs_is_null{lcol.is_null(lhs_element_index)};
       bool const rhs_is_null{rcol.is_null(rhs_element_index)};
 
-      if (lhs_is_null or rhs_is_null) {  // atleast one is null
-        state = null_compare(lhs_is_null, rhs_is_null, _null_precedence);
-        return cuda::std::make_pair(state, _depth);
+      if (lhs_is_null or rhs_is_null) {  // at least one is null
+        weak_ordering state = null_compare(lhs_is_null, rhs_is_null, _null_precedence);
+        return cuda::std::make_pair(state, depth);
       }
 
+      // Structs have been modified to only have 1 child when using this.
       lcol = lcol.children()[0];
       rcol = rcol.children()[0];
-      ++_depth;
+      ++depth;
     }
 
-    auto comparator = element_comparator{_nulls, lcol, rcol, _null_precedence, _depth};
+    auto comparator = element_comparator{_nulls, lcol, rcol, _null_precedence, depth};
     return cudf::type_dispatcher<dispatch_nested_to_void>(
       lcol.type(), comparator, lhs_element_index, rhs_element_index);
   }
 
  private:
-  column_device_view _lhs;
-  column_device_view _rhs;
-  Nullate _nulls;
-  null_order _null_precedence{};
-  int _depth{};
+  column_device_view const _lhs;
+  column_device_view const _rhs;
+  Nullate const _nulls;
+  null_order const _null_precedence;
+  int const _depth;
 };
 
 /**
@@ -255,12 +253,12 @@ class device_row_comparator {
   }
 
  private:
-  table_device_view _lhs;
-  table_device_view _rhs;
-  Nullate _nulls{};
-  std::optional<device_span<int const>> _depth;
-  std::optional<device_span<order const>> _column_order;
-  std::optional<device_span<null_order const>> _null_precedence;
+  table_device_view const _lhs;
+  table_device_view const _rhs;
+  Nullate const _nulls{};
+  std::optional<device_span<int const>> const _depth;
+  std::optional<device_span<order const>> const _column_order;
+  std::optional<device_span<null_order const>> const _null_precedence;
 };  // class device_row_comparator
 
 struct preprocessed_table {
@@ -404,17 +402,15 @@ class self_comparator {
   template <typename Nullate = nullate::DYNAMIC>
   device_row_comparator<Nullate> device_comparator()
   {
-    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
-      return device_row_comparator(Nullate{d_t->has_nulls()},
-                                   *d_t,
-                                   *d_t,
-                                   d_t->depths(),
-                                   d_t->column_order(),
-                                   d_t->null_precedence());
-    } else {
-      return device_row_comparator<Nullate>(
-        Nullate{}, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
-    }
+    Nullate nulls = [&] {
+      if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
+        return Nullate{d_t->has_nulls()};
+      } else {
+        return Nullate{};
+      }
+    }();
+    return device_row_comparator<Nullate>(
+      nulls, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
   }
 
  private:
