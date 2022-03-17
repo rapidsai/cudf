@@ -134,8 +134,17 @@ std::unique_ptr<scalar> reduce(
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+      // Under some circumstance, the output type will become the List of input type,
+      // such as: collect_list or collect_set. So, we have to handcraft the default scalar.
+      if (output_dtype.id() == type_id::LIST) {
+        auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
+        scalar->set_valid_async(false, stream);
+        return scalar;
+      }
+
       return make_default_constructed_scalar(output_dtype, stream, mr);
     }
+
     return make_empty_scalar_like(col, stream, mr);
   }
 
