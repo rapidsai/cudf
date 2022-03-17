@@ -1367,7 +1367,6 @@ static inline int32_t compute_fixed_width_layout(std::vector<data_type> const &s
 
 /**
  * @brief column sizes and column start offsets for a table
- *
  */
 struct column_info_s {
   size_type fixed_width_size_per_row;
