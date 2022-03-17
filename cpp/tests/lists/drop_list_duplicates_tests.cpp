@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -727,6 +727,113 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsHaveNull)
       cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
     auto const expected_original = cudf::make_lists_column(
       3, IntsCol{0, 6, 12, 20}.release(), get_structs_expected().release(), 0, {});
+    auto const lists    = cudf::slice(lists_original->view(), {1, 3})[0];
+    auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  }
+}
+
+TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfNestedStructsHaveNull)
+{
+  using ColWrapper    = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  auto constexpr null = int32_t{0};  // nulls at the children columns level
+  // XXX and YYY are int placeholders for nulls at parent structs column level.
+  // We bring up two placeholders of different values to create intra null structs with
+  // children of different values, so as to test whether null_equality::EQUAL works or not.
+  auto constexpr XXX = int32_t{5};
+  auto constexpr YYY = int32_t{6};
+
+  auto const get_nested_structs = [] {
+    auto grandchild1 = ColWrapper{{
+                                    1,    XXX,  null, XXX, YYY, 1, 1,    1,  // list1
+                                    1,    1,    1,    1,   2,   1, null, 2,  // list2
+                                    null, null, 2,    2,   3,   2, 3,    3   // list3
+                                  },
+                                  nulls_at({2, 14, 16, 17})};
+    auto grandchild2 = StringsCol{{
+                                    // begin list1
+                                    "Banana",
+                                    "YYY", /*NULL*/
+                                    "Apple",
+                                    "XXX", /*NULL*/
+                                    "YYY", /*NULL*/
+                                    "Banana",
+                                    "Cherry",
+                                    "Kiwi",  // end list1
+                                             // begin list2
+                                    "Bear",
+                                    "Duck",
+                                    "Cat",
+                                    "Dog",
+                                    "Panda",
+                                    "Bear",
+                                    "" /*NULL*/,
+                                    "Panda",  // end list2
+                                              // begin list3
+                                    "ÁÁÁ",
+                                    "ÉÉÉÉÉ",
+                                    "ÍÍÍÍÍ",
+                                    "ÁBC",
+                                    "" /*NULL*/,
+                                    "ÁÁÁ",
+                                    "ÁBC",
+                                    "XYZ"  // end list3
+                                  },
+                                  nulls_at({14, 20})};
+    auto child1      = StructsCol{{grandchild1, grandchild2}, nulls_at({1, 3, 4})};
+    return StructsCol{{child1}};
+  };
+
+  auto const get_nested_struct_expected = [] {
+    auto grandchild1 =
+      ColWrapper{{1, 1, 1, null, XXX, 1, 1, 1, 1, 2, null, 2, 2, 2, 3, 3, 3, null, null},
+                 nulls_at({3, 4, 10, 17, 18})};
+    auto grandchild2 = StringsCol{{
+                                    // begin list1
+                                    "Banana",
+                                    "Cherry",
+                                    "Kiwi",
+                                    "Apple",
+                                    "XXX" /*NULL*/,  // end list1
+                                                     // begin list2
+                                    "Bear",
+                                    "Cat",
+                                    "Dog",
+                                    "Duck",
+                                    "Panda",
+                                    "" /*NULL*/,  // end list2
+                                                  // begin list3
+                                    "ÁBC",
+                                    "ÁÁÁ",
+                                    "ÍÍÍÍÍ",
+                                    "XYZ",
+                                    "ÁBC",
+                                    "" /*NULL*/,
+                                    "ÁÁÁ",
+                                    "ÉÉÉÉÉ"  // end list3
+                                  },
+                                  nulls_at({4, 10, 16})};
+    auto child1      = StructsCol{{grandchild1, grandchild2}, nulls_at({4})};
+    return StructsCol{{child1}};
+  };
+
+  // Test full columns.
+  {
+    auto const lists = cudf::make_lists_column(
+      3, IntsCol{0, 8, 16, 24}.release(), get_nested_structs().release(), 0, {});
+    auto const expected = cudf::make_lists_column(
+      3, IntsCol{0, 5, 11, 19}.release(), get_nested_struct_expected().release(), 0, {});
+    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists->view()});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected->view(), verbosity);
+  }
+
+  // Test sliced columns.
+  {
+    auto const lists_original = cudf::make_lists_column(
+      3, IntsCol{0, 8, 16, 24}.release(), get_nested_structs().release(), 0, {});
+    auto const expected_original = cudf::make_lists_column(
+      3, IntsCol{0, 5, 11, 19}.release(), get_nested_struct_expected().release(), 0, {});
     auto const lists    = cudf::slice(lists_original->view(), {1, 3})[0];
     auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
