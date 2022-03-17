@@ -41,7 +41,7 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -185,7 +185,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             return False
         if check_dtypes and (self.dtype != other.dtype):
             return False
-        return self.binary_operator("NULL_EQUALS", other).all()
+        return self._binaryop("NULL_EQUALS", other).all()
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.
@@ -1030,82 +1030,82 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         )
 
     def __add__(self, other):
-        return self.binary_operator("add", other)
+        return self._binaryop("add", other)
 
     def __sub__(self, other):
-        return self.binary_operator("sub", other)
+        return self._binaryop("sub", other)
 
     def __mul__(self, other):
-        return self.binary_operator("mul", other)
+        return self._binaryop("mul", other)
 
     def __or__(self, other):
-        return self.binary_operator("or", other)
+        return self._binaryop("or", other)
 
     def __xor__(self, other):
-        return self.binary_operator("xor", other)
+        return self._binaryop("xor", other)
 
     def __and__(self, other):
-        return self.binary_operator("and", other)
+        return self._binaryop("and", other)
 
     def __floordiv__(self, other):
-        return self.binary_operator("floordiv", other)
+        return self._binaryop("floordiv", other)
 
     def __truediv__(self, other):
-        return self.binary_operator("truediv", other)
+        return self._binaryop("truediv", other)
 
     def __mod__(self, other):
-        return self.binary_operator("mod", other)
+        return self._binaryop("mod", other)
 
     def __pow__(self, other):
-        return self.binary_operator("pow", other)
+        return self._binaryop("pow", other)
 
     def __radd__(self, other):
-        return self.binary_operator("add", other, reflect=True)
+        return self._binaryop("add", other, reflect=True)
 
     def __rsub__(self, other):
-        return self.binary_operator("sub", other, reflect=True)
+        return self._binaryop("sub", other, reflect=True)
 
     def __rmul__(self, other):
-        return self.binary_operator("mul", other, reflect=True)
+        return self._binaryop("mul", other, reflect=True)
 
     def __ror__(self, other):
-        return self.binary_operator("or", other, reflect=True)
+        return self._binaryop("or", other, reflect=True)
 
     def __rxor__(self, other):
-        return self.binary_operator("xor", other, reflect=True)
+        return self._binaryop("xor", other, reflect=True)
 
     def __rand__(self, other):
-        return self.binary_operator("and", other, reflect=True)
+        return self._binaryop("and", other, reflect=True)
 
     def __rfloordiv__(self, other):
-        return self.binary_operator("floordiv", other, reflect=True)
+        return self._binaryop("floordiv", other, reflect=True)
 
     def __rtruediv__(self, other):
-        return self.binary_operator("truediv", other, reflect=True)
+        return self._binaryop("truediv", other, reflect=True)
 
     def __rmod__(self, other):
-        return self.binary_operator("mod", other, reflect=True)
+        return self._binaryop("mod", other, reflect=True)
 
     def __rpow__(self, other):
-        return self.binary_operator("pow", other, reflect=True)
+        return self._binaryop("pow", other, reflect=True)
 
     def __eq__(self, other):
-        return self.binary_operator("eq", other)
+        return self._binaryop("eq", other)
 
     def __ne__(self, other):
-        return self.binary_operator("ne", other)
+        return self._binaryop("ne", other)
 
     def __lt__(self, other):
-        return self.binary_operator("lt", other)
+        return self._binaryop("lt", other)
 
     def __gt__(self, other):
-        return self.binary_operator("gt", other)
+        return self._binaryop("gt", other)
 
     def __le__(self, other):
-        return self.binary_operator("le", other)
+        return self._binaryop("le", other)
 
     def __ge__(self, other):
-        return self.binary_operator("ge", other)
+        return self._binaryop("ge", other)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
@@ -1169,8 +1169,8 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
 
-    def binary_operator(
-        self, op: str, other: BinaryOperand, reflect: bool = False
+    def _binaryop(
+        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         raise TypeError(
             f"Operation {op} not supported between dtypes {self.dtype} and "

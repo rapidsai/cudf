@@ -14,7 +14,7 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import Dtype
+from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
@@ -60,13 +60,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
-    def binary_operator(self, op, other, reflect=False):
-        if reflect:
-            self, other = other, self
+    def _binaryop(self, op, other: ColumnBinaryOperand, reflect=False):
+        other = self._wrap_binop_normalization(other)
+        lhs, rhs = (other, self) if reflect else (self, other)
         # Decimals in libcudf don't support truediv, see
         # https://github.com/rapidsai/cudf/pull/7435 for explanation.
         op = op.replace("true", "")
-        other = self._wrap_binop_normalization(other)
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf

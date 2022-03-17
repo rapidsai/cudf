@@ -24,7 +24,7 @@ from numba import cuda
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -875,8 +875,8 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes.offset,
         )
 
-    def binary_operator(
-        self, op: str, rhs, reflect: bool = False
+    def _binaryop(
+        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         if op not in {"eq", "ne", "lt", "le", "gt", "ge", "NULL_EQUALS"}:
             raise TypeError(
@@ -894,7 +894,7 @@ class CategoricalColumn(column.ColumnBase):
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical.binary_operator(op, rhs.as_numerical)
+        return self.as_numerical._binaryop(op, rhs.as_numerical)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):

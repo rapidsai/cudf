@@ -14,7 +14,13 @@ import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf._typing import (
+    ColumnBinaryOperand,
+    DatetimeLikeScalar,
+    Dtype,
+    DtypeObj,
+    ScalarLike,
+)
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
@@ -388,11 +394,8 @@ class DatetimeColumn(column.ColumnBase):
             return pd.Timestamp(result, unit=self.time_unit)
         return result.astype(self.dtype)
 
-    def binary_operator(
-        self,
-        op: str,
-        rhs: Union[ColumnBase, "cudf.Scalar"],
-        reflect: bool = False,
+    def _binaryop(
+        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
         rhs = self._wrap_binop_normalization(rhs)
         if isinstance(rhs, cudf.DateOffset):

@@ -21,7 +21,13 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.stream_compaction import drop_nulls
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, DtypeObj, ScalarLike
+from cudf._typing import (
+    ColumnBinaryOperand,
+    ColumnLike,
+    Dtype,
+    DtypeObj,
+    ScalarLike,
+)
 from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
@@ -150,8 +156,8 @@ class NumericalColumn(NumericalBaseColumn):
         unaryop = libcudf.unary.UnaryOp[unaryop.upper()]
         return libcudf.unary.unary_operation(self, unaryop)
 
-    def binary_operator(
-        self, binop: str, rhs: BinaryOperand, reflect: bool = False,
+    def _binaryop(
+        self, binop: str, rhs: ColumnBinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
         int_float_dtype_mapping = {
             np.int8: np.float32,
@@ -168,16 +174,14 @@ class NumericalColumn(NumericalBaseColumn):
         if binop in {"truediv", "rtruediv"}:
             # Division with integer types results in a suitable float.
             if (truediv_type := int_float_dtype_mapping.get(self.dtype.type)) :
-                return self.astype(truediv_type).binary_operator(
-                    binop, rhs, reflect
-                )
+                return self.astype(truediv_type)._binaryop(binop, rhs, reflect)
 
         rhs = self._wrap_binop_normalization(rhs)
         out_dtype = self.dtype
         if rhs is not None:
             if isinstance(rhs, cudf.core.column.DecimalBaseColumn):
                 dtyp = rhs.dtype.__class__(rhs.dtype.MAX_PRECISION, 0)
-                return self.as_decimal_column(dtyp).binary_operator(binop, rhs)
+                return self.as_decimal_column(dtyp)._binaryop(binop, rhs)
 
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in {"mod", "floordiv"}:

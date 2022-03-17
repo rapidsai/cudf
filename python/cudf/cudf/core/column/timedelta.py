@@ -11,7 +11,12 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import BinaryOperand, DatetimeLikeScalar, Dtype, DtypeObj
+from cudf._typing import (
+    ColumnBinaryOperand,
+    DatetimeLikeScalar,
+    Dtype,
+    DtypeObj,
+)
 from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -125,7 +130,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return pd_series
 
-    def _binary_op_mul(self, rhs: BinaryOperand) -> DtypeObj:
+    def _binary_op_mul(self, rhs: ColumnBinaryOperand) -> DtypeObj:
         if rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -135,7 +140,7 @@ class TimeDeltaColumn(column.ColumnBase):
             )
         return out_dtype
 
-    def _binary_op_mod(self, rhs: BinaryOperand) -> DtypeObj:
+    def _binary_op_mod(self, rhs: ColumnBinaryOperand) -> DtypeObj:
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
         elif rhs.dtype.kind in ("f", "i", "u"):
@@ -147,7 +152,9 @@ class TimeDeltaColumn(column.ColumnBase):
             )
         return out_dtype
 
-    def _binary_op_lt_gt_le_ge_eq_ne(self, rhs: BinaryOperand) -> DtypeObj:
+    def _binary_op_lt_gt_le_ge_eq_ne(
+        self, rhs: ColumnBinaryOperand
+    ) -> DtypeObj:
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             return np.bool_
         raise TypeError(
@@ -156,8 +163,8 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def _binary_op_div(
-        self, rhs: BinaryOperand, op: str
-    ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
+        self, rhs: ColumnBinaryOperand, op: str
+    ) -> Tuple["column.ColumnBase", ColumnBinaryOperand, DtypeObj]:
         lhs = self  # type: column.ColumnBase
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
@@ -181,8 +188,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return lhs, rhs, out_dtype
 
-    def binary_operator(
-        self, op: str, rhs: BinaryOperand, reflect: bool = False
+    def _binaryop(
+        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False
     ) -> "column.ColumnBase":
         rhs = self._wrap_binop_normalization(rhs)
         lhs, rhs = self, rhs
@@ -211,7 +218,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
-    def normalize_binop_value(self, other) -> BinaryOperand:
+    def normalize_binop_value(self, other) -> ColumnBinaryOperand:
         if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
         if isinstance(other, np.ndarray) and other.ndim == 0:
@@ -556,7 +563,7 @@ def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
 
 
 def _timedelta_add_result_dtype(
-    lhs: BinaryOperand, rhs: BinaryOperand
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
     if pd.api.types.is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
@@ -577,7 +584,7 @@ def _timedelta_add_result_dtype(
 
 
 def _timedelta_sub_result_dtype(
-    lhs: BinaryOperand, rhs: BinaryOperand
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
     if pd.api.types.is_timedelta64_dtype(
         lhs.dtype

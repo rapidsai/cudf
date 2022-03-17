@@ -50,7 +50,13 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
-    from cudf._typing import ColumnLike, Dtype, ScalarLike, SeriesOrIndex
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        ScalarLike,
+        SeriesOrIndex,
+    )
 
 
 _str_to_numeric_typecast_functions = {
@@ -5444,8 +5450,8 @@ class StringColumn(column.ColumnBase):
             )
         raise TypeError(f"cannot broadcast {type(other)}")
 
-    def binary_operator(
-        self, op: str, rhs, reflect: bool = False
+    def _binaryop(
+        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False
     ) -> "column.ColumnBase":
         # Handle object columns that are empty or all nulls when performing
         # binary operations

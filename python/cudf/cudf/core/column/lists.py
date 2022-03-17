@@ -19,7 +19,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
@@ -92,8 +92,8 @@ class ListColumn(ColumnBase):
         # avoid it being negative
         return max(0, len(self.base_children[0]) - 1)
 
-    def binary_operator(
-        self, binop: str, other: BinaryOperand, reflect: bool = False
+    def _binaryop(
+        self, binop: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         """
         Calls a binary operator *binop* on operands *self*
