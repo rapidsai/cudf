@@ -623,15 +623,23 @@ def test_index_where(data, condition, other, error):
                 got.codes.astype(expect.codes.dtype).fillna(-1).to_numpy(),
             )
             assert_eq(expect.categories, got.categories)
+        elif isinstance(gs, RangeIndex):
+            assert_eq(
+                ps.where(ps_condition, other=ps_other),
+                gs._as_int64().where(gs_condition, other=gs_other).to_pandas(),
+            )
         else:
             assert_eq(
                 ps.where(ps_condition, other=ps_other),
                 gs.where(gs_condition, other=gs_other).to_pandas(),
             )
     else:
+        rfunc = (
+            gs._as_int64().where if isinstance(gs, RangeIndex) else gs.where
+        )
         assert_exceptions_equal(
             lfunc=ps.where,
-            rfunc=gs.where,
+            rfunc=rfunc,
             lfunc_args_and_kwargs=([ps_condition], {"other": ps_other}),
             rfunc_args_and_kwargs=([gs_condition], {"other": gs_other}),
             compare_error_message=False,
