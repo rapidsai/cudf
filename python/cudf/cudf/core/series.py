@@ -2428,7 +2428,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.5
         """
         
-        if method not in ("pearson",):
+        if method not in ("pearson", "spearman",):
             raise ValueError(f"Unknown method {method}")
 
         if min_periods not in (None,):
