@@ -128,7 +128,6 @@ size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
 
 /**
  * @brief bool generator with given probability [0.0 - 1.0] of returning true.
- *
  */
 struct bool_generator {
   thrust::minstd_rand engine;
@@ -311,7 +310,7 @@ auto create_run_length_dist(cudf::size_type avg_run_len)
  * `avg_run_len`
  *
  * @param avg_run_len  Average run length of the generated indices
- * @param cardinality  Range of the generated indices
+ * @param cardinality  Number of unique values in the output vector
  * @param num_rows     Number of indices to generate
  * @param engine       Random engine
  * @return Generated indices of type `cudf::size_type`
@@ -369,8 +368,8 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
                                                    cudf::size_type num_rows)
 {
   // Bernoulli distribution
-  auto valid_dist = random_value_fn<bool>(
-    distribution_params<bool>{1. - profile.get_null_frequency().value_or(-1)});
+  auto valid_dist =
+    random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency().value_or(0)});
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
 
   auto const cardinality                      = std::min(num_rows, profile.get_cardinality());
@@ -407,7 +406,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
     data.release(),
-    profile.get_null_frequency() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_frequency().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
 }
 
 struct valid_or_zero {
@@ -454,8 +453,8 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
 {
   auto len_dist =
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::string_view>().length_params};
-  auto valid_dist = random_value_fn<bool>(
-    distribution_params<bool>{1. - profile.get_null_frequency().value_or(-1)});
+  auto valid_dist =
+    random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency().value_or(0)});
   auto lengths   = len_dist(engine, num_rows + 1);
   auto null_mask = valid_dist(engine, num_rows + 1);
   thrust::transform_if(
@@ -485,7 +484,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     num_rows,
     std::move(offsets),
     std::move(chars),
-    profile.get_null_frequency() ? std::move(result_bitmask) : rmm::device_buffer{});
+    profile.get_null_frequency().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
 }
 
 /**
@@ -548,9 +547,9 @@ struct create_rand_col_fn {
 
 template <typename T>
 struct clamp_down : public thrust::unary_function<T, T> {
-  T max_size;
-  clamp_down(T max_size) : max_size(max_size) {}
-  __host__ __device__ T operator()(T x) const { return min(x, max_size); }
+  T max;
+  clamp_down(T max) : max(max) {}
+  __host__ __device__ T operator()(T x) const { return min(x, max); }
 };
 /**
  * @brief Creates a list column with random content.
@@ -577,8 +576,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
   auto len_dist =
     random_value_fn<uint32_t>{profile.get_distribution_params<cudf::list_view>().length_params};
-  auto valid_dist = random_value_fn<bool>(
-    distribution_params<bool>{1. - profile.get_null_frequency().value_or(-1)});
+  auto valid_dist =
+    random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency().value_or(0)});
 
   // Generate the list column bottom-up
   auto list_column = std::move(leaf_column);
@@ -606,8 +605,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       num_rows,
       std::move(offsets_column),
       std::move(current_child_column),
-      profile.get_null_frequency() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
-      profile.get_null_frequency() ? std::move(null_mask) : rmm::device_buffer{});
+      profile.get_null_frequency().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
+      profile.get_null_frequency().has_value() ? std::move(null_mask) : rmm::device_buffer{});
   }
   return list_column;  // return the top-level column
 }
