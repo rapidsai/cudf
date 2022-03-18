@@ -1833,5 +1833,5 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     def repeat(self, repeats, axis=None):
         return self._from_columns_like_self(
-            self._repeat([*self._columns], repeats, axis), self._column_names
+            Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
