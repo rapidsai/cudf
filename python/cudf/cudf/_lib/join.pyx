@@ -27,11 +27,14 @@ cpdef join(list lhs, list rhs, how=None):
     cdef table_view c_rhs = table_view_from_columns(rhs)
 
     if how == "inner":
-        c_result = move(cpp_join.inner_join(c_lhs, c_rhs))
+        with nogil:
+            c_result = move(cpp_join.inner_join(c_lhs, c_rhs))
     elif how == "left":
-        c_result = move(cpp_join.left_join(c_lhs, c_rhs))
+        with nogil:
+            c_result = move(cpp_join.left_join(c_lhs, c_rhs))
     elif how == "outer":
-        c_result = move(cpp_join.full_join(c_lhs, c_rhs))
+        with nogil:
+            c_result = move(cpp_join.full_join(c_lhs, c_rhs))
     else:
         raise ValueError(f"Invalid join type {how}")
 
@@ -47,9 +50,11 @@ cpdef semi_join(list lhs, list rhs, how=None):
     cdef table_view c_rhs = table_view_from_columns(rhs)
 
     if how == "leftsemi":
-        c_result = move(cpp_join.left_semi_join(c_lhs, c_rhs))
+        with nogil:
+            c_result = move(cpp_join.left_semi_join(c_lhs, c_rhs))
     elif how == "leftanti":
-        c_result = move(cpp_join.left_anti_join(c_lhs, c_rhs))
+        with nogil:
+            c_result = move(cpp_join.left_anti_join(c_lhs, c_rhs))
     else:
         raise ValueError(f"Invalid join type {how}")
 
