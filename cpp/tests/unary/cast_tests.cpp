@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
         rmm::device_buffer{test_durations_ns.data(),
                            test_durations_ns.size() * sizeof(test_durations_ns.front()),
                            rmm::cuda_stream_default});
-    default: CUDF_FAIL("");
+    default: CUDF_FAIL("Unsupported type_id");
   }
 };
 

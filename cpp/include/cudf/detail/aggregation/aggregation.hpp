@@ -1483,17 +1483,7 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      cudf_assert(false && "Unsupported aggregation.");
-
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type =
-        decltype(f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...));
-      return return_type();
+      CUDF_UNREACHABLE("Unsupported aggregation.");
 #endif
     }
   }

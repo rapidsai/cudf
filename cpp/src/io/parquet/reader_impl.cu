@@ -1222,7 +1222,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                 argc - start_pos,
                                 stream));
           break;
-        default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
+        default: CUDF_FAIL("Unexpected decompression dispatch"); break;
       }
       CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(start_pos),
                                inflate_out.device_ptr(start_pos),
