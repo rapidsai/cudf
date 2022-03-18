@@ -270,7 +270,7 @@ __global__ void __launch_bounds__(block_size, 1)
         state,
         threadIdx.x);
     }
-    // Temporarily disable stats writing if it's int96 timestamps
+    // Temporarily disable stats writing for int96 timestamps
     // TODO: https://github.com/rapidsai/cudf/issues/10438
     else if (not cudf::is_timestamp(state.col.leaf_column->type())) {
       type_dispatcher(state.col.leaf_column->type(),
