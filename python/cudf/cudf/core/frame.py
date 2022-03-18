@@ -1150,10 +1150,16 @@ class Frame(BinaryOperand, Scannable):
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        data, index, output_offsets = libcudf.partitioning.partition(
-            self, map_index, map_size, keep_index
+        partitioned_columns, output_offsets = libcudf.partitioning.partition(
+            [*(self._index._columns if keep_index else ()), *self._columns],
+            map_index,
+            map_size,
         )
-        partitioned = self.__class__._from_data(data, index)
+        partitioned = self._from_columns_like_self(
+            partitioned_columns,
+            column_names=self._column_names,
+            index_names=self._index_names if keep_index else None,
+        )
 
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
@@ -1162,9 +1168,6 @@ class Frame(BinaryOperand, Scannable):
         output_offsets = output_offsets[1:-1]
 
         result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        for frame in result:
-            frame._copy_type_metadata(self, include_index=keep_index)
 
         if map_size:
             result += [
