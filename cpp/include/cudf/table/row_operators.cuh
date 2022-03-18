@@ -217,8 +217,7 @@ class element_equality_comparator {
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
-    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return false;
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
 
  private:
@@ -323,8 +322,7 @@ class element_relational_comparator {
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
-    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return weak_ordering::LESS;
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
 
  private:
@@ -356,12 +354,13 @@ class row_lexicographic_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
+   * Behavior is undefined if called with incomparable column types.
    *
+   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
@@ -382,8 +381,6 @@ class row_lexicographic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-    CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
-                 "Attempted to compare elements of uncomparable types.");
   }
 
   /**
@@ -443,8 +440,7 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
   Nullate has_nulls;
@@ -473,8 +469,7 @@ class element_hasher_with_seed {
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
  private:

@@ -5,12 +5,13 @@ channels:
   - rapidsai
   - nvidia
   - rapidsai-nightly
+  - dask/label/dev
   - conda-forge
 dependencies:
   - clang=11.1.0
   - clang-tools=11.1.0
   - cupy>=9.5.0,<11.0.0a0
-  - rmm=22.04.*
+  - rmm=22.06.*
   - cmake>=3.20.1
   - cmake_setuptools>=0.1.3
   - python>=3.7,<3.9
@@ -42,8 +43,8 @@ dependencies:
   - pydocstyle=6.1.1
   - typing_extensions
   - pre-commit
-  - dask>=2021.11.1,<=2022.01.0
-  - distributed>=2021.11.1,<=2022.01.0
+  - dask>=2022.02.1
+  - distributed>=2022.02.1
   - streamz
   - arrow-cpp=6.0.1
   - dlpack>=0.5,<0.6.0a0
@@ -63,8 +64,6 @@ dependencies:
   - librdkafka=1.7.0
   - python-confluent-kafka=1.7.0
   - pip:
-      - git+https://github.com/dask/dask.git@main
-      - git+https://github.com/dask/distributed.git@main
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc
   - ptxcompiler  # [linux64]

@@ -1,3 +1,7 @@
+# cuDF 22.06.00 (Date TBD)
+
+Please see https://github.com/rapidsai/cudf/releases/tag/v22.06.00a for the latest changes to this development branch.
+
 # cuDF 22.04.00 (Date TBD)
 
 Please see https://github.com/rapidsai/cudf/releases/tag/v22.04.00a for the latest changes to this development branch.

@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -190,7 +192,10 @@ def test_categorical_compare_unordered(data):
 
     with pytest.raises(
         (TypeError, ValueError),
-        match="Unordered Categoricals can only compare equality or not",
+        match=(
+            "The only binary operations supported by unordered categorical "
+            "columns are equality and inequality."
+        ),
     ):
         dsr < dsr
 
