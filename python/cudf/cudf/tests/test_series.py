@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import hashlib
 import operator
 import re
 from string import ascii_letters, digits
@@ -1274,27 +1275,8 @@ def test_series_sort_index(
         assert_eq(expected, got, check_index_type=True)
 
 
-@pytest.mark.parametrize(
-    "method,validation_data",
-    [
-        (
-            "md5",
-            [
-                "d41d8cd98f00b204e9800998ecf8427e",
-                "cfcd208495d565ef66e7dff9f98764da",
-                "3d3aaae21d57b101227f0384f644abe0",
-                "3e76c7023d771ad1c1520c27ab3d4874",
-                "f8d805e33ec3ade1a6ea251ac1c118e7",
-                "c30515f66a5aec7af7666abf33600c92",
-                "c61a4185135eda043f35e92c3505e180",
-                "52da74c75cb6575d25be29e66bd0adde",
-                "5152ac13bdd09110d9ee9c169a3d9237",
-                "f1d3ff8443297732862df21dc4e57262",
-            ],
-        )
-    ],
-)
-def test_series_hash_values(method, validation_data):
+@pytest.mark.parametrize("method", ["md5"])
+def test_series_hash_values(method):
     inputs = cudf.Series(
         [
             "",
@@ -1313,9 +1295,22 @@ def test_series_hash_values(method, validation_data):
             "\x00\x00\x00\x00",
         ]
     )
-    validation_results = cudf.Series(validation_data)
+
+    def hashlib_compute_digest(data):
+        hasher = getattr(hashlib, method)()
+        hasher.update(data.encode("utf-8"))
+        return hasher.hexdigest()
+
+    hashlib_validation = inputs.to_pandas().apply(hashlib_compute_digest)
+    validation_results = cudf.Series(hashlib_validation)
     hash_values = inputs.hash_values(method=method)
     assert_eq(hash_values, validation_results)
+
+
+def test_series_hash_values_invalid_method():
+    inputs = cudf.Series(["", "0"])
+    with pytest.raises(ValueError):
+        inputs.hash_values(method="invalid_method")
 
 
 def test_set_index_unequal_length():

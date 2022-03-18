@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -109,7 +109,10 @@ def test_timedelta_from_typecast(data, dtype, cast_dtype):
     )
     gsr = cudf.Series(data, dtype=dtype)
 
-    assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
+    if cast_dtype == "int64":
+        assert_eq(psr.values.view(cast_dtype), gsr.astype(cast_dtype).values)
+    else:
+        assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
 
 
 @pytest.mark.parametrize(
@@ -622,7 +625,11 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    expected = getattr(psr, reduction_op)()
+    if len(psr) > 0 and psr.isnull().all() and reduction_op == "median":
+        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
+            expected = getattr(psr, reduction_op)()
+    else:
+        expected = getattr(psr, reduction_op)()
     actual = getattr(gsr, reduction_op)()
     if pd.isna(expected) and pd.isna(actual):
         pass
@@ -809,6 +816,7 @@ def test_timedelta_datetime_index_ops_misc(
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -872,6 +880,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -1243,7 +1252,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
         expected_error_message=re.escape(
-            f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
+            f"Division of {sr.dtype} with {dt_sr.dtype} "
             f"cannot be performed."
         ),
     )
