@@ -36,7 +36,7 @@ void calculate_group_statistics<detail::io_file_format::PARQUET>(statistics_chun
                                                                  const statistics_group* groups,
                                                                  uint32_t num_chunks,
                                                                  rmm::cuda_stream_view stream,
-                                                                 const bool int96_timestamp);
+                                                                 bool int96_timestamp);
 
 }  // namespace detail
 }  // namespace io
