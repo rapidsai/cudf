@@ -3877,19 +3877,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         partitioned: list of DataFrame
         """
-        idx = (
-            0
-            if (self._index is None or keep_index is False)
-            else self._index._num_columns
-        )
-        key_indices = [self._data.names.index(k) + idx for k in columns]
 
-        output_data, output_index, offsets = libcudf.hash.hash_partition(
-            self, key_indices, nparts, keep_index
+        key_indices = [self._column_names.index(k) for k in columns]
+        output_columns, offsets = libcudf.hash.hash_partition(
+            [*self._columns], key_indices, nparts
         )
-        outdf = self.__class__._from_data(output_data, output_index)
-        outdf._copy_type_metadata(self, include_index=keep_index)
-
+        outdf = self._from_columns_like_self(
+            [*(self._index._columns if keep_index else ()), *output_columns],
+            self._column_names,
+            self._index_names if keep_index else None,
+        )
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 

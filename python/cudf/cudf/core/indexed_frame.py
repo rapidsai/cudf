@@ -617,7 +617,8 @@ class IndexedFrame(Frame):
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
         return cudf.Series._from_data(
-            {None: libcudf.hash.hash(self, method)}, index=self.index
+            {None: libcudf.hash.hash([*self._columns], method)},
+            index=self.index,
         )
 
     def _gather(
