@@ -630,6 +630,14 @@ class CategoricalColumn(column.ColumnBase):
     dtype: cudf.core.dtypes.CategoricalDtype
     _codes: Optional[NumericalColumn]
     _children: Tuple[NumericalColumn]
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+    }
 
     def __init__(
         self,
@@ -876,19 +884,6 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        if op not in {
-            "__eq__",
-            "__ne__",
-            "__lt__",
-            "__le__",
-            "__gt__",
-            "__ge__",
-            "NULL_EQUALS",
-        }:
-            raise TypeError(
-                "Series of dtype `category` cannot perform the operation: "
-                f"{op}"
-            )
         other = self._wrap_binop_normalization(other)
         # TODO: This is currently just here to make mypy happy, but eventually
         # we'll need to properly establish the APIs for these methods.

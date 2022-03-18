@@ -29,6 +29,7 @@ from cudf.core.dtypes import ListDtype
 
 class ListColumn(ColumnBase):
     dtype: ListDtype
+    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
 
     def __init__(
         self, size, dtype, mask=None, offset=0, null_count=None, children=(),

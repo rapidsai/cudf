@@ -1285,9 +1285,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.xor,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        expected_error_message=re.escape(
-            f"Series of dtype {sr.dtype} cannot perform the operation __xor__"
-        ),
+        compare_error_message=False,
     )
 
 

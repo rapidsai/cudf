@@ -115,6 +115,21 @@ class DatetimeColumn(column.ColumnBase):
         The validity mask
     """
 
+    # TODO: Timedelta columns support more operations than this, figure out why
+    # and whether we should be exploiting reflection more.
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__sub__",
+        "__radd__",
+        "__rsub__",
+    }
+
     def __init__(
         self,
         data: Buffer,

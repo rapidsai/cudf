@@ -93,7 +93,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
         "max",
         "min",
     }
-    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_frame(self) -> "cudf.core.frame.Frame":
         """

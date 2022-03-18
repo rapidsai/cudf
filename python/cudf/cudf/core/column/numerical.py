@@ -43,6 +43,7 @@ from cudf.core.column import (
     string,
 )
 from cudf.core.dtypes import CategoricalDtype
+from cudf.core.mixins import BinaryOperand
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -69,6 +70,7 @@ class NumericalColumn(NumericalBaseColumn):
     """
 
     _nan_count: Optional[int]
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(
         self,

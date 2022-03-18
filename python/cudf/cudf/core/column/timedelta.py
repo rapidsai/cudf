@@ -51,6 +51,27 @@ class TimeDeltaColumn(column.ColumnBase):
         If None, it is calculated automatically.
     """
 
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__sub__",
+        "__mul__",
+        "__mod__",
+        "__truediv__",
+        "__floordiv__",
+        "__radd__",
+        "__rsub__",
+        "__rmul__",
+        "__rmod__",
+        "__rtruediv__",
+        "__rfloordiv__",
+    }
+
     def __init__(
         self,
         data: Buffer,

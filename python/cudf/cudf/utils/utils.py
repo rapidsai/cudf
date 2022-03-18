@@ -88,6 +88,8 @@ def _array_ufunc(obj, ufunc, method, inputs, kwargs):
         op = f"__{'r' if reflect else ''}{op}__"
 
         # Float_power returns float irrespective of the input type.
+        # TODO: Do not get the attribute directly, get from the operator module
+        # so that we can still exploit reflection.
         if fname == "float_power":
             return getattr(obj, op)(other).astype(float)
         return getattr(obj, op)(other)

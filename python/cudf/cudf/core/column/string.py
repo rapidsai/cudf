@@ -5031,6 +5031,25 @@ class StringColumn(column.ColumnBase):
     _start_offset: Optional[int]
     _end_offset: Optional[int]
 
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__radd__",
+        # These operators aren't actually supported, they only exist to allow
+        # empty column binops with scalars of arbitrary other dtypes.
+        "__sub__",
+        "__mul__",
+        "__mod__",
+        "__pow__",
+        "__truediv__",
+        "__floordiv__",
+    }
+
     def __init__(
         self,
         mask: Buffer = None,
@@ -5454,6 +5473,8 @@ class StringColumn(column.ColumnBase):
         self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
         reflect, op = self._check_reflected_op(op)
+        # TODO: Try to find a way to disable these ops while still exposing
+        # this behavior. It may not be possible for now though.
         # Handle object columns that are empty or all nulls when performing
         # binary operations
         # See https://github.com/pandas-dev/pandas/issues/46332

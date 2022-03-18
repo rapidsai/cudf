@@ -24,6 +24,7 @@ from cudf.core.dtypes import (
     Decimal128Dtype,
     DecimalDtype,
 )
+from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
@@ -33,6 +34,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     dtype: DecimalDtype
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
