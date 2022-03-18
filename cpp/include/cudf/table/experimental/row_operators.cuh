@@ -259,6 +259,9 @@ class device_row_comparator {
 };  // class device_row_comparator
 
 struct preprocessed_table {
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
   /**
    * @brief Preprocess table for use with lexicographical comparison
    *
@@ -274,22 +277,29 @@ struct preprocessed_table {
    * `null_order::BEFORE` for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
    */
-  preprocessed_table(table_view const& table,
-                     host_span<order const> column_order,
-                     host_span<null_order const> null_precedence,
-                     rmm::cuda_stream_view stream);
-
-  // TODO: Should we add a static create method that returns a shared_ptr?
+  static std::shared_ptr<preprocessed_table> create(table_view const& table,
+                                                    host_span<order const> column_order,
+                                                    host_span<null_order const> null_precedence,
+                                                    rmm::cuda_stream_view stream);
 
  private:
   friend class self_comparator;
+
+  preprocessed_table(table_device_view_owner&& table,
+                     rmm::device_uvector<order>&& column_order,
+                     rmm::device_uvector<null_order>&& null_precedence,
+                     rmm::device_uvector<size_type>&& depths)
+    : _t(std::move(table)),
+      _column_order(std::move(column_order)),
+      _null_precedence(std::move(null_precedence)),
+      _depths(std::move(depths)){};
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
    *
    * @return table_device_view
    */
-  operator table_device_view() { return **d_t; }
+  operator table_device_view() { return *_t; }
 
   /**
    * @brief Get a device array containing the desired order of each column in the preprocessed table
@@ -300,8 +310,8 @@ struct preprocessed_table {
    */
   [[nodiscard]] std::optional<device_span<order const>> column_order() const
   {
-    return d_column_order.size() ? std::optional<device_span<order const>>(d_column_order)
-                                 : std::nullopt;
+    return _column_order.size() ? std::optional<device_span<order const>>(_column_order)
+                                : std::nullopt;
   }
 
   /**
@@ -314,9 +324,8 @@ struct preprocessed_table {
    */
   [[nodiscard]] std::optional<device_span<null_order const>> null_precedence() const
   {
-    return d_null_precedence.size()
-             ? std::optional<device_span<null_order const>>(d_null_precedence)
-             : std::nullopt;
+    return _null_precedence.size() ? std::optional<device_span<null_order const>>(_null_precedence)
+                                   : std::nullopt;
   }
 
   /**
@@ -329,24 +338,14 @@ struct preprocessed_table {
    */
   [[nodiscard]] std::optional<device_span<int const>> depths() const
   {
-    return d_depths.size() ? std::optional<device_span<int const>>(d_depths) : std::nullopt;
+    return _depths.size() ? std::optional<device_span<int const>>(_depths) : std::nullopt;
   }
 
-  /**
-   * @brief Whether the table has any nullable column
-   *
-   */
-  [[nodiscard]] bool has_nulls() const { return _has_nulls; }
-
  private:
-  using table_device_view_owner =
-    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
-
-  std::unique_ptr<table_device_view_owner> d_t;
-  rmm::device_uvector<order> d_column_order;
-  rmm::device_uvector<null_order> d_null_precedence;
-  rmm::device_uvector<size_type> d_depths;
-  bool _has_nulls;
+  table_device_view_owner _t;
+  rmm::device_uvector<order> _column_order;
+  rmm::device_uvector<null_order> _null_precedence;
+  rmm::device_uvector<size_type> _depths;
 };
 
 /**
@@ -382,7 +381,7 @@ class self_comparator {
                   host_span<order const> column_order         = {},
                   host_span<null_order const> null_precedence = {},
                   rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
-    : d_t{std::make_shared<preprocessed_table>(t, column_order, null_precedence, stream)}
+    : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
   }
 

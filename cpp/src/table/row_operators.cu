@@ -167,26 +167,24 @@ void check_lex_compatibility(table_view const& input)
 
 namespace lex {
 
-preprocessed_table::preprocessed_table(table_view const& t,
-                                       host_span<order const> column_order,
-                                       host_span<null_order const> null_precedence,
-                                       rmm::cuda_stream_view stream)
-  : d_column_order(0, stream),
-    d_null_precedence(0, stream),
-    d_depths(0, stream),
-    _has_nulls(has_nested_nulls(t))
+std::shared_ptr<preprocessed_table> preprocessed_table::create(
+  table_view const& t,
+  host_span<order const> column_order,
+  host_span<null_order const> null_precedence,
+  rmm::cuda_stream_view stream)
 {
   check_lex_compatibility(t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    struct_linearize(t, column_order, null_precedence);
+    decompose_structs(t, column_order, null_precedence);
 
-  d_t =
-    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+  auto d_t               = table_device_view::create(verticalized_lhs, stream);
+  auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
+  auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
+  auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
-  d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
-  d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+  return std::shared_ptr<preprocessed_table>(new preprocessed_table(
+    std::move(d_t), std::move(d_column_order), std::move(d_null_precedence), std::move(d_depths)));
 }
 
 }  // namespace lex
