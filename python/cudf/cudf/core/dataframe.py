@@ -613,6 +613,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             self._data = new_df._data
             self._index = new_df._index
+            self._check_data_index_length_match()
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
             if len(arr_interface["descr"]) == 1:
@@ -622,6 +623,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
             self._index = new_df._index
+            self._check_data_index_length_match()
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
@@ -633,6 +635,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                     self._data = new_df._data
                     self._index = new_df._index
+                    self._check_data_index_length_match()
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -650,13 +653,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     data, index=index, columns=columns, nan_as_null=nan_as_null
                 )
 
-        if self._data.nrows > 0 and self._data.nrows != len(self._index):
-            raise ValueError(
-                f"Shape of passed values is {self.shape}, indices imply "
-                f"({len(self._index)}, {self._num_columns})"
-            )
         if dtype:
             self._data = self.astype(dtype)._data
+
+    def _check_data_index_length_match(df: DataFrame) -> None:
+        # Validate that the number of rows in the data matches the index if the
+        # data is not empty. This is a helper for the constructor.
+        if df._data.nrows > 0 and df._data.nrows != len(df._index):
+            raise ValueError(
+                f"Shape of passed values is {df.shape}, indices imply "
+                f"({len(df._index)}, {df._num_columns})"
+            )
 
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):

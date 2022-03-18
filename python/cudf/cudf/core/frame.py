@@ -454,6 +454,8 @@ class Frame(BinaryOperand, Scannable):
         >>> df.equals(different_column_type)
         True
         """
+        if self is other:
+            return True
         if (
             other is None
             or not isinstance(other, type(self))
