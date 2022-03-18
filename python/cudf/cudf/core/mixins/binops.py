@@ -48,13 +48,22 @@ BinaryOperand = _create_delegating_mixin(
     },
 )
 
+# TODO: See if there is a better approach to these two issues: 1) The mixin
+# assumes a single standard parameter, whereas binops have two, and 2) we need
+# a way to determine reflected vs normal ops.
 
-# TODO: See if there is a better approach to this problem.
+
+def _binaryop(self, other, op: str):
+    "The core binary_operation function. Must be overridden by subclasses, "
+    "the default implementation raises a NotImplementedError."
+    raise NotImplementedError
+
+
 def _check_reflected_op(op):
-    reflect = op[2] == "r" and op != "__rshift__"
-    if reflect:
+    if (reflect := op[2] == "r" and op != "__rshift__") :
         op = op[:2] + op[3:]
     return reflect, op
 
 
+BinaryOperand._binaryop = _binaryop
 BinaryOperand._check_reflected_op = staticmethod(_check_reflected_op)
