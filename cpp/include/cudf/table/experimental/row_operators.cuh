@@ -128,9 +128,7 @@ class element_comparator {
     return cuda::std::make_pair(weak_ordering::LESS, std::numeric_limits<int>::max());
   }
 
-  template <typename Element,
-            CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                           std::is_same_v<Element, cudf::struct_view>)>
+  template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
   __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
                                                             size_type const rhs_element_index)
   {
@@ -188,8 +186,6 @@ class device_row_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
-   *
    * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
@@ -202,12 +198,13 @@ class device_row_comparator {
    * values compare to all other for every column. If `nullopt`, then null precedence would be
    * `null_order::BEFORE` for all columns.
    */
-  device_row_comparator(Nullate has_nulls,
-                        table_device_view lhs,
-                        table_device_view rhs,
-                        std::optional<device_span<int const>> depth                  = std::nullopt,
-                        std::optional<device_span<order const>> column_order         = std::nullopt,
-                        std::optional<device_span<null_order const>> null_precedence = std::nullopt)
+  device_row_comparator(
+    Nullate has_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    std::optional<device_span<int const>> depth                  = std::nullopt,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
@@ -359,6 +356,9 @@ struct preprocessed_table {
  * comparison. The preprocessed table and temporary data required for the comparison are created and
  * owned by this class.
  *
+ * Alternatively, `self_comparator` can be constructed from an existing
+ * `shared_ptr<preprocessed_table>` when sharing the same table among multiple comparators.
+ *
  * This class can then provide a functor object that can used on the device.
  * The object of this class must outlive the usage of the device functor.
  */
@@ -390,17 +390,24 @@ class self_comparator {
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
    * the same preprocessed table.
    *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
    * @param t A table preprocessed for lexicographic comparison
    */
   self_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
   /**
-   * @brief Ger the comparison operator to use on the device
+   * @brief Return the binary operator for comparing rows in the table.
+   *
+   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   *
+   * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
    * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
    */
   template <typename Nullate>
-  device_row_comparator<Nullate> device_comparator(Nullate nullate)
+  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
   {
     return device_row_comparator<Nullate>(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
