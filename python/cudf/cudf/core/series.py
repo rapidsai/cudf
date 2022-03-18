@@ -5417,6 +5417,7 @@ class Series(Frame, Serializable):
             rhs = rhs.rank()
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
+            
         try:
             return lhs._column.corr(rhs._column)
         except AttributeError:
