@@ -11,6 +11,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from string import Template
 from typing import (
     Any,
     Dict,
@@ -349,10 +350,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         )
                     else:
                         raise ValueError(
-                            f"shape mismatch: value array of shape "
-                            f"{value_df.shape} could not be "
-                            f"broadcast to indexing result of shape "
-                            f"{columns_df.shape}"
+                            Template(
+                                "shape mismatch: value array of shape $value1 could \
+                                not be broadcast to indexing result of shape \
+                                $value2"
+                            ).substitute(
+                                value1=value_df.shape, value2=columns_df.shape,
+                            )
                         )
                 else:
                     value_cols = value_df._data.columns
@@ -362,24 +366,35 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if isinstance(value, cudf.DataFrame):
                     if value.shape != self._frame.loc[key[0]].shape:
                         raise ValueError(
-                            f"shape mismatch: value array of shape "
-                            f"{value.shape} could not be broadcast "
-                            f"to indexing result of shape "
-                            f"{self._frame.loc[key[0]].shape}"
+                            Template(
+                                "shape mismatch: value array of shape $value1 could \
+                                not be broadcast to indexing result of shape \
+                                $value2"
+                            ).substitute(
+                                value1=value.shape,
+                                value2=self._frame.loc[key[0]].shape,
+                            )
                         )
                     value_column_names = set(value._column_names)
-                    
                     for col in columns_df._column_names:
-                        columns_df[col][key[0]] = value._data[col] if col in value_column_names else cudf.NA
+                        columns_df[col][key[0]] = (
+                            value._data[col]
+                            if col in value_column_names
+                            else cudf.NA
+                        )
                 else:
                     value = np.array(value)
                     value = value.reshape((-1, value.shape[0]))
                     if value.shape != self._frame.loc[key[0]].shape:
                         raise ValueError(
-                            f"shape mismatch: value array of shape "
-                            f"{value.shape} could not be broadcast "
-                            f"to indexing result of shape "
-                            f"{self._frame.loc[key[0]].shape} "
+                            Template(
+                                "shape mismatch: value array of shape $value1 could \
+                                not be broadcast to indexing result of shape \
+                                $value2"
+                            ).substitute(
+                                value1=value.shape,
+                                value2=self._frame.loc[key[0]].shape,
+                            )
                         )
                     for i, col in enumerate(columns_df._column_names):
                         self._frame._data[col][key[0]] = value[:, i]
@@ -449,32 +464,34 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    f"shape mismatch: value array of shape "
-                    f"{value.shape} could not be broadcast "
-                    f"to indexing result of shape "
-                    f"{self._frame.iloc[key[0]].shape} "
+                    Template(
+                        "shape mismatch: value array of shape $value1 could \
+                        not be broadcast to indexing result of shape $value2"
+                    ).substitute(
+                        value1=value.shape,
+                        value2=self._frame.loc[key[0]].shape,
+                    )
                 )
-            for col in self._frame._column_names:
-                if col in value:
-                    self._frame._data[col][key[0]] = value.iloc[
-                        :, columns_df._column_names.index(col)
-                    ]
-                else:
-                    self._frame._data[col][key[0]] = cudf.NA
+            value_column_names = set(value._column_names)
+            for col in columns_df._column_names:
+                columns_df[col][key[0]] = (
+                    value._data[col] if col in value_column_names else cudf.NA
+                )
         else:
             value = np.array(value)
             value = value.reshape((-1, value.shape[0]))
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    f"shape mismatch: value array of shape "
-                    f"{value.shape} could not be broadcast "
-                    f"to indexing result of shape "
-                    f"{self._frame.iloc[key[0]].shape} "
+                    Template(
+                        "shape mismatch: value array of shape $value1 could \
+                        not be broadcast to indexing result of shape $value2"
+                    ).substitute(
+                        value1=value.shape,
+                        value2=self._frame.loc[key[0]].shape,
+                    )
                 )
-            for col in columns_df._column_names:
-                self._frame._data[col][key[0]] = value[
-                    :, columns_df._column_names.index(col)
-                ]
+            for i, col in enumerate(columns_df._column_names):
+                self._frame._data[col][key[0]] = value[:, i]
 
     def _getitem_scalar(self, arg):
         col = self._frame.columns[arg[1]]
