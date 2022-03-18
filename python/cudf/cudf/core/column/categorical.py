@@ -906,8 +906,6 @@ class CategoricalColumn(column.ColumnBase):
                     "Categoricals can only compare with the same type"
                 )
             return other
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
 
         ary = cudf.utils.utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype

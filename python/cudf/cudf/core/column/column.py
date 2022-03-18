@@ -526,6 +526,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
     def _wrap_binop_normalization(self, other):
         if other is cudf.NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(

@@ -5459,8 +5459,6 @@ class StringColumn(column.ColumnBase):
             and other.dtype == "object"
         ):
             return other
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
         if isinstance(other, str):
             return cudf.Scalar(other)
         return NotImplemented

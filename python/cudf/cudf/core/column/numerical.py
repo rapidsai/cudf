@@ -241,8 +241,6 @@ class NumericalColumn(NumericalBaseColumn):
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
-        elif isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
             if isinstance(other, cudf.Scalar):

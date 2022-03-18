@@ -250,8 +250,6 @@ class TimeDeltaColumn(column.ColumnBase):
     def normalize_binop_value(self, other) -> ColumnBinaryOperand:
         if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
         if isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):
