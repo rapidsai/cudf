@@ -177,15 +177,15 @@ class Merge:
         )
 
     def perform_merge(self) -> Frame:
-        left_join_cols = {}
-        right_join_cols = {}
+        left_join_cols = []
+        right_join_cols = []
 
         for left_key, right_key in zip(self._left_keys, self._right_keys):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
-            left_join_cols[left_key.name] = lcol_casted
-            right_join_cols[left_key.name] = rcol_casted
+            left_join_cols.append(lcol_casted)
+            right_join_cols.append(rcol_casted)
 
             # Categorical dtypes must be cast back from the underlying codes
             # type that was returned by _match_join_keys.
@@ -201,9 +201,7 @@ class Merge:
             right_key.set(self.rhs, rcol_casted, validate=False)
 
         left_rows, right_rows = self._joiner(
-            cudf.core.frame.Frame(left_join_cols),
-            cudf.core.frame.Frame(right_join_cols),
-            how=self.how,
+            left_join_cols, right_join_cols, how=self.how,
         )
 
         gather_index = self._using_left_index or self._using_right_index
