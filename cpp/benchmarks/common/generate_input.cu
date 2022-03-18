@@ -133,12 +133,12 @@ size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
 struct bool_generator {
   thrust::minstd_rand engine;
   thrust::uniform_real_distribution<float> dist;
-  float probability_true;
-  bool_generator(thrust::minstd_rand engine, float probability_true)
+  double probability_true;
+  bool_generator(thrust::minstd_rand engine, double probability_true)
     : engine(engine), dist{0, 1}, probability_true{probability_true}
   {
   }
-  bool_generator(unsigned seed, float probability_true)
+  bool_generator(unsigned seed, double probability_true)
     : engine(seed), dist{0, 1}, probability_true{probability_true}
   {
   }
@@ -688,7 +688,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 
 std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
                                                    row_count num_rows,
-                                                   std::optional<float> null_probability,
+                                                   std::optional<double> null_probability,
                                                    unsigned seed)
 {
   auto seed_engine = deterministic_engine(seed);
@@ -707,19 +707,19 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
 }
 
 std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
-  cudf::size_type size, std::optional<float> null_probability, unsigned seed)
+  cudf::size_type size, std::optional<double> null_probability, unsigned seed)
 {
   if (not null_probability.has_value()) { return {rmm::device_buffer{}, 0}; }
-  CUDF_EXPECTS(*null_probability >= 0.0f and *null_probability <= 1.0f,
+  CUDF_EXPECTS(*null_probability >= 0.0 and *null_probability <= 1.0,
                "Null probability must be within the range [0.0, 1.0]");
   if (*null_probability == 0.0f) {
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_VALID), 0};
-  } else if (*null_probability == 1.0f) {
+  } else if (*null_probability == 1.0) {
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
   } else {
     return cudf::detail::valid_if(thrust::make_counting_iterator<cudf::size_type>(0),
                                   thrust::make_counting_iterator<cudf::size_type>(size),
-                                  bool_generator{seed, 1.0f - *null_probability});
+                                  bool_generator{seed, 1.0 - *null_probability});
   }
 }
 

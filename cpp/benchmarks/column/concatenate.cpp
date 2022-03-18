@@ -39,7 +39,7 @@ static void BM_concatenate(benchmark::State& state)
 
   auto input         = create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
                                      row_count{num_rows},
-                                     Nullable ? std::optional<float>{2.0 / 3.0} : std::nullopt);
+                                     Nullable ? std::optional<double>{2.0 / 3.0} : std::nullopt);
   auto input_columns = input->view();
   std::vector<cudf::column_view> column_views(input_columns.begin(), input_columns.end());
 
@@ -76,7 +76,7 @@ static void BM_concatenate_tables(benchmark::State& state)
   std::generate_n(tables.begin(), num_tables, [&]() {
     return create_sequence_table(cycle_dtypes({cudf::type_to_id<T>()}, num_cols),
                                  row_count{num_rows},
-                                 Nullable ? std::optional<float>{2.0 / 3.0} : std::nullopt);
+                                 Nullable ? std::optional<double>{2.0 / 3.0} : std::nullopt);
   });
 
   // Generate table views

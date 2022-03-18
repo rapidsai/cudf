@@ -49,7 +49,7 @@ static void BM_ast_transform(benchmark::State& state)
   auto const source_table =
     create_sequence_table(cycle_dtypes({cudf::type_to_id<key_type>()}, n_cols),
                           row_count{table_size},
-                          Nullable ? std::optional<float>{0.5} : std::nullopt);
+                          Nullable ? std::optional<double>{0.5} : std::nullopt);
   auto table = source_table->view();
 
   // Create column references

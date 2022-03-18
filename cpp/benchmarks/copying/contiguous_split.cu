@@ -44,7 +44,7 @@ void BM_contiguous_split_common(benchmark::State& state,
                    });
   }
 
-  for (auto&& col : src_cols)
+  for (auto const& col : src_cols)
     // computing the null count is not a part of the benchmark's target code path, and we want the
     // property to be pre-computed so that we measure the performance of only the intended code path
     [[maybe_unused]] auto const nulls = col->null_count();

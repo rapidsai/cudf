@@ -58,7 +58,7 @@ static void BM_shift(benchmark::State& state)
   auto const input_table =
     create_sequence_table({cudf::type_to_id<int>()},
                           row_count{size},
-                          use_validity ? std::optional<float>{1.0} : std::nullopt);
+                          use_validity ? std::optional<double>{1.0} : std::nullopt);
   cudf::column_view input{input_table->get_column(0)};
 
   auto fill = use_validity ? make_scalar<int>() : make_scalar<int>(777);

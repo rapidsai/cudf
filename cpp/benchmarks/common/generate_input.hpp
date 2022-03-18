@@ -417,8 +417,8 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
 std::unique_ptr<cudf::table> create_sequence_table(
   std::vector<cudf::type_id> const& dtype_ids,
   row_count num_rows,
-  std::optional<float> null_probability = std::nullopt,
-  unsigned seed                         = 1);
+  std::optional<double> null_probability = std::nullopt,
+  unsigned seed                          = 1);
 
 /**
  * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
@@ -440,4 +440,4 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
  * @return null mask device buffer with random null mask data and null count
  */
 std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
-  cudf::size_type size, std::optional<float> null_probability = std::nullopt, unsigned seed = 1);
+  cudf::size_type size, std::optional<double> null_probability = std::nullopt, unsigned seed = 1);

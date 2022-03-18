@@ -32,7 +32,7 @@ void BM_repeat(benchmark::State& state)
   auto const input_table =
     create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
                           row_count{n_rows},
-                          nulls ? std::optional<float>{1.0} : std::nullopt);
+                          nulls ? std::optional<double>{1.0} : std::nullopt);
   // Create table view
   auto input = cudf::table_view(*input_table);
 
