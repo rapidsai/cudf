@@ -202,8 +202,6 @@ class NumericalColumn(NumericalBaseColumn):
                     out_dtype = cudf.dtype("float64")
 
         if binop in {
-            "l_and",
-            "l_or",
             "lt",
             "gt",
             "le",
