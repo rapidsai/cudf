@@ -25,7 +25,7 @@
 namespace cudf {
 
 std::unique_ptr<column> scan(column_view const& input,
-                             std::unique_ptr<aggregation> const& agg,
+                             std::unique_ptr<scan_aggregation> const& agg,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::mr::device_memory_resource* mr)

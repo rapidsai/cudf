@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -278,14 +278,14 @@ struct launch_functor {
   launch_functor(column_view inp, mutable_column_view out) : input(inp), output(out) {}
 
   template <typename Element>
-  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
+  std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
     rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
-  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
+  std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
     rmm::cuda_stream_view stream) const
   {
     thrust::transform(rmm::exec_policy(stream),
@@ -326,18 +326,18 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 
 struct add_calendrical_months_functor {
   template <typename Element, typename... Args>
-  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, std::unique_ptr<column>>
-  operator()(Args&&...) const
+  std::enable_if_t<!cudf::is_timestamp_t<Element>::value, std::unique_ptr<column>> operator()(
+    Args&&...) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp, typename MonthIterator>
-  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, std::unique_ptr<column>>
-  operator()(column_view timestamp_column,
-             MonthIterator months_begin,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+  std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, std::unique_ptr<column>> operator()(
+    column_view timestamp_column,
+    MonthIterator months_begin,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     auto size            = timestamp_column.size();
     auto output_col_type = timestamp_column.type();

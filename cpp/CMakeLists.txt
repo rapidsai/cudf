@@ -265,7 +265,6 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
-  src/groupby/sort/group_tdigest.cu
   src/groupby/sort/sort_helper.cu
   src/hash/hashing.cu
   src/hash/md5_hash.cu
@@ -311,6 +310,7 @@ add_library(
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
+  src/io/text/byte_range_info.cpp
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
   src/io/utilities/config_utils.cpp
@@ -356,11 +356,13 @@ add_library(
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
   src/quantiles/tdigest/tdigest.cu
+  src/quantiles/tdigest/tdigest_aggregation.cu
   src/quantiles/tdigest/tdigest_column_view.cpp
   src/quantiles/quantile.cu
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/collect_ops.cu
   src/reductions/max.cu
   src/reductions/mean.cu
   src/reductions/min.cu
@@ -372,6 +374,13 @@ add_library(
   src/reductions/scan/scan.cpp
   src/reductions/scan/scan_exclusive.cu
   src/reductions/scan/scan_inclusive.cu
+  src/reductions/segmented_all.cu
+  src/reductions/segmented_any.cu
+  src/reductions/segmented_max.cu
+  src/reductions/segmented_min.cu
+  src/reductions/segmented_product.cu
+  src/reductions/segmented_reductions.cpp
+  src/reductions/segmented_sum.cu
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
@@ -399,10 +408,12 @@ add_library(
   src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/stream_compaction/apply_boolean_mask.cu
+  src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
-  src/stream_compaction/drop_duplicates.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/unique.cu
+  src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
@@ -469,8 +480,10 @@ add_library(
   src/text/normalize.cu
   src/text/replace.cu
   src/text/stemmer.cu
+  src/text/subword/bpe_tokenizer.cu
   src/text/subword/data_normalizer.cu
   src/text/subword/load_hash_file.cu
+  src/text/subword/load_merges_file.cu
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu

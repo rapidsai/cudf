@@ -48,6 +48,107 @@ T __device__ inline normalize_nans_and_zeros(T const& key)
   return key;
 }
 
+__device__ inline uint32_t rotate_bits_left(uint32_t x, uint32_t r)
+{
+  // This function is equivalent to (x << r) | (x >> (32 - r))
+  return __funnelshift_l(x, x, r);
+}
+
+__device__ inline uint32_t rotate_bits_right(uint32_t x, uint32_t r)
+{
+  // This function is equivalent to (x >> r) | (x << (32 - r))
+  return __funnelshift_r(x, x, r);
+}
+
+__device__ inline uint64_t rotate_bits_right(uint64_t x, uint32_t r)
+{
+  return (x >> r) | (x << (64 - r));
+}
+
+// Swap the endianness of a 32 bit value
+__device__ inline uint32_t swap_endian(uint32_t x)
+{
+  // The selector 0x0123 reverses the byte order
+  return __byte_perm(x, 0, 0x0123);
+}
+
+// Swap the endianness of a 64 bit value
+// There is no CUDA intrinsic for permuting bytes in 64 bit integers
+__device__ inline uint64_t swap_endian(uint64_t x)
+{
+  // Reverse the endianness of each 32 bit section
+  uint32_t low_bits  = swap_endian(static_cast<uint32_t>(x));
+  uint32_t high_bits = swap_endian(static_cast<uint32_t>(x >> 32));
+  // Reassemble a 64 bit result, swapping the low bits and high bits
+  return (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
+};
+
+template <int capacity, typename hash_step_callable>
+struct hash_circular_buffer {
+  uint8_t storage[capacity];
+  uint8_t* cur;
+  int available_space{capacity};
+  hash_step_callable hash_step;
+
+  __device__ inline hash_circular_buffer(hash_step_callable hash_step)
+    : cur{storage}, hash_step{hash_step}
+  {
+  }
+
+  __device__ inline void put(uint8_t const* in, int size)
+  {
+    int copy_start = 0;
+    while (size >= available_space) {
+      // The buffer will be filled by this chunk of data. Copy a chunk of the
+      // data to fill the buffer and trigger a hash step.
+      memcpy(cur, in + copy_start, available_space);
+      hash_step(storage);
+      size -= available_space;
+      copy_start += available_space;
+      cur             = storage;
+      available_space = capacity;
+    }
+    // The buffer will not be filled by the remaining data. That is, `size >= 0
+    // && size < capacity`. We copy the remaining data into the buffer but do
+    // not trigger a hash step.
+    memcpy(cur, in + copy_start, size);
+    cur += size;
+    available_space -= size;
+  }
+
+  __device__ inline void pad(int const space_to_leave)
+  {
+    if (space_to_leave > available_space) {
+      memset(cur, 0x00, available_space);
+      hash_step(storage);
+      cur             = storage;
+      available_space = capacity;
+    }
+    memset(cur, 0x00, available_space - space_to_leave);
+    cur += available_space - space_to_leave;
+    available_space = space_to_leave;
+  }
+
+  __device__ inline const uint8_t& operator[](int idx) const { return storage[idx]; }
+};
+
+// Get a uint8_t pointer to a column element and its size as a pair.
+template <typename Element>
+auto __device__ inline get_element_pointer_and_size(Element const& element)
+{
+  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
+  } else {
+    cudf_assert(false && "Unsupported type.");
+  }
+}
+
+template <>
+auto __device__ inline get_element_pointer_and_size(string_view const& element)
+{
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
+}
+
 /**
  * Modified GPU implementation of
  * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
@@ -90,11 +191,6 @@ struct MurmurHash3_32 {
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  [[nodiscard]] __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    return (x << r) | (x >> (32 - r));
-  }
-
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
@@ -112,32 +208,6 @@ struct MurmurHash3_32 {
     // unaligned access (very likely for string types).
     auto const block = reinterpret_cast<uint8_t const*>(data + offset);
     return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
-  }
-
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
   }
 
   // TODO Do we need this operator() and/or compute? Probably not both.
@@ -182,10 +252,10 @@ struct MurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -197,7 +267,7 @@ struct MurmurHash3_32 {
       case 1:
         k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = rotl32(k1, rot_c1);
+        k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
         k1 *= c2;
         h1 ^= k1;
     };
@@ -218,18 +288,6 @@ hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& k
   return this->compute(static_cast<uint8_t>(key));
 }
 
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
 template <>
 hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
 {
@@ -240,6 +298,15 @@ template <>
 hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
 {
   return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
@@ -285,11 +352,6 @@ struct SparkMurmurHash3_32 {
 
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
-
-  __device__ inline uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    return (x << r) | (x >> (32 - r));
-  }
 
   __device__ inline uint32_t fmix32(uint32_t h) const
   {
@@ -344,10 +406,10 @@ struct SparkMurmurHash3_32 {
     for (cudf::size_type i = 0; i < nblocks; i++) {
       uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -360,10 +422,10 @@ struct SparkMurmurHash3_32 {
       // signedness when casting byte-to-int, but C++ does not.
       uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, rot_c2);
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
       h1 = h1 * 5 + c3;
     }
 
@@ -406,6 +468,27 @@ hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
   uint16_t const& key) const
 {
   return this->compute<uint32_t>(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
 }
 
 template <>
@@ -481,30 +564,6 @@ hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operat
 }
 
 /**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-/**
  * @brief  This hash function simply returns the value that is asked to be hash
  * reinterpreted as the result_type of the functor.
  */
@@ -513,32 +572,6 @@ struct IdentityHash {
   using result_type = hash_value_type;
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
-
-  /* Copyright 2005-2014 Daniel James.
-   *
-   * Use, modification and distribution is subject to the Boost Software
-   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-   * http://www.boost.org/LICENSE_1_0.txt)
-   */
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
 
   template <typename return_type = result_type>
   constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(

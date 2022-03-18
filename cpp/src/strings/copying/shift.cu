@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,9 @@ std::unique_ptr<column> shift(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   auto d_fill_str = static_cast<string_scalar const&>(fill_value).value(stream);
+
+  // adjust offset when greater than the size of the input
+  if (std::abs(offset) > input.size()) { offset = input.size(); }
 
   // output offsets column is the same size as the input
   auto const input_offsets =
