@@ -45,7 +45,7 @@ struct reduce_dispatch_functor {
   }
 
   template <aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const& agg)
+  std::unique_ptr<scalar> operator()(std::unique_ptr<reduce_aggregation> const& agg)
   {
     switch (k) {
       case aggregation::SUM: return reduction::sum(col, output_dtype, stream, mr); break;
@@ -93,7 +93,7 @@ struct reduce_dispatch_functor {
       case aggregation::NUNIQUE: {
         auto nunique_agg = dynamic_cast<nunique_aggregation const*>(agg.get());
         return make_fixed_width_scalar(
-          detail::unordered_distinct_count(
+          detail::distinct_count(
             col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
           stream,
           mr);
@@ -125,7 +125,7 @@ struct reduce_dispatch_functor {
 
 std::unique_ptr<scalar> reduce(
   column_view const& col,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -134,8 +134,17 @@ std::unique_ptr<scalar> reduce(
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+      // Under some circumstance, the output type will become the List of input type,
+      // such as: collect_list or collect_set. So, we have to handcraft the default scalar.
+      if (output_dtype.id() == type_id::LIST) {
+        auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
+        scalar->set_valid_async(false, stream);
+        return scalar;
+      }
+
       return make_default_constructed_scalar(output_dtype, stream, mr);
     }
+
     return make_empty_scalar_like(col, stream, mr);
   }
 
@@ -145,7 +154,7 @@ std::unique_ptr<scalar> reduce(
 }  // namespace detail
 
 std::unique_ptr<scalar> reduce(column_view const& col,
-                               std::unique_ptr<aggregation> const& agg,
+                               std::unique_ptr<reduce_aggregation> const& agg,
                                data_type output_dtype,
                                rmm::mr::device_memory_resource* mr)
 {
