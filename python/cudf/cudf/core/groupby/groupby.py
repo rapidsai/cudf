@@ -39,8 +39,6 @@ def _quantile_75(x):
 
 class GroupBy(Serializable, Reducible, Scannable):
 
-    # Pandas Index object supports groupby, but only trivially return a dict
-    # of grouped values.
     obj: "cudf.core.indexed_frame.IndexedFrame"
 
     _VALID_REDUCTIONS = {
