@@ -130,91 +130,90 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return pd_series
 
-    def _binary_op_mul(self, rhs: ColumnBinaryOperand) -> DtypeObj:
-        if rhs.dtype.kind in ("f", "i", "u"):
+    def _binary_op_mul(self, other: ColumnBinaryOperand) -> DtypeObj:
+        if other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Multiplication of {self.dtype} with {rhs.dtype} "
+                f"Multiplication of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
         return out_dtype
 
-    def _binary_op_mod(self, rhs: ColumnBinaryOperand) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-        elif rhs.dtype.kind in ("f", "i", "u"):
+    def _binary_op_mod(self, other: ColumnBinaryOperand) -> DtypeObj:
+        if pd.api.types.is_timedelta64_dtype(other.dtype):
+            out_dtype = determine_out_dtype(self.dtype, other.dtype)
+        elif other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Modulus of {self.dtype} with {rhs.dtype} "
+                f"Modulus of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
         return out_dtype
 
     def _binary_op_lt_gt_le_ge_eq_ne(
-        self, rhs: ColumnBinaryOperand
+        self, other: ColumnBinaryOperand
     ) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        if pd.api.types.is_timedelta64_dtype(other.dtype):
             return np.bool_
         raise TypeError(
             f"Invalid comparison between dtype={self.dtype}"
-            f" and {rhs.dtype}"
+            f" and {other.dtype}"
         )
 
     def _binary_op_div(
-        self, rhs: ColumnBinaryOperand, op: str
+        self, other: ColumnBinaryOperand, op: str
     ) -> Tuple["column.ColumnBase", ColumnBinaryOperand, DtypeObj]:
-        lhs = self  # type: column.ColumnBase
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-            lhs = lhs.astype(common_dtype).astype("float64")
-            if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid():
-                    rhs = rhs.value.astype(common_dtype).astype("float64")
+        this: ColumnBase = self
+        if pd.api.types.is_timedelta64_dtype(other.dtype):
+            common_dtype = determine_out_dtype(self.dtype, other.dtype)
+            this = self.astype(common_dtype).astype("float64")
+            if isinstance(other, cudf.Scalar):
+                if other.is_valid():
+                    other = other.value.astype(common_dtype).astype("float64")
                 else:
-                    rhs = cudf.Scalar(None, "float64")
+                    other = cudf.Scalar(None, "float64")
             else:
-                rhs = rhs.astype(common_dtype).astype("float64")
+                other = other.astype(common_dtype).astype("float64")
 
             out_dtype = cudf.dtype("float64" if op == "truediv" else "int64")
-        elif rhs.dtype.kind in ("f", "i", "u"):
+        elif other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Division of {self.dtype} with {rhs.dtype} "
+                f"Division of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
 
-        return lhs, rhs, out_dtype
+        return this, other, out_dtype
 
     def _binaryop(
-        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False
+        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> "column.ColumnBase":
-        rhs = self._wrap_binop_normalization(rhs)
-        lhs, rhs = self, rhs
+        other = self._wrap_binop_normalization(other)
 
+        this: ColumnBinaryOperand = self
         if op in {"eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"}:
-            out_dtype = self._binary_op_lt_gt_le_ge_eq_ne(rhs)
+            out_dtype = self._binary_op_lt_gt_le_ge_eq_ne(other)
         elif op == "mul":
-            out_dtype = self._binary_op_mul(rhs)
+            out_dtype = self._binary_op_mul(other)
         elif op == "mod":
-            out_dtype = self._binary_op_mod(rhs)
+            out_dtype = self._binary_op_mod(other)
         elif op in {"truediv", "floordiv"}:
-            lhs, rhs, out_dtype = self._binary_op_div(rhs, op)  # type: ignore
+            this, other, out_dtype = self._binary_op_div(other, op)
             op = "truediv"
         elif op == "add":
-            out_dtype = _timedelta_add_result_dtype(lhs, rhs)
+            out_dtype = _timedelta_add_result_dtype(self, other)
         elif op == "sub":
-            out_dtype = _timedelta_sub_result_dtype(lhs, rhs)
+            out_dtype = _timedelta_sub_result_dtype(self, other)
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
                 f"the operation {op}"
             )
 
-        if reflect:
-            lhs, rhs = rhs, lhs  # type: ignore
+        lhs, rhs = (this, other) if not reflect else (other, this)
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 

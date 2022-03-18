@@ -157,7 +157,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.unary.unary_operation(self, unaryop)
 
     def _binaryop(
-        self, binop: str, rhs: ColumnBinaryOperand, reflect: bool = False,
+        self, binop: str, other: ColumnBinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
         int_float_dtype_mapping = {
             np.int8: np.float32,
@@ -174,18 +174,20 @@ class NumericalColumn(NumericalBaseColumn):
         if binop in {"truediv", "rtruediv"}:
             # Division with integer types results in a suitable float.
             if (truediv_type := int_float_dtype_mapping.get(self.dtype.type)) :
-                return self.astype(truediv_type)._binaryop(binop, rhs, reflect)
+                return self.astype(truediv_type)._binaryop(
+                    binop, other, reflect
+                )
 
-        rhs = self._wrap_binop_normalization(rhs)
+        other = self._wrap_binop_normalization(other)
         out_dtype = self.dtype
-        if rhs is not None:
-            if isinstance(rhs, cudf.core.column.DecimalBaseColumn):
-                dtyp = rhs.dtype.__class__(rhs.dtype.MAX_PRECISION, 0)
-                return self.as_decimal_column(dtyp)._binaryop(binop, rhs)
+        if other is not None:
+            if isinstance(other, cudf.core.column.DecimalBaseColumn):
+                dtyp = other.dtype.__class__(other.dtype.MAX_PRECISION, 0)
+                return self.as_decimal_column(dtyp)._binaryop(binop, other)
 
-            out_dtype = np.result_type(self.dtype, rhs.dtype)
+            out_dtype = np.result_type(self.dtype, other.dtype)
             if binop in {"mod", "floordiv"}:
-                tmp = self if reflect else rhs
+                tmp = self if reflect else other
                 # Guard against division by zero for integers.
                 if (
                     (tmp.dtype.type in int_float_dtype_mapping)
@@ -213,16 +215,16 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if binop in {"and", "or", "xor"}:
-            if is_float_dtype(self.dtype) or is_float_dtype(rhs):
+            if is_float_dtype(self.dtype) or is_float_dtype(other):
                 raise TypeError(
                     f"Operation 'bitwise {binop}' not supported between "
                     f"{self.dtype.type.__name__} and "
-                    f"{rhs.dtype.type.__name__}"
+                    f"{other.dtype.type.__name__}"
                 )
-            if is_bool_dtype(self.dtype) or is_bool_dtype(rhs):
+            if is_bool_dtype(self.dtype) or is_bool_dtype(other):
                 out_dtype = "bool"
 
-        lhs, rhs = (self, rhs) if not reflect else (rhs, self)
+        lhs, rhs = (self, other) if not reflect else (other, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:

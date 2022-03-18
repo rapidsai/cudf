@@ -876,17 +876,17 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(
-        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False
+        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         if op not in {"eq", "ne", "lt", "le", "gt", "ge", "NULL_EQUALS"}:
             raise TypeError(
                 "Series of dtype `category` cannot perform the operation: "
                 f"{op}"
             )
-        rhs = self._wrap_binop_normalization(rhs)
+        other = self._wrap_binop_normalization(other)
         # TODO: This is currently just here to make mypy happy, but eventually
         # we'll need to properly establish the APIs for these methods.
-        if not isinstance(rhs, CategoricalColumn):
+        if not isinstance(other, CategoricalColumn):
             raise ValueError
         # Note: at this stage we are guaranteed that the dtypes are equal.
         if not self.ordered and op not in {"eq", "ne", "NULL_EQUALS"}:
@@ -894,7 +894,7 @@ class CategoricalColumn(column.ColumnBase):
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical._binaryop(op, rhs.as_numerical)
+        return self.as_numerical._binaryop(op, other.as_numerical)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):

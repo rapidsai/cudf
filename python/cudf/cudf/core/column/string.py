@@ -5451,7 +5451,7 @@ class StringColumn(column.ColumnBase):
         raise TypeError(f"cannot broadcast {type(other)}")
 
     def _binaryop(
-        self, op: str, rhs: ColumnBinaryOperand, reflect: bool = False
+        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> "column.ColumnBase":
         # Handle object columns that are empty or all nulls when performing
         # binary operations
@@ -5479,10 +5479,10 @@ class StringColumn(column.ColumnBase):
             elif op == "ne":
                 return self.isnull()
 
-        rhs = self._wrap_binop_normalization(rhs)
+        other = self._wrap_binop_normalization(other)
 
-        if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
-            lhs, rhs = (rhs, self) if reflect else (self, rhs)
+        if isinstance(other, (StringColumn, str, cudf.Scalar)):
+            lhs, rhs = (other, self) if reflect else (self, other)
             if op == "add":
                 return cast(
                     "column.ColumnBase",
