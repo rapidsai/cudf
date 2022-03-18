@@ -2440,30 +2440,6 @@ class Frame(BinaryOperand, Scannable):
             zip(self._column_names, data_columns), self._index
         )
 
-    def _binaryop(
-        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
-    ) -> Frame:
-        """Perform a binary operation between two frames.
-
-        Parameters
-        ----------
-        other : Frame
-            The second operand.
-        op : str
-            The operation to perform.
-        fill_value : Any, default None
-            The value to replace null values with. If ``None``, nulls are not
-            filled before the operation.
-
-        Returns
-        -------
-        Frame
-            A new instance containing the result of the operation.
-        """
-        raise NotImplementedError(
-            f"Binary operations are not supported for {self.__class__}"
-        )
-
     @classmethod
     @_cudf_nvtx_annotate
     def _colwise_binop(

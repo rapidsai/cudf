@@ -41,7 +41,7 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -1090,12 +1090,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
     def unary_operator(self, unaryop: str):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
-        )
-
-    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        raise TypeError(
-            f"Operation {op} not supported between dtypes {self.dtype} and "
-            f"{other.dtype}."
         )
 
     def normalize_binop_value(

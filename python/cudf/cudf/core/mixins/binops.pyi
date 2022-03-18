@@ -1,9 +1,15 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from typing import Set, Tuple
+from typing import Any, Set, Tuple, TypeVar
+
+# Note: It may be possible to define a narrower bound here eventually.
+BinaryOperandType = TypeVar("BinaryOperandType", bound="Any")
 
 class BinaryOperand:
     _SUPPORTED_BINARY_OPERATIONS: Set
+
+    def _binaryop(self, other: BinaryOperandType, op: str):
+        ...
 
     def __add__(self, other):
         ...
