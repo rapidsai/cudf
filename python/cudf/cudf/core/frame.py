@@ -229,14 +229,17 @@ class Frame(BinaryOperand, Scannable):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
+        column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
 
+        If `column_names` is None, use column names from self.
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
         """
+        if column_names is None:
+            column_names = self._column_names
         frame = self.__class__._from_columns(
             columns, column_names, index_names
         )
