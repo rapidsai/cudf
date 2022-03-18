@@ -5396,11 +5396,8 @@ class Series(Frame, Serializable):
         >>> ser1.corr(ser2, method="spearman")
         -0.5
         """
-        if method not in ("pearson", "spearman",):
-            raise ValueError(f"Unknown method {method}")
-            
-        if min_periods not in (None,):
-            raise NotImplementedErroe("Unsupported argument 'min_periods'")
+        
+        assert method in ("pearson", "spearman",) and min_periods in (None,)
             
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
