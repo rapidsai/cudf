@@ -395,7 +395,7 @@ class DatetimeColumn(column.ColumnBase):
         return result.astype(self.dtype)
 
     def _binaryop(
-        self, op: str, other: ColumnBinaryOperand, reflect: bool = False,
+        self, other: ColumnBinaryOperand, op: str, reflect: bool = False,
     ) -> ColumnBase:
         other = self._wrap_binop_normalization(other)
         if isinstance(other, cudf.DateOffset):

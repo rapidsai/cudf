@@ -5451,7 +5451,7 @@ class StringColumn(column.ColumnBase):
         raise TypeError(f"cannot broadcast {type(other)}")
 
     def _binaryop(
-        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
+        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
     ) -> "column.ColumnBase":
         # Handle object columns that are empty or all nulls when performing
         # binary operations

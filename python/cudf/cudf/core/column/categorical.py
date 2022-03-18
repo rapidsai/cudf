@@ -876,7 +876,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _binaryop(
-        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
+        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
     ) -> ColumnBase:
         if op not in {
             "__eq__",
@@ -902,7 +902,7 @@ class CategoricalColumn(column.ColumnBase):
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical._binaryop(op, other.as_numerical)
+        return self.as_numerical._binaryop(other.as_numerical, op)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):

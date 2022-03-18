@@ -60,7 +60,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
-    def _binaryop(self, op, other: ColumnBinaryOperand, reflect=False):
+    def _binaryop(self, other: ColumnBinaryOperand, op: str, reflect=False):
         other = self._wrap_binop_normalization(other)
         lhs, rhs = (other, self) if reflect else (self, other)
         # Decimals in libcudf don't support truediv, see

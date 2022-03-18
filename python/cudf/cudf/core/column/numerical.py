@@ -157,7 +157,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.unary.unary_operation(self, unaryop)
 
     def _binaryop(
-        self, op: str, other: ColumnBinaryOperand, reflect: bool = False,
+        self, other: ColumnBinaryOperand, op: str, reflect: bool = False,
     ) -> ColumnBase:
         int_float_dtype_mapping = {
             np.int8: np.float32,
@@ -174,14 +174,14 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if (truediv_type := int_float_dtype_mapping.get(self.dtype.type)) :
-                return self.astype(truediv_type)._binaryop(op, other, reflect)
+                return self.astype(truediv_type)._binaryop(other, op, reflect)
 
         other = self._wrap_binop_normalization(other)
         out_dtype = self.dtype
         if other is not None:
             if isinstance(other, cudf.core.column.DecimalBaseColumn):
                 dtyp = other.dtype.__class__(other.dtype.MAX_PRECISION, 0)
-                return self.as_decimal_column(dtyp)._binaryop(op, other)
+                return self.as_decimal_column(dtyp)._binaryop(other, op)
 
             out_dtype = np.result_type(self.dtype, other.dtype)
             if op in {"__mod__", "__floordiv__"}:

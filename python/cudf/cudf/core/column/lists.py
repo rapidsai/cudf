@@ -93,7 +93,7 @@ class ListColumn(ColumnBase):
         return max(0, len(self.base_children[0]) - 1)
 
     def _binaryop(
-        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
+        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
     ) -> ColumnBase:
         """
         Calls a binary operator *binop* on operands *self*
