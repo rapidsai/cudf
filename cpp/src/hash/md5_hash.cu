@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -247,9 +247,6 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
-  // Build an output null mask from the logical AND of all input columns' null masks.
-  rmm::device_buffer null_mask{cudf::detail::bitmask_and(input, stream)};
-
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
@@ -278,6 +275,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
         }
       }
     });
+
+  rmm::device_buffer null_mask{0, stream, mr};
 
   return make_strings_column(
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));

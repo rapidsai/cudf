@@ -24,9 +24,9 @@ package ai.rapids.cudf;
 public enum HashType {
   IDENTITY(0),
   MURMUR3(1),
-  HASH_MD5(2),
-  HASH_SERIAL_MURMUR3(3),
-  HASH_SPARK_MURMUR3(4),
+  HASH_SERIAL_MURMUR3(2),
+  HASH_SPARK_MURMUR3(3),
+  HASH_MD5(4);
   HASH_SHA1(5),
   HASH_SHA224(6),
   HASH_SHA256(7),

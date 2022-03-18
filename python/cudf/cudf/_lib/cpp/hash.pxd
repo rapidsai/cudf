@@ -14,9 +14,9 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
     ctypedef enum hash_id "cudf::hash_id":
         HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"
         HASH_MURMUR3 "cudf::hash_id::HASH_MURMUR3"
-        HASH_MD5 "cudf::hash_id::HASH_MD5"
         HASH_SERIAL_MURMUR3 "cudf::hash_id::HASH_SERIAL_MURMUR3"
         HASH_SPARK_MURMUR3 "cudf::hash_id::HASH_SPARK_MURMUR3"
+        HASH_MD5 "cudf::hash_id::HASH_MD5"
         HASH_SHA1 "cudf::hash_id::HASH_SHA1"
         HASH_SHA224 "cudf::hash_id::HASH_SHA224"
         HASH_SHA256 "cudf::hash_id::HASH_SHA256"
