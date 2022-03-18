@@ -227,13 +227,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
           4
         ]
         """
-        return libcudf.interop.to_arrow(
-            cudf.core.frame.Frame(
-                cudf.core.column_accessor.ColumnAccessor({"None": self})
-            ),
-            [["None"]],
-            keep_index=False,
-        )["None"].chunk(0)
+        return libcudf.interop.to_arrow([self], [["None"]],)["None"].chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -278,12 +272,8 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 }
             )
 
-            codes = libcudf.interop.from_arrow(
-                indices_table, indices_table.column_names
-            )[0]["None"]
-            categories = libcudf.interop.from_arrow(
-                dictionaries_table, dictionaries_table.column_names
-            )[0]["None"]
+            codes = libcudf.interop.from_arrow(indices_table)[0]
+            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
 
             return build_categorical_column(
                 categories=categories,
@@ -299,7 +289,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
-        result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
+        result = libcudf.interop.from_arrow(data)[0]
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 

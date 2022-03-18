@@ -1727,30 +1727,33 @@ class Frame(BinaryOperand, Scannable):
 
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            cudf_indices_frame, _ = libcudf.interop.from_arrow(
-                dict_indices_table, dict_indices_table.column_names
-            )
+            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name, codes in cudf_indices_frame.items():
-                cudf_category_frame[name] = build_categorical_column(
+            cudf_category_frame = {
+                name: build_categorical_column(
                     cudf_dictionaries_columns[name],
                     codes,
                     mask=codes.base_mask,
                     size=codes.size,
                     ordered=dict_ordered[name],
                 )
+                for name, codes in zip(
+                    dict_indices_table.column_names, indices_columns
+                )
+            }
 
         # Handle non-dict arrays
-        cudf_non_category_frame = (
-            {}
-            if data.num_columns == 0
-            else libcudf.interop.from_arrow(data, data.column_names)[0]
-        )
+        cudf_non_category_frame = {
+            name: col
+            for name, col in zip(
+                data.column_names, libcudf.interop.from_arrow(data)
+            )
+        }
 
         result = {**cudf_non_category_frame, **cudf_category_frame}
 
