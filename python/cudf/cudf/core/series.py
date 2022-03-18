@@ -2428,7 +2428,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.5
         """
         
-        assert method in ("pearson", "spearman",) and min_periods in (None,)
+        if method not in ("pearson",):
+             raise ValueError(f"Unknown method {method}")
+
+        if min_periods not in (None,):
+             raise NotImplementedError("Unsupported argument 'min_periods'")
             
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
