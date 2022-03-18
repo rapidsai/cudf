@@ -229,14 +229,17 @@ class Frame(BinaryOperand, Scannable):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
+        column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
 
+        If `column_names` is None, use column names from self.
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
         """
+        if column_names is None:
+            column_names = self._column_names
         frame = self.__class__._from_columns(
             columns, column_names, index_names
         )
@@ -1546,96 +1549,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
         return self._from_data(data, index).astype(np.float64)
-
-    @_cudf_nvtx_annotate
-    def repeat(self, repeats, axis=None):
-        """Repeats elements consecutively.
-
-        Returns a new object of caller type(DataFrame/Series/Index) where each
-        element of the current object is repeated consecutively a given
-        number of times.
-
-        Parameters
-        ----------
-        repeats : int, or array of ints
-            The number of repetitions for each element. This should
-            be a non-negative integer. Repeating 0 times will return
-            an empty object.
-
-        Returns
-        -------
-        Series/DataFrame/Index
-            A newly created object of same type as caller
-            with repeated elements.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': [10, 20, 30]})
-        >>> df
-           a   b
-        0  1  10
-        1  2  20
-        2  3  30
-        >>> df.repeat(3)
-           a   b
-        0  1  10
-        0  1  10
-        0  1  10
-        1  2  20
-        1  2  20
-        1  2  20
-        2  3  30
-        2  3  30
-        2  3  30
-
-        Repeat on Series
-
-        >>> s = cudf.Series([0, 2])
-        >>> s
-        0    0
-        1    2
-        dtype: int64
-        >>> s.repeat([3, 4])
-        0    0
-        0    0
-        0    0
-        1    2
-        1    2
-        1    2
-        1    2
-        dtype: int64
-        >>> s.repeat(2)
-        0    0
-        0    0
-        1    2
-        1    2
-        dtype: int64
-
-        Repeat on Index
-
-        >>> index = cudf.Index([10, 22, 33, 55])
-        >>> index
-        Int64Index([10, 22, 33, 55], dtype='int64')
-        >>> index.repeat(5)
-        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
-                    33, 33, 33, 33, 55, 55, 55, 55, 55],
-                dtype='int64')
-        """
-        if axis is not None:
-            raise NotImplementedError(
-                "Only axis=`None` supported at this time."
-            )
-
-        if not is_scalar(repeats):
-            repeats = as_column(repeats)
-
-        result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, repeats)
-        )
-
-        result._copy_type_metadata(self)
-        return result
 
     @_cudf_nvtx_annotate
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
@@ -6259,6 +6172,20 @@ class Frame(BinaryOperand, Scannable):
             name: col.distinct_count(dropna=dropna)
             for name, col in self._data.items()
         }
+
+    @staticmethod
+    def _repeat(
+        columns: List[ColumnBase], repeats, axis=None
+    ) -> List[ColumnBase]:
+        if axis is not None:
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
+
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
+
+        return libcudf.filling.repeat(columns, repeats)
 
 
 @_cudf_nvtx_annotate
