@@ -394,9 +394,8 @@ class DatetimeColumn(column.ColumnBase):
             return pd.Timestamp(result, unit=self.time_unit)
         return result.astype(self.dtype)
 
-    def _binaryop(
-        self, other: ColumnBinaryOperand, op: str, reflect: bool = False,
-    ) -> ColumnBase:
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)

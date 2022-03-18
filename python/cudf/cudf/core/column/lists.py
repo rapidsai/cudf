@@ -92,9 +92,7 @@ class ListColumn(ColumnBase):
         # avoid it being negative
         return max(0, len(self.base_children[0]) - 1)
 
-    def _binaryop(
-        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
-    ) -> ColumnBase:
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         """
         Calls a binary operator *binop* on operands *self*
         and *other*.
@@ -106,11 +104,6 @@ class ListColumn(ColumnBase):
         binop :  binary operator
             Only "add" operator is currently being supported
             for lists concatenation functions
-
-        reflect : boolean, default False
-            If ``True``, swap the order of the operands. See
-            https://docs.python.org/3/reference/datamodel.html#object.__ror__
-            for more information on when this is necessary.
 
         Returns
         -------
@@ -133,6 +126,7 @@ class ListColumn(ColumnBase):
         Name: val, dtype: list
 
         """
+        reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":

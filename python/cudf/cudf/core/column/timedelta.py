@@ -191,8 +191,9 @@ class TimeDeltaColumn(column.ColumnBase):
         return this, other, out_dtype
 
     def _binaryop(
-        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
+        self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
+        reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
 
         this: ColumnBinaryOperand = self

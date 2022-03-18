@@ -2118,9 +2118,7 @@ class IndexedFrame(Frame):
         *args,
         **kwargs,
     ):
-        reflect = self._is_reflected_op(op)
-        if reflect:
-            op = op[:2] + op[3:]
+        reflect, op = self._check_reflected_op(op)
         operands, out_index = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )

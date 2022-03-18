@@ -1,6 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-from typing import Set
+from typing import Set, Tuple
 
 class BinaryOperand:
     _SUPPORTED_BINARY_OPERATIONS: Set
@@ -84,5 +84,5 @@ class BinaryOperand:
         ...
 
     @staticmethod
-    def _is_reflected_op(op) -> bool:
+    def _check_reflected_op(op) -> Tuple[bool, str]:
         ...

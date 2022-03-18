@@ -875,9 +875,7 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes.offset,
         )
 
-    def _binaryop(
-        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
-    ) -> ColumnBase:
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         if op not in {
             "__eq__",
             "__ne__",

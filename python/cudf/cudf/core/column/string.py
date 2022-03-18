@@ -5451,8 +5451,9 @@ class StringColumn(column.ColumnBase):
         raise TypeError(f"cannot broadcast {type(other)}")
 
     def _binaryop(
-        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
+        self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
+        reflect, op = self._check_reflected_op(op)
         # Handle object columns that are empty or all nulls when performing
         # binary operations
         # See https://github.com/pandas-dev/pandas/issues/46332
@@ -5465,13 +5466,6 @@ class StringColumn(column.ColumnBase):
                 "__pow__",
                 "__truediv__",
                 "__floordiv__",
-                "__radd__",
-                "__rsub__",
-                "__rmul__",
-                "__rmod__",
-                "__rpow__",
-                "__rtruediv__",
-                "__rfloordiv__",
             }:
                 return self
             elif op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:

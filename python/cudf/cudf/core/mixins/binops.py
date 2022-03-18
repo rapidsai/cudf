@@ -49,8 +49,12 @@ BinaryOperand = _create_delegating_mixin(
 )
 
 
-def _is_reflected_op(op):
-    return op[2] == "r" and op != "__rshift__"
+# TODO: See if there is a better approach to this problem.
+def _check_reflected_op(op):
+    reflect = op[2] == "r" and op != "__rshift__"
+    if reflect:
+        op = op[:2] + op[3:]
+    return reflect, op
 
 
-BinaryOperand._is_reflected_op = staticmethod(_is_reflected_op)
+BinaryOperand._check_reflected_op = staticmethod(_check_reflected_op)

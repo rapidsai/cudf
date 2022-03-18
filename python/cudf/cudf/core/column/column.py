@@ -68,7 +68,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.mixins import Reducible
+from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -86,13 +86,14 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-class ColumnBase(Column, Serializable, Reducible, NotIterable):
+class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
     _VALID_REDUCTIONS = {
         "any",
         "all",
         "max",
         "min",
     }
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
@@ -1029,84 +1030,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             "`__cuda_array_interface__`"
         )
 
-    def __add__(self, other):
-        return self._binaryop(other, "__add__")
-
-    def __sub__(self, other):
-        return self._binaryop(other, "__sub__")
-
-    def __mul__(self, other):
-        return self._binaryop(other, "__mul__")
-
-    def __or__(self, other):
-        return self._binaryop(other, "__or__")
-
-    def __xor__(self, other):
-        return self._binaryop(other, "__xor__")
-
-    def __and__(self, other):
-        return self._binaryop(other, "__and__")
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "__floordiv__")
-
-    def __truediv__(self, other):
-        return self._binaryop(other, "__truediv__")
-
-    def __mod__(self, other):
-        return self._binaryop(other, "__mod__")
-
-    def __pow__(self, other):
-        return self._binaryop(other, "__pow__")
-
-    def __radd__(self, other):
-        return self._binaryop(other, "__add__", reflect=True)
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "__sub__", reflect=True)
-
-    def __rmul__(self, other):
-        return self._binaryop(other, "__mul__", reflect=True)
-
-    def __ror__(self, other):
-        return self._binaryop(other, "__or__", reflect=True)
-
-    def __rxor__(self, other):
-        return self._binaryop(other, "__xor__", reflect=True)
-
-    def __rand__(self, other):
-        return self._binaryop(other, "__and__", reflect=True)
-
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "__floordiv__", reflect=True)
-
-    def __rtruediv__(self, other):
-        return self._binaryop(other, "__truediv__", reflect=True)
-
-    def __rmod__(self, other):
-        return self._binaryop(other, "__mod__", reflect=True)
-
-    def __rpow__(self, other):
-        return self._binaryop(other, "__pow__", reflect=True)
-
-    def __eq__(self, other):
-        return self._binaryop(other, "__eq__")
-
-    def __ne__(self, other):
-        return self._binaryop(other, "__ne__")
-
-    def __lt__(self, other):
-        return self._binaryop(other, "__lt__")
-
-    def __gt__(self, other):
-        return self._binaryop(other, "__gt__")
-
-    def __le__(self, other):
-        return self._binaryop(other, "__le__")
-
-    def __ge__(self, other):
-        return self._binaryop(other, "__ge__")
-
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
@@ -1169,9 +1092,7 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             f"Operation {unaryop} not supported for dtype {self.dtype}."
         )
 
-    def _binaryop(
-        self, other: ColumnBinaryOperand, op: str, reflect: bool = False
-    ) -> ColumnBase:
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         raise TypeError(
             f"Operation {op} not supported between dtypes {self.dtype} and "
             f"{other.dtype}."
