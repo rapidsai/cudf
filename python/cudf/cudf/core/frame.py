@@ -1460,19 +1460,17 @@ class Frame(BinaryOperand, Scannable):
             libcudf.types.NullOrder[key] for key in null_precedence
         ]
 
-        result = self.__class__._from_data(
+        return self._from_columns_like_self(
             *libcudf.quantiles.quantiles(
-                self,
+                [*self._columns],
                 q,
                 interpolation,
                 is_sorted,
                 column_order,
                 null_precedence,
-            )
+            ),
+            column_names=self._column_names,
         )
-
-        result._copy_type_metadata(self)
-        return result
 
     @_cudf_nvtx_annotate
     def rank(
