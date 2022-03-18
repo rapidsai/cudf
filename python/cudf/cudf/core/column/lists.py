@@ -93,7 +93,7 @@ class ListColumn(ColumnBase):
         return max(0, len(self.base_children[0]) - 1)
 
     def _binaryop(
-        self, binop: str, other: ColumnBinaryOperand, reflect: bool = False
+        self, op: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         """
         Calls a binary operator *binop* on operands *self*
@@ -135,7 +135,7 @@ class ListColumn(ColumnBase):
         """
         other = self._wrap_binop_normalization(other)
         if isinstance(other.dtype, ListDtype):
-            if binop == "add":
+            if op == "add":
                 return concatenate_rows(
                     cudf.core.frame.Frame({0: self, 1: other})
                 )
