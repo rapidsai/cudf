@@ -1097,16 +1097,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             for i in range(0, len(cols_list), num_cols)
         ]
 
-        def combine_columns(gb_cov_corr, ys):
-            list_of_columns = [gb_cov_corr._data[y] for y in ys]
-            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
-            return interleave_columns(frame)
-
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
         res = cudf.DataFrame._from_data(
             {
-                x: combine_columns(gb_cov_corr, ys)
+                x: interleave_columns([gb_cov_corr._data[y] for y in ys])
                 for ys, x in zip(cols_split, column_names)
             }
         )

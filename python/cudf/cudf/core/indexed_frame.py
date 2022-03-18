@@ -2425,6 +2425,38 @@ class IndexedFrame(Frame):
             res.index.names = self._index.names
         return res
 
+    @_cudf_nvtx_annotate
+    def tile(self, count):
+        """Repeats the rows `count` times to form a new Frame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Examples
+        --------
+        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The indexed frame containing the tiled "rows".
+        """
+        return self._from_columns_like_self(
+            libcudf.reshape.tile(
+                [*self._index._columns, *self._columns], count
+            ),
+            column_names=self._column_names,
+            index_names=self._index_names,
+        )
+
 
 def _check_duplicate_level_names(specified, level_names):
     """Raise if any of `specified` has duplicates in `level_names`."""

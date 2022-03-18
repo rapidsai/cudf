@@ -5597,8 +5597,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
-        name_index = Frame({0: self._column_names}).tile(self.shape[0])
-        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        name_index = libcudf.reshape.tile(
+            [as_column(self._column_names)], self.shape[0]
+        )
+        new_index = list(repeated_index._columns) + name_index
         if isinstance(self._index, MultiIndex):
             index_names = self._index.names + [None]
         else:
@@ -5621,9 +5623,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
         )
 
-        data_col = libcudf.reshape.interleave_columns(homogenized)
+        result = Series._from_data(
+            {
+                None: libcudf.reshape.interleave_columns(
+                    [*homogenized._columns]
+                )
+            },
+            index=new_index,
+        )
 
-        result = Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()
         else:
@@ -6055,6 +6063,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns, column_names, index_names
         )
         result._set_column_names_like(self)
+        return result
+
+    @_cudf_nvtx_annotate
+    def interleave_columns(self):
+        """
+        Interleave Series columns of a table into a single column.
+
+        Converts the column major table `cols` into a row major column.
+
+        Parameters
+        ----------
+        cols : input Table containing columns to interleave.
+
+        Examples
+        --------
+        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> df
+        0    [A1, A2, A3]
+        1    [B1, B2, B3]
+        >>> df.interleave_columns()
+        0    A1
+        1    B1
+        2    A2
+        3    B2
+        4    A3
+        5    B3
+
+        Returns
+        -------
+        The interleaved columns as a single column
+        """
+        if ("category" == self.dtypes).any():
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
+        result = self._constructor_sliced._from_data(
+            {None: libcudf.reshape.interleave_columns([*self._columns])}
+        )
+
         return result
 
 
