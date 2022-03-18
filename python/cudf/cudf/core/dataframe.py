@@ -7493,15 +7493,15 @@ class DataFrame(Frame, Serializable):
         """
         if method == "pearson":
             corr = cupy.corrcoef(self.values, rowvar=False)
-            column_names = cudf.core.column.as_column(self._column_names)
-            index = cudf.core.index._index_from_data({None: column_names})
-            df = DataFrame._from_data({col: cudf.core.column.as_column(arr) for col, arr in zip(self._column_names, corr)}, index=index)
-            df.columns = self.columns
+            cols = self._data.to_pandas_index()
+            df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
+            df._set_column_names_like(self)
 
         elif method == "spearman":
             corr = cupy.corrcoef(self.rank().values, rowvar=False)
-            df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
-            df.columns = self.columns
+            cols = self._data.to_pandas_index()
+            df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
+            df._set_column_names_like(self)
 
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
