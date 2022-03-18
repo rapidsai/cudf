@@ -7493,9 +7493,8 @@ class DataFrame(Frame, Serializable):
         """
         if method == "pearson":
             corr = cupy.corrcoef(self.values, rowvar=False)
-            cols = self._data.to_pandas_index()
-            df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
-            df._set_column_names_like(self)
+            df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
+            df.columns = self.columns
 
         elif method == "spearman":
             corr = cupy.corrcoef(self.rank().values, rowvar=False)
