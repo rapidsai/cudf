@@ -39,7 +39,6 @@ from cudf.core.column import (
     ColumnBase,
     as_column,
     build_categorical_column,
-    column_empty,
     deserialize_columns,
     serialize_columns,
 )
@@ -2499,9 +2498,7 @@ class Frame(BinaryOperand, Scannable):
             # are not numerical using the new binops mixin.
 
             outcol = (
-                column_empty(left_column.size, left_column.dtype, masked=True)
-                if right_column is None
-                else getattr(operator, fn)(right_column, left_column)
+                getattr(operator, fn)(right_column, left_column)
                 if reflect
                 else getattr(operator, fn)(left_column, right_column)
             )

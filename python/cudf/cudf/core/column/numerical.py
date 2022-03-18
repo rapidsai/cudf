@@ -235,8 +235,6 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(other, NumericalColumn):
                 return NotImplemented
             return other
-        if other is None:
-            return other
         if isinstance(other, cudf.Scalar):
             if self.dtype == other.dtype:
                 return other

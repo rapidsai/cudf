@@ -524,7 +524,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is cudf.NA:
+        if other is cudf.NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
         return self.normalize_binop_value(other)
 

@@ -5459,14 +5459,10 @@ class StringColumn(column.ColumnBase):
             and other.dtype == "object"
         ):
             return other
-        if isinstance(other, str) or other is None:
-            return utils.scalar_broadcast_to(
-                other, size=len(self), dtype="object"
-            )
         if isinstance(other, np.ndarray) and other.ndim == 0:
-            return utils.scalar_broadcast_to(
-                other.item(), size=len(self), dtype="object"
-            )
+            other = other.item()
+        if isinstance(other, str):
+            return cudf.Scalar(other)
         return NotImplemented
 
     def _binaryop(
@@ -5498,8 +5494,13 @@ class StringColumn(column.ColumnBase):
             return NotImplemented
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
-            lhs, rhs = (other, self) if reflect else (self, other)
             if op == "__add__":
+                if isinstance(other, cudf.Scalar):
+                    other = utils.scalar_broadcast_to(
+                        other, size=len(self), dtype="object"
+                    )
+                lhs, rhs = (other, self) if reflect else (self, other)
+
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
@@ -5517,6 +5518,7 @@ class StringColumn(column.ColumnBase):
                 "__le__",
                 "NULL_EQUALS",
             }:
+                lhs, rhs = (other, self) if reflect else (self, other)
                 return libcudf.binaryop.binaryop(
                     lhs=lhs, rhs=rhs, op=op, dtype="bool"
                 )

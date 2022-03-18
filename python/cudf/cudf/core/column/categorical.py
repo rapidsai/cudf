@@ -900,10 +900,7 @@ class CategoricalColumn(column.ColumnBase):
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
-                raise ValueError(
-                    "Binary operations with categorical columns require both "
-                    "columns to be categorical."
-                )
+                return NotImplemented
             if other.dtype != self.dtype:
                 raise TypeError(
                     "Categoricals can only compare with the same type"
