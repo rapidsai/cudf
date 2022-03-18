@@ -2429,10 +2429,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         
         if method not in ("pearson",):
-             raise ValueError(f"Unknown method {method}")
+            raise ValueError(f"Unknown method {method}")
 
         if min_periods not in (None,):
-             raise NotImplementedError("Unsupported argument 'min_periods'")
+            raise NotImplementedError("Unsupported argument 'min_periods'")
             
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
