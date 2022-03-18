@@ -5467,7 +5467,7 @@ class StringColumn(column.ColumnBase):
             return utils.scalar_broadcast_to(
                 other.item(), size=len(self), dtype="object"
             )
-        raise TypeError(f"cannot broadcast {type(other)}")
+        return NotImplemented
 
     def _binaryop(
         self, other: ColumnBinaryOperand, op: str
@@ -5494,7 +5494,8 @@ class StringColumn(column.ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        other = self._wrap_binop_normalization(other)
+        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+            return NotImplemented
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             lhs, rhs = (other, self) if reflect else (self, other)
@@ -5519,9 +5520,7 @@ class StringColumn(column.ColumnBase):
                 return libcudf.binaryop.binaryop(
                     lhs=lhs, rhs=rhs, op=op, dtype="bool"
                 )
-        raise TypeError(
-            f"{op} not supported between {type(self)} and {type(rhs)}"
-        )
+        return NotImplemented
 
     @copy_docstring(column.ColumnBase.view)
     def view(self, dtype) -> "cudf.core.column.ColumnBase":

@@ -128,7 +128,8 @@ class ListColumn(ColumnBase):
 
         """
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+            return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
                 return concatenate_rows(
@@ -250,6 +251,8 @@ class ListColumn(ColumnBase):
         )
 
     def normalize_binop_value(self, other):
+        if not isinstance(other, ListColumn):
+            return NotImplemented
         return other
 
     def _with_type_metadata(

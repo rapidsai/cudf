@@ -64,7 +64,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str):
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+            return NotImplemented
         lhs, rhs = (other, self) if reflect else (self, other)
         # Decimals in libcudf don't support truediv, see
         # https://github.com/rapidsai/cudf/pull/7435 for explanation.
@@ -137,10 +138,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
                 )
             elif not isinstance(other, DecimalBaseColumn):
-                raise TypeError(
-                    f"Binary operations are not supported between"
-                    f"{str(type(self))} and {str(type(other))}"
-                )
+                return NotImplemented
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
@@ -160,7 +158,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
             return cudf.Scalar(Decimal(other))
-        raise TypeError(f"cannot normalize {type(other)}")
+        return NotImplemented
 
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool

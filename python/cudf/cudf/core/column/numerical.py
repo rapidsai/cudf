@@ -183,7 +183,8 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.astype(truediv_type)._binaryop(other, op)
 
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+            return NotImplemented
         out_dtype = self.dtype
         if other is not None:
             out_dtype = np.result_type(self.dtype, other.dtype)
@@ -240,10 +241,7 @@ class NumericalColumn(NumericalBaseColumn):
             if not isinstance(
                 other, (NumericalColumn, cudf.core.column.DecimalBaseColumn,),
             ):
-                raise TypeError(
-                    f"Binary operations are not supported between "
-                    f"{type(self)}and {type(other)}"
-                )
+                return NotImplemented
             return other
         if other is None:
             return other
@@ -275,7 +273,7 @@ class NumericalColumn(NumericalBaseColumn):
                     data=Buffer(ary), dtype=ary.dtype, mask=self.mask,
                 )
         else:
-            raise TypeError(f"cannot broadcast {type(other)}")
+            return NotImplemented
 
     def int2ip(self) -> "cudf.core.column.StringColumn":
         if self.dtype != cudf.dtype("int64"):

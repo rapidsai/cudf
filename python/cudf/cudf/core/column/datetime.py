@@ -278,7 +278,7 @@ class DatetimeColumn(column.ColumnBase):
         elif other is None:
             return cudf.Scalar(other, dtype=self.dtype)
 
-        raise TypeError(f"cannot normalize {type(other)}")
+        return NotImplemented
 
     @property
     def as_numerical(self) -> "cudf.core.column.NumericalColumn":
@@ -411,7 +411,8 @@ class DatetimeColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+            return NotImplemented
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
 
@@ -451,10 +452,7 @@ class DatetimeColumn(column.ColumnBase):
                 f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
             )
         else:
-            raise TypeError(
-                f"Series of dtype {self.dtype} cannot perform "
-                f" the operation {op}"
-            )
+            return NotImplemented
 
         lhs, rhs = (self, other) if not reflect else (other, self)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)

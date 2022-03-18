@@ -185,7 +185,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
             return False
         if check_dtypes and (self.dtype != other.dtype):
             return False
-        return self._binaryop(other, "NULL_EQUALS").all()
+        ret = self._binaryop(other, "NULL_EQUALS")
+        if ret is NotImplemented:
+            raise TypeError
+        return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.

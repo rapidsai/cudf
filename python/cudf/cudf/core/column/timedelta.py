@@ -215,7 +215,8 @@ class TimeDeltaColumn(column.ColumnBase):
         self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+            return NotImplemented
 
         this: ColumnBinaryOperand = self
         if op in {
@@ -240,10 +241,7 @@ class TimeDeltaColumn(column.ColumnBase):
         elif op == "__sub__":
             out_dtype = _timedelta_sub_result_dtype(self, other)
         else:
-            raise TypeError(
-                f"Series of dtype {self.dtype} cannot perform "
-                f"the operation {op}"
-            )
+            return NotImplemented
 
         lhs, rhs = (this, other) if not reflect else (other, this)
 
@@ -276,7 +274,7 @@ class TimeDeltaColumn(column.ColumnBase):
         elif other is None:
             return cudf.Scalar(other, dtype=self.dtype)
         else:
-            raise TypeError(f"cannot normalize {type(other)}")
+            return NotImplemented
 
     @property
     def as_numerical(self) -> "cudf.core.column.NumericalColumn":
