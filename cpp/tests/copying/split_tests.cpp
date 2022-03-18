@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -162,7 +162,7 @@ template <typename T>
 struct SplitTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(SplitTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(SplitTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTest, SplitEndLessThanSize)
 {
@@ -551,7 +551,7 @@ void split_empty_output_column_value(SplitFunc Split, CompareFunc Compare)
 template <typename T>
 struct SplitTableTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(SplitTableTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(SplitTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTableTest, SplitEndLessThanSize)
 {
@@ -718,7 +718,9 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 
   auto expected = create_expected_string_tables_for_splits(strings, validity_masks, splits);
 
-  for (std::size_t i = 0; i < result.size(); ++i) { Compare(expected[i], result[i]); }
+  for (std::size_t i = 0; i < result.size(); ++i) {
+    Compare(expected[i], result[i]);
+  }
 }
 
 // split with strings
@@ -904,7 +906,7 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
   std::vector<bool> ages_validity = {1, 1, 1, 1, 0, 1, 0, 0, 1};
   auto ages_column                = include_validity ? fixed_width_column_wrapper<int>(
                                           ages.begin(), ages.end(), ages_validity.begin())
-                                      : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
+                                                     : fixed_width_column_wrapper<int>(ages.begin(), ages.end());
 
   // 3. Boolean "is_human" column.
   std::vector<bool> is_human{true, true, false, false, false, false, true, true, true};
@@ -929,9 +931,9 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
   auto expected_names = include_validity
                           ? create_expected_string_columns_for_splits(names, splits, names_validity)
                           : create_expected_string_columns_for_splits(names, splits, false);
-  auto expected_ages = include_validity
-                         ? create_expected_columns_for_splits<int>(splits, ages, ages_validity)
-                         : create_expected_columns_for_splits<int>(splits, ages, false);
+  auto expected_ages  = include_validity
+                          ? create_expected_columns_for_splits<int>(splits, ages, ages_validity)
+                          : create_expected_columns_for_splits<int>(splits, ages, false);
   auto expected_is_human =
     include_validity ? create_expected_columns_for_splits<bool>(splits, is_human, is_human_validity)
                      : create_expected_columns_for_splits<bool>(splits, is_human, false);
@@ -1170,7 +1172,7 @@ struct ContiguousSplitTest : public cudf::test::BaseFixture {
 using FixedWidthTypesWithoutChrono =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(ContiguousSplitTest, FixedWidthTypesWithoutChrono);
+TYPED_TEST_SUITE(ContiguousSplitTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTest, LongColumn)
 {
@@ -1314,6 +1316,56 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
   }
 }
 
+TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
+{
+  // it is tricky to actually get the internal repartitioning/load-balancing code to add new splits
+  // inside a validity buffer.  Under almost all situations, the fraction of bytes that validity
+  // represents is so small compared to the bytes for all other data, that those buffers end up not
+  // getting subdivided. this test forces it happen by using a small, single column of int8's, which
+  // keeps the overall fraction that validity takes up large enough to cause a repartition.
+  srand(0);
+  auto rvalids                   = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    return static_cast<float>(rand()) / static_cast<float>(RAND_MAX) < 0.5f ? 0 : 1;
+  });
+  cudf::size_type const num_rows = 2000000;
+  auto col                       = cudf::sequence(num_rows, cudf::numeric_scalar<int8_t>{0});
+  col->set_null_mask(cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows));
+
+  cudf::table_view t({*col});
+  auto result   = cudf::contiguous_split(t, {num_rows / 2});
+  auto expected = cudf::split(t, {num_rows / 2});
+  CUDF_EXPECTS(result.size() == expected.size(),
+               "Mismatch in split results in ValidityRepartition test");
+
+  for (size_t idx = 0; idx < result.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result[idx].table, expected[idx]);
+  }
+}
+
+TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
+{
+  // tests an edge case where the splits cause the final validity data to be copied
+  // to be < 32 full bits, making sure we don't unintentionally read past the end of the input
+  auto col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT32}, 512, cudf::mask_state::ALL_VALID);
+  auto result   = cudf::contiguous_split(cudf::table_view{{*col}}, {510});
+  auto expected = cudf::split(cudf::table_view{{*col}}, {510});
+
+  EXPECT_EQ(expected.size(), result.size());
+  for (unsigned long index = 0; index < result.size(); index++) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index].column(0), result[index].table.column(0));
+  }
+}
+
+TEST_F(ContiguousSplitUntypedTest, CalculationOverflow)
+{
+  // tests an edge case where buf.elements * buf.element_size overflows an INT32.
+  auto col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
+  auto result = cudf::contiguous_split(cudf::table_view{{*col}}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
+}
+
 // contiguous split with strings
 struct ContiguousSplitStringTableTest : public SplitTest<std::string> {
 };
@@ -1386,7 +1438,7 @@ TEST_F(ContiguousSplitStringTableTest, NullStringColumn)
 template <typename T>
 struct ContiguousSplitTableTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
+TYPED_TEST_SUITE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
 {
@@ -1500,6 +1552,58 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
 
 TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
 {
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  cudf::test::lists_column_wrapper<int> col0{{{{1, 2, 3}, valids}, {4, 5}},
+                                             {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
+                                             {{{6}}},
+                                             {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
+                                             {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                                             {LCW{}},
+                                             {{-10}, {-100, -200}}};
+
+  cudf::test::strings_column_wrapper col1{
+    "Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred"};
+  cudf::test::fixed_width_column_wrapper<float> col2{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
+
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(std::make_unique<cudf::column>(col2));
+  children.push_back(std::make_unique<cudf::column>(col0));
+  children.push_back(std::make_unique<cudf::column>(col1));
+  auto col3 = cudf::make_structs_column(
+    static_cast<cudf::column_view>(col0).size(), std::move(children), 0, rmm::device_buffer{});
+
+  cudf::table_view t({col0, col1, col2, *col3});
+  auto pre_split = cudf::split(t, {1});
+
+  {
+    std::vector<cudf::size_type> splits{1, 4};
+
+    auto result   = cudf::contiguous_split(pre_split[1], splits);
+    auto expected = cudf::split(pre_split[1], splits);
+
+    for (size_t index = 0; index < expected.size(); index++) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[index], result[index].table);
+    }
+  }
+
+  {
+    std::vector<cudf::size_type> splits{0, 5};
+
+    auto result   = cudf::contiguous_split(pre_split[1], splits);
+    auto expected = cudf::split(pre_split[1], splits);
+
+    for (size_t index = 0; index < expected.size(); index++) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[index], result[index].table);
+    }
+  }
+}
+
+TEST_F(ContiguousSplitTableCornerCases, PreSplitTableLarge)
+{
   // test splitting a table that is already split (has an offset)
   cudf::size_type start        = 0;
   cudf::size_type presplit_pos = 47;
@@ -1541,15 +1645,127 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
   }
 }
 
+TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
+{
+  // list<list<int>>
+  {
+    cudf::test::lists_column_wrapper<int> list{{{1, 2}, {3, 4}},
+                                               {{5, 6}, {7}, {8, 9, 10}},
+                                               {{11, 12}, {13}},
+                                               {{14, 15, 16}, {17, 18}, {}},
+                                               {{-1, -2, -3}, {-4, -5, -6, -7}},
+                                               {{-8, -9}, {-10, -11}},
+                                               {{-12, -13}, {-14}, {-15, -16}},
+                                               {{-17, -18}, {}, {-19, -20}}};
+    auto pre_split = cudf::split(list, {2});
+
+    cudf::table_view t({pre_split[1]});
+    auto result   = cudf::contiguous_split(t, {3, 4});
+    auto expected = cudf::split(t, {3, 4});
+
+    auto iter = thrust::make_counting_iterator(0);
+    std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
+      CUDF_TEST_EXPECT_TABLES_EQUAL(result[index].table, expected[index]);
+    });
+  }
+
+  // list<struct<float>>
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{
+      0, 2, 5, 7, 10, 12, 14, 17, 20};
+    cudf::test::fixed_width_column_wrapper<float> floats{1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+                                                         11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+    cudf::test::structs_column_wrapper data({floats});
+
+    auto list =
+      cudf::make_lists_column(8, offsets.release(), data.release(), 0, rmm::device_buffer{});
+
+    auto pre_split = cudf::split(*list, {2});
+
+    cudf::table_view t({pre_split[1]});
+    auto result   = cudf::contiguous_split(t, {3, 4});
+    auto expected = cudf::split(t, {3, 4});
+
+    auto iter = thrust::make_counting_iterator(0);
+    std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
+      CUDF_TEST_EXPECT_TABLES_EQUAL(result[index].table, expected[index]);
+    });
+  }
+}
+
+TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
+{
+  // includes struct<list>
+  {
+    cudf::test::fixed_width_column_wrapper<int> a{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    cudf::test::fixed_width_column_wrapper<float> b{{0, -1, -2, -3, -4, -5, -6, -7, -8, -9},
+                                                    {1, 1, 1, 0, 0, 0, 0, 1, 1, 1}};
+    cudf::test::strings_column_wrapper c{
+      {"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx", "yy", "zzzz"},
+      {0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
+    std::vector<bool> list_validity{1, 0, 1, 0, 1, 0, 1, 1, 1, 1};
+    cudf::test::lists_column_wrapper<int16_t> d{
+      {{0, 1}, {2, 3, 4}, {5, 6}, {7}, {8, 9, 10}, {11, 12}, {}, {15, 16, 17}, {18, 19}, {20}},
+      list_validity.begin()};
+    cudf::test::fixed_width_column_wrapper<int> _a{10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+    cudf::test::fixed_width_column_wrapper<float> _b{
+      -10, -20, -30, -40, -50, -60, -70, -80, -90, -100};
+    cudf::test::strings_column_wrapper _c{
+      "aa", "", "ccc", "dddd", "eeeee", "f", "gg", "hhh", "i", "jjj"};
+    cudf::test::structs_column_wrapper e({_a, _b, _c}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+    cudf::test::structs_column_wrapper s({a, b, c, d, e}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 1});
+
+    auto pre_split = cudf::split(s, {4});
+
+    auto iter = thrust::make_counting_iterator(0);
+    std::for_each(iter, iter + pre_split.size(), [&](cudf::size_type index) {
+      cudf::table_view t({pre_split[index]});
+      auto result   = cudf::contiguous_split(t, {1});
+      auto expected = cudf::split(t, {1});
+
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[0].table, expected[0]);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[1].table, expected[1]);
+    });
+  }
+
+  // struct<list<struct>>
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{
+      0, 2, 5, 7, 10, 12, 14, 17, 20};
+    cudf::test::fixed_width_column_wrapper<float> floats{1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+                                                         11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+    cudf::test::structs_column_wrapper data({floats});
+    auto list =
+      cudf::make_lists_column(8, offsets.release(), data.release(), 0, rmm::device_buffer{});
+    cudf::test::strings_column_wrapper strings{"a", "bb", "ccc", "dddd", "", "e", "ff", "ggg"};
+
+    std::vector<std::unique_ptr<cudf::column>> struct_children;
+    struct_children.push_back(std::move(list));
+    struct_children.push_back(strings.release());
+    cudf::test::structs_column_wrapper col(std::move(struct_children));
+
+    auto pre_split = cudf::split(col, {2});
+
+    cudf::table_view t({pre_split[1]});
+    auto result   = cudf::contiguous_split(t, {3, 4});
+    auto expected = cudf::split(t, {3, 4});
+
+    auto iter = thrust::make_counting_iterator(0);
+    std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
+      CUDF_TEST_EXPECT_TABLES_EQUAL(result[index].table, expected[index]);
+    });
+  }
+}
+
 TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
 {
   // this produces an empty strings column with no children,
   // nested inside a list
   {
-    auto empty_string = cudf::strings::detail::make_empty_strings_column();
+    auto empty_string = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
     auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list         = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
 
@@ -1567,7 +1783,7 @@ TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
     auto empty_string = cudf::empty_like(str);
     auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list         = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
 
@@ -1584,8 +1800,8 @@ TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
     cudf::test::lists_column_wrapper<float> listw{{1.0f, 2.0f}, {3.0f, 4.0f}};
     auto empty_list = cudf::empty_like(listw);
     auto offsets    = cudf::test::fixed_width_column_wrapper<int>({0, 0});
-    auto list       = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{0});
+    auto list =
+      cudf::make_lists_column(1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
 
@@ -1602,8 +1818,8 @@ TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
     cudf::test::lists_column_wrapper<float> listw{{1.0f, 2.0f}, {3.0f, 4.0f}};
     auto empty_list = cudf::empty_like(listw);
     auto offsets    = cudf::test::fixed_width_column_wrapper<int>({0, 0});
-    auto list       = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{0});
+    auto list =
+      cudf::make_lists_column(1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
 
@@ -1623,7 +1839,7 @@ TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
     auto empty_struct  = cudf::empty_like(struct_column);
     auto offsets       = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list          = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_struct), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_struct), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
 
@@ -1635,7 +1851,40 @@ TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
   }
 }
 
-TEST_F(ContiguousSplitTableCornerCases, MalformedColumns) {}
+TEST_F(ContiguousSplitTableCornerCases, SplitEmpty)
+{
+  // empty sliced column. this is specifically testing the corner case:
+  // - a sliced column of size 0
+  // - having children that are of size > 0
+  //
+  cudf::test::strings_column_wrapper a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
+  cudf::test::lists_column_wrapper<int> b{
+    {0, 1}, {2}, {3, 4, 5}, {6, 7}, {8, 9}, {10}, {11, 12}, {13, 14}};
+  cudf::test::fixed_width_column_wrapper<float> c{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::test::strings_column_wrapper _a{"abc", "def", "ghi", "jkl", "mno", "", "st", "uvwx"};
+  cudf::test::lists_column_wrapper<float> _b{
+    {0, 1}, {2}, {3, 4, 5}, {6, 7}, {8, 9}, {10}, {11, 12}, {13, 14}};
+  cudf::test::fixed_width_column_wrapper<float> _c{0, 1, 2, 3, 4, 5, 6, 7};
+  cudf::test::structs_column_wrapper d({_a, _b, _c});
+
+  cudf::table_view t({a, b, c, d});
+
+  auto sliced = cudf::split(t, {0});
+
+  {
+    auto result = cudf::contiguous_split(sliced[0], {});
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(sliced[0], result[0].table);
+  }
+
+  {
+    auto result = cudf::contiguous_split(sliced[0], {0});
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(sliced[0], result[0].table);
+  }
+
+  {
+    EXPECT_THROW(cudf::contiguous_split(sliced[0], {1}), cudf::logic_error);
+  }
+}
 
 struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {
 };

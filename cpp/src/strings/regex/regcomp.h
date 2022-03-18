@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 #pragma once
+
+#include <cudf/strings/regex/flags.hpp>
+
 #include <string>
 #include <vector>
 
@@ -48,9 +51,9 @@ enum InstType {
  * @brief Class type for regex compiler instruction.
  */
 struct reclass {
-  int32_t builtins;         // bit mask identifying builtin classes
+  int32_t builtins{0};      // bit mask identifying builtin classes
   std::u32string literals;  // ranges as pairs of utf-8 characters
-  reclass() : builtins(0) {}
+  reclass() {}
   reclass(int m) : builtins(m) {}
 };
 
@@ -89,38 +92,43 @@ class reprog {
    * @brief Parses the given regex pattern and compiles
    * into a list of chained instructions.
    */
-  static reprog create_from(const char32_t* pattern);
+  static reprog create_from(const char32_t* pattern, regex_flags const flags);
 
   int32_t add_inst(int32_t type);
   int32_t add_inst(reinst inst);
   int32_t add_class(reclass cls);
 
   void set_groups_count(int32_t groups);
-  int32_t groups_count() const;
+  [[nodiscard]] int32_t groups_count() const;
 
-  const reinst* insts_data() const;
-  int32_t insts_count() const;
+  [[nodiscard]] const reinst* insts_data() const;
+  [[nodiscard]] int32_t insts_count() const;
   reinst& inst_at(int32_t id);
 
   reclass& class_at(int32_t id);
-  int32_t classes_count() const;
+  [[nodiscard]] int32_t classes_count() const;
 
-  const int32_t* starts_data() const;
-  int32_t starts_count() const;
+  [[nodiscard]] const int32_t* starts_data() const;
+  [[nodiscard]] int32_t starts_count() const;
 
   void set_start_inst(int32_t id);
-  int32_t get_start_inst() const;
+  [[nodiscard]] int32_t get_start_inst() const;
 
   void optimize1();
   void optimize2();
-  void print();  // for debugging
+  void check_for_errors();
+#ifndef NDEBUG
+  void print(regex_flags const flags);
+#endif
 
  private:
   std::vector<reinst> _insts;
   std::vector<reclass> _classes;
   int32_t _startinst_id;
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
-  int32_t _num_capturing_groups;
+  int32_t _num_capturing_groups{};
+
+  void check_for_errors(int32_t id, int32_t next_id);
 };
 
 }  // namespace detail

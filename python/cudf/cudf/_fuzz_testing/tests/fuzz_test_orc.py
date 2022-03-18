@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import io
 import sys
@@ -74,7 +74,7 @@ def orc_reader_stripes_test(input_tuple, columns, stripes):
     data_handle=OrcWriter,
     params={
         "compression": [None, "snappy"],
-        "enable_statistics": [True, False],
+        "enable_statistics": ["NONE", "STRIPE", "ROWGROUP"],
     },
 )
 def orc_writer_test(pdf, compression, enable_statistics):

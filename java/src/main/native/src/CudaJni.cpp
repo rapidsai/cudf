@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cuda_profiler_api.h>
+#include <rmm/device_buffer.hpp>
 
 #include "jni_utils.hpp"
 
@@ -45,6 +48,12 @@ void auto_set_device(JNIEnv *env) {
       Thread_device = Cudf_device;
     }
   }
+}
+
+/** Fills all the bytes in the buffer 'buf' with 'value'. */
+void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value) {
+  cudaError_t cuda_status = cudaMemsetAsync((void *)buf.data(), value, buf.size());
+  jni_cuda_check(env, cuda_status);
 }
 
 } // namespace jni
@@ -152,6 +161,38 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_autoSetDevice(JNIEnv *env, jclas
     cudf::jni::auto_set_device(env);
   }
   CATCH_STD(env, );
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDriverVersion(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    jint driver_version;
+    JNI_CUDA_TRY(env, -2, cudaDriverGetVersion(&driver_version));
+    return driver_version;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getRuntimeVersion(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    jint runtime_version;
+    JNI_CUDA_TRY(env, -2, cudaRuntimeGetVersion(&runtime_version));
+    return runtime_version;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, cudaGetDevice(&device));
+    cudaDeviceProp device_prop;
+    JNI_CUDA_TRY(env, -2, cudaGetDeviceProperties(&device_prop, device));
+    return device_prop.computeMode;
+  }
+  CATCH_STD(env, -2);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
@@ -304,6 +345,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_asyncMemcpyOnStream(JNIEnv *env,
     auto kind = static_cast<cudaMemcpyKind>(jkind);
     auto stream = reinterpret_cast<cudaStream_t>(jstream);
     JNI_CUDA_TRY(env, , cudaMemcpyAsync(dst, src, count, kind, stream));
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStart(JNIEnv *env, jclass clazz) {
+  try {
+    cudaProfilerStart();
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv *env, jclass clazz) {
+  try {
+    cudaProfilerStop();
   }
   CATCH_STD(env, );
 }

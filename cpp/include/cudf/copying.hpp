@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ namespace cudf {
  */
 
 enum class out_of_bounds_policy : bool {
-  NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
-  DONT_CHECK  /// No bounds checking is performed, better performance
+  NULLIFY,    ///< Output values corresponding to out-of-bounds indices are null
+  DONT_CHECK  ///< No bounds checking is performed, better performance
 };
 
 /**
@@ -79,6 +79,38 @@ std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
   out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Reverses the rows within a table.
+ * Creates a new table that is the reverse of @p source_table.
+ * Example:
+ * ```
+ * source = [[4,5,6], [7,8,9], [10,11,12]]
+ * return = [[6,5,4], [9,8,7], [12,11,10]]
+ * ```
+ *
+ * @param source_table Table that will be reversed
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ */
+std::unique_ptr<table> reverse(
+  table_view const& source_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Reverses the elements of a column
+ * Creates a new column that is the reverse of @p source_column.
+ * Example:
+ * ```
+ * source = [4,5,6]
+ * return = [6,5,4]
+ * ```
+ *
+ * @param source_column Column that will be reversed
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ */
+std::unique_ptr<column> reverse(
+  column_view const& source_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -181,6 +213,14 @@ enum class mask_allocation_policy {
  * @return std::unique_ptr<column> An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(column_view const& input);
+
+/**
+ * @brief Initializes and returns an empty column of the same type as the `input`.
+ *
+ * @param[in] input Scalar to emulate
+ * @return std::unique_ptr<column> An empty column of same type as `input`
+ */
+std::unique_ptr<column> empty_like(scalar const& input);
 
 /**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
@@ -331,7 +371,7 @@ std::unique_ptr<column> copy_range(
  * @param fill_value Fill value for indeterminable outputs.
  * @param mr         Device memory resource used to allocate the returned result's device memory
  *
- * @throw cudf::logic_error if @p input dtype is not fixed-with.
+ * @throw cudf::logic_error if @p input dtype is neither fixed-width nor string type
  * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
  */
 std::unique_ptr<column> shift(
@@ -367,10 +407,15 @@ std::unique_ptr<column> shift(
  * the range [0, input.size()).
  *
  * @param input View of column to slice
- * @param indices A vector of indices used to take slices of `input`.
+ * @param indices Indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<column_view> slice(column_view const& input, std::vector<size_type> const& indices);
+std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
+/**
+ * @ingroup copy_slice
+ * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
+ */
+std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
@@ -401,10 +446,15 @@ std::vector<column_view> slice(column_view const& input, std::vector<size_type> 
  * the range [0, input.size()).
  *
  * @param input View of table to slice
- * @param indices A vector of indices used to take slices of `input`.
+ * @param indices Indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<table_view> slice(table_view const& input, std::vector<size_type> const& indices);
+std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
+/**
+ * @ingroup copy_slice
+ * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
+ */
+std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
@@ -435,10 +485,15 @@ std::vector<table_view> slice(table_view const& input, std::vector<size_type> co
  * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of column to split
- * @param splits A vector of indices where the view will be split
+ * @param splits Indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<column_view> split(column_view const& input, std::vector<size_type> const& splits);
+std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
+/**
+ * @ingroup copy_split
+ * @copydoc cudf::split(column_view const&, host_span<size_type const>)
+ */
+std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits);
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -471,10 +526,15 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
  * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
+ * @param splits Indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<table_view> split(table_view const& input, std::vector<size_type> const& splits);
+std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
+/**
+ * @ingroup copy_split
+ * @copydoc cudf::split(table_view const&, host_span<size_type const>)
+ */
+std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits);
 
 /**
  * @brief Column data in a serialized format
@@ -491,13 +551,23 @@ struct packed_columns {
    * @ingroup copy_split
    */
   struct metadata {
+    metadata() = default;
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-    uint8_t const* data() const { return data_.data(); }
-    size_t size() const { return data_.size(); }
+    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
+    [[nodiscard]] size_t size() const { return data_.size(); }
 
    private:
     std::vector<uint8_t> data_;
   };
+
+  packed_columns()
+    : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
+  {
+  }
+  packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
+    : metadata_(std::move(md)), gpu_data(std::move(gd))
+  {
+  }
 
   std::unique_ptr<metadata> metadata_;
   std::unique_ptr<rmm::device_buffer> gpu_data;
@@ -590,8 +660,8 @@ packed_columns pack(cudf::table_view const& input,
  * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
- * @param input View of the table to pack
- * @param contgiuous_buffer A contiguous buffer of device memory which contains the data referenced
+ * @param table View of the table to pack
+ * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
  * by the columns in `table`
  * @param buffer_size The size of `contiguous_buffer`.
  * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.
@@ -831,8 +901,8 @@ std::unique_ptr<scalar> get_element(
  * @brief Indicates whether a row can be sampled more than once.
  */
 enum class sample_with_replacement : bool {
-  FALSE,  // A row can be sampled only once
-  TRUE    // A row can be sampled more than once
+  FALSE,  ///< A row can be sampled only once
+  TRUE    ///< A row can be sampled more than once
 };
 
 /**

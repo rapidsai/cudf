@@ -9,7 +9,7 @@ from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 # TODO: PANDAS 1.0 support
 # Revisit drop_duplicates() tests to update parameters like ignore_index.
@@ -24,11 +24,11 @@ def assert_df(g, p):
 
 def assert_df2(g, p):
     assert g.index.dtype == p.index.dtype
-    np.testing.assert_equal(g.index.to_array(), p.index)
+    np.testing.assert_equal(g.index.to_numpy(), p.index)
     assert tuple(g.columns) == tuple(p.columns)
     for k in g.columns:
         assert g[k].dtype == p[k].dtype
-        np.testing.assert_equal(g[k].to_array(), p[k])
+        np.testing.assert_equal(g[k].to_numpy(), p[k])
 
 
 # most tests are similar to pandas drop_duplicates

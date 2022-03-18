@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,8 @@ __device__ int retrieve(uint64_t const key,
   auto const inner_bin_a = bin_params >> 16;
   auto const inner_bin_b = (bin_params >> 9) & ((1 << 7) - 1);
   auto const bin_size    = static_cast<uint8_t>(bin_params);
+
+  if (bin_size == 0) { return -1; }  // key hash has no bin parameters
 
   auto const inner_offset = hash(key, inner_bin_a, inner_bin_b, bin_size);
   auto const kv_pair      = hash_table[start_ht_offset + inner_offset];

@@ -135,7 +135,9 @@ std::string ptx_parser::parse_instruction(const std::string& src)
       break;
     }
     if (src[start] == '[') {
-      while (stop < length && src[stop] != ']') { stop++; }
+      while (stop < length && src[stop] != ']') {
+        stop++;
+      }
       stop++;
     } else {
       while (stop < length && !is_white(src[stop]) && src[stop] != ',' && src[stop] != ':') {
@@ -383,18 +385,24 @@ std::string parse_single_function_cuda(const std::string& src, const std::string
   size_t start        = 0;
   size_t stop         = start;
 
-  while (stop < length && no_comments[stop] != '(') { stop++; }
+  while (stop < length && no_comments[stop] != '(') {
+    stop++;
+  }
   CUDF_EXPECTS(stop != length && stop != 0,
                "No CUDA device function found in the input CUDA code.\n");
 
   stop--;
 
-  while (stop > 0 && is_white(no_comments[stop])) { stop--; }
+  while (stop > 0 && is_white(no_comments[stop])) {
+    stop--;
+  }
   CUDF_EXPECTS(stop != 0 || !is_white(no_comments[0]),
                "No CUDA device function name found in the input CUDA code.\n");
 
   start = stop;
-  while (start > 0 && !is_white(no_comments[start])) { start--; }
+  while (start > 0 && !is_white(no_comments[start])) {
+    start--;
+  }
   start++;
   stop++;
   CUDF_EXPECTS(start < stop, "No CUDA device function name found in the input CUDA code.\n");

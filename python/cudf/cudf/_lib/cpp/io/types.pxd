@@ -1,14 +1,17 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr, shared_ptr
-from libcpp.string cimport string
 from libcpp.map cimport map
+from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.pair cimport pair
+from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp.pair cimport pair
 from pyarrow.includes.libarrow cimport CRandomAccessFile
+
+cimport cudf._lib.cpp.table.table_view as cudf_table_view
 from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef extern from "cudf/io/types.hpp" \
@@ -52,14 +55,30 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
         vector[column_name_info] schema_info
 
-    cdef cppclass table_metadata_with_nullability(table_metadata):
-        table_metadata_with_nullability() except +
-
-        vector[bool] nullability
-
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl
         table_metadata metadata
+
+    cdef cppclass column_in_metadata:
+        column_in_metadata& set_name(const string& name)
+        column_in_metadata& set_nullability(bool nullable)
+        column_in_metadata& set_list_column_as_map()
+        column_in_metadata& set_int96_timestamps(bool req)
+        column_in_metadata& set_decimal_precision(uint8_t precision)
+        column_in_metadata& child(size_type i)
+
+    cdef cppclass table_input_metadata:
+        table_input_metadata() except +
+        table_input_metadata(const cudf_table_view.table_view& table) except +
+
+        vector[column_in_metadata] column_metadata
+
+    cdef cppclass partition_info:
+        size_type start_row
+        size_type num_rows
+
+        partition_info()
+        partition_info(size_type start_row, size_type num_rows) except +
 
     cdef cppclass host_buffer:
         const char* data
@@ -70,8 +89,8 @@ cdef extern from "cudf/io/types.hpp" \
 
     cdef cppclass source_info:
         io_type type
-        vector[string] filepaths
-        vector[host_buffer] buffers
+        const vector[string]& filepaths() except +
+        const vector[host_buffer]& buffers() except +
         vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
@@ -81,14 +100,16 @@ cdef extern from "cudf/io/types.hpp" \
 
     cdef cppclass sink_info:
         io_type type
-        string filepath
-        vector[char] * buffer
-        data_sink * user_sink
+        const vector[string]& filepaths()
+        const vector[vector[char] *]& buffers()
+        const vector[data_sink *]& user_sinks()
 
         sink_info() except +
         sink_info(string file_path) except +
+        sink_info(vector[string] file_path) except +
         sink_info(vector[char] * buffer) except +
         sink_info(data_sink * user_sink) except +
+        sink_info(vector[data_sink *] user_sink) except +
 
 
 cdef extern from "cudf/io/data_sink.hpp" \
@@ -102,3 +123,7 @@ cdef extern from "cudf/io/datasource.hpp" \
 
     cdef cppclass datasource:
         pass
+
+    cdef cppclass arrow_io_source(datasource):
+        arrow_io_source(string arrow_uri) except +
+        arrow_io_source(shared_ptr[CRandomAccessFile]) except +

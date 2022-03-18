@@ -196,7 +196,7 @@ struct column_scatterer_impl<dictionary32> {
                                      rmm::mr::device_memory_resource* mr) const
   {
     if (target_in.is_empty())  // empty begets empty
-      return make_empty_column(data_type{type_id::DICTIONARY32});
+      return make_empty_column(type_id::DICTIONARY32);
     if (source_in.is_empty())  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
@@ -296,7 +296,7 @@ struct column_scatterer_impl<struct_view> {
 
     // We still need to call `gather_bitmask` even when the source's children are not nullable,
     // as if the target's children have null_masks, those null_masks need to be updated after
-    // being scattered onto
+    // being scattered onto.
     auto const child_nullable = std::any_of(structs_src.child_begin(),
                                             structs_src.child_end(),
                                             [](auto const& col) { return col.nullable(); }) or
@@ -305,7 +305,7 @@ struct column_scatterer_impl<struct_view> {
                                             [](auto const& col) { return col.nullable(); });
     if (child_nullable) {
       auto const gather_map =
-        scatter_to_gather(scatter_map_begin, scatter_map_end, source.size(), stream);
+        scatter_to_gather(scatter_map_begin, scatter_map_end, target.size(), stream);
       gather_bitmask(cudf::table_view{std::vector<cudf::column_view>{structs_src.child_begin(),
                                                                      structs_src.child_end()}},
                      gather_map.begin(),
@@ -315,9 +315,9 @@ struct column_scatterer_impl<struct_view> {
                      mr);
     }
 
-    // Need to put the result column in a vector to call `gather_bitmask`
+    // Need to put the result column in a vector to call `gather_bitmask`.
     std::vector<std::unique_ptr<column>> result;
-    result.emplace_back(cudf::make_structs_column(source.size(),
+    result.emplace_back(cudf::make_structs_column(target.size(),
                                                   std::move(output_struct_members),
                                                   0,
                                                   rmm::device_buffer{0, stream, mr},
@@ -325,7 +325,7 @@ struct column_scatterer_impl<struct_view> {
                                                   mr));
 
     // Only gather bitmask from the target column for the rows that have not been scattered onto
-    // The bitmask from the source column will be gathered at the top level `scatter()` call
+    // The bitmask from the source column will be gathered at the top level `scatter()` call.
     if (target.nullable()) {
       auto const gather_map =
         scatter_to_gather_complement(scatter_map_begin, scatter_map_end, target.size(), stream);
@@ -402,7 +402,7 @@ std::unique_ptr<table> scatter(
   CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
                "scatter map size should be <= to number of rows in source");
 
-  // Transform negative indices to index + target size
+  // Transform negative indices to index + target size.
   auto updated_scatter_map_begin =
     thrust::make_transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
   auto updated_scatter_map_end =
@@ -425,7 +425,7 @@ std::unique_ptr<table> scatter(
                  });
 
   // We still need to call `gather_bitmask` even when the source columns are not nullable,
-  // as if the target has null_mask, that null_mask needs to be updated after scattering
+  // as if the target has null_mask, that null_mask needs to be updated after scattering.
   auto const nullable =
     std::any_of(source.begin(), source.end(), [](auto const& col) { return col.nullable(); }) or
     std::any_of(target.begin(), target.end(), [](auto const& col) { return col.nullable(); });
@@ -433,6 +433,25 @@ std::unique_ptr<table> scatter(
     auto const gather_map = scatter_to_gather(
       updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
     gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, stream, mr);
+
+    // For struct columns, we need to superimpose the null_mask of the parent over the null_mask of
+    // the children.
+    std::for_each(result.begin(), result.end(), [=](auto& col) {
+      auto const col_view = col->view();
+      if (col_view.type().id() == type_id::STRUCT and col_view.nullable()) {
+        auto const num_rows   = col_view.size();
+        auto const null_count = col_view.null_count();
+        auto contents         = col->release();
+
+        // Children null_mask will be superimposed during structs column construction.
+        col = cudf::make_structs_column(num_rows,
+                                        std::move(contents.children),
+                                        null_count,
+                                        std::move(*contents.null_mask),
+                                        stream,
+                                        mr);
+      }
+    });
   }
   return std::make_unique<table>(std::move(result));
 }

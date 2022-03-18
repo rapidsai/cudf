@@ -15,6 +15,8 @@
  */
 #include "timezone.cuh"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
+
 #include <algorithm>
 #include <fstream>
 
@@ -68,15 +70,15 @@ struct timezone_file {
   std::vector<localtime_type_record_s> ttype;
   std::vector<char> posix_tz_string;
 
-  auto timecnt() const { return header.timecnt; }
-  auto typecnt() const { return header.typecnt; }
+  [[nodiscard]] auto timecnt() const { return header.timecnt; }
+  [[nodiscard]] auto typecnt() const { return header.typecnt; }
 
   // Based on https://tools.ietf.org/id/draft-murchison-tzdist-tzif-00.html
   static constexpr auto leap_second_rec_size(bool is_64bit) noexcept
   {
     return (is_64bit ? sizeof(uint64_t) : sizeof(uint32_t)) + sizeof(uint32_t);
   }
-  static constexpr auto file_content_size_32(timezone_file_header const &header) noexcept
+  static constexpr auto file_content_size_32(timezone_file_header const& header) noexcept
   {
     return header.timecnt * sizeof(uint32_t) +                 // transition times
            header.timecnt * sizeof(uint8_t) +                  // transition time index
@@ -100,9 +102,9 @@ struct timezone_file {
     header.charcnt  = __builtin_bswap32(header.charcnt);
   }
 
-  void read_header(std::ifstream &input_file, size_t file_size)
+  void read_header(std::ifstream& input_file, size_t file_size)
   {
-    input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+    input_file.read(reinterpret_cast<char*>(&header), sizeof(header));
     CUDF_EXPECTS(!input_file.fail() && header.magic == tzif_magic,
                  "Error reading time zones file header.");
     header_to_little_endian();
@@ -113,7 +115,7 @@ struct timezone_file {
         // skip the 32-bit content
         input_file.seekg(file_content_size_32(header), std::ios_base::cur);
         // read the 64-bit header
-        input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+        input_file.read(reinterpret_cast<char*>(&header), sizeof(header));
         header_to_little_endian();
         is_header_from_64bit = true;
       }
@@ -125,7 +127,7 @@ struct timezone_file {
                  "Number of transition times is larger than the file size.");
   }
 
-  timezone_file(std::string const &timezone_name)
+  timezone_file(std::string const& timezone_name)
   {
     using std::ios_base;
 
@@ -142,23 +144,25 @@ struct timezone_file {
     // Read transition times (convert from 32-bit to 64-bit if necessary)
     transition_times.resize(timecnt());
     if (is_header_from_64bit) {
-      fin.read(reinterpret_cast<char *>(transition_times.data()),
+      fin.read(reinterpret_cast<char*>(transition_times.data()),
                transition_times.size() * sizeof(int64_t));
-      for (auto &tt : transition_times) { tt = __builtin_bswap64(tt); }
+      for (auto& tt : transition_times) {
+        tt = __builtin_bswap64(tt);
+      }
     } else {
       std::vector<int32_t> tt32(timecnt());
-      fin.read(reinterpret_cast<char *>(tt32.data()), tt32.size() * sizeof(int32_t));
+      fin.read(reinterpret_cast<char*>(tt32.data()), tt32.size() * sizeof(int32_t));
       std::transform(
-        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto &tt) {
+        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto& tt) {
           return __builtin_bswap32(tt);
         });
     }
     ttime_idx.resize(timecnt());
-    fin.read(reinterpret_cast<char *>(ttime_idx.data()), timecnt() * sizeof(uint8_t));
+    fin.read(reinterpret_cast<char*>(ttime_idx.data()), timecnt() * sizeof(uint8_t));
 
     // Read time types
     ttype.resize(typecnt());
-    fin.read(reinterpret_cast<char *>(ttype.data()), typecnt() * sizeof(localtime_type_record_s));
+    fin.read(reinterpret_cast<char*>(ttype.data()), typecnt() * sizeof(localtime_type_record_s));
     CUDF_EXPECTS(!fin.fail(), "Failed to read time types from the time zone file.");
     for (uint32_t i = 0; i < typecnt(); i++) {
       ttype[i].utcoff = __builtin_bswap32(ttype[i].utcoff);
@@ -182,7 +186,7 @@ struct timezone_file {
 template <class Container>
 class posix_parser {
  public:
-  posix_parser(Container const &tz_string) : cur{tz_string.begin()}, end{tz_string.end()} {}
+  posix_parser(Container const& tz_string) : cur{tz_string.begin()}, end{tz_string.end()} {}
 
   /**
    * @brief Advances the parser past a name from the posix TZ string.
@@ -218,7 +222,7 @@ class posix_parser {
   /**
    * @brief Returns the next character in the input.
    */
-  char next_character() const { return *cur; }
+  [[nodiscard]] char next_character() const { return *cur; }
 
  private:
   typename Container::const_iterator cur;
@@ -314,14 +318,6 @@ dst_transition_s posix_parser<Container>::parse_transition()
 }
 
 /**
- * @brief Checks if a given year is a leap year.
- */
-static bool is_leap_year(uint32_t year)
-{
-  return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
-}
-
-/**
  * @brief Returns the number of days in a month.
  */
 static int days_in_month(int month, bool is_leap_year)
@@ -340,14 +336,15 @@ static int days_in_month(int month, bool is_leap_year)
  *
  * @return transition time in seconds from the beginning of the year
  */
-static int64_t get_transition_time(dst_transition_s const &trans, int year)
+static int64_t get_transition_time(dst_transition_s const& trans, int year)
 {
   auto day = trans.day;
 
+  auto const is_leap = cuda::std::chrono::year{year}.is_leap();
+
   if (trans.type == 'M') {
-    auto const is_leap = is_leap_year(year);
-    auto const month   = std::min(std::max(trans.month, 1), 12);
-    auto week          = std::min(std::max(trans.week, 1), 52);
+    auto const month = std::min(std::max(trans.month, 1), 12);
+    auto week        = std::min(std::max(trans.week, 1), 52);
 
     // Year-to-year day adjustment
     auto const adjusted_month = (month + 9) % 12 + 1;
@@ -365,16 +362,18 @@ static int64_t get_transition_time(dst_transition_s const &trans, int year)
       day += 7;
     }
     // Add months
-    for (int m = 1; m < month; m++) { day += days_in_month(m, is_leap); }
+    for (int m = 1; m < month; m++) {
+      day += days_in_month(m, is_leap);
+    }
   } else if (trans.type == 'J') {
     // Account for 29th of February on leap years
-    day += (day > 31 + 29 && is_leap_year(year));
+    day += (day > 31 + 29 && is_leap);
   }
 
-  return trans.time + day * day_seconds;
+  return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
-timezone_table build_timezone_transition_table(std::string const &timezone_name,
+timezone_table build_timezone_transition_table(std::string const& timezone_name,
                                                rmm::cuda_stream_view stream)
 {
   if (timezone_name == "UTC" || timezone_name.empty()) {
@@ -441,7 +440,7 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name,
 
   // Add entries to fill the transition cycle
   int64_t year_timestamp = 0;
-  for (uint32_t year = 1970; year < 1970 + cycle_years; ++year) {
+  for (int32_t year = 1970; year < 1970 + cycle_years; ++year) {
     auto const dst_start_time = get_transition_time(dst_start, year);
     auto const dst_end_time   = get_transition_time(dst_end, year);
 
@@ -457,22 +456,14 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name,
       std::swap(offsets.rbegin()[0], offsets.rbegin()[1]);
     }
 
-    year_timestamp += (365 + is_leap_year(year)) * day_seconds;
+    year_timestamp += cuda::std::chrono::duration_cast<duration_s>(
+                        duration_D{365 + cuda::std::chrono::year{year}.is_leap()})
+                        .count();
   }
 
-  rmm::device_uvector<int64_t> d_ttimes{ttimes.size(), stream};
-  CUDA_TRY(cudaMemcpyAsync(d_ttimes.data(),
-                           ttimes.data(),
-                           ttimes.size() * sizeof(int64_t),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  rmm::device_uvector<int32_t> d_offsets{offsets.size(), stream};
-  CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
-                           offsets.data(),
-                           offsets.size() * sizeof(int32_t),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  auto const gmt_offset = get_gmt_offset(ttimes, offsets, orc_utc_offset);
+  rmm::device_uvector<int64_t> d_ttimes  = cudf::detail::make_device_uvector_async(ttimes, stream);
+  rmm::device_uvector<int32_t> d_offsets = cudf::detail::make_device_uvector_async(offsets, stream);
+  auto const gmt_offset                  = get_gmt_offset(ttimes, offsets, orc_utc_offset);
   stream.synchronize();
 
   return {gmt_offset, std::move(d_ttimes), std::move(d_offsets)};

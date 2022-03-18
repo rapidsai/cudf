@@ -172,7 +172,7 @@ void copy_range(SourceValueIterator source_value_begin,
       target_end,
       null_count.data());
 
-    target.set_null_count(null_count.value());
+    target.set_null_count(null_count.value(stream));
   } else {
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, false>;

@@ -79,11 +79,12 @@ Jon L. Bentley
 For more information on these sources, see the manual.
 --*/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <vector>
 #include "io_uncomp.h"
 #include "unbz2.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
 
 namespace cudf {
 namespace io {
@@ -101,36 +102,36 @@ namespace io {
 // Constants for the back end.
 
 #define BZ_MAX_ALPHA_SIZE 258
-#define BZ_MAX_CODE_LEN 23
+#define BZ_MAX_CODE_LEN   23
 
 #define BZ_RUNA 0
 #define BZ_RUNB 1
 
 #define BZ_N_GROUPS 6
-#define BZ_G_SIZE 50
+#define BZ_G_SIZE   50
 
 #define BZ_MAX_SELECTORS (2 + (900000 / BZ_G_SIZE))
 
-typedef struct {
+using huff_s = struct {
   int32_t minLen;
   int32_t limit[BZ_MAX_CODE_LEN];
   int32_t base[BZ_MAX_CODE_LEN];
   uint16_t perm[BZ_MAX_ALPHA_SIZE];
-} huff_s;
+};
 
 // Decoder state
-typedef struct {
+using unbz_state_s = struct {
   // Input
-  const uint8_t *cur;
-  const uint8_t *end;
-  const uint8_t *base;
+  const uint8_t* cur;
+  const uint8_t* end;
+  const uint8_t* base;
   uint64_t bitbuf;
   uint32_t bitpos;
 
   // Output
-  uint8_t *out;
-  uint8_t *outend;
-  uint8_t *outbase;
+  uint8_t* out;
+  uint8_t* outend;
+  uint8_t* outbase;
 
   // misc administratium
   uint32_t blockSize100k;
@@ -153,28 +154,28 @@ typedef struct {
   uint8_t len[BZ_MAX_ALPHA_SIZE];
 
   huff_s ht[BZ_N_GROUPS];
-} unbz_state_s;
+};
 
 // return next 32 bits
-static inline uint32_t next32bits(const unbz_state_s *s)
+static inline uint32_t next32bits(const unbz_state_s* s)
 {
   return (uint32_t)((s->bitbuf << s->bitpos) >> 32);
 }
 
 // return next n bits
-static inline uint32_t showbits(const unbz_state_s *s, uint32_t n)
+static inline uint32_t showbits(const unbz_state_s* s, uint32_t n)
 {
   return (uint32_t)((s->bitbuf << s->bitpos) >> (64 - n));
 }
 
 // update bit position, refill bit buffer if necessary
-static void skipbits(unbz_state_s *s, uint32_t n)
+static void skipbits(unbz_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    const uint8_t *cur = s->cur + 4;
+    const uint8_t* cur = s->cur + 4;
     uint32_t next32 =
-      (cur + 4 < s->end) ? __builtin_bswap32(*reinterpret_cast<const uint32_t *>(cur + 4)) : 0;
+      (cur + 4 < s->end) ? __builtin_bswap32(*reinterpret_cast<const uint32_t*>(cur + 4)) : 0;
     s->cur    = cur;
     s->bitbuf = (s->bitbuf << 32) | next32;
     bitpos &= 0x1f;
@@ -182,7 +183,7 @@ static void skipbits(unbz_state_s *s, uint32_t n)
   s->bitpos = bitpos;
 }
 
-static inline uint32_t getbits(unbz_state_s *s, uint32_t n)
+static inline uint32_t getbits(unbz_state_s* s, uint32_t n)
 {
   uint32_t bits = showbits(s, n);
   skipbits(s, n);
@@ -190,7 +191,7 @@ static inline uint32_t getbits(unbz_state_s *s, uint32_t n)
 }
 
 /*---------------------------------------------------*/
-int32_t bz2_decompress_block(unbz_state_s *s)
+int32_t bz2_decompress_block(unbz_state_s* s)
 {
   int nInUse;
 
@@ -204,7 +205,7 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   int32_t groupNo;
   int32_t groupPos;
   uint32_t nblock, nblockMAX;
-  const huff_s *gSel = nullptr;
+  const huff_s* gSel = nullptr;
   uint32_t inUse16;
   uint32_t sig0, sig1;
 
@@ -263,11 +264,11 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   // Now the coding tables
   for (t = 0; t < nGroups; t++) {
     int32_t pp, vec;
-    uint8_t *length = &s->len[0];
+    uint8_t* length = &s->len[0];
     int32_t curr    = getbits(s, 5);
     int32_t minLen  = BZ_MAX_CODE_LEN - 1;
     int32_t maxLen  = 0;
-    huff_s *sel     = &s->ht[t];
+    huff_s* sel     = &s->ht[t];
     for (i = 0; i < alphaSize; i++) {
       for (;;) {
         uint32_t v = showbits(s, 2);
@@ -297,9 +298,11 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       sel->base[i]  = 0;
       sel->limit[i] = 0;
     }
-    for (i = 0; i < alphaSize; i++) sel->base[length[i] + 1]++;
+    for (i = 0; i < alphaSize; i++)
+      sel->base[length[i] + 1]++;
 
-    for (i = 1; i < BZ_MAX_CODE_LEN; i++) sel->base[i] += sel->base[i - 1];
+    for (i = 1; i < BZ_MAX_CODE_LEN; i++)
+      sel->base[i] += sel->base[i - 1];
 
     vec = 0;
     for (i = minLen; i <= maxLen; i++) {
@@ -318,7 +321,8 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   EOB       = nInUse + 1;
   nblockMAX = 100000 * s->blockSize100k;
 
-  for (i = 0; i <= 255; i++) s->unzftab[i] = 0;
+  for (i = 0; i <= 255; i++)
+    s->unzftab[i] = 0;
 
   // MTF init
   {
@@ -456,7 +460,7 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   // Verify the end-of-block signature: should be followed by another block or an end-of-stream
   // signature
   {
-    const uint8_t *save_cur = s->cur;
+    const uint8_t* save_cur = s->cur;
     uint64_t save_bitbuf    = s->bitbuf;
     uint32_t save_bitpos    = s->bitpos;
     sig0                    = getbits(s, 24);
@@ -476,14 +480,14 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   }
 }
 
-static void bzUnRLE(unbz_state_s *s)
+static void bzUnRLE(unbz_state_s* s)
 {
-  uint8_t *out    = s->out;
-  uint8_t *outend = s->outend;
+  uint8_t* out    = s->out;
+  uint8_t* outend = s->outend;
 
   int32_t rle_cnt           = s->save_nblock;
   int cprev                 = -1;
-  std::vector<uint32_t> &tt = s->tt;
+  std::vector<uint32_t>& tt = s->tt;
   uint32_t pos              = tt[s->origPtr] >> 8;
   int mask                  = ~0;
 
@@ -520,21 +524,22 @@ static void bzUnRLE(unbz_state_s *s)
 }
 
 int32_t cpu_bz2_uncompress(
-  const uint8_t *source, size_t sourceLen, uint8_t *dest, size_t *destLen, uint64_t *block_start)
+  const uint8_t* source, size_t sourceLen, uint8_t* dest, size_t* destLen, uint64_t* block_start)
 {
   unbz_state_s s{};
   uint32_t v;
   int ret;
   size_t last_valid_block_in, last_valid_block_out;
 
-  if (dest == NULL || destLen == NULL || source == NULL || sourceLen < 12) return BZ_PARAM_ERROR;
+  if (dest == nullptr || destLen == nullptr || source == nullptr || sourceLen < 12)
+    return BZ_PARAM_ERROR;
   s.currBlockNo = 0;
 
   s.cur  = source;
   s.base = source;
   s.end =
     source + sourceLen - 4;  // We will not read the final combined CRC (last 4 bytes of the file)
-  s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t *>(source));
+  s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(source));
   s.bitpos = 0;
 
   s.out     = dest;
@@ -560,7 +565,7 @@ int32_t cpu_bz2_uncompress(
       s.cur    = source + (size_t)(bit_offs >> 3);
       s.bitpos = (uint32_t)(bit_offs & 7);
       if (s.cur + 8 > s.end) return BZ_PARAM_ERROR;
-      s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t *>(s.cur));
+      s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t*>(s.cur));
     }
   }
 

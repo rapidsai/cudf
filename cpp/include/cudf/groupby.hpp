@@ -17,10 +17,13 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <memory>
 #include <rmm/cuda_stream_view.hpp>
 
 #include <utility>
@@ -53,8 +56,23 @@ class sort_groupby_helper;
  * `values.size()` column must equal `keys.num_rows()`.
  */
 struct aggregation_request {
-  column_view values;                                      ///< The elements to aggregate
-  std::vector<std::unique_ptr<aggregation>> aggregations;  ///< Desired aggregations
+  column_view values;                                              ///< The elements to aggregate
+  std::vector<std::unique_ptr<groupby_aggregation>> aggregations;  ///< Desired aggregations
+};
+
+/**
+ * @brief Request for groupby aggregation(s) for scanning a column.
+ *
+ * The group membership of each `value[i]` is determined by the corresponding
+ * row `i` in the original order of `keys` used to construct the
+ * `groupby`. I.e., for each `aggregation`, `values[i]` is aggregated with all
+ * other `values[j]` where rows `i` and `j` in `keys` are equivalent.
+ *
+ * `values.size()` column must equal `keys.num_rows()`.
+ */
+struct scan_request {
+  column_view values;  ///< The elements to aggregate
+  std::vector<std::unique_ptr<groupby_scan_aggregation>> aggregations;  ///< Desired aggregations
 };
 
 /**
@@ -113,7 +131,7 @@ class groupby {
   /**
    * @brief Performs grouped aggregations on the specified values.
    *
-   * The values to aggregate and the aggregations to perform are specifed in an
+   * The values to aggregate and the aggregations to perform are specified in an
    * `aggregation_request`. Each request contains a `column_view` of values to
    * aggregate and a set of `aggregation`s to perform on those elements.
    *
@@ -170,7 +188,7 @@ class groupby {
   /**
    * @brief Performs grouped scans on the specified values.
    *
-   * The values to aggregate and the aggregations to perform are specifed in an
+   * The values to aggregate and the aggregations to perform are specified in an
    * `aggregation_request`. Each request contains a `column_view` of values to
    * aggregate and a set of `aggregation`s to perform on those elements.
    *
@@ -219,7 +237,63 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
-    host_span<aggregation_request const> requests,
+    host_span<scan_request const> requests,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Performs grouped shifts for specified values.
+   *
+   * In `j`th column, for each group, `i`th element is determined by the `i - offsets[j]`th
+   * element of the group. If `i - offsets[j] < 0 or >= group_size`, the value is determined by
+   * @p fill_values[j].
+   *
+   * @note The first returned table stores the keys passed to the groupby object. Row `i` of the key
+   * table corresponds to the group labels of row `i` in the shifted columns. The key order in
+   * each group matches the input order. The order of each group is arbitrary. The group order
+   * in successive calls to `groupby::shifts` may be different.
+   *
+   * Example:
+   * @code{.pseudo}
+   * keys:    {1 4 1 3 4 4 1}
+   *          {1 2 1 3 2 2 1}
+   * values:  {3 9 1 4 2 5 7}
+   *          {"a" "c" "bb" "ee" "z" "x" "d"}
+   * offset:  {2, -1}
+   * fill_value: {@, @}
+   * result (group order maybe different):
+   *    keys:   {3 1 1 1 4 4 4}
+   *            {3 1 1 1 2 2 2}
+   *    values: {@ @ @ 3 @ @ 9}
+   *            {@ "bb" "d" @ "z" "x" @}
+   *
+   * -------------------------------------------------
+   * keys:    {1 4 1 3 4 4 1}
+   *          {1 2 1 3 2 2 1}
+   * values:  {3 9 1 4 2 5 7}
+   *          {"a" "c" "bb" "ee" "z" "x" "d"}
+   * offset:  {-2, 1}
+   * fill_value: {-1, "42"}
+   * result (group order maybe different):
+   *    keys:   {3 1 1 1 4 4 4}
+   *            {3 1 1 1 2 2 2}
+   *    values: {-1 7 -1 -1 5 -1 -1}
+   *            {"42" "42" "a" "bb" "42" "c" "z"}
+   *
+   * @endcode
+   *
+   * @param values Table whose columns to be shifted
+   * @param offsets The offsets by which to shift the input
+   * @param fill_values Fill values for indeterminable outputs
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @return Pair containing the tables with each group's key and the columns shifted
+   *
+   * @throws cudf::logic_error if @p fill_value[i] dtype does not match @p values[i] dtype for
+   * `i`th column
+   */
+  std::pair<std::unique_ptr<table>, std::unique_ptr<table>> shift(
+    table_view const& values,
+    host_span<size_type const> offsets,
+    std::vector<std::reference_wrapper<const scalar>> const& fill_values,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -250,6 +324,46 @@ class groupby {
    */
   groups get_groups(cudf::table_view values             = {},
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Performs grouped replace nulls on @p value
+   *
+   * For each `value[i] == NULL` in group `j`, `value[i]` is replaced with the first non-null value
+   * in group `j` that precedes or follows `value[i]`. If a non-null value is not found in the
+   * specified direction, `value[i]` is left NULL.
+   *
+   * The returned pair contains a column of the sorted keys and the result column. In result column,
+   * values of the same group are in contiguous memory. In each group, the order of values maintain
+   * their original order. The order of groups are not guaranteed.
+   *
+   * Example:
+   * @code{.pseudo}
+   *
+   * //Inputs:
+   * keys:    {3 3 1 3 1 3 4}
+   *          {2 2 1 2 1 2 5}
+   * values:  {3 4 7 @ @ @ @}
+   *          {@ @ @ "x" "tt" @ @}
+   * replace_policies:    {FORWARD, BACKWARD}
+   *
+   * //Outputs (group orders may be different):
+   * keys:    {3 3 3 3 1 1 4}
+   *          {2 2 2 2 1 1 5}
+   * result:  {3 4 4 4 7 7 @}
+   *          {"x" "x" "x" @ "tt" "tt" @}
+   * @endcode
+   *
+   * @param[in] values A table whose column null values will be replaced.
+   * @param[in] replace_policies Specify the position of replacement values relative to null values,
+   * one for each column
+   * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+   *
+   * @return Pair that contains a table with the sorted keys and the result column
+   */
+  std::pair<std::unique_ptr<table>, std::unique_ptr<table>> replace_nulls(
+    table_view const& values,
+    host_span<cudf::replace_policy const> replace_policies,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
  private:
   table_view _keys;                                      ///< Keys that determine grouping
@@ -289,7 +403,7 @@ class groupby {
     rmm::mr::device_memory_resource* mr);
 
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_scan(
-    host_span<aggregation_request const> requests,
+    host_span<scan_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
 };

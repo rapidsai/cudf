@@ -1,16 +1,17 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 from io import BytesIO, StringIO
 
-from nvtx import annotate
+from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.api.types import is_scalar
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_scalar
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
-@annotate("READ_CSV", color="purple", domain="cudf_python")
+@_cudf_nvtx_annotate
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -45,6 +46,7 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
@@ -60,7 +62,8 @@ def read_csv(
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
-        iotypes=(BytesIO, StringIO),
+        iotypes=(BytesIO, StringIO, NativeFile),
+        use_python_file_object=use_python_file_object,
         **kwargs,
     )
 
@@ -103,7 +106,7 @@ def read_csv(
     )
 
 
-@annotate("WRITE_CSV", color="purple", domain="cudf_python")
+@_cudf_nvtx_annotate
 @ioutils.doc_to_csv()
 def to_csv(
     df,
@@ -177,7 +180,7 @@ def to_csv(
         df = df.copy(deep=False)
         for col_name, col in df._data.items():
             if isinstance(col, cudf.core.column.CategoricalColumn):
-                df._data[col_name] = col.astype(col.cat().categories.dtype)
+                df._data[col_name] = col.astype(col.categories.dtype)
 
         if isinstance(df.index, cudf.CategoricalIndex):
             df.index = df.index.astype(df.index.categories.dtype)

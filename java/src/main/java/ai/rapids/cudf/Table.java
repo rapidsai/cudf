@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,19 +23,15 @@ import ai.rapids.cudf.HostColumnVector.DataType;
 import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
+import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -119,7 +115,7 @@ public final class Table implements AutoCloseable {
   }
 
   /** Return the native table view handle for this table */
-  long getNativeView() {
+  public long getNativeView() {
     return nativeHandle;
   }
 
@@ -176,10 +172,19 @@ public final class Table implements AutoCloseable {
     return total;
   }
 
+  /**
+   * This method is internal and exposed purely for testing purpopses
+   */
+  static Table removeNullMasksIfNeeded(Table table) {
+    return new Table(removeNullMasksIfNeeded(table.nativeHandle));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // NATIVE APIs
   /////////////////////////////////////////////////////////////////////////////
-  
+
+  private static native long[] removeNullMasksIfNeeded(long tableView) throws CudfException;
+
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
   private static native long[] partition(long inputTable, long partitionView,
@@ -206,7 +211,8 @@ public final class Table implements AutoCloseable {
    * into a java
    * object to try and pull out all of the options.  If this becomes unwieldy we can change it.
    * @param columnNames       names of all of the columns, even the ones filtered out
-   * @param dTypes            types of all of the columns as strings.  Why strings? who knows.
+   * @param dTypeIds          native types IDs of all of the columns.
+   * @param dTypeScales       scale of the type for all of the columns.
    * @param filterColumnNames name of the columns to read, or an empty array if we want to read
    *                          all of them
    * @param filePath          the path of the file to read, or null if no path should be read.
@@ -220,12 +226,18 @@ public final class Table implements AutoCloseable {
    * @param trueValues        values that should be treated as boolean true
    * @param falseValues       values that should be treated as boolean false
    */
-  private static native long[] readCSV(String[] columnNames, String[] dTypes,
+  private static native long[] readCSV(String[] columnNames,
+                                       int[] dTypeIds, int[] dTypeScales,
                                        String[] filterColumnNames,
                                        String filePath, long address, long length,
                                        int headerRow, byte delim, byte quote,
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
+
+  private static native long[] readJSON(String[] columnNames,
+                                        int[] dTypeIds, int[] dTypeScales,
+                                        String filePath, long address, long length,
+                                        boolean dayFirst, boolean lines) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -235,15 +247,26 @@ public final class Table implements AutoCloseable {
    * @param address            the address of the buffer to read from or 0 if we should not.
    * @param length             the length of the buffer to read from.
    * @param timeUnit           return type of TimeStamp in units
-   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit,
-                                           boolean strictDecimalTypes) throws CudfException;
+                                           long address, long length, int timeUnit) throws CudfException;
+
+  /**
+   * Read in Avro formatted data.
+   * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
+   *                           all of them
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param address            the address of the buffer to read from or 0 if we should not.
+   * @param length             the length of the buffer to read from.
+   */
+  private static native long[] readAvro(String[] filterColumnNames, String filePath,
+                                        long address, long length) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -252,22 +275,27 @@ public final class Table implements AutoCloseable {
    * @param isInt96         true if timestamp type is int96
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
+                                                   int numChildren,
+                                                   int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
-                                                   boolean isInt96,
+                                                   boolean[] isInt96,
                                                    int[] precisions,
-                                                   String filename) throws CudfException;
+                                                   boolean[] isMapValues, String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -276,17 +304,21 @@ public final class Table implements AutoCloseable {
    * @param isInt96         true if timestamp type is int96
    * @param precisions      precision list containing all the precisions of the decimal types in
    *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
+                                                     int numChildren,
+                                                     int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
-                                                     boolean isInt96,
+                                                     boolean[] isInt96,
                                                      int[] precisions,
+                                                     boolean[] isMapValues,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -313,43 +345,63 @@ public final class Table implements AutoCloseable {
    * @param usingNumPyTypes   whether the parser should implicitly promote TIMESTAMP
    *                          columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
    * @param timeUnit          return type of TimeStamp in units
+   * @param decimal128Columns name of the columns which are read as Decimal128 rather than Decimal64
    */
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       boolean usingNumPyTypes, int timeUnit) throws CudfException;
+                                       boolean usingNumPyTypes, int timeUnit,
+                                       String[] decimal128Columns) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param filename        local output path
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCFileBegin(String[] columnNames,
+                                               int numChildren,
+                                               int[] flatNumChildren,
                                                boolean[] nullable,
                                                String[] metadataKeys,
                                                String[] metadataValues,
                                                int compression,
+                                               int[] precisions,
+                                               boolean[] isMapValues,
                                                String filename) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCBufferBegin(String[] columnNames,
+                                                 int numChildren,
+                                                 int[] flatNumChildren,
                                                  boolean[] nullable,
                                                  String[] metadataKeys,
                                                  String[] metadataValues,
                                                  int compression,
+                                                 int[] precisions,
+                                                 boolean[] isMapValues,
                                                  HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -452,7 +504,20 @@ public final class Table implements AutoCloseable {
   private static native void readArrowIPCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
+                                                long[] aggInstances, boolean ignoreNullKeys,
+                                                boolean keySorted, boolean[] keysDescending,
+                                                boolean[] keysNullSmallest) throws CudfException;
+
+  private static native long[] groupByScan(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
+      long[] aggInstances, boolean ignoreNullKeys,
+      boolean keySorted, boolean[] keysDescending,
+      boolean[] keysNullSmallest) throws CudfException;
+
+  private static native long[] groupByReplaceNulls(long inputTable, int[] keyIndices,
+      int[] replaceColumnsIndices,
+      boolean[] isPreceding, boolean ignoreNullKeys,
+      boolean keySorted, boolean[] keysDescending,
+      boolean[] keysNullSmallest) throws CudfException;
 
   private static native long[] rollingWindowAggregate(
       long inputTable,
@@ -465,10 +530,10 @@ public final class Table implements AutoCloseable {
       int[] following,
       boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
-                                                               int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                               int[] preceding, int[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing, 
-                                                               boolean ignoreNullKeys) throws CudfException;
+  private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
+                                                           int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
+                                                           long[] preceding, long[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing,
+                                                           boolean ignoreNullKeys) throws CudfException;
 
   private static native long sortOrder(long inputTable, long[] sortKeys, boolean[] isDescending,
       boolean[] areNullsSmallest) throws CudfException;
@@ -485,17 +550,38 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
+  private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
+
+  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
+
+  private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
+                                                               long outputRowCount) throws CudfException;
+
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
+  private static native long innerJoinRowCount(long table, long hashJoin) throws CudfException;
+
+  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin) throws CudfException;
+
+  private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
+                                                                long outputRowCount) throws CudfException;
+
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
+
+  private static native long fullJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
+
+  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
+
+  private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
+                                                               long outputRowCount) throws CudfException;
 
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
@@ -509,6 +595,105 @@ public final class Table implements AutoCloseable {
   private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
                                                      boolean compareNullsEqual) throws CudfException;
 
+  private static native long conditionalLeftJoinRowCount(long leftTable, long rightTable,
+                                                         long condition) throws CudfException;
+
+  private static native long[] conditionalLeftJoinGatherMaps(long leftTable, long rightTable,
+                                                             long condition) throws CudfException;
+
+  private static native long[] conditionalLeftJoinGatherMapsWithCount(long leftTable, long rightTable,
+                                                                      long condition,
+                                                                      long rowCount) throws CudfException;
+
+  private static native long conditionalInnerJoinRowCount(long leftTable, long rightTable,
+                                                          long condition) throws CudfException;
+
+  private static native long[] conditionalInnerJoinGatherMaps(long leftTable, long rightTable,
+                                                              long condition) throws CudfException;
+
+  private static native long[] conditionalInnerJoinGatherMapsWithCount(long leftTable, long rightTable,
+                                                                       long condition,
+                                                                       long rowCount) throws CudfException;
+
+  private static native long[] conditionalFullJoinGatherMaps(long leftTable, long rightTable,
+                                                             long condition) throws CudfException;
+
+  private static native long conditionalLeftSemiJoinRowCount(long leftTable, long rightTable,
+                                                             long condition) throws CudfException;
+
+  private static native long[] conditionalLeftSemiJoinGatherMap(long leftTable, long rightTable,
+                                                                long condition) throws CudfException;
+
+  private static native long[] conditionalLeftSemiJoinGatherMapWithCount(long leftTable, long rightTable,
+                                                                         long condition,
+                                                                         long rowCount) throws CudfException;
+
+  private static native long conditionalLeftAntiJoinRowCount(long leftTable, long rightTable,
+                                                             long condition) throws CudfException;
+
+  private static native long[] conditionalLeftAntiJoinGatherMap(long leftTable, long rightTable,
+                                                                long condition) throws CudfException;
+
+  private static native long[] conditionalLeftAntiJoinGatherMapWithCount(long leftTable, long rightTable,
+                                                                         long condition,
+                                                                         long rowCount) throws CudfException;
+
+  private static native long[] mixedLeftJoinSize(long leftKeysTable, long rightKeysTable,
+                                                 long leftConditionTable, long rightConditionTable,
+                                                 long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftJoinGatherMaps(long leftKeysTable, long rightKeysTable,
+                                                       long leftConditionTable, long rightConditionTable,
+                                                       long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
+                                                               long leftConditionTable, long rightConditionTable,
+                                                               long condition, boolean compareNullsEqual,
+                                                               long outputRowCount, long matchesColumnView);
+
+  private static native long[] mixedInnerJoinSize(long leftKeysTable, long rightKeysTable,
+                                                  long leftConditionTable, long rightConditionTable,
+                                                  long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedInnerJoinGatherMaps(long leftKeysTable, long rightKeysTable,
+                                                        long leftConditionTable, long rightConditionTable,
+                                                        long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedInnerJoinGatherMapsWithSize(long leftKeysTable, long rightKeysTable,
+                                                                long leftConditionTable, long rightConditionTable,
+                                                                long condition, boolean compareNullsEqual,
+                                                                long outputRowCount, long matchesColumnView);
+
+  private static native long[] mixedFullJoinGatherMaps(long leftKeysTable, long rightKeysTable,
+                                                       long leftConditionTable, long rightConditionTable,
+                                                       long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftSemiJoinSize(long leftKeysTable, long rightKeysTable,
+                                                     long leftConditionTable, long rightConditionTable,
+                                                     long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftSemiJoinGatherMap(long leftKeysTable, long rightKeysTable,
+                                                          long leftConditionTable, long rightConditionTable,
+                                                          long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftSemiJoinGatherMapWithSize(long leftKeysTable, long rightKeysTable,
+                                                                  long leftConditionTable, long rightConditionTable,
+                                                                  long condition, boolean compareNullsEqual,
+                                                                  long outputRowCount, long matchesColumnView);
+
+  private static native long[] mixedLeftAntiJoinSize(long leftKeysTable, long rightKeysTable,
+                                                     long leftConditionTable, long rightConditionTable,
+                                                     long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftAntiJoinGatherMap(long leftKeysTable, long rightKeysTable,
+                                                          long leftConditionTable, long rightConditionTable,
+                                                          long condition, boolean compareNullsEqual);
+
+  private static native long[] mixedLeftAntiJoinGatherMapWithSize(long leftKeysTable, long rightKeysTable,
+                                                                  long leftConditionTable, long rightConditionTable,
+                                                                  long condition, boolean compareNullsEqual,
+                                                                  long outputRowCount, long matchesColumnView);
+
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
@@ -517,11 +702,26 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
+                                              boolean keepFirst, boolean nullsEqual,
+                                              boolean nullsBefore) throws CudfException;
+
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
+
+  private static native long[] scatterTable(long srcTableHandle, long scatterView,
+                                            long targetTableHandle, boolean checkBounds)
+                                            throws CudfException;
+  private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
+                                             long targetTableHandle, boolean checkBounds)
+                                             throws CudfException;
 
   private static native long[] convertToRows(long nativeHandle);
 
+  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
+
   private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
+
+  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
 
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
@@ -542,6 +742,15 @@ public final class Table implements AutoCloseable {
   private static native long createCudfTableView(long[] nativeColumnViewHandles);
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
+
+  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+                                                                int[] keyIndices,
+                                                                boolean ignoreNullKeys,
+                                                                boolean keySorted,
+                                                                boolean[] keysDescending,
+                                                                boolean[] keysNullSmallest);
+
+  private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -566,7 +775,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
     return new Table(
-        readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+        readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
             opts.getIncludeColumnNames(), path.getAbsolutePath(),
             0, 0,
             opts.getHeaderRow(),
@@ -639,7 +848,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+    return new Table(readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
         opts.getIncludeColumnNames(), null,
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
@@ -649,6 +858,97 @@ public final class Table implements AutoCloseable {
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  /**
+   * Read a JSON file using the default JSONOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, File path) {
+    return readJSON(schema, JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read JSON formatted data using the default JSONOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, byte[] buffer) {
+    return readJSON(schema, JSONOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer) {
+    return readJSON(schema, opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read a JSON file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    return new Table(
+        readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+            path.getAbsolutePath(),
+            0, 0,
+            opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readJSON(schema, opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+        null, buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
   }
 
   /**
@@ -668,8 +968,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
-        opts.isStrictDecimalType()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -729,8 +1028,83 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
-        opts.isStrictDecimalType()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+  }
+
+  /**
+   * Read an Avro file using the default AvroOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readAvro(File path) {
+    return readAvro(AvroOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read an Avro file.
+   * @param opts various Avro parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, File path) {
+    return new Table(readAvro(opts.getIncludeColumnNames(),
+        path.getAbsolutePath(), 0, 0));
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param buffer raw Avro formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(byte[] buffer) {
+    return readAvro(AvroOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, byte[] buffer) {
+    return readAvro(opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+    assert offset >= 0 && offset < buffer.length;
+    assert len <= buffer.length - offset;
+    len = len > 0 ? len : buffer.length - offset;
+
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readAvro(opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, HostMemoryBuffer buffer,
+                               long offset, long len) {
+    assert offset >= 0 && offset < buffer.length;
+    assert len <= buffer.length - offset;
+    len = len > 0 ? len : buffer.length - offset;
+
+    return new Table(readAvro(opts.getIncludeColumnNames(),
+        null, buffer.getAddress() + offset, len));
   }
 
   /**
@@ -750,7 +1124,9 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   /**
@@ -810,8 +1186,9 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -819,35 +1196,49 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
-      int numColumns = options.getColumnNames().length;
-      assert (numColumns == options.getColumnNullability().length);
-      int[] precisions = options.getPrecisions();
-      if (precisions != null) {
-        assert (numColumns >= options.getPrecisions().length);
-      }
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      boolean[] isMapValues = options.getFlatIsMap();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
       this.consumer = null;
-      this.handle = writeParquetFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeParquetFileBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
+          isMapValues,
           outputFile.getAbsolutePath());
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeParquetBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      boolean[] isMapValues = options.getFlatIsMap();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
+      this.consumer = consumer;
+      this.handle = writeParquetBufferBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
+          isMapValues,
           consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -894,16 +1285,42 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param options parameters for the writer
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
+   * This is an evolving API and most likely be removed in future releases. Please use with the
+   * caveat that this will not exist in the near future.
+   * @param options the Parquet writer options.
+   * @param consumer a class that will be called when host buffers are ready with Parquet
+   *                 formatted data in them.
+   * @param columnViews ColumnViews to write to Parquet
    */
-  @Deprecated
-  public void writeParquet(ParquetWriterOptions options, File outputFile) {
-    try (TableWriter writer = writeParquetChunked(options, outputFile)) {
-      writer.write(this);
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+    assert columnViews != null && columnViews.length > 0 : "ColumnViews can't be null or empty";
+    long rows = columnViews[0].getRowCount();
+
+    for (ColumnView columnView : columnViews) {
+      assert (null != columnView) : "ColumnViews can't be null";
+      assert (rows == columnView.getRowCount()) : "All columns should have the same number of " +
+          "rows " + columnView.getType();
+    }
+
+    // Since Arrays are mutable objects make a copy
+    long[] viewPointers = new long[columnViews.length];
+    for (int i = 0; i < columnViews.length; i++) {
+      viewPointers[i] = columnViews[i].getNativeView();
+    }
+
+    long nativeHandle = createCudfTableView(viewPointers);
+    try {
+      try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer)) {
+        long total = 0;
+        for (ColumnView cv : columnViews) {
+          total += cv.getDeviceMemorySize();
+        }
+        writeParquetChunk(writer.handle, nativeHandle, total);
+      }
+    } finally {
+      deleteCudfTable(nativeHandle);
     }
   }
 
@@ -912,21 +1329,29 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ORCTableWriter(ORCWriterOptions options, File outputFile) {
-      this.handle = writeORCFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCFileBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           outputFile.getAbsolutePath());
       this.consumer = null;
     }
 
     private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeORCBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCBufferBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           consumer);
       this.consumer = consumer;
     }
@@ -971,28 +1396,6 @@ public final class Table implements AutoCloseable {
    */
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
     return new ORCTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(File outputFile) {
-    writeORC(ORCWriterOptions.DEFAULT, outputFile);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(ORCWriterOptions options, File outputFile) {
-    try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
-      writer.write(this);
-    }
   }
 
   private static class ArrowIPCTableWriter implements TableWriter {
@@ -1252,7 +1655,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts) {
+  public Table repeat(ColumnView counts) {
     return repeat(counts, true);
   }
 
@@ -1267,7 +1670,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts, boolean checkCount) {
+  public Table repeat(ColumnView counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
   }
 
@@ -1529,130 +1932,31 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Returns count aggregation with only valid values.
-   * Null values are skipped.
-   * @param index Column on which aggregation is to be performed
-   * @return count aggregation of column `index` with null values skipped.
-   * @deprecated please use Aggregation.count.onColumn
-   */
-  @Deprecated
-  public static Aggregate count(int index) {
-    return Aggregate.count(index, false);
-  }
-
-  /**
-   * Returns count aggregation
-   * @param index Column on which aggregation is to be performed.
-   * @param include_nulls Include nulls if set to true
-   * @return count aggregation of column `index`
-   * @deprecated please use Aggregation.count.onColumn
-   */
-  @Deprecated
-  public static Aggregate count(int index, boolean include_nulls) {
-    return Aggregate.count(index, include_nulls);
-  }
-
-  /**
-   * Returns max aggregation. Null values are skipped.
-   * @param index Column on which max aggregation is to be performed.
-   * @return max aggregation of column `index`
-   * @deprecated please use Aggregation.max.onColumn
-   */
-  @Deprecated
-  public static Aggregate max(int index) {
-    return Aggregate.max(index);
-  }
-
-  /**
-   * Returns min aggregation. Null values are skipped.
-   * @param index Column on which min aggregation is to be performed.
-   * @return min aggregation of column `index`
-   * @deprecated please use Aggregation.min.onColumn
-   */
-  @Deprecated
-  public static Aggregate min(int index) {
-    return Aggregate.min(index);
-  }
-
-  /**
-   * Returns sum aggregation. Null values are skipped.
-   * @param index Column on which sum aggregation is to be performed.
-   * @return sum aggregation of column `index`
-   * @deprecated please use Aggregation.sum.onColumn
-   */
-  @Deprecated
-  public static Aggregate sum(int index) {
-    return Aggregate.sum(index);
-  }
-
-  /**
-   * Returns mean aggregation. Null values are skipped.
-   * @param index Column on which mean aggregation is to be performed.
-   * @return mean aggregation of column `index`
-   * @deprecated please use Aggregation.mean.onColumn
-   */
-  @Deprecated
-  public static Aggregate mean(int index) {
-    return Aggregate.mean(index);
-  }
-
-  /**
-   * Returns median aggregation. Null values are skipped.
-   * @param index Column on which median aggregation is to be performed.
-   * @return median aggregation of column `index`
-   * @deprecated please use Aggregation.median.onColumn
-   */
-  @Deprecated
-  public static Aggregate median(int index) {
-    return Aggregate.median(index);
-  }
-
-  /**
-   * Returns first aggregation.
-   * @param index Column on which first aggregation is to be performed.
-   * @param includeNulls Specifies whether null values are included in the aggregate operation.
-   * @return first aggregation of column `index`
-   * @deprecated please use Aggregation.nth.onColumn
-   */
-  @Deprecated
-  public static Aggregate first(int index, boolean includeNulls) {
-    return Aggregate.first(index, includeNulls);
-  }
-
-  /**
-   * Returns last aggregation.
-   * @param index Column on which last aggregation is to be performed.
-   * @param includeNulls Specifies whether null values are included in the aggregate operation.
-   * @return last aggregation of column `index`
-   * @deprecated please use Aggregation.nth.onColumn
-   */
-  @Deprecated
-  public static Aggregate last(int index, boolean includeNulls) {
-    return Aggregate.last(index, includeNulls);
-  }
-
-  /**
    * Returns aggregate operations grouped by columns provided in indices
    * @param groupByOptions Options provided in the builder
    * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+  public GroupByOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
   }
 
   /**
    * Returns aggregate operations grouped by columns provided in indices
-   * null is considered as key while grouping.
-   * @param indices columnns to be considered for groupBy
+   * with default options as below:
+   *  - null is considered as key while grouping.
+   *  - keys are not presorted.
+   *  - empty key order array.
+   *  - empty null order array.
+   * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(int... indices) {
+  public GroupByOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
         indices);
   }
 
-  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
+  private GroupByOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
+    return new GroupByOperation(this, groupByOptions, operationIndicesArray);
   }
 
   /**
@@ -1706,10 +2010,34 @@ public final class Table implements AutoCloseable {
    * @return table containing copy of all elements of this table passing
    * the filter defined by the boolean mask
    */
-  public Table filter(ColumnVector mask) {
+  public Table filter(ColumnView mask) {
     assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
+  }
+
+  /**
+   * Copy rows of the current table to an output table such that duplicate rows in the key columns
+   * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
+   * a subset of the current table columns and their indices are specified by an input array.
+   *
+   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
+   * guaranteed in the future.
+   *
+   * @param keyColumns Array of indices representing key columns from the current table.
+   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
+   *                  copy the last row with a duplicated key.
+   * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
+   *                   key columns to check for uniqueness.
+   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
+   *                    after non-null elements when sorting the table.
+   *
+   * @return Table with unique keys.
+   */
+  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
+                              boolean nullsBefore) {
+    assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
   }
 
   /**
@@ -1942,8 +2270,8 @@ public final class Table implements AutoCloseable {
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap) {
-    return gather(gatherMap, true);
+  public Table gather(ColumnView gatherMap) {
+    return gather(gatherMap, OutOfBoundsPolicy.NULLIFY);
   }
 
   /**
@@ -1954,17 +2282,76 @@ public final class Table implements AutoCloseable {
    *
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
-
+   *
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param checkBounds if true bounds checking is performed on the value. Be very careful
-   *                    when setting this to false.
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
+    boolean checkBounds = outOfBoundsPolicy == OutOfBoundsPolicy.NULLIFY;
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
-  private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
+  /**
+   * Scatters values from the source table into the target table out-of-place, returning a new
+   * result table. The scatter is performed according to a scatter map such that row `scatterMap[i]`
+   * of the destination table gets row `i` of the source table. All other rows of the destination
+   * table equal corresponding rows of the target table.
+   *
+   * The number of columns in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which rows from the current table are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source table into the
+   *         target table.
+   */
+  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
+        checkBounds));
+  }
+
+  /**
+   * Scatters values from the source rows into the target table out-of-place, returning a new result
+   * table. The scatter is performed according to a scatter map such that row `scatterMap[i]` of the
+   * destination table is replaced by the source row `i`. All other rows of the destination table
+   * equal corresponding rows of the target table.
+   *
+   * The number of elements in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param source The input scalars containing values to be scattered into the target table.
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which the values from source are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source values into the
+   *         target table.
+   */
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
+                              boolean checkBounds) {
+    long[] srcScalarHandles = new long[source.length];
+    for(int i = 0; i < source.length; ++i) {
+      assert source[i] != null : "Scalar vectors passed in should not contain null";
+      srcScalarHandles[i] = source[i].getScalarHandle();
+    }
+    return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
+        target.getNativeView(), checkBounds));
+  }
+
+  private static GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -1998,6 +2385,210 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows resulting from a left equi-join between two tables.
+   * It is assumed this table instance holds the key columns from the left table, and the
+   * {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return row count of the join result
+   */
+  public long leftJoinRowCount(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    return leftJoinRowCount(getNativeView(), rightHash.getNativeView());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData = leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #leftJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData = leftHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows from the result of a left join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @return row count for the join result
+   */
+  public long conditionalLeftJoinRowCount(Table rightTable, CompiledExpression condition) {
+    return conditionalLeftJoinRowCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalLeftJoinGatherMaps(Table rightTable,
+                                                   CompiledExpression condition) {
+    long[] gatherMapData =
+        conditionalLeftJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalLeftJoinGatherMaps(Table rightTable,
+                                                   CompiledExpression condition,
+                                                   long outputRowCount) {
+    long[] gatherMapData =
+        conditionalLeftJoinGatherMapsWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes output size information for a left join between two tables using a mix of equality
+   * and inequality conditions. The entire join condition is assumed to be a logical AND of the
+   * equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedLeftJoinSize(Table leftKeys, Table rightKeys,
+                                                Table leftConditional, Table rightConditional,
+                                                CompiledExpression condition,
+                                                NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftJoinSize(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedLeftJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] gatherMapData = mixedLeftJoinGatherMaps(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedLeftJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedLeftJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality,
+                                                    MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftJoinGatherMapsWithSize(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL,
+            joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
    * Computes the gather maps that can be used to manifest the result of an inner equi-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
@@ -2015,6 +2606,209 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows resulting from an inner equi-join between two tables.
+   * @param otherHash hash table built from join key columns from the other table
+   * @return row count of the join result
+   */
+  public long innerJoinRowCount(HashJoin otherHash) {
+    if (getNumberOfColumns() != otherHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "otherKeys: " + otherHash.getNumberOfColumns());
+    }
+    return innerJoinRowCount(getNativeView(), otherHash.getNativeView());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData = innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #innerJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData = innerHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows from the result of an inner join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @return row count for the join result
+   */
+  public long conditionalInnerJoinRowCount(Table rightTable,
+                                           CompiledExpression condition) {
+    return conditionalInnerJoinRowCount(getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalInnerJoinGatherMaps(Table rightTable,
+                                                    CompiledExpression condition) {
+    long[] gatherMapData =
+        conditionalInnerJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalInnerJoinGatherMaps(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    long outputRowCount) {
+    long[] gatherMapData =
+        conditionalInnerJoinGatherMapsWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes output size information for an inner join between two tables using a mix of equality
+   * and inequality conditions. The entire join condition is assumed to be a logical AND of the
+   * equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedInnerJoinSize(Table leftKeys, Table rightKeys,
+                                                 Table leftConditional, Table rightConditional,
+                                                 CompiledExpression condition,
+                                                 NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedInnerJoinSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedInnerJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality) {
+    long[] gatherMapData = mixedInnerJoinGatherMaps(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedInnerJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedInnerJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality,
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedInnerJoinGatherMapsWithSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2039,7 +2833,115 @@ public final class Table implements AutoCloseable {
     return buildJoinGatherMaps(gatherMapData);
   }
 
-  private GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+  /**
+   * Computes the number of rows resulting from a full equi-join between two tables.
+   * It is assumed this table instance holds the key columns from the left table, and the
+   * {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Note that unlike {@link #leftJoinRowCount(HashJoin)} and {@link #innerJoinRowCount(HashJoin),
+   * this will perform some redundant calculations compared to
+   * {@link #fullJoinGatherMaps(HashJoin, long)}.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return row count of the join result
+   */
+  public long fullJoinRowCount(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    return fullJoinRowCount(getNativeView(), rightHash.getNativeView());
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightHash hash table built from join key columns from the right table
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(HashJoin rightHash) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData = fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the {@link HashJoin} argument has been constructed from the key columns from the right table.
+   * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
+   * tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #fullJoinRowCount(HashJoin)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightHash hash table built from join key columns from the right table
+   * @param outputRowCount number of output rows in the join result
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
+    if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightHash.getNumberOfColumns());
+    }
+    long[] gatherMapData = fullHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @return left and right table gather maps
+   */
+  public GatherMap[] conditionalFullJoinGatherMaps(Table rightTable,
+                                                   CompiledExpression condition) {
+    long[] gatherMapData =
+        conditionalFullJoinGatherMaps(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle());
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a full join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * Two {@link GatherMap} instances will be returned that can be used to gather
+   * the left and right tables, respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap[] mixedFullJoinGatherMaps(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] gatherMapData = mixedFullJoinGatherMaps(
+            leftKeys.getNativeView(), rightKeys.getNativeView(),
+            leftConditional.getNativeView(), rightConditional.getNativeView(),
+            condition.getNativeHandle(),
+            nullEquality == NullEquality.EQUAL);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  private static GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -2068,6 +2970,152 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Computes the number of rows from the result of a left semi join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @return row count for the join result
+   */
+  public long conditionalLeftSemiJoinRowCount(Table rightTable,
+                                              CompiledExpression condition) {
+    return conditionalLeftSemiJoinRowCount(getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle());
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @return left table gather map
+   */
+  public GatherMap conditionalLeftSemiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition) {
+    long[] gatherMapData =
+        conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle());
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param outputRowCount number of output rows in the join result
+   * @return left table gather map
+   */
+  public GatherMap conditionalLeftSemiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    long outputRowCount) {
+    long[] gatherMapData =
+        conditionalLeftSemiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), outputRowCount);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes output size information for a left semi join between two tables using a mix of
+   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
+   * of the equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedLeftSemiJoinSize(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftSemiJoinSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftSemiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality) {
+    long[] gatherMapData = mixedLeftSemiJoinGatherMap(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left semi join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedLeftSemiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftSemiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality,
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftSemiJoinGatherMapWithSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
    * Computes the gather map that can be used to manifest the result of a left anti-join between
    * two tables. It is assumed this table instance holds the key columns from the left table, and
    * the table argument represents the key columns from the right table. The {@link GatherMap}
@@ -2086,6 +3134,169 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
     return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the number of rows from the result of a left anti join between two tables when a
+   * conditional expression is true. It is assumed this table instance holds the columns from
+   * the left table, and the table argument represents the columns from the right table.
+   * @param rightTable the right side table of the join in the join
+   * @param condition conditional expression to evaluate during the join
+   * @return row count for the join result
+   */
+  public long conditionalLeftAntiJoinRowCount(Table rightTable,
+                                              CompiledExpression condition) {
+    return conditionalLeftAntiJoinRowCount(getNativeView(), rightTable.getNativeView(),
+        condition.getNativeHandle());
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @return left table gather map
+   */
+  public GatherMap conditionalLeftAntiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition) {
+    long[] gatherMapData =
+        conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle());
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables when a conditional expression is true. It is assumed this table instance holds
+   * the columns from the left table, and the table argument represents the columns from the
+   * right table. The {@link GatherMap} instance returned can be used to gather the left table
+   * to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * This interface allows passing an output row count that was previously computed from
+   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression)}.
+   * WARNING: Passing a row count that is smaller than the actual row count will result
+   * in undefined behavior.
+   * @param rightTable the right side table of the join
+   * @param condition conditional expression to evaluate during the join
+   * @param outputRowCount number of output rows in the join result
+   * @return left table gather map
+   */
+  public GatherMap conditionalLeftAntiJoinGatherMap(Table rightTable,
+                                                    CompiledExpression condition,
+                                                    long outputRowCount) {
+    long[] gatherMapData =
+        conditionalLeftAntiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
+            condition.getNativeHandle(), outputRowCount);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes output size information for a left anti join between two tables using a mix of
+   * equality and inequality conditions. The entire join condition is assumed to be a logical AND
+   * of the equality condition and inequality condition.
+   * NOTE: It is the responsibility of the caller to close the resulting size information object
+   * or native resources can be leaked!
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return size information for the join
+   */
+  public static MixedJoinSize mixedLeftAntiJoinSize(Table leftKeys, Table rightKeys,
+                                                    Table leftConditional, Table rightConditional,
+                                                    CompiledExpression condition,
+                                                    NullEquality nullEquality) {
+    long[] mixedSizeInfo = mixedLeftAntiJoinSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(), nullEquality == NullEquality.EQUAL);
+    assert mixedSizeInfo.length == 2;
+    long outputRowCount = mixedSizeInfo[0];
+    long matchesColumnHandle = mixedSizeInfo[1];
+    return new MixedJoinSize(outputRowCount, new ColumnVector(matchesColumnHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftAntiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality) {
+    long[] gatherMapData = mixedLeftAntiJoinGatherMap(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti join between
+   * two tables using a mix of equality and inequality conditions. The entire join condition is
+   * assumed to be a logical AND of the equality condition and inequality condition.
+   * A {@link GatherMap} instance will be returned that can be used to gather
+   * the left table to produce the result of the left anti join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * This interface allows passing the size result from
+   * {@link #mixedLeftAntiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
+   * when the output size was computed previously.
+   * @param leftKeys the left table's key columns for the equality condition
+   * @param rightKeys the right table's key columns for the equality condition
+   * @param leftConditional the left table's columns needed to evaluate the inequality condition
+   * @param rightConditional the right table's columns needed to evaluate the inequality condition
+   * @param condition the inequality condition of the join
+   * @param nullEquality whether nulls should compare as equal
+   * @param joinSize mixed join size result
+   * @return left and right table gather maps
+   */
+  public static GatherMap mixedLeftAntiJoinGatherMap(Table leftKeys, Table rightKeys,
+                                                     Table leftConditional, Table rightConditional,
+                                                     CompiledExpression condition,
+                                                     NullEquality nullEquality,
+                                                     MixedJoinSize joinSize) {
+    long[] gatherMapData = mixedLeftAntiJoinGatherMapWithSize(
+        leftKeys.getNativeView(), rightKeys.getNativeView(),
+        leftConditional.getNativeView(), rightConditional.getNativeView(),
+        condition.getNativeHandle(),
+        nullEquality == NullEquality.EQUAL,
+        joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * For details about how this method functions refer to
+   * {@link #convertToRowsFixedWidthOptimized()}.
+   *
+   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
+   * is that this can handle rougly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
+   * can only handle columns less than 100
+   */
+  public ColumnVector[] convertToRows() {
+    long[] ptrs = convertToRows(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
   }
 
   /**
@@ -2162,8 +3373,8 @@ public final class Table implements AutoCloseable {
    * There are some limits on the size of a single row.  If the row is larger than 1KB this will
    * throw an exception.
    */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
+  public ColumnVector[] convertToRowsFixedWidthOptimized() {
+    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
     for (int i = 0; i < ptrs.length; i++) {
       ret[i] = new ColumnVector(ptrs[i]);
@@ -2174,13 +3385,14 @@ public final class Table implements AutoCloseable {
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
    * @param vec the row data to process.
    * @param schema the types of each column.
    * @return the parsed table.
    */
-  public static Table convertFromRows(ColumnVector vec, DType ... schema) {
-    // TODO at some point we need a schema that support nesting so we can support nested types
-    // TODO we will need scale at some point very soon too
+  public static Table convertFromRows(ColumnView vec, DType ... schema) {
     int[] types = new int[schema.length];
     int[] scale = new int[schema.length];
     for (int i = 0; i < schema.length; i++) {
@@ -2189,6 +3401,27 @@ public final class Table implements AutoCloseable {
 
     }
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
+  }
+
+  /**
+   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
+   * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
+   * @param vec the row data to process.
+   * @param schema the types of each column.
+   * @return the parsed table.
+   */
+  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
+    int[] types = new int[schema.length];
+    int[] scale = new int[schema.length];
+    for (int i = 0; i < schema.length; i++) {
+      types[i] = schema[i].typeId.nativeId;
+      scale[i] = schema[i].getScale();
+
+    }
+    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
   }
 
   /**
@@ -2233,6 +3466,34 @@ public final class Table implements AutoCloseable {
     }
 
     return result;
+  }
+
+
+  /**
+   * Gather `n` samples from table randomly
+   * Note: does not preserve the ordering
+   * Example:
+   * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+   * n: 3
+   * replacement: false
+   *
+   * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+   *
+   * replacement: true
+   *
+   * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+   *
+   * throws "logic_error" if `n` > table rows and `replacement` == FALSE.
+   * throws "logic_error" if `n` < 0.
+   *
+   * @param n non-negative number of samples expected from table
+   * @param replacement Allow or disallow sampling of the same row more than once.
+   * @param seed Seed value to initiate random number generator.
+   *
+   * @return Table containing samples
+   */
+  public Table sample(long n, boolean replacement, long seed) {
+    return new Table(sample(nativeHandle, n, replacement, seed));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2315,14 +3576,14 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Class representing aggregate operations
+   * Class representing groupby operations
    */
-  public static final class AggregateOperation {
+  public static final class GroupByOperation {
 
     private final Operation operation;
     private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
+    GroupByOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
       this.groupByOptions = groupByOptions;
     }
@@ -2343,7 +3604,7 @@ public final class Table implements AutoCloseable {
      *                  1,   2
      *                  2,   1 ==> aggregated count
      */
-    public Table aggregate(AggregationOnColumn... aggregates) {
+    public Table aggregate(GroupByAggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -2356,9 +3617,9 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        AggregationOnColumn agg = aggregates[outputIndex];
+        GroupByAggregationOnColumn agg = aggregates[outputIndex];
         ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg, outputIndex + keysLength);
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
       long[] aggOperationInstances = new long[totalOps];
@@ -2379,7 +3640,10 @@ public final class Table implements AutoCloseable {
             operation.indices,
             aggColumnIndexes,
             aggOperationInstances,
-            groupByOptions.getIgnoreNullKeys()))) {
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
 
@@ -2406,27 +3670,27 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Computes row-based window aggregation functions on the Table/projection, 
+     * Computes row-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
-     * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     *
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
+     *
      *  [ // user_id,  sales_amt
      *    { "user1",     10      },
      *    { "user2",     20      },
@@ -2438,19 +3702,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",     60      },
      *    { "user2",     40      }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
      *      <-------user1-------->|<------user2------->
-     * 
+     *
      * The SUM aggregation is applied with 1 preceding and 1 following
      * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
      * yielding the following column:
-     * 
+     *
      *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
@@ -2469,7 +3733,7 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
-          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: " 
+          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
                   + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
@@ -2489,8 +3753,10 @@ public final class Table implements AutoCloseable {
           for (AggregationOverWindow operation: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
             aggInstances[opIndex] = operation.createNativeInstance();
-            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            Scalar p = operation.getWindowOptions().getPrecedingScalar();
+            aggPrecedingWindows[opIndex] = p == null || !p.isValid() ? 0 : p.getInt();
+            Scalar f = operation.getWindowOptions().getFollowingScalar();
+            aggFollowingWindows[opIndex] = f == null || ! f.isValid() ? 1 : f.getInt();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
@@ -2526,29 +3792,29 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Computes time-range-based window aggregation functions on the Table/projection, 
+     * Computes range-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
-     * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     *
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
      *  2. the number of DAYS preceding and following the current row's date, to consider in the window
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
-     *  [ // user,  sales_amt,  YYYYMMDD (date)  
+     *
+     *  [ // user,  sales_amt,  YYYYMMDD (date)
      *    { "user1",   10,      20200101    },
      *    { "user2",   20,      20200101    },
      *    { "user1",   20,      20200102    },
@@ -2559,26 +3825,26 @@ public final class Table implements AutoCloseable {
      *    { "user1",   60,      20200107    },
      *    { "user2",   40,      20200104    }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
      * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
      *                    <-------user1-------->|<---------user2--------->
-     * 
-     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
+     *
+     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period.
      * The aggregation window is thus 3 *days* wide, yielding the following output column:
-     * 
+     *
      *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
-     * {@link WindowOptions.FrameType#RANGE},
+     * {@link WindowOptions.FrameType#RANGE} or the orderBys are not of (Boolean-exclusive) integral type
      * i.e. the timestamp-column was not specified for the aggregation.
      */
-    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
+    public Table aggregateWindowsOverRanges(AggregationOverWindow... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
       // in a single pass.
@@ -2590,51 +3856,82 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
-          throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: " 
-                  + agg.getWindowOptions().getFrameType());
+          throw new IllegalArgumentException("Expected range-based window specification. Unexpected window type: "
+              + agg.getWindowOptions().getFrameType());
         }
+
+        DType orderByType = operation.table.getColumn(agg.getWindowOptions().getOrderByColumnIndex()).getType();
+        switch (orderByType.getTypeId()) {
+          case INT8:
+          case INT16:
+          case INT32:
+          case INT64:
+          case UINT8:
+          case UINT16:
+          case UINT32:
+          case UINT64:
+          case TIMESTAMP_MILLISECONDS:
+          case TIMESTAMP_SECONDS:
+          case TIMESTAMP_DAYS:
+          case TIMESTAMP_NANOSECONDS:
+          case TIMESTAMP_MICROSECONDS:
+            break;
+          default:
+            throw new IllegalArgumentException("Expected range-based window orderBy's " +
+                "type: integral (Boolean-exclusive) and timestamp");
+        }
+
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
         totalOps += ops.add(agg, outputIndex);
       }
 
       int[] aggColumnIndexes = new int[totalOps];
-      int[] timestampColumnIndexes = new int[totalOps];
-      boolean[] isTimestampOrderAscending = new boolean[totalOps];
+      int[] orderByColumnIndexes = new int[totalOps];
+      boolean[] isOrderByOrderAscending = new boolean[totalOps];
       long[] aggInstances = new long[totalOps];
+      long[] aggPrecedingWindows = new long[totalOps];
+      long[] aggFollowingWindows = new long[totalOps];
       try {
-        int[] aggPrecedingWindows = new int[totalOps];
-        int[] aggFollowingWindows = new int[totalOps];
         boolean[] aggPrecedingWindowsUnbounded = new boolean[totalOps];
         boolean[] aggFollowingWindowsUnbounded = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
           int columnIndex = entry.getKey();
-          for (AggregationOverWindow operation: entry.getValue().operations()) {
+          for (AggregationOverWindow op: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
-            aggInstances[opIndex] = operation.createNativeInstance();
-            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
-            aggPrecedingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
-            aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
-            aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
-            assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
-            timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
-            isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
-            if (operation.getDefaultOutput() != 0) {
+            aggInstances[opIndex] = op.createNativeInstance();
+            Scalar p = op.getWindowOptions().getPrecedingScalar();
+            Scalar f = op.getWindowOptions().getFollowingScalar();
+            if ((p == null || !p.isValid()) && !op.getWindowOptions().isUnboundedPreceding()) {
+              throw new IllegalArgumentException("Some kind of preceding must be set and a preceding column is not currently supported");
+            }
+            if ((f == null || !f.isValid()) && !op.getWindowOptions().isUnboundedFollowing()) {
+              throw new IllegalArgumentException("some kind of following must be set and a follow column is not currently supported");
+            }
+            aggPrecedingWindows[opIndex] = p == null ? 0 : p.getScalarHandle();
+            aggFollowingWindows[opIndex] = f == null ? 0 : f.getScalarHandle();
+            aggPrecedingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedPreceding();
+            aggFollowingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedFollowing();
+            aggMinPeriods[opIndex] = op.getWindowOptions().getMinPeriods();
+            assert (op.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
+            orderByColumnIndexes[opIndex] = op.getWindowOptions().getOrderByColumnIndex();
+            isOrderByOrderAscending[opIndex] = op.getWindowOptions().isOrderByOrderAscending();
+            if (op.getDefaultOutput() != 0) {
               throw new IllegalArgumentException("Operations with a default output are not " +
                   "supported on time based rolling windows");
             }
+
             opIndex++;
           }
         }
         assert opIndex == totalOps : opIndex + " == " + totalOps;
 
-        try (Table aggregate = new Table(timeRangeRollingWindowAggregate(
+        try (Table aggregate = new Table(rangeRollingWindowAggregate(
             operation.table.nativeHandle,
             operation.indices,
-            timestampColumnIndexes,
-            isTimestampOrderAscending,
+            orderByColumnIndexes,
+            isOrderByOrderAscending,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
             aggPrecedingWindowsUnbounded, aggFollowingWindowsUnbounded,
@@ -2657,6 +3954,137 @@ public final class Table implements AutoCloseable {
       } finally {
         Aggregation.close(aggInstances);
       }
+    }
+
+    public Table scan(GroupByScanAggregationOnColumn... aggregates) {
+      assert aggregates != null;
+
+      // To improve performance and memory we want to remove duplicate operations
+      // and also group the operations by column so hopefully cudf can do multiple aggregations
+      // in a single pass.
+
+      // Use a tree map to make debugging simpler (columns are all in the same order)
+      TreeMap<Integer, ColumnOps> groupedOps = new TreeMap<>();
+      // Total number of operations that will need to be done.
+      int keysLength = operation.indices.length;
+      int totalOps = 0;
+      for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
+        GroupByScanAggregationOnColumn agg = aggregates[outputIndex];
+        ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
+        totalOps += ops.add(agg.getWrapped().getWrapped(), outputIndex + keysLength);
+      }
+      int[] aggColumnIndexes = new int[totalOps];
+      long[] aggOperationInstances = new long[totalOps];
+      try {
+        int opIndex = 0;
+        for (Map.Entry<Integer, ColumnOps> entry: groupedOps.entrySet()) {
+          int columnIndex = entry.getKey();
+          for (Aggregation operation: entry.getValue().operations()) {
+            aggColumnIndexes[opIndex] = columnIndex;
+            aggOperationInstances[opIndex] = operation.createNativeInstance();
+            opIndex++;
+          }
+        }
+        assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+        try (Table aggregate = new Table(groupByScan(
+            operation.table.nativeHandle,
+            operation.indices,
+            aggColumnIndexes,
+            aggOperationInstances,
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
+          // prepare the final table
+          ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
+
+          // get the key columns
+          for (int aggIndex = 0; aggIndex < keysLength; aggIndex++) {
+            finalCols[aggIndex] = aggregate.getColumn(aggIndex);
+          }
+
+          int inputColumn = keysLength;
+          // Now get the aggregation columns
+          for (ColumnOps ops: groupedOps.values()) {
+            for (List<Integer> indices: ops.outputIndices()) {
+              for (int outIndex: indices) {
+                finalCols[outIndex] = aggregate.getColumn(inputColumn);
+              }
+              inputColumn++;
+            }
+          }
+          return new Table(finalCols);
+        }
+      } finally {
+        Aggregation.close(aggOperationInstances);
+      }
+    }
+
+    public Table replaceNulls(ReplacePolicyWithColumn... replacements) {
+      assert replacements != null;
+
+      // TODO in the future perhaps to improve performance and memory we want to
+      //  remove duplicate operations.
+
+      boolean[] isPreceding = new boolean[replacements.length];
+      int [] columnIndexes = new int[replacements.length];
+
+      for (int index = 0; index < replacements.length; index++) {
+        isPreceding[index] = replacements[index].policy.isPreceding;
+        columnIndexes[index] = replacements[index].column;
+      }
+
+      return new Table(groupByReplaceNulls(
+          operation.table.nativeHandle,
+          operation.indices,
+          columnIndexes,
+          isPreceding,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest()));
+    }
+
+    /**
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * This API will be used by some grouping related operators to process the data
+     * group by group.
+     *
+     * Example:
+     *   Grouping column index: 0
+     *   Input: A table of 3 rows (two groups)
+     *             a    1
+     *             b    2
+     *             b    3
+     *
+     * Result:
+     *   Two tables, one group one table.
+     *   Result[0]:
+     *              a    1
+     *
+     *   Result[1]:
+     *              b    2
+     *              b    3
+     *
+     * Note, the order of the groups returned is NOT always the same with that in the input table.
+     * The split is done in native to avoid copying the offset array to JVM.
+     *
+     * @return The tables split according to the groups in the table. NOTE: It is the
+     * responsibility of the caller to close the result. Each table and column holds a
+     * reference to the original buffer. But both the buffer and the table must be closed
+     * for the memory to be released.
+     */
+    public ContiguousTable[] contiguousSplitGroups() {
+      return Table.contiguousSplitGroups(
+          operation.table.nativeHandle,
+          operation.indices,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest());
     }
   }
 
@@ -2851,18 +4279,6 @@ public final class Table implements AutoCloseable {
           type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
-    }
-
-    /**
-     * Hash partition a table into the specified number of partitions.
-     * @deprecated Use {@link #hashPartition(int)}
-     * @param numberOfPartitions - number of partitions to use
-     * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
-     * {@link Table} class
-     */
-    @Deprecated
-    public PartitionedTable partition(int numberOfPartitions) {
-      return hashPartition(numberOfPartitions);
     }
   }
 
@@ -3074,6 +4490,16 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal128Column(int scale, RoundingMode mode, BigInteger... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x, scale, new MathContext(38, mode));
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -3118,6 +4544,7 @@ public final class Table implements AutoCloseable {
           break;
         case DECIMAL32:
         case DECIMAL64:
+        case DECIMAL128:
           int scale = type.getScale();
           if (dataArray instanceof Integer[]) {
             BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))

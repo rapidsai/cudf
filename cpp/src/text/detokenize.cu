@@ -16,14 +16,13 @@
 
 #include <nvtext/tokenize.hpp>
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -125,7 +124,7 @@ struct token_row_offsets_fn {
 
   // non-integral types throw an exception
   template <typename T, typename... Args, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(Args&&... args) const
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(Args&&...) const
   {
     CUDF_FAIL("The detokenize indices parameter must be an integer type.");
   }
@@ -142,7 +141,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   CUDF_EXPECTS(row_indices.size() == strings.size(),
                "Parameter row_indices must be the same size as the input column");
   CUDF_EXPECTS(row_indices.has_nulls() == false, "Parameter row_indices must not have nulls");
@@ -175,9 +174,8 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   // build the chars column - append each source token to the appropriate output row
   cudf::size_type const total_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), output_count, stream);
-  auto chars_column =
-    cudf::strings::detail::create_chars_child_column(output_count, total_bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto chars_column = cudf::strings::detail::create_chars_child_column(total_bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -187,13 +185,8 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
   chars_column->set_null_count(0);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(output_count,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    output_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

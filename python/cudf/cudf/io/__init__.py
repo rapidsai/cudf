@@ -12,3 +12,4 @@ from cudf.io.parquet import (
     read_parquet_metadata,
     write_to_dataset,
 )
+from cudf.io.text import read_text

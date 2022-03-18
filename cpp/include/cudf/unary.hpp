@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,28 +28,28 @@ namespace cudf {
  */
 
 enum class unary_operator : int32_t {
-  SIN,         // < Trigonometric sine
-  COS,         // < Trigonometric cosine
-  TAN,         // < Trigonometric tangent
-  ARCSIN,      // < Trigonometric sine inverse
-  ARCCOS,      // < Trigonometric cosine inverse
-  ARCTAN,      // < Trigonometric tangent inverse
-  SINH,        // < Hyperbolic sine
-  COSH,        // < Hyperbolic cosine
-  TANH,        // < Hyperbolic tangent
-  ARCSINH,     // < Hyperbolic sine inverse
-  ARCCOSH,     // < Hyperbolic cosine inverse
-  ARCTANH,     // < Hyperbolic tangent inverse
-  EXP,         // < Exponential (base e, Euler number)
-  LOG,         // < Natural Logarithm (base e)
-  SQRT,        // < Square-root (x^0.5)
-  CBRT,        // < Cube-root (x^(1.0/3))
-  CEIL,        // < Smallest integer value not less than arg
-  FLOOR,       // < largest integer value not greater than arg
-  ABS,         // < Absolute value
-  RINT,        // < Rounds the floating-point argument arg to an integer value
-  BIT_INVERT,  // < Bitwise Not (~)
-  NOT,         // < Logical Not (!)
+  SIN,         ///< Trigonometric sine
+  COS,         ///< Trigonometric cosine
+  TAN,         ///< Trigonometric tangent
+  ARCSIN,      ///< Trigonometric sine inverse
+  ARCCOS,      ///< Trigonometric cosine inverse
+  ARCTAN,      ///< Trigonometric tangent inverse
+  SINH,        ///< Hyperbolic sine
+  COSH,        ///< Hyperbolic cosine
+  TANH,        ///< Hyperbolic tangent
+  ARCSINH,     ///< Hyperbolic sine inverse
+  ARCCOSH,     ///< Hyperbolic cosine inverse
+  ARCTANH,     ///< Hyperbolic tangent inverse
+  EXP,         ///< Exponential (base e, Euler number)
+  LOG,         ///< Natural Logarithm (base e)
+  SQRT,        ///< Square-root (x^0.5)
+  CBRT,        ///< Cube-root (x^(1.0/3))
+  CEIL,        ///< Smallest integer value not less than arg
+  FLOOR,       ///< largest integer value not greater than arg
+  ABS,         ///< Absolute value
+  RINT,        ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,  ///< Bitwise Not (~)
+  NOT,         ///< Logical Not (!)
 };
 
 /**
@@ -101,7 +101,7 @@ std::unique_ptr<cudf::column> is_valid(
  *
  * Supports only fixed-width types.
  *
- * @param column_view Input column
+ * @param input Input column
  * @param out_type Desired datatype of output column
  * @param mr Device memory resource used to allocate the returned column's device memory
  *

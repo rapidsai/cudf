@@ -51,6 +51,37 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Looks up a "map" column by specified key to see if the key exists or not,
+ *        and returns a cudf column of bool value.
+ *
+ * The map-column is represented as follows:
+ *
+ *  list_view<struct_view< string_view, string_view > >.
+ *                         <---KEY--->  <--VALUE-->
+ *
+ * The string_view struct members are the key and value, respectively.
+ * For each row in the input list column, if the key is not found, false will be returned for that
+ * row.
+ * Note: when search for the scalar key of "null", a column full of "false" will be returned because
+ *       map_contains is leveraging cudf::list:contains.
+ *
+ * @param map_column The input "map" column to be searched. Must be of
+ *                   type list_view<struct_view<string_view, string_view>>.
+ * @param lookup_key The search key, whose index(offset) is to be returned for each list row
+ * @param has_nulls  Whether the input column might contain null list-rows, or null keys.
+ * @param stream     The CUDA stream
+ * @param mr         The device memory resource to be used for allocations
+ * @return           An boolean column reflecting the existence of the key in each row in the map
+ *                   column. True means the lookup_key is found in that row.
+ * @throw cudf::logic_error If the input column is not of type
+ *                          list_view<struct_view<string_view, string_view>>
+ */
+std::unique_ptr<column>
+map_contains(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
+             rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+             rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
 } // namespace jni
 
 } // namespace cudf

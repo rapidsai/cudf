@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/copying.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -44,12 +45,53 @@ inline bool __device__ out_of_bounds(size_type size, size_type idx)
   return idx < 0 || idx >= size;
 }
 
+std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view const& input,
+                                                          size_type offset,
+                                                          scalar const& fill_value,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource* mr)
+{
+  auto const size = input.size();
+  auto func_validity =
+    [size, offset, fill = fill_value.validity_data(), input] __device__(size_type idx) {
+      auto src_idx = idx - offset;
+      return out_of_bounds(size, src_idx) ? *fill : input.is_valid(src_idx);
+    };
+  return detail::valid_if(thrust::make_counting_iterator<size_type>(0),
+                          thrust::make_counting_iterator<size_type>(size),
+                          func_validity,
+                          stream,
+                          mr);
+}
+
 struct shift_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same_v<cudf::string_view, T>,
+                   std::unique_ptr<column>>
+  operator()(Args&&...)
   {
-    CUDF_FAIL("shift does not support non-fixed-width types.");
+    CUDF_FAIL("shift only supports fixed-width or string types.");
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same_v<cudf::string_view, T>, std::unique_ptr<column>> operator()(
+    column_view const& input,
+    size_type offset,
+    scalar const& fill_value,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    auto output = cudf::strings::detail::shift(
+      cudf::strings_column_view(input), offset, fill_value, stream, mr);
+
+    if (input.nullable() || not fill_value.is_valid(stream)) {
+      auto const d_input = column_device_view::create(input, stream);
+      auto mask_pair     = create_null_mask(*d_input, offset, fill_value, stream, mr);
+      output->set_null_mask(std::move(std::get<0>(mask_pair)));
+      output->set_null_count(std::get<1>(mask_pair));
+    }
+
+    return output;
   }
 
   template <typename T>
@@ -63,34 +105,27 @@ struct shift_functor {
     using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
-    auto device_input = column_device_view::create(input);
+    auto device_input = column_device_view::create(input, stream);
     auto output =
       detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
-    auto device_output = mutable_column_device_view::create(*output);
+    auto device_output = mutable_column_device_view::create(*output, stream);
 
-    auto size        = input.size();
-    auto index_begin = thrust::make_counting_iterator<size_type>(0);
-    auto index_end   = thrust::make_counting_iterator<size_type>(size);
+    auto const scalar_is_valid = scalar.is_valid(stream);
 
-    if (input.nullable() || not scalar.is_valid()) {
-      auto func_validity = [size,
-                            offset,
-                            fill  = scalar.validity_data(),
-                            input = *device_input] __device__(size_type idx) {
-        auto src_idx = idx - offset;
-        return out_of_bounds(size, src_idx) ? *fill : input.is_valid(src_idx);
-      };
-
-      auto mask_pair = detail::valid_if(index_begin, index_end, func_validity, stream, mr);
-
+    if (input.nullable() || not scalar_is_valid) {
+      auto mask_pair = create_null_mask(*device_input, offset, fill_value, stream, mr);
       output->set_null_mask(std::move(std::get<0>(mask_pair)));
       output->set_null_count(std::get<1>(mask_pair));
     }
 
-    auto data = device_output->data<T>();
+    auto const size  = input.size();
+    auto index_begin = thrust::make_counting_iterator<size_type>(0);
+    auto index_end   = thrust::make_counting_iterator<size_type>(size);
+    auto data        = device_output->data<T>();
 
     // avoid assigning elements we know to be invalid.
-    if (not scalar.is_valid()) {
+    if (not scalar_is_valid) {
+      if (std::abs(offset) > size) { return output; }
       if (offset > 0) {
         index_begin = thrust::make_counting_iterator<size_type>(offset);
         data        = data + offset;

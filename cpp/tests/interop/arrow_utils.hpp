@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
 #pragma once
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
                  std::shared_ptr<arrow::Array>>
 get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
 {
@@ -50,7 +50,7 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same<T, bool>::value,
+std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>,
                  std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t> validity = {})
 {
@@ -61,7 +61,7 @@ get_arrow_array(std::initializer_list<T> elements, std::initializer_list<uint8_t
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arrow_array(
   std::vector<bool> const& data, std::vector<bool> const& mask = {})
 {
   std::shared_ptr<arrow::BooleanArray> boolean_array;
@@ -80,7 +80,7 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> get_arrow_array(
+std::enable_if_t<std::is_same_v<T, bool>, std::shared_ptr<arrow::Array>> get_arrow_array(
   std::initializer_list<bool> elements, std::initializer_list<bool> validity = {})
 {
   std::vector<bool> mask(validity);
@@ -90,7 +90,7 @@ std::enable_if_t<std::is_same<T, bool>::value, std::shared_ptr<arrow::Array>> ge
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
 get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const& mask = {})
 {
   std::shared_ptr<arrow::StringArray> string_array;
@@ -104,7 +104,7 @@ get_arrow_array(std::vector<std::string> const& data, std::vector<uint8_t> const
 }
 
 template <typename T>
-std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::shared_ptr<arrow::Array>>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::shared_ptr<arrow::Array>>
 get_arrow_array(std::initializer_list<std::string> elements,
                 std::initializer_list<uint8_t> validity = {})
 {
@@ -176,3 +176,27 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(
 
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(
   cudf::size_type length = 10000);
+
+template <typename T>
+[[nodiscard]] auto make_decimal128_arrow_array(std::vector<T> const& data,
+                                               std::optional<std::vector<int>> const& validity,
+                                               int32_t scale) -> std::shared_ptr<arrow::Array>
+{
+  auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
+
+  std::shared_ptr<arrow::Array> arr;
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+                                           arrow::default_memory_pool());
+
+  for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
+    if (validity.has_value() and not validity.value()[i]) {
+      decimal_builder.AppendNull();
+    } else {
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i));
+    }
+  }
+
+  CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+  return arr;
+}

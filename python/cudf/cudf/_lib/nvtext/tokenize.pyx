@@ -3,17 +3,17 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.tokenize cimport (
-    tokenize as cpp_tokenize,
-    detokenize as cpp_detokenize,
+    character_tokenize as cpp_character_tokenize,
     count_tokens as cpp_count_tokens,
-    character_tokenize as cpp_character_tokenize
+    detokenize as cpp_detokenize,
+    tokenize as cpp_tokenize,
 )
-from cudf._lib.column cimport Column
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 

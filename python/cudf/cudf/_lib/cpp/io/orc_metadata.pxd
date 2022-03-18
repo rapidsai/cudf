@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from libcpp.vector cimport vector
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
 

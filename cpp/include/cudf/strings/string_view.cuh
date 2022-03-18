@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,18 @@
 
 #pragma once
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.hpp>
-#include <cudf/utilities/error.hpp>
 
+#ifndef __CUDA_ARCH__
+#include <cudf/utilities/error.hpp>
+#endif
+
+// This is defined when including this header in a https://github.com/NVIDIA/jitify
+// or jitify2 source file. The jitify cannot include thrust headers at this time.
+#ifndef CUDF_JIT_UDF
 #include <thrust/count.h>
-#include <thrust/find.h>
-#include <cstdlib>
+#endif
 
 // This file should only include device code logic.
 // Host-only or host/device code should be defined in the string_view.hpp header file.
@@ -39,10 +45,19 @@ namespace detail {
  */
 __device__ inline size_type characters_in_string(const char* str, size_type bytes)
 {
-  if ((str == 0) || (bytes == 0)) return 0;
+  if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
+#ifndef CUDF_JIT_UDF
   return thrust::count_if(
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
+#else
+  size_type chars = 0;
+  auto const end  = ptr + bytes;
+  while (ptr < end) {
+    chars += is_begin_utf8_char(*ptr++);
+  }
+  return chars;
+#endif
 }
 
 /**
@@ -66,7 +81,7 @@ static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
  *
  * @return An empty string
  */
-CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view(); }
+CUDF_HOST_DEVICE inline string_view string_view::min() { return string_view(); }
 
 /**
  * @brief Return maximum value associated with the string type
@@ -77,7 +92,7 @@ CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view();
  * @return A string value which represents the highest possible valid UTF-8 encoded
  * character.
  */
-CUDA_HOST_DEVICE_CALLABLE string_view string_view::max()
+CUDF_HOST_DEVICE inline string_view string_view::max()
 {
   const char* psentinel{nullptr};
 #if defined(__CUDA_ARCH__)
@@ -92,20 +107,6 @@ __device__ inline size_type string_view::length() const
 {
   if (_length == UNKNOWN_STRING_LENGTH)
     _length = strings::detail::characters_in_string(_data, _bytes);
-  if (_length && (_char_width == UNKNOWN_CHAR_WIDTH)) {
-    uint8_t const* ptr = reinterpret_cast<uint8_t const*>(data());
-    auto const first   = strings::detail::bytes_in_utf8_byte(*ptr);
-    // see if they are all the same width
-    _char_width = (thrust::find_if(thrust::seq,
-                                   ptr,
-                                   ptr + size_bytes(),
-                                   [first](auto ch) {
-                                     auto width = strings::detail::bytes_in_utf8_byte(ch);
-                                     return (width != 0) && (width != first);
-                                   })) == (ptr + size_bytes())
-                    ? first
-                    : VARIABLE_CHAR_WIDTH;
-  }
   return _length;
 }
 
@@ -135,7 +136,8 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? ++tmp : --tmp;
+  while (adjust-- > 0)
+    offset > 0 ? ++tmp : --tmp;
   return tmp;
 }
 
@@ -143,7 +145,8 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
   string_view::const_iterator::difference_type offset)
 {
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? operator++() : operator--();
+  while (adjust-- > 0)
+    offset > 0 ? operator++() : operator--();
   return *this;
 }
 
@@ -167,7 +170,8 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
   string_view::const_iterator::difference_type offset)
 {
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? operator--() : operator++();
+  while (adjust-- > 0)
+    offset > 0 ? operator--() : operator++();
   return *this;
 }
 
@@ -176,7 +180,8 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 {
   const_iterator tmp(*this);
   size_type adjust = abs(offset);
-  while (adjust-- > 0) offset > 0 ? --tmp : ++tmp;
+  while (adjust-- > 0)
+    offset > 0 ? --tmp : ++tmp;
   return tmp;
 }
 
@@ -251,7 +256,7 @@ __device__ inline size_type string_view::byte_offset(size_type pos) const
   size_type offset = 0;
   const char* sptr = _data;
   const char* eptr = sptr + _bytes;
-  if (_char_width > 0) return pos * _char_width;
+  if (length() == size_bytes()) return pos;
   while ((pos > 0) && (sptr < eptr)) {
     size_type charbytes = strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(*sptr++));
     if (charbytes) --pos;
@@ -267,10 +272,11 @@ __device__ inline int string_view::compare(const string_view& in) const
 
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
-  size_type const len1      = size_bytes();
-  const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-  const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
-  size_type idx             = 0;
+  size_type const len1 = size_bytes();
+  const auto* ptr1     = reinterpret_cast<const unsigned char*>(this->data());
+  const auto* ptr2     = reinterpret_cast<const unsigned char*>(data);
+  if ((ptr1 == ptr2) && (bytes == len1)) return 0;
+  size_type idx = 0;
   for (; (idx < len1) && (idx < bytes); ++idx) {
     if (*ptr1 != *ptr2) return static_cast<int32_t>(*ptr1) - static_cast<int32_t>(*ptr2);
     ++ptr1;
@@ -341,7 +347,8 @@ __device__ inline size_type string_view::find(const char* str,
   const char* ptr2 = str;
   for (size_type idx = 0; idx < len1; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx) match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
+      match = (ptr1[jdx] == ptr2[jdx]);
     if (match) return character_offset(idx + spos);
     ptr1++;
   }
@@ -382,7 +389,8 @@ __device__ inline size_type string_view::rfind(const char* str,
   const char* ptr2 = str;
   for (int idx = 0; idx < len1; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx) match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
+      match = (ptr1[jdx] == ptr2[jdx]);
     if (match) return character_offset(epos - len2 - idx);
     ptr1--;  // go backwards
   }
@@ -408,7 +416,7 @@ __device__ inline string_view string_view::substr(size_type pos, size_type lengt
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
 {
-  if (_char_width > 0) return bytepos / _char_width;
+  if (length() == size_bytes()) return bytepos;
   return strings::detail::characters_in_string(data(), bytepos);
 }
 

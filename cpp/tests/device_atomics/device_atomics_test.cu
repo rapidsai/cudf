@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include <algorithm>
+#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-
-#include <cudf/detail/utilities/device_atomics.cuh>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <algorithm>
 
 template <typename T>
 __global__ void gpu_atomic_test(T* result, T* data, size_t size)
@@ -43,12 +46,12 @@ __global__ void gpu_atomic_test(T* result, T* data, size_t size)
 template <typename T, typename BinaryOp>
 constexpr inline bool is_timestamp_sum()
 {
-  return cudf::is_timestamp<T>() && std::is_same<BinaryOp, cudf::DeviceSum>::value;
+  return cudf::is_timestamp<T>() && std::is_same_v<BinaryOp, cudf::DeviceSum>;
 }
 // Disable SUM of TIMESTAMP types
 template <typename T,
           typename BinaryOp,
-          typename std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+          std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   return {};
@@ -56,7 +59,7 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 
 template <typename T,
           typename BinaryOp,
-          typename std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+          std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   T old_value = *addr;
@@ -89,13 +92,13 @@ __global__ void gpu_atomicCAS_test(T* result, T* data, size_t size)
 }
 
 template <typename T>
-typename std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(std::vector<T> const& xs)
+std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
 {
   return std::accumulate(xs.begin(), xs.end(), T{0});
 }
 
 template <typename T>
-typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(std::vector<T> const& xs)
+std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
 {
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(
@@ -112,8 +115,8 @@ struct AtomicsTest : public cudf::test::BaseFixture {
   {
     size_t vec_size = v_input.size();
 
-    // use transform from std::vector<int> instead.
-    std::vector<T> v(vec_size);
+    // use transform from thrust::host_vector<int> instead.
+    thrust::host_vector<T> v(vec_size);
     std::transform(v_input.begin(), v_input.end(), v.begin(), [](int x) {
       T t = cudf::test::make_type_param_scalar<T>(x);
       return t;
@@ -124,30 +127,33 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     exact[1] = *(std::min_element(v.begin(), v.end()));
     exact[2] = *(std::max_element(v.begin(), v.end()));
 
-    std::vector<T> result_init(9);  // +3 padding for int8 tests
+    thrust::host_vector<T> result_init(9);  // +3 padding for int8 tests
     result_init[0] = cudf::test::make_type_param_scalar<T>(0);
-    result_init[1] = std::numeric_limits<T>::max();
-    result_init[2] = std::numeric_limits<T>::min();
+    if constexpr (cudf::is_chrono<T>()) {
+      result_init[1] = T::max();
+      result_init[2] = T::min();
+    } else {
+      result_init[1] = std::numeric_limits<T>::max();
+      result_init[2] = std::numeric_limits<T>::min();
+    }
     result_init[3] = result_init[0];
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];
 
-    thrust::device_vector<T> dev_data(v);
-    thrust::device_vector<T> dev_result(result_init);
+    auto dev_data   = cudf::detail::make_device_uvector_sync(v);
+    auto dev_result = cudf::detail::make_device_uvector_sync(result_init);
 
     if (block_size == 0) { block_size = vec_size; }
 
     if (is_cas_test) {
-      gpu_atomicCAS_test<<<grid_size, block_size>>>(
-        dev_result.data().get(), dev_data.data().get(), vec_size);
+      gpu_atomicCAS_test<<<grid_size, block_size>>>(dev_result.data(), dev_data.data(), vec_size);
     } else {
-      gpu_atomic_test<<<grid_size, block_size>>>(
-        dev_result.data().get(), dev_data.data().get(), vec_size);
+      gpu_atomic_test<<<grid_size, block_size>>>(dev_result.data(), dev_data.data(), vec_size);
     }
 
-    thrust::host_vector<T> host_result(dev_result);
-    CUDA_TRY(cudaDeviceSynchronize());
-    CHECK_CUDA(0);
+    auto host_result = cudf::detail::make_host_vector_sync(dev_result);
+
+    CHECK_CUDA(rmm::cuda_stream_default.value());
 
     if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
       EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
@@ -162,7 +168,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)
@@ -272,15 +278,10 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
       return t;
     });
 
-    std::vector<T> identity = {T(~0ull),
-                               T(0),
-                               T(0),
-                               T(~0ull),
-                               T(0),
-                               T(0),
-                               T(0),
-                               T(0),
-                               T(0)};  // +3 elements padding for int8 tests
+    thrust::host_vector<T> identity(9, T{0});  // +3 elements padding for int8 tests
+    identity[0] = T(~0ull);
+    identity[3] = T(~0ull);
+
     T exact[3];
     exact[0] = std::accumulate(
       v.begin(), v.end(), identity[0], [](T acc, uint64_t i) { return acc & T(i); });
@@ -289,22 +290,20 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
     exact[2] = std::accumulate(
       v.begin(), v.end(), identity[2], [](T acc, uint64_t i) { return acc ^ T(i); });
 
-    thrust::device_vector<T> dev_result(identity);
-    thrust::device_vector<T> dev_data(v);
+    auto dev_result = cudf::detail::make_device_uvector_sync(identity);
+    auto dev_data   = cudf::detail::make_device_uvector_sync(v);
 
     if (block_size == 0) { block_size = vec_size; }
 
-    gpu_atomic_bitwiseOp_test<T>
-      <<<grid_size, block_size>>>(reinterpret_cast<T*>(dev_result.data().get()),
-                                  reinterpret_cast<T*>(dev_data.data().get()),
-                                  vec_size);
+    gpu_atomic_bitwiseOp_test<T><<<grid_size, block_size>>>(
+      reinterpret_cast<T*>(dev_result.data()), reinterpret_cast<T*>(dev_data.data()), vec_size);
 
-    thrust::host_vector<T> host_result(dev_result);
-    CUDA_TRY(cudaDeviceSynchronize());
-    CHECK_CUDA(0);
+    auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    print_exact(exact, "exact");
-    print_exact(host_result.data(), "result");
+    CHECK_CUDA(rmm::cuda_stream_default.value());
+
+    // print_exact(exact, "exact");
+    // print_exact(host_result.data(), "result");
 
     EXPECT_EQ(host_result[0], exact[0]) << "atomicAnd test failed";
     EXPECT_EQ(host_result[1], exact[1]) << "atomicOr  test failed";
@@ -314,7 +313,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
     EXPECT_EQ(host_result[5], exact[2]) << "atomicXor test(2) failed";
   }
 
-  void print_exact(const T* v, const char* msg)
+  [[maybe_unused]] void print_exact(const T* v, const char* msg)
   {
     std::cout << std::hex << std::showbase;
     std::cout << "The " << msg << " = {" << +v[0] << ", " << +v[1] << ", " << +v[2] << "}"
@@ -325,7 +324,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 using BitwiseOpTestingTypes =
   cudf::test::Types<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>;
 
-TYPED_TEST_CASE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
+TYPED_TEST_SUITE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
 
 TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
 {

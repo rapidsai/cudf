@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,28 +16,33 @@
 
 #pragma once
 
-#include "generate_benchmark_input.hpp"
+#include "generate_input.hpp"
 
 #include <memory>
 #include <random>
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-auto make_normal_dist(T range_start, T range_end)
+/**
+ * @brief Generates a normal(binomial) distribution between zero and upper_bound.
+ */
+template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
+auto make_normal_dist(T upper_bound)
 {
-  using uT            = typename std::make_unsigned<T>::type;
-  uT const range_size = range_end - range_start;
-  return std::binomial_distribution<uT>(range_size, 0.5);
+  using uT = typename std::make_unsigned<T>::type;
+  return std::binomial_distribution<uT>(upper_bound, 0.5);
 }
 
+/**
+ * @brief Generates a normal distribution between zero and upper_bound.
+ */
 template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
-auto make_normal_dist(T range_start, T range_end)
+auto make_normal_dist(T upper_bound)
 {
-  T const mean   = range_start / 2 + range_end / 2;
-  T const stddev = range_end / 6 - range_start / 6;
+  T const mean   = upper_bound / 2;
+  T const stddev = upper_bound / 6;
   return std::normal_distribution<T>(mean, stddev);
 }
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 auto make_uniform_dist(T range_start, T range_end)
 {
   return std::uniform_int_distribution<T>(range_start, range_end);
@@ -57,7 +62,7 @@ double geometric_dist_p(T range_size)
   return p ? p : std::numeric_limits<double>::epsilon();
 }
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 auto make_geometric_dist(T range_start, T range_end)
 {
   using uT = typename std::make_unsigned<T>::type;
@@ -77,13 +82,13 @@ auto make_geometric_dist(T range_start, T range_end)
 template <typename T>
 using distribution_fn = std::function<T(std::mt19937&)>;
 
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
 distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper_bound)
 {
   switch (did) {
     case distribution_id::NORMAL:
-      return [lower_bound, dist = make_normal_dist(lower_bound, upper_bound)](
-               std::mt19937& engine) mutable -> T { return dist(engine) - lower_bound; };
+      return [lower_bound, dist = make_normal_dist(upper_bound - lower_bound)](
+               std::mt19937& engine) mutable -> T { return dist(engine) + lower_bound; };
     case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine); };
@@ -104,8 +109,8 @@ distribution_fn<T> make_distribution(distribution_id dist_id, T lower_bound, T u
 {
   switch (dist_id) {
     case distribution_id::NORMAL:
-      return [dist = make_normal_dist(lower_bound, upper_bound)](
-               std::mt19937& engine) mutable -> T { return dist(engine); };
+      return [lower_bound, dist = make_normal_dist(upper_bound - lower_bound)](
+               std::mt19937& engine) mutable -> T { return dist(engine) + lower_bound; };
     case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine); };

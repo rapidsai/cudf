@@ -1,15 +1,37 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 from typing import Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._lib.unary import is_nan
+from cudf.api.types import (
+    is_categorical_dtype,
+    is_decimal_dtype,
+    is_interval_dtype,
+    is_list_dtype,
+    is_numeric_dtype,
+    is_string_dtype,
+    is_struct_dtype,
+)
 from cudf.core._compat import PANDAS_GE_110
-from cudf.utils.dtypes import is_categorical_dtype
+
+
+def dtype_can_compare_equal_to_other(dtype):
+    # return True if values of this dtype can compare
+    # as equal to equal values of a different dtype
+    return not (
+        is_string_dtype(dtype)
+        or is_list_dtype(dtype)
+        or is_struct_dtype(dtype)
+        or is_decimal_dtype(dtype)
+        or is_interval_dtype(dtype)
+    )
 
 
 def _check_isinstance(left, right, obj):
@@ -145,6 +167,9 @@ def assert_column_equal(
                 msg1 = f"{left.dtype}"
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)
+    else:
+        if left.null_count == len(left) and right.null_count == len(right):
+            return True
 
     if check_datetimelike_compat:
         if np.issubdtype(left.dtype, np.datetime64):
@@ -162,8 +187,8 @@ def assert_column_equal(
 
     if check_exact and check_categorical:
         if is_categorical_dtype(left) and is_categorical_dtype(right):
-            left_cat = left.cat().categories
-            right_cat = right.cat().categories
+            left_cat = left.categories
+            right_cat = right.categories
 
             if check_category_order:
                 assert_index_equal(
@@ -200,27 +225,70 @@ def assert_column_equal(
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
-
     columns_equal = False
-    try:
-        columns_equal = left.equals(right)
-    except TypeError as e:
-        if str(e) != "Categoricals can only compare with the same type":
-            raise e
-        if is_categorical_dtype(left) and is_categorical_dtype(right):
-            left = left.astype(left.categories.dtype)
-            right = right.astype(right.categories.dtype)
-    if not columns_equal:
-        msg1 = f"{left.to_array()}"
-        msg2 = f"{right.to_array()}"
+    if left.size == right.size == 0:
+        columns_equal = True
+    elif not (
+        (
+            not dtype_can_compare_equal_to_other(left.dtype)
+            and is_numeric_dtype(right)
+        )
+        or (
+            is_numeric_dtype(left)
+            and not dtype_can_compare_equal_to_other(right)
+        )
+    ):
         try:
-            diff = left.apply_boolean_mask(left != right).size
+            # nulls must be in the same places for all dtypes
+            columns_equal = cp.all(
+                left.isnull().values == right.isnull().values
+            )
+
+            if columns_equal and not check_exact and is_numeric_dtype(left):
+                # non-null values must be the same
+                columns_equal = cp.allclose(
+                    left[left.isnull().unary_operator("not")].values,
+                    right[right.isnull().unary_operator("not")].values,
+                )
+                if columns_equal and (
+                    left.dtype.kind == right.dtype.kind == "f"
+                ):
+                    columns_equal = cp.all(
+                        is_nan(left).values == is_nan(right).values
+                    )
+            else:
+                columns_equal = left.equals(right)
+        except TypeError as e:
+            if str(e) != "Categoricals can only compare with the same type":
+                raise e
+            else:
+                columns_equal = False
+            if is_categorical_dtype(left) and is_categorical_dtype(right):
+                left = left.astype(left.categories.dtype)
+                right = right.astype(right.categories.dtype)
+    if not columns_equal:
+        ldata = str([val for val in left.to_pandas(nullable=True)])
+        rdata = str([val for val in right.to_pandas(nullable=True)])
+        try:
+            diff = 0
+            for i in range(left.size):
+                if not null_safe_scalar_equals(left[i], right[i]):
+                    diff += 1
             diff = diff * 100.0 / left.size
         except BaseException:
             diff = 100.0
         raise_assert_detail(
-            obj, f"values are different ({np.round(diff, 5)} %)", msg1, msg2,
+            obj,
+            f"values are different ({np.round(diff, 5)} %)",
+            {ldata},
+            {rdata},
         )
+
+
+def null_safe_scalar_equals(left, right):
+    if left in {cudf.NA, np.nan} or right in {cudf.NA, np.nan}:
+        return left is right
+    return left == right
 
 
 def assert_index_equal(
@@ -307,7 +375,7 @@ def assert_index_equal(
     """
 
     # instance validation
-    _check_isinstance(left, right, cudf.Index)
+    _check_isinstance(left, right, cudf.BaseIndex)
 
     _check_types(
         left, right, exact=exact, check_categorical=check_categorical, obj=obj
@@ -347,7 +415,6 @@ def assert_index_equal(
                 obj=mul_obj,
             )
         return
-
     assert_column_equal(
         left._columns[0],
         right._columns[0],
@@ -399,7 +466,7 @@ def assert_series_equal(
         Whether to check the Index class, dtype and inferred_type
         are identical.
     check_series_type : bool, default True
-        Whether to check the seires class, dtype and
+        Whether to check the series class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
     check_less_precise : bool or int, default False
@@ -629,8 +696,8 @@ def assert_frame_equal(
 
     if PANDAS_GE_110:
         pd.testing.assert_index_equal(
-            left.columns,
-            right.columns,
+            left._data.to_pandas_index(),
+            right._data.to_pandas_index(),
             exact=check_column_type,
             check_names=check_names,
             check_exact=check_exact,
@@ -641,8 +708,8 @@ def assert_frame_equal(
         )
     else:
         pd.testing.assert_index_equal(
-            left.columns,
-            right.columns,
+            left._data.to_pandas_index(),
+            right._data.to_pandas_index(),
             exact=check_column_type,
             check_names=check_names,
             check_exact=check_exact,
@@ -650,7 +717,7 @@ def assert_frame_equal(
             obj=f"{obj}.columns",
         )
 
-    for col in left.columns:
+    for col in left._column_names:
         assert_column_equal(
             left._data[col],
             right._data[col],

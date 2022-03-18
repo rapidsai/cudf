@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import re
 
@@ -9,7 +9,7 @@ import pytest
 import cudf
 from cudf import melt as cudf_melt
 from cudf.core._compat import PANDAS_GE_120
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -17,9 +17,9 @@ from cudf.tests.utils import (
 )
 
 
-@pytest.mark.parametrize("num_id_vars", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_value_vars", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_rows", [1, 2, 1000])
+@pytest.mark.parametrize("num_id_vars", [0, 1, 2])
+@pytest.mark.parametrize("num_value_vars", [0, 1, 2])
+@pytest.mark.parametrize("num_rows", [1, 2, 100])
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
@@ -103,14 +103,31 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     gdf = cudf.from_pandas(pdf)
 
     got = gdf.stack()
-
     expect = pdf.stack()
-    if {None} == set(expect.index.names):
-        expect.rename_axis(
-            list(range(0, len(expect.index.names))), inplace=True
-        )
 
     assert_eq(expect, got)
+
+
+def test_df_stack_reset_index():
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3, 4],
+            "b": [10, 11, 12, 13],
+            "c": ["ab", "cd", None, "gh"],
+        }
+    )
+    df = df.set_index(["a", "b"])
+    pdf = df.to_pandas()
+
+    expected = pdf.stack()
+    actual = df.stack()
+
+    assert_eq(expected, actual)
+
+    expected = expected.reset_index()
+    actual = actual.reset_index()
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
@@ -393,15 +410,35 @@ def test_pivot_multi_values():
     "level",
     [
         0,
-        1,
+        pytest.param(
+            1,
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         2,
         "foo",
-        "bar",
+        pytest.param(
+            "bar",
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         "baz",
         [],
-        [0, 1],
+        pytest.param(
+            [0, 1],
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         ["foo"],
-        ["foo", "bar"],
+        pytest.param(
+            ["foo", "bar"],
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
         pytest.param(
             [0, 1, 2],
             marks=pytest.mark.xfail(reason="Pandas behaviour unclear"),
@@ -416,7 +453,7 @@ def test_unstack_multiindex(level):
     pdf = pd.DataFrame(
         {
             "foo": ["one", "one", "one", "two", "two", "two"],
-            "bar": ["A", "B", "C", "A", "B", "C"],
+            "bar": pd.Categorical(["A", "B", "C", "A", "B", "C"]),
             "baz": [1, 2, 3, 4, 5, 6],
             "zoo": ["x", "y", "z", "q", "w", "t"],
         }
@@ -436,6 +473,12 @@ def test_unstack_multiindex(level):
     [
         pd.Index(range(0, 5), name=None),
         pd.Index(range(0, 5), name="row_index"),
+        pytest.param(
+            pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
+            marks=pytest.mark.xfail(
+                reason="Categorical column indexes not supported"
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize(

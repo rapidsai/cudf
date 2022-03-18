@@ -16,7 +16,6 @@
 
 #include <strings/char_types/char_cases.h>
 #include <strings/char_types/char_flags.h>
-#include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
@@ -85,8 +84,7 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(cudf::device_span<s
   auto const d_offsets = offsets.data<int32_t>();
 
   // create column
-  auto chars_column =
-    make_numeric_column(data_type{type_id::INT8}, bytes, mask_state::UNALLOCATED, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   // get it's view
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -101,24 +99,12 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(cudf::device_span<s
 }
 
 //
-std::unique_ptr<column> create_chars_child_column(cudf::size_type strings_count,
-                                                  cudf::size_type total_bytes,
+std::unique_ptr<column> create_chars_child_column(cudf::size_type total_bytes,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   return make_numeric_column(
     data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
-}
-
-//
-std::unique_ptr<column> make_empty_strings_column(rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
-{
-  return std::make_unique<column>(data_type{type_id::STRING},
-                                  0,
-                                  rmm::device_buffer{0, stream, mr},  // data
-                                  rmm::device_buffer{0, stream, mr},
-                                  0);  // nulls
 }
 
 namespace {

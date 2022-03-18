@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,9 +12,26 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
+#pragma once
 
-#include <cudf/detail/iterator.cuh>                             // include iterator header
-#include <cudf/detail/utilities/transform_unary_functions.cuh>  //for meanvar
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/transform_unary_functions.cuh>  // for meanvar
+#include <cudf/detail/utilities/vector_factories.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/equal.h>
+#include <thrust/functional.h>
+#include <thrust/logical.h>
+#include <thrust/transform.h>
+
+#include <cub/device/device_reduce.cuh>
 
 #include <bitset>
 #include <cstdint>
@@ -22,20 +39,7 @@
 #include <numeric>
 #include <random>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
-
-#include <thrust/equal.h>
-#include <thrust/functional.h>
-#include <thrust/transform.h>
-
-// for reduction tests
-#include <thrust/device_vector.h>
-#include <cub/device/device_reduce.cuh>
-
 // Base Typed test fixture for iterator test
-
 template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {
   // iterator test case which uses cub
@@ -43,20 +47,15 @@ struct IteratorTest : public cudf::test::BaseFixture {
   void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
   {
     T_output init = cudf::test::make_type_param_scalar<T_output>(0);
-    thrust::device_vector<T_output> dev_result(1, init);
+    rmm::device_uvector<T_output> dev_result(1, rmm::cuda_stream_default);
 
     // Get temporary storage size
     size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Reduce(nullptr,
-                              temp_storage_bytes,
-                              d_in,
-                              dev_result.begin(),
-                              num_items,
-                              thrust::minimum<T_output>{},
-                              init);
+    cub::DeviceReduce::Reduce(
+      nullptr, temp_storage_bytes, d_in, dev_result.begin(), num_items, thrust::minimum{}, init);
 
     // Allocate temporary storage
-    rmm::device_buffer d_temp_storage(temp_storage_bytes);
+    rmm::device_buffer d_temp_storage(temp_storage_bytes, rmm::cuda_stream_default);
 
     // Run reduction
     cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -64,7 +63,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              thrust::minimum<T_output>{},
+                              thrust::minimum{},
                               init);
 
     evaluate(expected, dev_result, "cub test");
@@ -72,57 +71,40 @@ struct IteratorTest : public cudf::test::BaseFixture {
 
   // iterator test case which uses thrust
   template <typename InputIterator, typename T_output>
-  void iterator_test_thrust(thrust::host_vector<T_output>& expected,
+  void iterator_test_thrust(thrust::host_vector<T_output> const& expected,
                             InputIterator d_in,
                             int num_items)
   {
     InputIterator d_in_last = d_in + num_items;
     EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
-    thrust::device_vector<T_output> dev_expected(expected);
+    auto dev_expected = cudf::detail::make_device_uvector_sync(expected);
 
-    // Can't use this because time_point make_pair bug in libcudacxx
-    // bool result = thrust::equal(thrust::device, d_in, d_in_last, dev_expected.begin());
-    bool result = thrust::transform_reduce(
-      thrust::device,
-      thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
-      thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
-      [] __device__(auto it) {
-        return static_cast<typename InputIterator::value_type>(thrust::get<0>(it)) ==
-               T_output(thrust::get<1>(it));
-      },
-      true,
-      thrust::logical_and<bool>());
-#ifndef NDEBUG
-    thrust::device_vector<bool> vec(expected.size(), false);
-    thrust::transform(
-      thrust::device,
-      thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
-      thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
-      vec.begin(),
-      [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); });
-    thrust::copy(vec.begin(), vec.end(), std::ostream_iterator<bool>(std::cout, " "));
-    std::cout << std::endl;
-#endif
-
+    // using a temporary vector and calling transform and all_of separately is
+    // equivalent to thrust::equal but compiles ~3x faster
+    auto dev_results = rmm::device_uvector<bool>(num_items, rmm::cuda_stream_default);
+    thrust::transform(thrust::device,
+                      d_in,
+                      d_in_last,
+                      dev_expected.begin(),
+                      dev_results.begin(),
+                      thrust::equal_to{});
+    auto result = thrust::all_of(
+      thrust::device, dev_results.begin(), dev_results.end(), thrust::identity<bool>{});
     EXPECT_TRUE(result) << "thrust test";
   }
 
   template <typename T_output>
   void evaluate(T_output expected,
-                thrust::device_vector<T_output>& dev_result,
+                rmm::device_uvector<T_output> const& dev_result,
                 const char* msg = nullptr)
   {
-    thrust::host_vector<T_output> hos_result(dev_result);
+    auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    EXPECT_EQ(expected, hos_result[0]) << msg;
-    std::cout << "Done: expected <" << msg
-              << "> = "
-              //<< hos_result[0] //TODO uncomment after time_point ostream operator<<
-              << std::endl;
+    EXPECT_EQ(expected, host_result[0]) << msg;
   }
 
   template <typename T_output>
-  void values_equal_test(thrust::host_vector<T_output>& expected,
+  void values_equal_test(thrust::host_vector<T_output> const& expected,
                          const cudf::column_device_view& col)
   {
     if (col.nullable()) {

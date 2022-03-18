@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/replace.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
-#include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -404,8 +405,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 {
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
-  auto const d_in_chars    = strings.chars().data<char>();
+  auto const d_offsets     = strings.offsets_begin();
+  auto const d_in_chars    = strings.chars_begin();
   auto const chars_bytes   = chars_end - chars_start;
   auto const target_size   = d_target.size_bytes();
 
@@ -476,8 +477,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                     offsets_update_fn);
 
   // build the characters column
-  auto chars_column = create_chars_child_column(
-    strings_count, chars_bytes + (delta_per_target * target_count), stream, mr);
+  auto chars_column =
+    create_chars_child_column(chars_bytes + (delta_per_target * target_count), stream, mr);
   auto d_out_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -493,9 +494,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                              std::move(offsets_column),
                              std::move(chars_column),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 /**
@@ -531,9 +530,7 @@ std::unique_ptr<column> replace_row_parallel(strings_column_view const& strings,
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace
@@ -550,10 +547,10 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
                                                          rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (maxrepl == 0) return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
 
   string_view d_target(target.data(), target.size());
@@ -567,9 +564,9 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
     (strings.offset() == 0)
       ? 0
       : cudf::detail::get_value<int32_t>(strings.offsets(), strings.offset(), stream);
-  size_type const chars_end = (offset_count == strings.offsets().size())
-                                ? strings.chars_size()
-                                : cudf::detail::get_value<int32_t>(
+  size_type const chars_end   = (offset_count == strings.offsets().size())
+                                  ? strings.chars_size()
+                                  : cudf::detail::get_value<int32_t>(
                                     strings.offsets(), strings.offset() + strings_count, stream);
   size_type const chars_bytes = chars_end - chars_start;
 
@@ -589,10 +586,10 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (maxrepl == 0) return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
 
   string_view d_target(target.data(), target.size());
@@ -601,13 +598,13 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   // determine range of characters in the base column
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
+  auto const d_offsets     = strings.offsets_begin();
   size_type chars_start    = (strings.offset() == 0) ? 0
-                                                  : cudf::detail::get_value<int32_t>(
+                                                     : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (offset_count == strings.offsets().size())
-                          ? strings.chars_size()
-                          : cudf::detail::get_value<int32_t>(
+  size_type chars_end      = (offset_count == strings.offsets().size())
+                               ? strings.chars_size()
+                               : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(
     strings, chars_start, chars_end, d_target, d_repl, maxrepl, stream, mr);
@@ -622,10 +619,10 @@ std::unique_ptr<column> replace<replace_algorithm::ROW_PARALLEL>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (maxrepl == 0) return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
 
   string_view d_target(target.data(), target.size());
@@ -682,8 +679,8 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
   if (stop > 0) CUDF_EXPECTS(start <= stop, "Parameter start must be less than or equal to stop.");
 
   string_view d_repl(repl.data(), repl.size());
@@ -698,9 +695,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 namespace {
@@ -766,7 +761,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
                "Parameters targets must not be empty and must not have nulls");
   CUDF_EXPECTS(((repls.size() > 0) && (repls.null_count() == 0)),
@@ -786,9 +781,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
@@ -797,8 +790,8 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
 
   string_view d_repl(repl.data(), repl.size());
 
@@ -818,7 +811,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
@@ -829,13 +822,8 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                        memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
                      });
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             0,
-                             rmm::device_buffer{0, stream, mr},
-                             stream,
-                             mr);
+  return make_strings_column(
+    strings_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -869,14 +857,6 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace(strings, targets, repls, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
-                                      string_scalar const& repl,
-                                      rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace_nulls(strings, repl, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

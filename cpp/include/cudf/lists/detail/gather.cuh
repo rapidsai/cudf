@@ -117,11 +117,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                       return src_offsets[index] - shift;
                     });
 
-  // now that we are done using the gather_map, we can release the underlying prev_base_offsets.
-  // doing this prevents this (potentially large) memory buffer from sitting around unused as the
-  // recursion continues.
-  prev_base_offsets.release();
-
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
   size_type child_gather_map_size =
     cudf::detail::get_value<size_type>(dst_offsets_c->view(), output_count, stream);
@@ -288,6 +283,7 @@ std::unique_ptr<column> gather_list_leaf(
 /**
  * @copydoc cudf::lists::segmented_gather(lists_column_view const& source_column,
  *                                        lists_column_view const& gather_map_list,
+ *                                        out_of_bounds_policy bounds_policy,
  *                                        rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream on which to execute kernels
@@ -295,6 +291,7 @@ std::unique_ptr<column> gather_list_leaf(
 std::unique_ptr<column> segmented_gather(
   lists_column_view const& source_column,
   lists_column_view const& gather_map_list,
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

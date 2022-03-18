@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <thrust/logical.h>
 
-#include <gtest/gtest.h>
-
+#include "rmm/exec_policy.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -53,13 +54,13 @@ struct InsertTest : public cudf::test::BaseFixture {
     // prevent overflow of small types
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
-    pairs.resize(input_size);
+    pairs.resize(input_size, rmm::cuda_stream_default);
     map = std::move(map_type::create(compute_hash_table_size(size)));
     rmm::cuda_stream_default.synchronize();
   }
 
   const cudf::size_type size{10000};
-  rmm::device_vector<pair_type> pairs;
+  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), rmm::cuda_stream_default};
   std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
 
@@ -72,7 +73,7 @@ using TestTypes = ::testing::Types<key_value_types<int32_t, int32_t>,
                                    key_value_types<int32_t, float>,
                                    key_value_types<int64_t, double>>;
 
-TYPED_TEST_CASE(InsertTest, TestTypes);
+TYPED_TEST_SUITE(InsertTest, TestTypes);
 
 template <typename map_type, typename pair_type>
 struct insert_pair {
@@ -137,53 +138,78 @@ TYPED_TEST(InsertTest, UniqueKeysUniqueValues)
 {
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
-  thrust::tabulate(this->pairs.begin(), this->pairs.end(), unique_pair_generator<pair_type>{});
+  thrust::tabulate(
+    rmm::exec_policy(), this->pairs.begin(), this->pairs.end(), unique_pair_generator<pair_type>{});
   // All pairs should be new inserts
-  EXPECT_TRUE(thrust::all_of(
-    this->pairs.begin(), this->pairs.end(), insert_pair<map_type, pair_type>{*this->map}));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             this->pairs.begin(),
+                             this->pairs.end(),
+                             insert_pair<map_type, pair_type>{*this->map}));
 
   // All pairs should be present in the map
-  EXPECT_TRUE(thrust::all_of(
-    this->pairs.begin(), this->pairs.end(), find_pair<map_type, pair_type>{*this->map}));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             this->pairs.begin(),
+                             this->pairs.end(),
+                             find_pair<map_type, pair_type>{*this->map}));
 }
 
 TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues)
 {
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
-  thrust::tabulate(this->pairs.begin(), this->pairs.end(), identical_pair_generator<pair_type>{});
+  thrust::tabulate(rmm::exec_policy(),
+                   this->pairs.begin(),
+                   this->pairs.end(),
+                   identical_pair_generator<pair_type>{});
   // Insert a single pair
-  EXPECT_TRUE(thrust::all_of(
-    this->pairs.begin(), this->pairs.begin() + 1, insert_pair<map_type, pair_type>{*this->map}));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             this->pairs.begin(),
+                             this->pairs.begin() + 1,
+                             insert_pair<map_type, pair_type>{*this->map}));
   // Identical inserts should all return false (no new insert)
-  EXPECT_FALSE(thrust::all_of(
-    this->pairs.begin(), this->pairs.end(), insert_pair<map_type, pair_type>{*this->map}));
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(),
+                              this->pairs.begin(),
+                              this->pairs.end(),
+                              insert_pair<map_type, pair_type>{*this->map}));
 
   // All pairs should be present in the map
-  EXPECT_TRUE(thrust::all_of(
-    this->pairs.begin(), this->pairs.end(), find_pair<map_type, pair_type>{*this->map}));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             this->pairs.begin(),
+                             this->pairs.end(),
+                             find_pair<map_type, pair_type>{*this->map}));
 }
 
 TYPED_TEST(InsertTest, IdenticalKeysUniqueValues)
 {
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
-  thrust::tabulate(this->pairs.begin(), this->pairs.end(), identical_key_generator<pair_type>{});
+  thrust::tabulate(rmm::exec_policy(),
+                   this->pairs.begin(),
+                   this->pairs.end(),
+                   identical_key_generator<pair_type>{});
 
   // Insert a single pair
-  EXPECT_TRUE(thrust::all_of(
-    this->pairs.begin(), this->pairs.begin() + 1, insert_pair<map_type, pair_type>{*this->map}));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             this->pairs.begin(),
+                             this->pairs.begin() + 1,
+                             insert_pair<map_type, pair_type>{*this->map}));
 
   // Identical key inserts should all return false (no new insert)
-  EXPECT_FALSE(thrust::all_of(
-    this->pairs.begin() + 1, this->pairs.end(), insert_pair<map_type, pair_type>{*this->map}));
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(),
+                              this->pairs.begin() + 1,
+                              this->pairs.end(),
+                              insert_pair<map_type, pair_type>{*this->map}));
 
   // Only first pair is present in map
-  EXPECT_TRUE(thrust::all_of(
-    this->pairs.begin(), this->pairs.begin() + 1, find_pair<map_type, pair_type>{*this->map}));
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             this->pairs.begin(),
+                             this->pairs.begin() + 1,
+                             find_pair<map_type, pair_type>{*this->map}));
 
-  EXPECT_FALSE(thrust::all_of(
-    this->pairs.begin() + 1, this->pairs.end(), find_pair<map_type, pair_type>{*this->map}));
+  EXPECT_FALSE(thrust::all_of(rmm::exec_policy(),
+                              this->pairs.begin() + 1,
+                              this->pairs.end(),
+                              find_pair<map_type, pair_type>{*this->map}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

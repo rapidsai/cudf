@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 #pragma once
 
-#include <io/parquet/parquet_common.hpp>
+#include "parquet_common.hpp"
 
-#include <stddef.h>
-#include <stdint.h>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -65,11 +65,11 @@ struct MilliSeconds {
 };
 struct MicroSeconds {
 };
-typedef struct TimeUnit_isset {
-  TimeUnit_isset() : MILLIS(false), MICROS(false) {}
-  bool MILLIS;
-  bool MICROS;
-} TimeUnit_isset;
+using TimeUnit_isset = struct TimeUnit_isset {
+  TimeUnit_isset() {}
+  bool MILLIS{false};
+  bool MICROS{false};
+};
 
 struct TimeUnit {
   TimeUnit_isset isset;
@@ -97,35 +97,21 @@ struct BsonType {
 };
 
 // thrift generated code simplified.
-typedef struct LogicalType_isset {
-  LogicalType_isset()
-    : STRING(false),
-      MAP(false),
-      LIST(false),
-      ENUM(false),
-      DECIMAL(false),
-      DATE(false),
-      TIME(false),
-      TIMESTAMP(false),
-      INTEGER(false),
-      UNKNOWN(false),
-      JSON(false),
-      BSON(false)
-  {
-  }
-  bool STRING;
-  bool MAP;
-  bool LIST;
-  bool ENUM;
-  bool DECIMAL;
-  bool DATE;
-  bool TIME;
-  bool TIMESTAMP;
-  bool INTEGER;
-  bool UNKNOWN;
-  bool JSON;
-  bool BSON;
-} LogicalType_isset;
+using LogicalType_isset = struct LogicalType_isset {
+  LogicalType_isset() {}
+  bool STRING{false};
+  bool MAP{false};
+  bool LIST{false};
+  bool ENUM{false};
+  bool DECIMAL{false};
+  bool DATE{false};
+  bool TIME{false};
+  bool TIMESTAMP{false};
+  bool INTEGER{false};
+  bool UNKNOWN{false};
+  bool JSON{false};
+  bool BSON{false};
+};
 
 struct LogicalType {
   LogicalType_isset isset;
@@ -165,8 +151,9 @@ struct SchemaElement {
   int max_definition_level = 0;
   int max_repetition_level = 0;
   int parent_idx           = 0;
+  std::vector<size_t> children_idx;
 
-  bool operator==(SchemaElement const &other) const
+  bool operator==(SchemaElement const& other) const
   {
     return type == other.type && converted_type == other.converted_type &&
            type_length == other.type_length && repetition_type == other.repetition_type &&
@@ -196,10 +183,19 @@ struct SchemaElement {
   //     required int32 num;
   //  };
   // }
-  bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+  [[nodiscard]] bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+
+  // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
+  // One-level LIST encoding: Only allows required lists with required cells:
+  //   repeated value_type name
+  [[nodiscard]] bool is_one_level_list() const
+  {
+    return repetition_type == REPEATED and num_children == 0;
+  }
+
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
-  bool is_struct() const
+  [[nodiscard]] bool is_struct() const
   {
     return type == UNDEFINED_TYPE &&
            // this assumption might be a little weak.
@@ -232,7 +228,7 @@ struct ColumnChunkMetaData {
  * column
  *
  * Each column chunk lives in a particular row group and are guaranteed to be
- * contiguous in the file. Any mssing or corrupted chunks can be skipped during
+ * contiguous in the file. Any missing or corrupted chunks can be skipped during
  * reading.
  */
 struct ColumnChunk {
@@ -356,13 +352,13 @@ class CompactProtocolReader {
   static const uint8_t g_list2struct[16];
 
  public:
-  explicit CompactProtocolReader(const uint8_t *base = nullptr, size_t len = 0) { init(base, len); }
-  void init(const uint8_t *base, size_t len)
+  explicit CompactProtocolReader(const uint8_t* base = nullptr, size_t len = 0) { init(base, len); }
+  void init(const uint8_t* base, size_t len)
   {
     m_base = m_cur = base;
     m_end          = base + len;
   }
-  ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
+  [[nodiscard]] ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
   unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
   void skip_bytes(size_t bytecnt) noexcept
   {
@@ -400,7 +396,7 @@ class CompactProtocolReader {
     uint64_t u = get_u64();
     return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
   }
-  int32_t get_listh(uint8_t *el_type) noexcept
+  int32_t get_listh(uint8_t* el_type) noexcept
   {
     uint32_t c = getb();
     int32_t sz = c >> 4;
@@ -412,40 +408,40 @@ class CompactProtocolReader {
 
  public:
   // Generate Thrift structure parsing routines
-  bool read(FileMetaData *f);
-  bool read(SchemaElement *s);
-  bool read(LogicalType *l);
-  bool read(DecimalType *d);
-  bool read(TimeType *t);
-  bool read(TimeUnit *u);
-  bool read(TimestampType *t);
-  bool read(IntType *t);
-  bool read(RowGroup *r);
-  bool read(ColumnChunk *c);
-  bool read(ColumnChunkMetaData *c);
-  bool read(PageHeader *p);
-  bool read(DataPageHeader *d);
-  bool read(DictionaryPageHeader *d);
-  bool read(KeyValue *k);
+  bool read(FileMetaData* f);
+  bool read(SchemaElement* s);
+  bool read(LogicalType* l);
+  bool read(DecimalType* d);
+  bool read(TimeType* t);
+  bool read(TimeUnit* u);
+  bool read(TimestampType* t);
+  bool read(IntType* t);
+  bool read(RowGroup* r);
+  bool read(ColumnChunk* c);
+  bool read(ColumnChunkMetaData* c);
+  bool read(PageHeader* p);
+  bool read(DataPageHeader* d);
+  bool read(DictionaryPageHeader* d);
+  bool read(KeyValue* k);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
   {
     return 32 - CountLeadingZeros32(max_level);
   }
-  bool InitSchema(FileMetaData *md);
+  bool InitSchema(FileMetaData* md);
 
  protected:
-  int WalkSchema(FileMetaData *md,
+  int WalkSchema(FileMetaData* md,
                  int idx           = 0,
                  int parent_idx    = 0,
                  int max_def_level = 0,
                  int max_rep_level = 0);
 
  protected:
-  const uint8_t *m_base = nullptr;
-  const uint8_t *m_cur  = nullptr;
-  const uint8_t *m_end  = nullptr;
+  const uint8_t* m_base = nullptr;
+  const uint8_t* m_cur  = nullptr;
+  const uint8_t* m_end  = nullptr;
 
   friend class ParquetFieldBool;
   friend class ParquetFieldInt8;
@@ -473,12 +469,12 @@ class CompactProtocolReader {
  */
 class ParquetFieldBool {
   int field_val;
-  bool &val;
+  bool& val;
 
  public:
-  ParquetFieldBool(int f, bool &v) : field_val(f), val(v) {}
+  ParquetFieldBool(int f, bool& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
            !(val = (field_type == ST_FLD_TRUE), true);
@@ -494,12 +490,12 @@ class ParquetFieldBool {
  */
 class ParquetFieldInt8 {
   int field_val;
-  int8_t &val;
+  int8_t& val;
 
  public:
-  ParquetFieldInt8(int f, int8_t &v) : field_val(f), val(v) {}
+  ParquetFieldInt8(int f, int8_t& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     val = cpr->getb();
     return (field_type != ST_FLD_BYTE);
@@ -515,12 +511,12 @@ class ParquetFieldInt8 {
  */
 class ParquetFieldInt32 {
   int field_val;
-  int32_t &val;
+  int32_t& val;
 
  public:
-  ParquetFieldInt32(int f, int32_t &v) : field_val(f), val(v) {}
+  ParquetFieldInt32(int f, int32_t& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     val = cpr->get_i32();
     return (field_type != ST_FLD_I32);
@@ -536,12 +532,12 @@ class ParquetFieldInt32 {
  */
 class ParquetFieldInt64 {
   int field_val;
-  int64_t &val;
+  int64_t& val;
 
  public:
-  ParquetFieldInt64(int f, int64_t &v) : field_val(f), val(v) {}
+  ParquetFieldInt64(int f, int64_t& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     val = cpr->get_i64();
     return (field_type < ST_FLD_I16 || field_type > ST_FLD_I64);
@@ -559,12 +555,12 @@ class ParquetFieldInt64 {
 template <typename T>
 class ParquetFieldStructListFunctor {
   int field_val;
-  std::vector<T> &val;
+  std::vector<T>& val;
 
  public:
-  ParquetFieldStructListFunctor(int f, std::vector<T> &v) : field_val(f), val(v) {}
+  ParquetFieldStructListFunctor(int f, std::vector<T>& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
 
@@ -584,7 +580,7 @@ class ParquetFieldStructListFunctor {
 };
 
 template <typename T>
-ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T> &v)
+ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T>& v)
 {
   return ParquetFieldStructListFunctor<T>(f, v);
 }
@@ -597,17 +593,17 @@ ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T> &v
  */
 class ParquetFieldString {
   int field_val;
-  std::string &val;
+  std::string& val;
 
  public:
-  ParquetFieldString(int f, std::string &v) : field_val(f), val(v) {}
+  ParquetFieldString(int f, std::string& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_BINARY) return true;
     uint32_t n = cpr->get_u32();
     if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
-      val.assign((const char *)cpr->m_cur, n);
+      val.assign((const char*)cpr->m_cur, n);
       cpr->m_cur += n;
       return false;
     } else {
@@ -627,12 +623,12 @@ class ParquetFieldString {
 template <typename T>
 class ParquetFieldStructFunctor {
   int field_val;
-  T &val;
+  T& val;
 
  public:
-  ParquetFieldStructFunctor(int f, T &v) : field_val(f), val(v) {}
+  ParquetFieldStructFunctor(int f, T& v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     return (field_type != ST_FLD_STRUCT || !(cpr->read(&val)));
   }
@@ -641,7 +637,7 @@ class ParquetFieldStructFunctor {
 };
 
 template <typename T>
-ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
+ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T& v)
 {
   return ParquetFieldStructFunctor<T>(f, v);
 }
@@ -657,13 +653,13 @@ ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
 template <typename T, bool is_empty = false>
 class ParquetFieldUnionFunctor {
   int field_val;
-  bool &is_set;
-  T &val;
+  bool& is_set;
+  T& val;
 
  public:
-  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+  ParquetFieldUnionFunctor(int f, bool& b, T& v) : field_val(f), is_set(b), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) {
       return true;
@@ -679,13 +675,13 @@ class ParquetFieldUnionFunctor {
 template <typename T>
 struct ParquetFieldUnionFunctor<T, true> {
   int field_val;
-  bool &is_set;
-  T &val;
+  bool& is_set;
+  T& val;
 
  public:
-  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+  ParquetFieldUnionFunctor(int f, bool& b, T& v) : field_val(f), is_set(b), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) {
       return true;
@@ -700,9 +696,9 @@ struct ParquetFieldUnionFunctor<T, true> {
 };
 
 template <typename T>
-ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bool &b, T &v)
+ParquetFieldUnionFunctor<T, std::is_empty_v<T>> ParquetFieldUnion(int f, bool& b, T& v)
 {
-  return ParquetFieldUnionFunctor<T, std::is_empty<T>::value>(f, b, v);
+  return ParquetFieldUnionFunctor<T, std::is_empty_v<T>>(f, b, v);
 }
 
 /**
@@ -713,11 +709,11 @@ ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bo
 template <typename Enum>
 class ParquetFieldEnum {
   int field_val;
-  Enum &val;
+  Enum& val;
 
  public:
-  ParquetFieldEnum(int f, Enum &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  ParquetFieldEnum(int f, Enum& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     val = static_cast<Enum>(cpr->get_i32());
     return (field_type != ST_FLD_I32);
@@ -735,11 +731,11 @@ class ParquetFieldEnum {
 template <typename Enum>
 class ParquetFieldEnumListFunctor {
   int field_val;
-  std::vector<Enum> &val;
+  std::vector<Enum>& val;
 
  public:
-  ParquetFieldEnumListFunctor(int f, std::vector<Enum> &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  ParquetFieldEnumListFunctor(int f, std::vector<Enum>& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
     int current_byte = cpr->getb();
@@ -747,7 +743,9 @@ class ParquetFieldEnumListFunctor {
     int n = current_byte >> 4;
     if (n == 0xf) n = cpr->get_u32();
     val.resize(n);
-    for (int32_t i = 0; i < n; i++) { val[i] = static_cast<Enum>(cpr->get_i32()); }
+    for (int32_t i = 0; i < n; i++) {
+      val[i] = static_cast<Enum>(cpr->get_i32());
+    }
     return false;
   }
 
@@ -755,7 +753,7 @@ class ParquetFieldEnumListFunctor {
 };
 
 template <typename T>
-ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T> &v)
+ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T>& v)
 {
   return ParquetFieldEnumListFunctor<T>(field, v);
 }
@@ -768,11 +766,11 @@ ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T> &v
  */
 class ParquetFieldStringList {
   int field_val;
-  std::vector<std::string> &val;
+  std::vector<std::string>& val;
 
  public:
-  ParquetFieldStringList(int f, std::vector<std::string> &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  ParquetFieldStringList(int f, std::vector<std::string>& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
     int current_byte = cpr->getb();
@@ -783,7 +781,7 @@ class ParquetFieldStringList {
     for (int32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
       if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
-        val[i].assign((const char *)cpr->m_cur, l);
+        val[i].assign((const char*)cpr->m_cur, l);
         cpr->m_cur += l;
       } else
         return true;
@@ -801,14 +799,14 @@ class ParquetFieldStringList {
  */
 class ParquetFieldStructBlob {
   int field_val;
-  std::vector<uint8_t> &val;
+  std::vector<uint8_t>& val;
 
  public:
-  ParquetFieldStructBlob(int f, std::vector<uint8_t> &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  ParquetFieldStructBlob(int f, std::vector<uint8_t>& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_STRUCT) return true;
-    const uint8_t *start = cpr->m_cur;
+    const uint8_t* start = cpr->m_cur;
     cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
     return false;

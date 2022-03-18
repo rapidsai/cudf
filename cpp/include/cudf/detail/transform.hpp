@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -32,6 +33,17 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::compute_column
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> compute_column(
+  table_view const table,
+  ast::operation const& expr,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -62,6 +74,17 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::one_hot_encode
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
+  column_view const& input,
+  column_view const& categories,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

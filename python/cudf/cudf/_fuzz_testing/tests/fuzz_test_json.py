@@ -9,7 +9,7 @@ import cudf
 from cudf._fuzz_testing.json import JSONReader, JSONWriter
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.utils import ALL_POSSIBLE_VALUES, run_test
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pythonfuzz(data_handle=JSONReader)

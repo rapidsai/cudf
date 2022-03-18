@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -44,7 +44,7 @@ from cudf.tests.utils import assert_eq
 )
 @pytest.mark.parametrize("to_host", [True, False])
 def test_serialize(df, to_host):
-    """ This should hopefully replace all functions below """
+    """This should hopefully replace all functions below"""
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
@@ -267,26 +267,6 @@ def test_serialize_string_check_buffer_sizes():
     header, frames = df.serialize()
     got = sum(b.nbytes for b in frames)
     assert expect == got
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"a": [[]]},
-        {"a": [[1, 2, None, 4]]},
-        {"a": [["cat", None, "dog"]]},
-        {
-            "a": [[1, 2, 3, None], [4, None, 5]],
-            "b": [None, ["fish", "bird"]],
-            "c": [[], []],
-        },
-        {"a": [[1, 2, 3, None], [4, None, 5], None, [6, 7]]},
-    ],
-)
-def test_serialize_list_columns(data):
-    df = cudf.DataFrame(data)
-    recreated = df.__class__.deserialize(*df.serialize())
-    assert_eq(recreated, df)
 
 
 def test_deserialize_cudf_0_16(datadir):

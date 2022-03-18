@@ -102,14 +102,12 @@ struct null_replaced_value_accessor {
                                bool has_nulls = true)
     : col{col}, null_replacement{null_val}, has_nulls{has_nulls}
   {
-    CUDF_EXPECTS(type_to_id<Element>() == device_storage_type_id(col.type().id()),
+    CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(col.type().id()),
                  "the data type mismatch");
-    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  CUDA_DEVICE_CALLABLE
-  Element operator()(cudf::size_type i) const
+  __device__ inline Element operator()(cudf::size_type i) const
   {
     return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
@@ -136,8 +134,7 @@ struct validity_accessor {
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
 
-  CUDA_DEVICE_CALLABLE
-  bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
+  __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
 };
 
 /**
@@ -165,6 +162,68 @@ auto make_null_replacement_iterator(column_device_view const& column,
 {
   return make_counting_transform_iterator(
     0, null_replaced_value_accessor<Element>{column, null_replacement, has_nulls});
+}
+
+/**
+ * @brief Constructs an optional iterator over a column's values and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::optional<Element>`.
+ *
+ * The element of this iterator contextually converts to bool. The conversion returns true
+ * if the object contains a value and false if it does not contain a value.
+ *
+ * Calling this function with `nullate::DYNAMIC` defers the assumption
+ * of nullability to runtime with the caller indicating if the column has nulls.
+ * This is useful when an algorithm is going to execute on multiple iterators and all
+ * the combinations of iterator types are not required at compile time.
+ *
+ * @code{.cpp}
+ * template<typename T>
+ * void some_function(cudf::column_view<T> const& col_view){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    // Create a `DYNAMIC` optional iterator
+ *    auto optional_iterator =
+ *      cudf::detail::make_optional_iterator<T>(
+ *        d_col, cudf::nullate::DYNAMIC{col_view.has_nulls()});
+ * }
+ * @endcode
+ *
+ * Calling this function with `nullate::YES` means that the column supports
+ * nulls and the optional returned might not contain a value.
+ * Calling this function with `nullate::NO` means that the column has no
+ * null values and the optional returned will always contain a value.
+ *
+ * @code{.cpp}
+ * template<typename T, bool has_nulls>
+ * void some_function(cudf::column_view<T> const& col_view){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    if constexpr(has_nulls) {
+ *      auto optional_iterator =
+ *        cudf::detail::make_optional_iterator<T>(d_col, cudf::nullate::YES{});
+ *      //use optional_iterator
+ *    } else {
+ *      auto optional_iterator =
+ *        cudf::detail::make_optional_iterator<T>(d_col, cudf::nullate::NO{});
+ *      //use optional_iterator
+ *    }
+ * }
+ * @endcode
+ *
+ * @throws cudf::logic_error if the column is not nullable and `has_nulls` is true.
+ * @throws cudf::logic_error if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ *
+ * @param column The column to iterate
+ * @param has_nulls Indicates whether `column` is checked for nulls.
+ * @return Iterator that returns valid column elements and the validity of the
+ * element in a `thrust::optional`
+ */
+template <typename Element, typename Nullate>
+auto make_optional_iterator(column_device_view const& column, Nullate has_nulls)
+{
+  return column.optional_begin<Element, Nullate>(has_nulls);
 }
 
 /**
@@ -283,8 +342,7 @@ struct scalar_value_accessor {
    *
    * @return value of the scalar.
    */
-  CUDA_DEVICE_CALLABLE
-  const Element operator()(size_type) const
+  __device__ inline const Element operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return dscalar.value();
@@ -321,6 +379,60 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
 }
 
 /**
+ * @brief Optional accessor for a scalar
+ *
+ * The `scalar_optional_accessor` always returns a `thrust::optional` of the scalar.
+ * The validity of the optional is determined by the `Nullate` parameter which may
+ * be one of the following:
+ *
+ * - `nullate::YES` means that the scalar may be valid or invalid and the optional returned
+ *    will contain a value only if the scalar is valid.
+ *
+ * - `nullate::NO` means the caller attests that the scalar will always be valid,
+ *    no checks will occur and `thrust::optional{column[i]}` will return a value
+ *    for each `i`.
+ *
+ * - `nullate::DYNAMIC` defers the assumption of nullability to runtime and the caller
+ *    specifies if the scalar may be valid or invalid.
+ *    For `DYNAMIC{true}` the return value will be a `thrust::optional{scalar}` when the
+ *      scalar is valid and a `thrust::optional{}` when the scalar is invalid.
+ *    For `DYNAMIC{false}` the return value will always be a `thrust::optional{scalar}`.
+ *
+ * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ *
+ * @tparam Element The type of return type of functor
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ */
+template <typename Element, typename Nullate>
+struct scalar_optional_accessor : public scalar_value_accessor<Element> {
+  using super_t    = scalar_value_accessor<Element>;
+  using value_type = thrust::optional<Element>;
+
+  scalar_optional_accessor(scalar const& scalar_value, Nullate with_nulls)
+    : scalar_value_accessor<Element>(scalar_value), has_nulls{with_nulls}
+  {
+  }
+
+  /**
+   * @brief returns a thrust::optional<Element>.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return a thrust::optional<Element> for the scalar value.
+   */
+  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
+  {
+    if (has_nulls) {
+      return (super_t::dscalar.is_valid()) ? Element{super_t::dscalar.value()}
+                                           : value_type{thrust::nullopt};
+    }
+    return Element{super_t::dscalar.value()};
+  }
+
+  Nullate has_nulls{};
+};
+
+/**
  * @brief pair accessor for scalar.
  * The unary functor returns a pair of data of Element type and bool validity of the scalar.
  *
@@ -341,8 +453,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
    *
    * @return a pair with value and validity of the scalar.
    */
-  CUDA_HOST_DEVICE_CALLABLE
-  const value_type operator()(size_type) const
+  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};
@@ -393,8 +504,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
    *
    * @return a pair with representative value and validity of the scalar.
    */
-  CUDA_DEVICE_CALLABLE
-  const value_type operator()(size_type) const
+  __device__ inline const value_type operator()(size_type) const
   {
     return {get_rep(base::dscalar), base::dscalar.is_valid()};
   }
@@ -402,18 +512,89 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  private:
   template <typename DeviceScalar,
             std::enable_if_t<!has_rep_member<DeviceScalar>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
+  __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
   {
     return dscalar.value();
   }
 
   template <typename DeviceScalar,
             std::enable_if_t<has_rep_member<DeviceScalar>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE rep_type get_rep(DeviceScalar const& dscalar) const
+  __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
   {
     return dscalar.rep();
   }
 };
+
+/**
+ * @brief Constructs an optional iterator over a scalar's values and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::optional<Element>`.
+ *
+ * The element of this iterator contextually converts to bool. The conversion returns true
+ * if the object contains a value and false if it does not contain a value.
+ *
+ * The iterator behavior is undefined if the scalar is destroyed before iterator dereferencing.
+ *
+ * Calling this function with `nullate::DYNAMIC` defers the assumption
+ * of nullability to runtime with the caller indicating if the scalar is valid.
+ *
+ * @code{.cpp}
+ * template<typename T>
+ * void some_function(cudf::column_view<T> const& col_view,
+ *                    scalar const& scalar_value,
+ *                    bool col_has_nulls){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    auto column_iterator = cudf::detail::make_optional_iterator<T>(
+ *      d_col, cudf::nullate::DYNAMIC{col_has_nulls});
+ *    auto scalar_iterator = cudf::detail::make_optional_iterator<T>(
+ *      scalar_value, cudf::nullate::DYNAMIC{scalar_value.is_valid()});
+ *    //use iterators
+ * }
+ * @endcode
+ *
+ * Calling this function with `nullate::YES` means that the scalar maybe invalid
+ * and the optional return might not contain a value.
+ * Calling this function with `nullate::NO` means that the scalar is valid
+ * and the optional returned will always contain a value.
+ *
+ * @code{.cpp}
+ * template<typename T, bool any_nulls>
+ * void some_function(cudf::column_view<T> const& col_view, scalar const& scalar_value){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    if constexpr(any_nulls) {
+ *      auto column_iterator =
+ *        cudf::detail::make_optional_iterator<T>(d_col, cudf::nullate::YES{});
+ *      auto scalar_iterator =
+ *        cudf::detail::make_optional_iterator<T>(scalar_value, cudf::nullate::YES{});
+ *      //use iterators
+ *    } else {
+ *      auto column_iterator =
+ *        cudf::detail::make_optional_iterator<T>(d_col, cudf::nullate::NO{});
+ *      auto scalar_iterator =
+ *        cudf::detail::make_optional_iterator<T>(scalar_value, cudf::nullate::NO{});
+ *      //use iterators
+ *    }
+ * }
+ * @endcode
+ *
+ * @throws cudf::logic_error if scalar datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the scalar
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ *
+ * @param scalar_value The scalar to be returned by the iterator.
+ * @param has_nulls Indicates if the scalar value may be invalid.
+ * @return Iterator that returns scalar and the validity of the scalar in a thrust::optional
+ */
+template <typename Element, typename Nullate>
+auto inline make_optional_iterator(scalar const& scalar_value, Nullate has_nulls)
+{
+  CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
+               "the data type mismatch");
+  return thrust::make_transform_iterator(
+    thrust::make_constant_iterator<size_type>(0),
+    scalar_optional_accessor<Element, Nullate>{scalar_value, has_nulls});
+}
 
 /**
  * @brief Constructs a constant device pair iterator over a scalar's value and its validity.
@@ -459,7 +640,7 @@ auto inline make_pair_iterator(scalar const& scalar_value)
  *
  * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
  *
- * The behaviour is undefined if the scalar is destroyed before iterator dereferencing.
+ * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
  * @throws cudf::logic_error if the returned iterator is dereferenced in host

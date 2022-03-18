@@ -24,6 +24,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace cudf {
@@ -103,14 +104,18 @@ class csv_reader_options {
   // Whether a quote inside a value is double-quoted
   bool _doublequote = true;
   // Names of columns to read as datetime
-  std::vector<std::string> _infer_date_names;
+  std::vector<std::string> _parse_dates_names;
   // Indexes of columns to read as datetime
-  std::vector<int> _infer_date_indexes;
+  std::vector<int> _parse_dates_indexes;
+  // Names of columns to parse as hexadecimal
+  std::vector<std::string> _parse_hex_names;
+  // Indexes of columns to parse as hexadecimal
+  std::vector<int> _parse_hex_indexes;
 
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::vector<std::string> _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -154,142 +159,201 @@ class csv_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns compression format of the source.
    */
-  compression_type get_compression() const { return _compression; }
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns number of bytes to skip from source start.
    */
-  std::size_t get_byte_range_offset() const { return _byte_range_offset; }
+  [[nodiscard]] std::size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
    */
-  std::size_t get_byte_range_size() const { return _byte_range_size; }
+  [[nodiscard]] std::size_t get_byte_range_size() const { return _byte_range_size; }
+
+  /**
+   * @brief Returns number of bytes to read with padding.
+   */
+  [[nodiscard]] std::size_t get_byte_range_size_with_padding() const
+  {
+    if (_byte_range_size == 0) {
+      return 0;
+    } else {
+      return _byte_range_size + get_byte_range_padding();
+    }
+  }
+
+  /**
+   * @brief Returns number of bytes to pad when reading.
+   */
+  [[nodiscard]] std::size_t get_byte_range_padding() const
+  {
+    auto const num_names   = _names.size();
+    auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_columns = std::max(num_dtypes, num_names);
+
+    auto const max_row_bytes = 16 * 1024;  // 16KB
+    auto const column_bytes  = 64;
+    auto const base_padding  = 1024;  // 1KB
+
+    if (num_columns == 0) {
+      // Use flat size if the number of columns is not known
+      return max_row_bytes;
+    }
+
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes;
+  }
 
   /**
    * @brief Returns names of the columns.
    */
-  std::vector<std::string> const& get_names() const { return _names; }
+  [[nodiscard]] std::vector<std::string> const& get_names() const { return _names; }
 
   /**
    * @brief Returns prefix to be used for column ID.
    */
-  std::string get_prefix() const { return _prefix; }
+  [[nodiscard]] std::string get_prefix() const { return _prefix; }
 
   /**
    * @brief Whether to rename duplicate column names.
    */
-  bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
+  [[nodiscard]] bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
 
   /**
    * @brief Returns names of the columns to be read.
    */
-  std::vector<std::string> const& get_use_cols_names() const { return _use_cols_names; }
+  [[nodiscard]] std::vector<std::string> const& get_use_cols_names() const
+  {
+    return _use_cols_names;
+  }
 
   /**
    * @brief Returns indexes of columns to read.
    */
-  std::vector<int> const& get_use_cols_indexes() const { return _use_cols_indexes; }
+  [[nodiscard]] std::vector<int> const& get_use_cols_indexes() const { return _use_cols_indexes; }
 
   /**
    * @brief Returns number of rows to read.
    */
-  size_type get_nrows() const { return _nrows; }
+  [[nodiscard]] size_type get_nrows() const { return _nrows; }
 
   /**
    * @brief Returns number of rows to skip from start.
    */
-  size_type get_skiprows() const { return _skiprows; }
+  [[nodiscard]] size_type get_skiprows() const { return _skiprows; }
 
   /**
    * @brief Returns number of rows to skip from end.
    */
-  size_type get_skipfooter() const { return _skipfooter; }
+  [[nodiscard]] size_type get_skipfooter() const { return _skipfooter; }
 
   /**
    * @brief Returns header row index.
    */
-  size_type get_header() const { return _header; }
+  [[nodiscard]] size_type get_header() const { return _header; }
 
   /**
    * @brief Returns line terminator.
    */
-  char get_lineterminator() const { return _lineterminator; }
+  [[nodiscard]] char get_lineterminator() const { return _lineterminator; }
 
   /**
    * @brief Returns field delimiter.
    */
-  char get_delimiter() const { return _delimiter; }
+  [[nodiscard]] char get_delimiter() const { return _delimiter; }
 
   /**
    * @brief Returns numeric data thousands separator.
    */
-  char get_thousands() const { return _thousands; }
+  [[nodiscard]] char get_thousands() const { return _thousands; }
 
   /**
    * @brief Returns decimal point character.
    */
-  char get_decimal() const { return _decimal; }
+  [[nodiscard]] char get_decimal() const { return _decimal; }
 
   /**
    * @brief Returns comment line start character.
    */
-  char get_comment() const { return _comment; }
+  [[nodiscard]] char get_comment() const { return _comment; }
 
   /**
    * @brief Whether to treat `\r\n` as line terminator.
    */
-  bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
+  [[nodiscard]] bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
 
   /**
    * @brief Whether to treat whitespace as field delimiter.
    */
-  bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
+  [[nodiscard]] bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
 
   /**
    * @brief Whether to skip whitespace after the delimiter.
    */
-  bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
+  [[nodiscard]] bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
 
   /**
    * @brief Whether to ignore empty lines or parse line values as invalid.
    */
-  bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
+  [[nodiscard]] bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
 
   /**
    * @brief Returns quoting style.
    */
-  quote_style get_quoting() const { return _quoting; }
+  [[nodiscard]] quote_style get_quoting() const { return _quoting; }
 
   /**
    * @brief Returns quoting character.
    */
-  char get_quotechar() const { return _quotechar; }
+  [[nodiscard]] char get_quotechar() const { return _quotechar; }
 
   /**
    * @brief Whether a quote inside a value is double-quoted.
    */
-  bool is_enabled_doublequote() const { return _doublequote; }
+  [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
 
   /**
    * @brief Returns names of columns to read as datetime.
    */
-  std::vector<std::string> const& get_infer_date_names() const { return _infer_date_names; }
+  [[nodiscard]] std::vector<std::string> const& get_parse_dates_names() const
+  {
+    return _parse_dates_names;
+  }
 
   /**
    * @brief Returns indexes of columns to read as datetime.
    */
-  std::vector<int> const& get_infer_date_indexes() const { return _infer_date_indexes; }
+  [[nodiscard]] std::vector<int> const& get_parse_dates_indexes() const
+  {
+    return _parse_dates_indexes;
+  }
+
+  /**
+   * @brief Returns names of columns to read as hexadecimal.
+   */
+  [[nodiscard]] std::vector<std::string> const& get_parse_hex_names() const
+  {
+    return _parse_hex_names;
+  }
+
+  /**
+   * @brief Returns indexes of columns to read as hexadecimal.
+   */
+  [[nodiscard]] std::vector<int> const& get_parse_hex_indexes() const { return _parse_hex_indexes; }
 
   /**
    * @brief Returns per-column types.
    */
-  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
+  {
+    return _dtypes;
+  }
 
   /**
    * @brief Returns additional values to recognize as boolean true values.
@@ -373,7 +437,7 @@ class csv_reader_options {
   /**
    * @brief Sets prefix to be used for column ID.
    *
-   * @param String used as prefix in for each column name.
+   * @param pfx String used as prefix in for each column name.
    */
   void set_prefix(std::string pfx) { _prefix = pfx; }
 
@@ -397,14 +461,17 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to read.
    *
-   * @param col_ind Vector of column indices that are needed.
+   * @param col_indices Vector of column indices that are needed.
    */
-  void set_use_cols_indexes(std::vector<int> col_ind) { _use_cols_indexes = std::move(col_ind); }
+  void set_use_cols_indexes(std::vector<int> col_indices)
+  {
+    _use_cols_indexes = std::move(col_indices);
+  }
 
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read.
+   * @param nrows Number of rows to read.
    */
   void set_nrows(size_type nrows)
   {
@@ -420,7 +487,7 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param val Number of rows to skip.
+   * @param skip Number of rows to skip.
    */
   void set_skiprows(size_type skip)
   {
@@ -543,27 +610,51 @@ class csv_reader_options {
    *
    * @param col_names Vector of column names to infer as datetime.
    */
-  void set_infer_date_names(std::vector<std::string> col_names)
+  void set_parse_dates(std::vector<std::string> col_names)
   {
-    _infer_date_names = std::move(col_names);
+    _parse_dates_names = std::move(col_names);
   }
 
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_names Vector of column indices to infer as datetime.
+   * @param col_indices Vector of column indices to infer as datetime.
    */
-  void set_infer_date_indexes(std::vector<int> col_ind)
+  void set_parse_dates(std::vector<int> col_indices)
   {
-    _infer_date_indexes = std::move(col_ind);
+    _parse_dates_indexes = std::move(col_indices);
   }
 
   /**
-   * @brief Sets per-column types.
+   * @brief Sets names of columns to parse as hexadecimal
    *
-   * @param types Vector of dtypes in which the column needs to be read.
+   * @param col_names Vector of column names to parse as hexadecimal
    */
-  void set_dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  void set_parse_hex(std::vector<std::string> col_names)
+  {
+    _parse_hex_names = std::move(col_names);
+  }
+
+  /**
+   * @brief Sets indexes of columns to parse as hexadecimal
+   *
+   * @param col_indices Vector of column indices to parse as hexadecimal
+   */
+  void set_parse_hex(std::vector<int> col_indices) { _parse_hex_indexes = std::move(col_indices); }
+
+  /**
+   * @brief Sets per-column types
+   *
+   * @param types Column name -> data type map specifying the columns' target data types
+   */
+  void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Sets per-column types
+   *
+   * @param types Vector specifying the columns' target data types.
+   */
+  void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -701,7 +792,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets prefix to be used for column ID.
    *
-   * @param String used as prefix in for each column name.
+   * @param pfx String used as prefix in for each column name.
    * @return this for chaining.
    */
   csv_reader_options_builder& prefix(std::string pfx)
@@ -737,19 +828,19 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to read.
    *
-   * @param col_ind Vector of column indices that are needed.
+   * @param col_indices Vector of column indices that are needed.
    * @return this for chaining.
    */
-  csv_reader_options_builder& use_cols_indexes(std::vector<int> col_ind)
+  csv_reader_options_builder& use_cols_indexes(std::vector<int> col_indices)
   {
-    options._use_cols_indexes = std::move(col_ind);
+    options._use_cols_indexes = std::move(col_indices);
     return *this;
   }
 
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read.
+   * @param rows Number of rows to read.
    * @return this for chaining.
    */
   csv_reader_options_builder& nrows(size_type rows)
@@ -761,7 +852,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param val Number of rows to skip.
+   * @param skip Number of rows to skip.
    * @return this for chaining.
    */
   csv_reader_options_builder& skiprows(size_type skip)
@@ -941,34 +1032,70 @@ class csv_reader_options_builder {
   /**
    * @brief Sets names of columns to read as datetime.
    *
-   * @param col_names Vector of column names to infer as datetime.
+   * @param col_names Vector of column names to read as datetime.
    * @return this for chaining.
    */
-  csv_reader_options_builder& infer_date_names(std::vector<std::string> col_names)
+  csv_reader_options_builder& parse_dates(std::vector<std::string> col_names)
   {
-    options._infer_date_names = std::move(col_names);
+    options._parse_dates_names = std::move(col_names);
     return *this;
   }
 
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_names Vector of column indices to infer as datetime.
+   * @param col_indices Vector of column indices to read as datetime
    * @return this for chaining.
    */
-  csv_reader_options_builder& infer_date_indexes(std::vector<int> col_ind)
+  csv_reader_options_builder& parse_dates(std::vector<int> col_indices)
   {
-    options._infer_date_indexes = std::move(col_ind);
+    options._parse_dates_indexes = std::move(col_indices);
+    return *this;
+  }
+
+  /**
+   * @brief Sets names of columns to parse as hexadecimal.
+   *
+   * @param col_names Vector of column names to parse as hexadecimal
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& parse_hex(std::vector<std::string> col_names)
+  {
+    options._parse_hex_names = std::move(col_names);
+    return *this;
+  }
+
+  /**
+   * @brief Sets indexes of columns to parse as hexadecimal.
+   *
+   * @param col_indices Vector of column indices to parse as hexadecimal
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& parse_hex(std::vector<int> col_indices)
+  {
+    options._parse_hex_indexes = std::move(col_indices);
     return *this;
   }
 
   /**
    * @brief Sets per-column types.
    *
-   * @param types Vector of dtypes in which the column needs to be read.
+   * @param types Column name -> data type map specifying the columns' target data types
    * @return this for chaining.
    */
-  csv_reader_options_builder& dtypes(std::vector<std::string> types)
+  csv_reader_options_builder& dtypes(std::map<std::string, data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Sets per-column types.
+   *
+   * @param types Vector of data types in which the column needs to be read.
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& dtypes(std::vector<data_type> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -1061,7 +1188,7 @@ class csv_reader_options_builder {
   /**
    * @brief move csv_reader_options member once it's built.
    */
-  operator csv_reader_options &&() { return std::move(options); }
+  operator csv_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move csv_reader_options member once it's built.
@@ -1076,11 +1203,9 @@ class csv_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::csv_reader_options options =
- * cudf::io::csv_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_csv(options);
+ *  auto source  = cudf::io::source_info("dataset.csv");
+ *  auto options = cudf::io::csv_reader_options::builder(source);
+ *  auto result  = cudf::io::read_csv(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
@@ -1090,7 +1215,7 @@ class csv_reader_options_builder {
  * @return The set of columns along with metadata.
  */
 table_with_metadata read_csv(
-  csv_reader_options const& options,
+  csv_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
@@ -1164,52 +1289,52 @@ class csv_writer_options {
   /**
    * @brief Returns sink used for writer output.
    */
-  sink_info const& get_sink(void) const { return _sink; }
+  [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns table that would be written to output.
    */
-  table_view const& get_table(void) const { return _table; }
+  [[nodiscard]] table_view const& get_table() const { return _table; }
 
   /**
    * @brief Returns optional associated metadata.
    */
-  table_metadata const* get_metadata(void) const { return _metadata; }
+  [[nodiscard]] table_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns string to used for null entries.
    */
-  std::string get_na_rep(void) const { return _na_rep; }
+  [[nodiscard]] std::string get_na_rep() const { return _na_rep; }
 
   /**
    * @brief Whether to write headers to csv.
    */
-  bool is_enabled_include_header(void) const { return _include_header; }
+  [[nodiscard]] bool is_enabled_include_header() const { return _include_header; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
    */
-  size_type get_rows_per_chunk(void) const { return _rows_per_chunk; }
+  [[nodiscard]] size_type get_rows_per_chunk() const { return _rows_per_chunk; }
 
   /**
    * @brief Returns character used for separating lines.
    */
-  std::string get_line_terminator(void) const { return _line_terminator; }
+  [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
 
   /**
    * @brief Returns character used for separating lines.
    */
-  char get_inter_column_delimiter(void) const { return _inter_column_delimiter; }
+  [[nodiscard]] char get_inter_column_delimiter() const { return _inter_column_delimiter; }
 
   /**
    * @brief Returns string used for values != 0 in INT8 types.
    */
-  std::string get_true_value(void) const { return _true_value; }
+  [[nodiscard]] std::string get_true_value() const { return _true_value; }
 
   /**
    * @brief Returns string used for values == 0 in INT8 types.
    */
-  std::string get_false_value(void) const { return _false_value; }
+  [[nodiscard]] std::string get_false_value() const { return _false_value; }
 
   // Setter
   /**
@@ -1390,7 +1515,7 @@ class csv_writer_options_builder {
   /**
    * @brief move `csv_writer_options` member once it's built.
    */
-  operator csv_writer_options &&() { return std::move(options); }
+  operator csv_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move `csv_writer_options` member once it's built.
@@ -1405,12 +1530,12 @@ class csv_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::sink_info sink_info(filepath);
+ *  auto destination = cudf::io::sink_info("dataset.csv");
+ *  auto options     = cudf::io::csv_writer_options(destination, table->view())
+ *    .na_rep(na)
+ *    .include_header(include_header)
+ *    .rows_per_chunk(rows_per_chunk);
  *
- *  cudf::io::csv_writer_options options = cudf::io::csv_writer_options(sink_info,
- * table->view()).na_rep(na).include_header(include_header).rows_per_chunk(rows_per_chunk);
- *  ...
  *  cudf::io::write_csv(options);
  * @endcode
  *

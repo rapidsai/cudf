@@ -4,9 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import Series
 from cudf.core.index import RangeIndex, as_index
-from cudf.tests.utils import (
+from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -82,7 +83,7 @@ def test_rangeindex_contains():
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_lists_contains(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     inner_data = np.array([1, 2, 3], dtype=dtype)
 
     data = Series([inner_data])
@@ -96,7 +97,7 @@ def test_lists_contains(dtype):
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES + TIMEDELTA_TYPES)
 def test_lists_contains_datetime(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     inner_data = np.array([1, 2, 3])
 
     unit, _ = np.datetime_data(dtype)

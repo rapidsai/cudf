@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
-
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/type.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -27,6 +21,12 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

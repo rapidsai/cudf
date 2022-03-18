@@ -20,6 +20,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -30,7 +31,7 @@
 #include <vector>
 
 // Compares two tables row by row, if table1 row is less than table2, then corresponding row value
-// in `ouput` would be `true`/1 else `false`/0.
+// in `output` would be `true`/1 else `false`/0.
 struct TableViewTest : public cudf::test::BaseFixture {
 };
 void row_comparison(cudf::table_view input1,
@@ -42,10 +43,10 @@ void row_comparison(cudf::table_view input1,
 
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
-  rmm::device_vector<cudf::order> d_column_order(column_order);
+  auto d_column_order = cudf::detail::make_device_uvector_sync(column_order);
 
-  auto comparator = cudf::row_lexicographic_comparator<false>(
-    *device_table_1, *device_table_2, d_column_order.data().get());
+  auto comparator = cudf::row_lexicographic_comparator(
+    cudf::nullate::NO{}, *device_table_1, *device_table_2, d_column_order.data());
 
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),
@@ -122,7 +123,7 @@ TEST_F(TableViewTest, SelectOutOfBounds)
   fixed_width_column_wrapper<int64_t> col4{{4, 5, 6, 7}};
   cudf::table_view t{{col1, col2}};
 
-  EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
+  EXPECT_THROW((void)t.select({2, 3, 4}), std::out_of_range);
 }
 
 TEST_F(TableViewTest, SelectNoColumns)

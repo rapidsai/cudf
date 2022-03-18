@@ -1,20 +1,33 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cudf
-from cudf.utils.dtypes import is_decimal_dtype
-from cudf.core.dtypes import Decimal64Dtype
-from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type, cpp_minmax
+from cudf.api.types import is_decimal_dtype
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.column cimport Column
-from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id, dtype_to_data_type
-from cudf._lib.aggregation cimport make_aggregation, aggregation
+
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
+
+from cudf._lib.aggregation cimport (
+    ReduceAggregation,
+    ScanAggregation,
+    make_reduce_aggregation,
+    make_scan_aggregation,
+)
+from cudf._lib.types cimport (
+    dtype_to_data_type,
+    is_decimal_type_id,
+    underlying_type_t_type_id,
+)
+
 import numpy as np
 
 cimport cudf._lib.cpp.types as libcudf_types
@@ -35,19 +48,15 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         to the same type as the input column
     """
 
-    col_dtype = incol.dtype
-    if (
-        reduction_op in ['sum', 'sum_of_squares', 'product']
-        and not is_decimal_dtype(col_dtype)
-    ):
-        col_dtype = np.find_common_type([col_dtype], [np.uint64])
-    col_dtype = col_dtype if dtype is None else dtype
+    col_dtype = (
+        dtype if dtype is not None
+        else incol._reduction_result_dtype(reduction_op)
+    )
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
-    cdef unique_ptr[aggregation] c_agg = move(make_aggregation(
-        reduction_op, kwargs
-    ))
+    cdef ReduceAggregation cython_agg = make_reduce_aggregation(
+        reduction_op, kwargs)
 
     cdef data_type c_out_dtype = dtype_to_data_type(col_dtype)
 
@@ -65,15 +74,15 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     with nogil:
         c_result = move(cpp_reduce(
             c_incol_view,
-            c_agg,
+            cython_agg.c_obj,
             c_out_dtype
         ))
 
-    if c_result.get()[0].type().id() == libcudf_types.type_id.DECIMAL64:
+    if is_decimal_type_id(c_result.get()[0].type().id()):
         scale = -c_result.get()[0].type().scale()
         precision = _reduce_precision(col_dtype, reduction_op, len(incol))
         py_result = DeviceScalar.from_unique_ptr(
-            move(c_result), dtype=Decimal64Dtype(precision, scale)
+            move(c_result), dtype=col_dtype.__class__(precision, scale)
         )
     else:
         py_result = DeviceScalar.from_unique_ptr(move(c_result))
@@ -95,20 +104,15 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
-    cdef unique_ptr[aggregation] c_agg = move(
-        make_aggregation(scan_op, kwargs)
-    )
+    cdef ScanAggregation cython_agg = make_scan_aggregation(scan_op, kwargs)
 
-    cdef scan_type c_inclusive
-    if inclusive is True:
-        c_inclusive = scan_type.INCLUSIVE
-    elif inclusive is False:
-        c_inclusive = scan_type.EXCLUSIVE
+    cdef scan_type c_inclusive = \
+        scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE
 
     with nogil:
         c_result = move(cpp_scan(
             c_incol_view,
-            c_agg,
+            cython_agg.c_obj,
             c_inclusive
         ))
 
@@ -159,4 +163,4 @@ def _reduce_precision(dtype, op, nrows):
         new_p = 2 * p + nrows
     else:
         raise NotImplementedError()
-    return max(min(new_p, Decimal64Dtype.MAX_PRECISION), 0)
+    return max(min(new_p, dtype.MAX_PRECISION), 0)

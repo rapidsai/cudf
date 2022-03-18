@@ -90,17 +90,6 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::column_view const& target;
 
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::size_type source_begin,
-    cudf::size_type source_end,
-    cudf::size_type target_begin,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-  {
-    CUDF_FAIL("Unsupported type for out of place copy.");
-  }
-
   template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
@@ -121,6 +110,13 @@ struct out_of_place_copy_range_dispatch {
     }
 
     return p_ret;
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
+  operator()(Args...)
+  {
+    CUDF_FAIL("Unsupported type for out of place copy.");
   }
 };
 
@@ -210,17 +206,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
                                 std::move(indices_column),
                                 std::move(*(target_contents.null_mask.release())),
                                 null_count);
-}
-
-template <>
-std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::list_view>(
-  cudf::size_type source_begin,
-  cudf::size_type source_end,
-  cudf::size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("list_view type not supported");
 }
 
 }  // namespace

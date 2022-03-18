@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #########################################
 # cuDF GPU build and test script for CI #
 #########################################
@@ -21,20 +21,23 @@ function hasArg {
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
 export PARALLEL_LEVEL=4
 export CUDA_REL=${CUDA_VERSION%.*}
-export HOME=$WORKSPACE
+export HOME="$WORKSPACE"
 
 # Parse git describe
-cd $WORKSPACE
+cd "$WORKSPACE"
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Set Benchmark Vars
-export GBENCH_BENCHMARKS_DIR=${WORKSPACE}/cpp/build/gbenchmarks/
+export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 
 # Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
 # it's local to the container's virtual file system, and not shared with other CI jobs
 # like `/tmp` is.
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
+
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
+export INSTALL_DASK_MAIN=1
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
@@ -74,13 +77,18 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 # conda remove -f rapids-build-env rapids-notebook-env
 # conda install "your-pkg=1.0.0"
 
-# Install the master version of dask, distributed, and streamz
-logger "pip install git+https://github.com/dask/distributed.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
-logger "pip install git+https://github.com/dask/dask.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
-logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
-pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+# Install the conda-forge or nightly version of dask and distributed
+if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
+    gpuci_logger "gpuci_mamba_retry update dask"
+    gpuci_mamba_retry update dask
+else
+    gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.02.1 conda-forge::distributed>=2022.02.1 conda-forge::dask-core>=2022.02.1 --force-reinstall"
+    gpuci_mamba_retry install conda-forge::dask>=2022.02.1 conda-forge::distributed>=2022.02.1 conda-forge::dask-core>=2022.02.1 --force-reinstall
+fi
+
+# Install the master version of streamz
+logger "pip install git+https://github.com/python-streamz/streamz.git@master --upgrade --no-deps"
+pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
 
 logger "Check versions..."
 python --version
@@ -95,11 +103,7 @@ conda list --show-channel-urls
 ################################################################################
 
 logger "Build libcudf..."
-if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests --ptds
-else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf benchmarks tests -l --ptds
-fi
+"$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests --ptds
 
 ################################################################################
 # BENCHMARK - Run and parse libcudf and cuDF benchmarks
@@ -144,9 +148,9 @@ function getReqs() {
 
 REQS=$(getReqs "${LIBCUDF_DEPS[@]}")
 
-mkdir -p ${WORKSPACE}/tmp/benchmark
-touch ${WORKSPACE}/tmp/benchmark/benchmarks.txt
-ls ${GBENCH_BENCHMARKS_DIR} > ${WORKSPACE}/tmp/benchmark/benchmarks.txt
+mkdir -p "$WORKSPACE/tmp/benchmark"
+touch "$WORKSPACE/tmp/benchmark/benchmarks.txt"
+ls ${GBENCH_BENCHMARKS_DIR} > "$WORKSPACE/tmp/benchmark/benchmarks.txt"
 
 #Disable error aborting while tests run, failed tests will not generate data
 logger "Running libcudf GBenchmarks..."
@@ -161,13 +165,13 @@ do
         rm ./${BENCH}.json
 	JOBEXITCODE=1
     fi
-done < ${WORKSPACE}/tmp/benchmark/benchmarks.txt
+done < "$WORKSPACE/tmp/benchmark/benchmarks.txt"
 set -e
 
-rm ${WORKSPACE}/tmp/benchmark/benchmarks.txt
-cd ${WORKSPACE}
-mv ${GBENCH_BENCHMARKS_DIR}/*.json ${WORKSPACE}/tmp/benchmark/
-python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${S3_ASV_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}"
+rm "$WORKSPACE/tmp/benchmark/benchmarks.txt"
+cd "$WORKSPACE"
+mv ${GBENCH_BENCHMARKS_DIR}/*.json "$WORKSPACE/tmp/benchmark/"
+python GBenchToASV.py -d  "$WORKSPACE/tmp/benchmark/" -t ${S3_ASV_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}"
 
 ###
 # Run Python Benchmarks

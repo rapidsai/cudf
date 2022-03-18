@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from cudf import Series
-from cudf.tests import utils
+from cudf.testing import _utils as utils
 
 
 @pytest.mark.parametrize(
@@ -24,13 +24,9 @@ def test_applymap_round(nelem, masked):
         boolmask = np.asarray(
             utils.expand_bits_to_bytes(bitmask), dtype=np.bool_
         )[:nelem]
-        data[~boolmask] = np.nan
+        data[~boolmask] = None
 
     sr = Series(data)
-
-    if masked:
-        # Mask the Series
-        sr = sr.set_mask(bitmask)
 
     # Call applymap
     out = sr.applymap(
@@ -43,7 +39,7 @@ def test_applymap_round(nelem, masked):
 
     # Check
     expect = np.round(data)
-    got = out.to_array()
+    got = out.to_numpy()
     np.testing.assert_array_almost_equal(expect, got)
 
 
@@ -58,5 +54,5 @@ def test_applymap_change_out_dtype():
 
     # Check
     expect = np.array(data, dtype=float)
-    got = out.to_array()
+    got = out.to_numpy()
     np.testing.assert_array_equal(expect, got)

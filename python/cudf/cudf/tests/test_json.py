@@ -12,7 +12,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -190,7 +190,57 @@ def test_json_lines_basic(json_input, engine):
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
-        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
+def test_json_lines_multiple(tmpdir, json_input, engine):
+    tmp_file1 = tmpdir.join("MultiInputs1.json")
+    tmp_file2 = tmpdir.join("MultiInputs2.json")
+
+    pdf = pd.read_json(json_input, lines=True)
+    pdf.to_json(tmp_file1, compression="infer", lines=True, orient="records")
+    pdf.to_json(tmp_file2, compression="infer", lines=True, orient="records")
+
+    cu_df = cudf.read_json([tmp_file1, tmp_file2], engine=engine, lines=True)
+    pd_df = pd.concat([pdf, pdf])
+
+    assert all(cu_df.dtypes == ["int64", "int64", "int64"])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert str(cu_col) == str(pd_col)
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
+
+
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
+def test_json_read_directory(tmpdir, json_input, engine):
+    pdf = pd.read_json(json_input, lines=True)
+    pdf.to_json(
+        tmpdir.join("MultiInputs1.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+    pdf.to_json(
+        tmpdir.join("MultiInputs2.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+    pdf.to_json(
+        tmpdir.join("MultiInputs3.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+
+    cu_df = cudf.read_json(tmpdir, engine=engine, lines=True)
+    pd_df = pd.concat([pdf, pdf, pdf])
+
+    assert all(cu_df.dtypes == ["int64", "int64", "int64"])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert str(cu_col) == str(pd_col)
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
 def test_json_lines_byte_range(json_input):
@@ -228,7 +278,7 @@ def test_json_lines_byte_range(json_input):
 )
 def test_json_lines_dtypes(json_input, dtype):
     df = cudf.read_json(json_input, lines=True, dtype=dtype)
-    assert all(df.dtypes == ["float32", "int32", "int16"])
+    assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
 @pytest.mark.parametrize(
@@ -251,7 +301,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     pd_df.to_json(fname, compression=out_comp, lines=True, orient="records")
 
     cu_df = cudf.read_json(
-        str(fname), compression=in_comp, lines=True, dtype=["int", "int"]
+        str(fname), compression=in_comp, lines=True, dtype=["int32", "int32"]
     )
     assert_eq(pd_df, cu_df)
 
@@ -290,9 +340,9 @@ def test_json_bool_values():
 
     # types should be ['bool', 'int64']
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
-    np.testing.assert_array_equal(pd_df[0], cu_df["0"].to_array())
+    np.testing.assert_array_equal(pd_df[0], cu_df["0"].to_numpy())
     # boolean values should be converted to 0/1
-    np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_array())
+    np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
     cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
@@ -314,15 +364,9 @@ def test_json_null_literal(buffer):
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
     np.testing.assert_array_equal(
-        df["0"].to_array(fillna=np.nan), [1.0, np.nan]
+        df["0"].to_numpy(na_value=np.nan), [1.0, np.nan]
     )
-    np.testing.assert_array_equal(
-        df["1"].to_array(fillna=np.nan),
-        [
-            df["1"]._column.default_na_value(),
-            df["1"]._column.default_na_value(),
-        ],
-    )
+    np.testing.assert_array_equal(df["1"].to_numpy(na_value=0), [0, 0])
 
 
 def test_json_bad_protocol_string():

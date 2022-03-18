@@ -1,11 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport data_type
 
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 
 cdef extern from "cudf/strings/convert/convert_datetime.hpp" namespace \
         "cudf::strings" nogil:
@@ -16,7 +17,8 @@ cdef extern from "cudf/strings/convert/convert_datetime.hpp" namespace \
 
     cdef unique_ptr[column] from_timestamps(
         column_view input_col,
-        string format) except +
+        string format,
+        column_view input_strings_names) except +
 
     cdef unique_ptr[column] is_timestamp(
         column_view input_col,

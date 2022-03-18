@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/merge.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -40,8 +39,8 @@ namespace detail {
  * @param lhs First column.
  * @param rhs Second column.
  * @param row_order Indexes for each column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 template <typename index_type, typename row_order_iterator>
@@ -54,7 +53,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
 {
   using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   auto lhs_column = column_device_view::create(lhs.parent(), stream);
   auto d_lhs      = *lhs_column;
@@ -69,8 +68,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
 
   // build offsets column
   auto offsets_transformer = [d_lhs, d_rhs] __device__(auto index_pair) {
-    auto side  = thrust::get<0>(index_pair);
-    auto index = thrust::get<1>(index_pair);
+    auto const [side, index] = index_pair;
     if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return 0;
     auto d_str =
       side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
@@ -84,16 +82,14 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   // create the chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
   // merge the strings
   auto d_chars = chars_column->mutable_view().template data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {
-                       index_type index_pair = begin[idx];
-                       auto side             = thrust::get<0>(index_pair);
-                       auto index            = thrust::get<1>(index_pair);
+                       auto const [side, index] = begin[idx];
                        if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return;
                        auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
                                                        : d_rhs.element<string_view>(index);
@@ -104,9 +100,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

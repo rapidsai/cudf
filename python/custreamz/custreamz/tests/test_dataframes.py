@@ -4,7 +4,6 @@
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
 *** Borrowed from streamz.dataframe.tests | License at thirdparty/LICENSE ***
 """
-from __future__ import division, print_function
 
 import json
 import operator
@@ -12,12 +11,13 @@ import operator
 import numpy as np
 import pandas as pd
 import pytest
-from streamz import Stream
-from streamz.dask import DaskStream
-from streamz.dataframe import Aggregation, DataFrame, DataFrames, Series
 
 from dask.dataframe.utils import assert_eq
 from distributed import Client
+
+from streamz import Stream
+from streamz.dask import DaskStream
+from streamz.dataframe import Aggregation, DataFrame, DataFrames, Series
 
 cudf = pytest.importorskip("cudf")
 

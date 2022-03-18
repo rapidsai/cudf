@@ -28,7 +28,9 @@ table::table(table const& other) : _num_rows{other.num_rows()}
 {
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
-  for (auto const& c : other._columns) { _columns.emplace_back(std::make_unique<column>(*c)); }
+  for (auto const& c : other._columns) {
+    _columns.emplace_back(std::make_unique<column>(*c));
+  }
 }
 
 // Move the contents of a vector `unique_ptr<column>`
@@ -53,7 +55,9 @@ table::table(table_view view, rmm::cuda_stream_view stream, rmm::mr::device_memo
 {
   CUDF_FUNC_RANGE();
   _columns.reserve(view.num_columns());
-  for (auto const& c : view) { _columns.emplace_back(std::make_unique<column>(c, stream, mr)); }
+  for (auto const& c : view) {
+    _columns.emplace_back(std::make_unique<column>(c, stream, mr));
+  }
 }
 
 // Create immutable view
@@ -61,7 +65,9 @@ table_view table::view() const
 {
   std::vector<column_view> views;
   views.reserve(_columns.size());
-  for (auto const& c : _columns) { views.push_back(c->view()); }
+  for (auto const& c : _columns) {
+    views.push_back(c->view());
+  }
   return table_view{views};
 }
 
@@ -70,7 +76,9 @@ mutable_table_view table::mutable_view()
 {
   std::vector<mutable_column_view> views;
   views.reserve(_columns.size());
-  for (auto const& c : _columns) { views.push_back(c->mutable_view()); }
+  for (auto const& c : _columns) {
+    views.push_back(c->mutable_view());
+  }
   return mutable_table_view{views};
 }
 

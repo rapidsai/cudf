@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,9 @@ namespace cudf {
 namespace io {
 namespace orc {
 
-// ORC rows are divided into groups and assigned indexes for faster seeking
-static constexpr uint32_t default_row_index_stride = 10000;
+static constexpr uint32_t BLOCK_HEADER_SIZE = 3;
 
-enum CompressionKind {
+enum CompressionKind : uint8_t {
   NONE   = 0,
   ZLIB   = 1,
   SNAPPY = 2,
@@ -34,7 +33,7 @@ enum CompressionKind {
   ZSTD   = 5,
 };
 
-enum TypeKind {
+enum TypeKind : int8_t {
   INVALID_TYPE_KIND = -1,
   BOOLEAN           = 0,
   BYTE              = 1,
@@ -56,7 +55,7 @@ enum TypeKind {
   CHAR              = 17,
 };
 
-enum StreamKind {
+enum StreamKind : int8_t {
   INVALID_STREAM_KIND = -1,
   PRESENT             = 0,  // boolean stream of whether the next value is non-null
   DATA                = 1,  // the primary data stream
@@ -69,7 +68,7 @@ enum StreamKind {
   BLOOM_FILTER_UTF8   = 8,  // bloom filters that consistently use utf8
 };
 
-enum ColumnEncodingKind {
+enum ColumnEncodingKind : int8_t {
   INVALID_ENCODING_KIND = -1,
   DIRECT                = 0,  // the encoding is mapped directly to the stream using RLE v1
   DICTIONARY            = 1,  // the encoding uses a dictionary of unique values using RLE v1
@@ -77,15 +76,15 @@ enum ColumnEncodingKind {
   DICTIONARY_V2         = 3,  // the encoding is dictionary-based using RLE v2
 };
 
-enum {  // Protobuf field types
-  PB_TYPE_VARINT      = 0,
-  PB_TYPE_FIXED64     = 1,
-  PB_TYPE_FIXEDLEN    = 2,
-  PB_TYPE_START_GROUP = 3,  // deprecated
-  PB_TYPE_END_GROUP   = 4,  // deprecated
-  PB_TYPE_FIXED32     = 5,
-  PB_TYPE_INVALID_6   = 6,
-  PB_TYPE_INVALID_7   = 7,
+enum ProtofType : uint8_t {
+  VARINT      = 0,
+  FIXED64     = 1,
+  FIXEDLEN    = 2,
+  START_GROUP = 3,  // deprecated
+  END_GROUP   = 4,  // deprecated
+  FIXED32     = 5,
+  INVALID_6   = 6,
+  INVALID_7   = 7,
 };
 
 }  // namespace orc

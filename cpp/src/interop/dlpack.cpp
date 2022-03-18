@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,9 +91,9 @@ struct data_type_to_DLDataType_impl {
   {
     uint8_t const bits{sizeof(T) * 8};
     uint16_t const lanes{1};
-    if (std::is_floating_point<T>::value) {
+    if (std::is_floating_point_v<T>) {
       return DLDataType{kDLFloat, bits, lanes};
-    } else if (std::is_signed<T>::value) {
+    } else if (std::is_signed_v<T>) {
       return DLDataType{kDLInt, bits, lanes};
     } else {
       return DLDataType{kDLUInt, bits, lanes};
@@ -137,15 +137,15 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   auto const& tensor = managed_tensor->dl_tensor;
 
   // We can copy from host or device pointers
-  CUDF_EXPECTS(kDLGPU == tensor.ctx.device_type || kDLCPU == tensor.ctx.device_type ||
-                 kDLCPUPinned == tensor.ctx.device_type,
-               "DLTensor must be GPU, CPU, or pinned type");
+  CUDF_EXPECTS(tensor.device.device_type == kDLCPU || tensor.device.device_type == kDLCUDA ||
+                 tensor.device.device_type == kDLCUDAHost,
+               "DLTensor device type must be CPU, CUDA or CUDAHost");
 
   // Make sure the current device ID matches the Tensor's device ID
-  if (tensor.ctx.device_type != kDLCPU) {
+  if (tensor.device.device_type != kDLCPU) {
     int device_id = 0;
     CUDA_TRY(cudaGetDevice(&device_id));
-    CUDF_EXPECTS(tensor.ctx.device_id == device_id, "DLTensor device ID must be current device");
+    CUDF_EXPECTS(tensor.device.device_id == device_id, "DLTensor device ID must be current device");
   }
 
   // Currently only 1D and 2D tensors are supported
@@ -168,7 +168,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   data_type const dtype = DLDataType_to_data_type(tensor.dtype);
 
   size_t const byte_width = size_of(dtype);
-  size_t const num_rows   = static_cast<size_t>(tensor.shape[0]);
+  auto const num_rows     = static_cast<size_t>(tensor.shape[0]);
   size_t const bytes      = num_rows * byte_width;
 
   // For 2D tensors, if the strides pointer is not null, then strides[1] is the
@@ -234,8 +234,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
     tensor.strides[1] = num_rows;
   }
 
-  CUDA_TRY(cudaGetDevice(&tensor.ctx.device_id));
-  tensor.ctx.device_type = kDLGPU;
+  CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
+  tensor.device.device_type = kDLCUDA;
 
   // If there is only one column, then a 1D tensor can just copy the pointer
   // to the data in the column, and the deleter should not delete the original

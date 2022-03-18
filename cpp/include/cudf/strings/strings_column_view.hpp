@@ -15,11 +15,7 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 /**
  * @file
@@ -56,24 +52,45 @@ class strings_column_view : private column_view {
   using column_view::offset;
   using column_view::size;
 
+  using offset_iterator = offset_type const*;
+  using chars_iterator  = char const*;
+
   /**
    * @brief Returns the parent column.
    */
-  column_view parent() const;
+  [[nodiscard]] column_view parent() const;
 
   /**
    * @brief Returns the internal column of offsets
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view offsets() const;
+  [[nodiscard]] column_view offsets() const;
+
+  /**
+   * @brief Return an iterator for the offsets child column.
+   *
+   * This automatically applies the offset of the parent.
+   *
+   * @return Iterator pointing to the first offset value.
+   */
+  [[nodiscard]] offset_iterator offsets_begin() const;
+
+  /**
+   * @brief Return an end iterator for the offsets child column.
+   *
+   * This automatically applies the offset of the parent.
+   *
+   * @return Iterator pointing 1 past the last offset value.
+   */
+  [[nodiscard]] offset_iterator offsets_end() const;
 
   /**
    * @brief Returns the internal column of chars
    *
    * @throw cudf::logic error if this is an empty column
    */
-  column_view chars() const;
+  [[nodiscard]] column_view chars() const;
 
   /**
    * @brief Returns the number of bytes in the chars child column.
@@ -81,26 +98,35 @@ class strings_column_view : private column_view {
    * This accounts for empty columns but does not reflect a sliced parent column
    * view  (i.e.: non-zero offset or reduced row count).
    */
-  size_type chars_size() const noexcept;
+  [[nodiscard]] size_type chars_size() const noexcept;
+
+  /**
+   * @brief Return an iterator for the chars child column.
+   *
+   * This does not apply the offset of the parent.
+   * The offsets child must be used to properly address the char bytes.
+   *
+   * For example, to access the first character of string `i` (accounting for
+   * a sliced column offset) use: `chars_begin()[offsets_begin()[i]]`.
+   *
+   * @return Iterator pointing to the first char byte.
+   */
+  [[nodiscard]] chars_iterator chars_begin() const;
+
+  /**
+   * @brief Return an end iterator for the offsets child column.
+   *
+   * This does not apply the offset of the parent.
+   * The offsets child must be used to properly address the char bytes.
+   *
+   * @return Iterator pointing 1 past the last char byte.
+   */
+  [[nodiscard]] chars_iterator chars_end() const;
 };
 
 //! Strings column APIs.
 namespace strings {
-/**
- * @brief Create output per Arrow strings format.
- *
- * The return pair is the vector of chars and the vector of offsets.
- *
- * @param strings Strings instance for this operation.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned device vectors.
- * @return Pair containing a vector of chars and a vector of offsets.
- */
-std::pair<rmm::device_uvector<char>, rmm::device_uvector<size_type>> create_offsets(
-  strings_column_view const& strings,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 }  // namespace strings
+
 /** @} */  // end of group
 }  // namespace cudf

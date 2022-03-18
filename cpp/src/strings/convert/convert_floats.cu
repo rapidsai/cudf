@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -45,7 +45,7 @@ namespace {
  * @brief This function converts the given string into a
  * floating point double value.
  *
- * This will also map strings containing "NaN", "Inf" and "-Inf"
+ * This will also map strings containing "NaN", "Inf", etc.
  * to the appropriate float values.
  *
  * This function will also handle scientific notation format.
@@ -55,14 +55,17 @@ __device__ inline double stod(string_view const& d_str)
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
-  // special strings
-  if (d_str.compare("NaN", 3) == 0) return std::numeric_limits<double>::quiet_NaN();
-  if (d_str.compare("Inf", 3) == 0) return std::numeric_limits<double>::infinity();
-  if (d_str.compare("-Inf", 4) == 0) return -std::numeric_limits<double>::infinity();
   double sign{1.0};
   if (*in_ptr == '-' || *in_ptr == '+') {
     sign = (*in_ptr == '-' ? -1 : 1);
     ++in_ptr;
+  }
+
+  // special strings: NaN, Inf
+  if ((in_ptr < end) && *in_ptr > '9') {
+    auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
+    if (string::is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
+    if (string::is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
   }
 
   // Parse and store the mantissa as much as we can,
@@ -124,8 +127,7 @@ __device__ inline double stod(string_view const& d_str)
   else if (exp_ten < std::numeric_limits<double>::min_exponent10)
     return double{0};
 
-  // using exp10() since the pow(10.0,exp_ten) function is
-  // very inaccurate in 10.2: http://nvbugs/2971187
+  // exp10() is faster than pow(10.0,exp_ten)
   double const base =
     sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
   double const exponent = exp10(static_cast<double>(exp_ten));
@@ -156,8 +158,7 @@ struct string_to_float_fn {
  * The output_column is expected to be one of the float types only.
  */
 struct dispatch_to_floats_fn {
-  template <typename FloatType,
-            std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
+  template <typename FloatType, std::enable_if_t<std::is_floating_point_v<FloatType>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -170,7 +171,7 @@ struct dispatch_to_floats_fn {
                       string_to_float_fn<FloatType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_floats must be a float type.");
@@ -235,7 +236,7 @@ struct ftos_converter {
   static constexpr double upper_limit = 1000000000;  // max is 1x10^9
   static constexpr double lower_limit = 0.0001;      // printf uses scientific notation below this
   // Tables for doing normalization: converting to exponent form
-  // IEEE double float has maximum exponent of 305 so these should cover everthing
+  // IEEE double float has maximum exponent of 305 so these should cover everything
   const double upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
   const double lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
   const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
@@ -253,7 +254,8 @@ struct ftos_converter {
       *ptr++ = (char)('0' + (value % 10));
       value /= 10;
     }
-    while (ptr != buffer) *output++ = *--ptr;  // 54321 -> 12345
+    while (ptr != buffer)
+      *output++ = *--ptr;  // 54321 -> 12345
     return output;
   }
 
@@ -471,8 +473,7 @@ struct float_to_string_fn {
  * The template function declaration ensures only float types are allowed.
  */
 struct dispatch_from_floats_fn {
-  template <typename FloatType,
-            std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
+  template <typename FloatType, std::enable_if_t<std::is_floating_point_v<FloatType>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& floats,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -493,7 +494,7 @@ struct dispatch_from_floats_fn {
 
     // build chars column
     auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(strings_count, bytes, stream, mr);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
     auto chars_view   = chars_column->mutable_view();
     auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
@@ -505,13 +506,11 @@ struct dispatch_from_floats_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                floats.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-float types throw an exception
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -528,7 +527,7 @@ std::unique_ptr<column> from_floats(column_view const& floats,
                                     rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = floats.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(floats.type(), dispatch_from_floats_fn{}, floats, stream, mr);
 }

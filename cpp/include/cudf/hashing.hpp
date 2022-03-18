@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,21 +26,36 @@ namespace cudf {
  */
 
 /**
+ *  @brief Identifies the hash function to be used
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,         ///< Murmur3 hash function
+  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
+  HASH_SPARK_MURMUR3,   ///< Spark Murmur3 hash function
+  HASH_MD5              ///< MD5 hash function
+};
+
+/**
+ * @brief The default seed value for hash functions
+ */
+static constexpr uint32_t DEFAULT_HASH_SEED = 0;
+
+/**
  * @brief Computes the hash value of each row in the input set of columns.
  *
- * @param input The table of columns to hash
- * @param initial_hash Optional vector of initial hash values for each column.
- * If this vector is empty then each element will be hashed as-is.
+ * @param input The table of columns to hash.
+ * @param hash_function The hash function enum to use.
+ * @param seed Optional seed value to use for the hash function.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns A column where each row is the hash of a column from the input
+ * @returns A column where each row is the hash of a column from the input.
  */
 std::unique_ptr<column> hash(
   table_view const& input,
-  hash_id hash_function                     = hash_id::HASH_MURMUR3,
-  std::vector<uint32_t> const& initial_hash = {},
-  uint32_t seed                             = DEFAULT_HASH_SEED,
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
+  hash_id hash_function               = hash_id::HASH_MURMUR3,
+  uint32_t seed                       = DEFAULT_HASH_SEED,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

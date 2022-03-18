@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,261 +14,294 @@
  * limitations under the License.
  */
 
+#include <strings/char_types/char_cases.h>
 #include <strings/char_types/is_flags.h>
-#include <strings/utilities.cuh>
+#include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/case.hpp>
-#include <cudf/strings/detail/modify_strings.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/capitalize.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
 namespace detail {
-namespace {  // anonym.
+namespace {
 
-// base class for 2-passes string modification:
-// 1st pass: probing string manipulation memory load requirements
-// 2nd pass: executing string modification.
-//
-struct probe_execute_base {
-  using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
+using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
 
-  probe_execute_base(column_device_view const d_column,
-                     int32_t const* d_offsets = nullptr,
-                     char* d_chars            = nullptr)
-    : d_column_(d_column),
-      d_flags_(get_character_flags_table()),       // set flag table
-      d_case_table_(get_character_cases_table()),  // set case table
-      d_offsets_(d_offsets),
-      d_chars_(d_chars)
+/**
+ * @brief Returns the given character's info flags.
+ */
+__device__ char_info get_char_info(character_flags_table_type const* d_flags, char_utf8 chr)
+{
+  auto const code_point = detail::utf8_to_codepoint(chr);
+  auto const flag = code_point <= 0x00FFFF ? d_flags[code_point] : character_flags_table_type{0};
+  return char_info{code_point, flag};
+}
+
+/**
+ * @brief Base class for capitalize and title functors.
+ *
+ * Utility functions here manage access to the character case and flags tables.
+ * Any derived class must supply a `capitalize_next` member function.
+ *
+ * @tparam Derived class uses the CRTP pattern to reuse code logic.
+ */
+template <typename Derived>
+struct base_fn {
+  character_flags_table_type const* d_flags;
+  character_cases_table_type const* d_case_table;
+  special_case_mapping const* d_special_case_mapping;
+  column_device_view const d_column;
+  offset_type* d_offsets{};
+  char* d_chars{};
+
+  base_fn(column_device_view const& d_column)
+    : d_flags(get_character_flags_table()),
+      d_case_table(get_character_cases_table()),
+      d_special_case_mapping(get_special_case_mapping_table()),
+      d_column(d_column)
   {
   }
 
-  __host__ __device__ column_device_view const get_column(void) const { return d_column_; }
-
-  __device__ char_info get_char_info(char_utf8 chr) const
+  __device__ int32_t convert_char(char_info const& info, char* d_buffer) const
   {
-    uint32_t code_point                     = detail::utf8_to_codepoint(chr);
-    detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
-    return char_info{code_point, flag};
-  }
+    auto const code_point = info.first;
+    auto const flag       = info.second;
 
-  __device__ char_utf8 convert_char(char_info const& info) const
-  {
-    return detail::codepoint_to_utf8(d_case_table_[info.first]);
-  }
+    if (!IS_SPECIAL(flag)) {
+      auto const new_char = codepoint_to_utf8(d_case_table[code_point]);
+      return d_buffer ? detail::from_char_utf8(new_char, d_buffer)
+                      : detail::bytes_in_char_utf8(new_char);
+    }
 
-  __device__ char* get_output_ptr(size_type idx)
-  {
-    return d_chars_ && d_offsets_ ? d_chars_ + d_offsets_[idx] : nullptr;
-  }
+    special_case_mapping m = d_special_case_mapping[get_special_case_hash_index(code_point)];
 
- private:
-  column_device_view const d_column_;
-  character_flags_table_type const* d_flags_;
-  character_cases_table_type const* d_case_table_;
-  int32_t const* d_offsets_;
-  char* d_chars_;
-};
-
-// class that factors out the common inside-loop behavior
-// of operator() between capitalize's `probe` and `execute`;
-//(public inheritance to allow getters pass-through
-// in derived classes);
-//
-struct probe_execute_capitalize : public probe_execute_base {
-  explicit probe_execute_capitalize(column_device_view const d_column)
-    : probe_execute_base(d_column)
-  {
-  }
-
-  probe_execute_capitalize(column_device_view const d_column,
-                           int32_t const* d_offsets,
-                           char* d_chars)
-    : probe_execute_base(d_column, d_offsets, d_chars)
-  {
-  }
-
-  __device__ char_utf8 generate_chr(string_view::const_iterator itr, string_view d_str) const
-  {
-    auto the_chr = *itr;
-
-    auto pair_char_info                     = get_char_info(the_chr);
-    detail::character_flags_table_type flag = pair_char_info.second;
-
-    if ((itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag))
-      the_chr = convert_char(pair_char_info);
-
-    return the_chr;
-  }
-};
-
-// functor for probing string capitalization
-// requirements:
-//(private inheritance to prevent polymorphic use,
-// a requirement that came up in code review)
-//
-struct probe_capitalize : private probe_execute_capitalize {
-  explicit probe_capitalize(column_device_view const d_column)
-    :  // probe_execute_base(d_column)
-      probe_execute_capitalize(d_column)
-  {
-  }
-
-  __device__ int32_t operator()(size_type idx) const
-  {
-    if (get_column().is_null(idx)) return 0;  // null string
-
-    string_view d_str = get_column().template element<string_view>(idx);
-    int32_t bytes     = 0;
-
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      bytes += detail::bytes_in_char_utf8(generate_chr(itr, d_str));
+    auto const count  = IS_LOWER(flag) ? m.num_upper_chars : m.num_lower_chars;
+    auto const* chars = IS_LOWER(flag) ? m.upper : m.lower;
+    size_type bytes   = 0;
+    for (uint16_t idx = 0; idx < count; idx++) {
+      bytes += d_buffer
+                 ? detail::from_char_utf8(detail::codepoint_to_utf8(chars[idx]), d_buffer + bytes)
+                 : detail::bytes_in_char_utf8(detail::codepoint_to_utf8(chars[idx]));
     }
     return bytes;
   }
-};
 
-// functor for executing string capitalization:
-//(private inheritance to prevent polymorphic use,
-// a requirement that came up in code review)
-//
-struct execute_capitalize : private probe_execute_capitalize {
-  execute_capitalize(column_device_view const d_column, int32_t const* d_offsets, char* d_chars)
-    :  // probe_execute_base(d_column, d_offsets, d_chars)
-      probe_execute_capitalize(d_column, d_offsets, d_chars)
+  /**
+   * @brief Operator called for each row in `d_column`.
+   *
+   * This logic is shared by capitalize() and title() functions.
+   * The derived class must supply a `capitalize_next` member function.
+   */
+  __device__ void operator()(size_type idx)
   {
-  }
-
-  __device__ int32_t operator()(size_type idx)
-  {
-    if (get_column().is_null(idx)) return 0;  // null string
-
-    string_view d_str = get_column().template element<string_view>(idx);
-    char* d_buffer    = get_output_ptr(idx);
-
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      d_buffer += detail::from_char_utf8(generate_chr(itr, d_str), d_buffer);
-    }
-    return 0;
-  }
-};
-
-// class that factors out the common inside-loop behavior
-// of operator() between title's `probe` and `execute`;
-//(public inheritance to allow getters pass-through
-// in derived classes);
-//
-struct probe_execute_title : public probe_execute_base {
-  explicit probe_execute_title(column_device_view const d_column) : probe_execute_base(d_column) {}
-
-  probe_execute_title(column_device_view const d_column, int32_t const* d_offsets, char* d_chars)
-    : probe_execute_base(d_column, d_offsets, d_chars)
-  {
-  }
-
-  __device__ thrust::pair<char_utf8, bool> generate_chr(string_view::const_iterator itr,
-                                                        string_view d_str,
-                                                        bool bcapnext) const
-  {
-    auto the_chr = *itr;
-
-    auto pair_char_info                     = get_char_info(the_chr);
-    detail::character_flags_table_type flag = pair_char_info.second;
-
-    if (!IS_ALPHA(flag)) {
-      bcapnext = true;
-    } else {
-      if (bcapnext ? IS_LOWER(flag) : IS_UPPER(flag)) the_chr = convert_char(pair_char_info);
-
-      bcapnext = false;
+    if (d_column.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
     }
 
-    return thrust::make_pair(the_chr, bcapnext);
-  }
-};
+    auto& derived     = static_cast<Derived&>(*this);
+    auto const d_str  = d_column.element<string_view>(idx);
+    offset_type bytes = 0;
+    auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    bool capitalize   = true;
+    for (auto const chr : d_str) {
+      auto const info        = get_char_info(d_flags, chr);
+      auto const flag        = info.second;
+      auto const change_case = capitalize ? IS_LOWER(flag) : IS_UPPER(flag);
 
-// functor for probing string title-ization
-// requirements:
-//(private inheritance to prevent polymorphic use,
-// a requirement that came up in code review)
-//
-struct probe_title : private probe_execute_title {
-  explicit probe_title(column_device_view const d_column) : probe_execute_title(d_column) {}
+      if (change_case) {
+        auto const char_bytes = convert_char(info, d_buffer);
+        bytes += char_bytes;
+        d_buffer += d_buffer ? char_bytes : 0;
+      } else {
+        if (d_buffer) {
+          d_buffer += detail::from_char_utf8(chr, d_buffer);
+        } else {
+          bytes += detail::bytes_in_char_utf8(chr);
+        }
+      }
 
-  __device__ int32_t operator()(size_type idx) const
-  {
-    if (get_column().is_null(idx)) return 0;  // null string
-
-    string_view d_str = get_column().template element<string_view>(idx);
-    int32_t bytes     = 0;
-
-    bool bcapnext = true;
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto pair_char_flag = generate_chr(itr, d_str, bcapnext);
-      bcapnext            = pair_char_flag.second;
-
-      bytes += detail::bytes_in_char_utf8(pair_char_flag.first);
+      // capitalize the next char if this one is a delimiter
+      capitalize = derived.capitalize_next(chr, flag);
     }
-    return bytes;
+    if (!d_chars) d_offsets[idx] = bytes;
   }
 };
 
-// functor for executing string title-ization:
-//(private inheritance to prevent polymorphic use,
-// a requirement that came up in code review)
-//
-struct execute_title : private probe_execute_title {
-  execute_title(column_device_view const d_column, int32_t const* d_offsets, char* d_chars)
-    : probe_execute_title(d_column, d_offsets, d_chars)
+/**
+ * @brief Capitalize functor.
+ *
+ * This capitalizes the first character of the string and lower-cases
+ * the remaining characters.
+ * If a delimiter is specified, capitalization continues within the string
+ * on the first eligible character after any delimiter.
+ */
+struct capitalize_fn : base_fn<capitalize_fn> {
+  string_view const d_delimiters;
+
+  capitalize_fn(column_device_view const& d_column, string_view const& d_delimiters)
+    : base_fn(d_column), d_delimiters(d_delimiters)
   {
   }
 
-  __device__ int32_t operator()(size_type idx)
+  __device__ bool capitalize_next(char_utf8 const chr, character_flags_table_type const)
   {
-    if (get_column().is_null(idx)) return 0;  // null string
+    return !d_delimiters.empty() && (d_delimiters.find(chr) >= 0);
+  }
+};
 
-    string_view d_str = get_column().template element<string_view>(idx);
-    char* d_buffer    = get_output_ptr(idx);
+/**
+ * @brief Title functor.
+ *
+ * This capitalizes the first letter of each word.
+ * The beginning of a word is identified as the first sequence_type
+ * character after a non-sequence_type character.
+ * Also, lower-case all other alphabetic characters.
+ */
+struct title_fn : base_fn<title_fn> {
+  string_character_types sequence_type;
 
-    bool bcapnext = true;
-    for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-      auto pair_char_flag = generate_chr(itr, d_str, bcapnext);
-      bcapnext            = pair_char_flag.second;
+  title_fn(column_device_view const& d_column, string_character_types sequence_type)
+    : base_fn(d_column), sequence_type(sequence_type)
+  {
+  }
 
-      d_buffer += detail::from_char_utf8(pair_char_flag.first, d_buffer);
+  __device__ bool capitalize_next(char_utf8 const, character_flags_table_type const flag)
+  {
+    return (flag & sequence_type) == 0;
+  };
+};
+
+/**
+ * @brief Functor for determining title format for each string in a column.
+ *
+ * The first letter of each word should be upper-case (IS_UPPER).
+ * All other characters should be lower-case (IS_LOWER).
+ * Non-upper/lower-case (IS_UPPER_OR_LOWER) characters delimit words.
+ */
+struct is_title_fn {
+  character_flags_table_type const* d_flags;
+  column_device_view const d_column;
+
+  __device__ bool operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) { return false; }
+    auto const d_str = d_column.element<string_view>(idx);
+
+    bool at_least_one_valid    = false;  // requires one or more cased characters
+    bool should_be_capitalized = true;   // current character should be upper-case
+    for (auto const chr : d_str) {
+      auto const flag = get_char_info(d_flags, chr).second;
+      if (IS_UPPER_OR_LOWER(flag)) {
+        if (should_be_capitalized == !IS_UPPER(flag)) return false;
+        at_least_one_valid = true;
+      }
+      should_be_capitalized = !IS_UPPER_OR_LOWER(flag);
     }
-    return 0;
+    return at_least_one_valid;
   }
 };
+
+/**
+ * @brief Common utility function for title() and capitalize().
+ *
+ * @tparam CapitalFn The specific functor.
+ * @param cfn The functor instance.
+ * @param input The input strings column.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used for allocating the new device_buffer
+ */
+template <typename CapitalFn>
+std::unique_ptr<column> capitalizer(CapitalFn cfn,
+                                    strings_column_view const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  auto children = cudf::strings::detail::make_strings_children(cfn, input.size(), stream, mr);
+
+  return make_strings_column(input.size(),
+                             std::move(children.first),
+                             std::move(children.second),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+}
 
 }  // namespace
+
+std::unique_ptr<column> capitalize(strings_column_view const& input,
+                                   string_scalar const& delimiters,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(delimiters.is_valid(stream), "Delimiter must be a valid string");
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
+  auto const d_column     = column_device_view::create(input.parent(), stream);
+  auto const d_delimiters = delimiters.value(stream);
+  return capitalizer(capitalize_fn{*d_column, d_delimiters}, input, stream, mr);
+}
+
+std::unique_ptr<column> title(strings_column_view const& input,
+                              string_character_types sequence_type,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
+  auto d_column = column_device_view::create(input.parent(), stream);
+  return capitalizer(title_fn{*d_column, sequence_type}, input, stream, mr);
+}
+
+std::unique_ptr<column> is_title(strings_column_view const& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) return make_empty_column(type_id::BOOL8);
+  auto results  = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  auto d_column = column_device_view::create(input.parent(), stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    results->mutable_view().data<bool>(),
+                    is_title_fn{get_character_flags_table(), *d_column});
+  return results;
+}
+
 }  // namespace detail
 
-std::unique_ptr<column> capitalize(strings_column_view const& strings,
+std::unique_ptr<column> capitalize(strings_column_view const& input,
+                                   string_scalar const& delimiter,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::modify_strings<detail::probe_capitalize, detail::execute_capitalize>(
-    strings, rmm::cuda_stream_default, mr);
+  return detail::capitalize(input, delimiter, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> title(strings_column_view const& strings,
+std::unique_ptr<column> title(strings_column_view const& input,
+                              string_character_types sequence_type,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::modify_strings<detail::probe_title, detail::execute_title>(
-    strings, rmm::cuda_stream_default, mr);
+  return detail::title(input, sequence_type, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> is_title(strings_column_view const& input,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_title(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

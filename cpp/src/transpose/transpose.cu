@@ -16,9 +16,9 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/reshape.hpp>
 #include <cudf/detail/transpose.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/reshape.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/transpose.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -44,12 +44,12 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
       input.begin(), input.end(), [dtype](auto const& col) { return dtype == col.type(); }),
     "Column type mismatch");
 
-  auto output_column = cudf::interleave_columns(input, mr);
+  auto output_column = cudf::detail::interleave_columns(input, stream, mr);
   auto one_iter      = thrust::make_counting_iterator<size_type>(1);
   auto splits_iter   = thrust::make_transform_iterator(
     one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
-  auto output_column_views = cudf::split(output_column->view(), splits);
+  auto output_column_views = split(output_column->view(), splits, stream);
 
   return std::make_pair(std::move(output_column), table_view(output_column_views));
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -10,25 +10,30 @@ from hypothesis import given, settings, strategies as st
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests import utils
-from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
+from cudf.testing import _utils as utils
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
-repr_categories = utils.NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+repr_categories = [
+    "uint16",
+    "int64",
+    "float64",
+    "str",
+    "category",
+    "datetime64[ns]",
+]
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
     size = 5
-    mask = utils.random_bitmask(size)
-    data = cudf.Series(np.random.randint(1, 9, size))
-    column = data.set_mask(mask)
-    sr = cudf.Series(column).astype(dtype)
-    if dtype != "category" and np.dtype(dtype).kind in {"u", "i"}:
+    sr = cudf.Series(np.random.randint(1, 9, size)).astype(dtype)
+    sr[np.random.choice([False, True], size=size)] = None
+    if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view.copy_to_host(),
-            dtype=cudf_dtypes_to_pandas_dtypes.get(
-                np.dtype(dtype), np.dtype(dtype)
+            dtype=np_dtypes_to_pandas_dtypes.get(
+                cudf.dtype(dtype), cudf.dtype(dtype)
             ),
         )
         ps[sr.isnull().to_pandas()] = pd.NA
@@ -40,14 +45,6 @@ def test_null_series(nrows, dtype):
     psrepr = psrepr.replace("NaN", "<NA>")
     psrepr = psrepr.replace("NaT", "<NA>")
     psrepr = psrepr.replace("None", "<NA>")
-    if (
-        dtype.startswith("int")
-        or dtype.startswith("uint")
-        or dtype.startswith("long")
-    ):
-        psrepr = psrepr.replace(
-            str(sr._column.default_na_value()) + "\n", "<NA>\n"
-        )
     if "UInt" in psrepr:
         psrepr = psrepr.replace("UInt", "uint")
     elif "Int" in psrepr:
@@ -70,10 +67,8 @@ def test_null_dataframe(ncols):
     size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(dtype_categories):
-        mask = utils.random_bitmask(size)
-        data = cudf.Series(np.random.randint(0, 128, size))
-        column = data.set_mask(mask)
-        sr = cudf.Series(column).astype(dtype)
+        sr = cudf.Series(np.random.randint(0, 128, size)).astype(dtype)
+        sr[np.random.choice([False, True], size=size)] = None
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
@@ -86,52 +81,32 @@ def test_null_dataframe(ncols):
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 10, 11, 19, 20, 21])
+@pytest.mark.parametrize("nrows", [None, 0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
     size = 20
     ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
-    pd.options.display.max_rows = int(nrows)
+    pd.options.display.max_rows = nrows
     assert ps.__repr__() == sr.__repr__()
     pd.reset_option("display.max_rows")
 
 
+@pytest.mark.parametrize("nrows", [5, 10, 15])
+@pytest.mark.parametrize("ncols", [5, 10, 15])
+@pytest.mark.parametrize("size", [20, 21])
 @pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
-@pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
-def test_full_dataframe_20(dtype, nrows, ncols):
-    size = 20
+def test_full_dataframe_20(dtype, size, nrows, ncols):
     pdf = pd.DataFrame(
         {idx: np.random.randint(0, 100, size) for idx in range(size)}
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
-    ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-
-    assert pdf.__repr__() == gdf.__repr__()
-    assert pdf._repr_html_() == gdf._repr_html_()
-    assert pdf._repr_latex_() == gdf._repr_latex_()
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
-
-
-@pytest.mark.parametrize("dtype", repr_categories)
-@pytest.mark.parametrize("nrows", [9, 21 / 2, 11, 21 - 1])
-@pytest.mark.parametrize("ncols", [9, 21 / 2, 11, 21 - 1])
-def test_full_dataframe_21(dtype, nrows, ncols):
-    size = 21
-    pdf = pd.DataFrame(
-        {idx: np.random.randint(0, 100, size) for idx in range(size)}
-    ).astype(dtype)
-    gdf = cudf.from_pandas(pdf)
-
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-    assert pdf.__repr__() == gdf.__repr__()
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
+    with pd.option_context(
+        "display.max_rows", int(nrows), "display.max_columns", int(ncols)
+    ):
+        assert repr(pdf) == repr(gdf)
+        assert pdf._repr_html_() == gdf._repr_html_()
+        assert pdf._repr_latex_() == gdf._repr_latex_()
 
 
 @given(
@@ -336,10 +311,14 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
         ),
         (
             cudf.Index([None, None, None], name="hello"),
+            "StringIndex([None None None], dtype='object', name='hello')",
+        ),
+        (
+            cudf.Index([None, None, None], dtype="float", name="hello"),
             "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
         ),
         (
-            cudf.Index([None], name="hello"),
+            cudf.Index([None], dtype="float64", name="hello"),
             "Float64Index([<NA>], dtype='float64', name='hello')",
         ),
         (
@@ -1152,23 +1131,8 @@ def test_timedelta_index_repr(index, expected_repr):
         ),
     ],
 )
-@pytest.mark.parametrize(
-    "max_seq_items",
-    [
-        None,
-        pytest.param(
-            1,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/38415"
-            ),
-        ),
-        2,
-        5,
-        10,
-        100,
-    ],
-)
-def test_mulitIndex_repr(pmi, max_seq_items):
+@pytest.mark.parametrize("max_seq_items", [None, 1, 2, 5, 10, 100])
+def test_multiIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
 
@@ -1413,7 +1377,7 @@ def test_mulitIndex_repr(pmi, max_seq_items):
         ),
     ],
 )
-def test_mulitIndex_null_repr(gdi, expected_repr):
+def test_multiIndex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()
@@ -1500,3 +1464,33 @@ def test_empty_series_name():
     gs = cudf.from_pandas(ps)
 
     assert ps.__repr__() == gs.__repr__()
+
+
+def test_repr_struct_after_concat():
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series(
+                [
+                    {"sa": 2056831253},
+                    {"sa": -1463792165},
+                    {"sa": 1735783038},
+                    {"sa": 103774433},
+                    {"sa": -1413247520},
+                ]
+                * 13
+            ),
+            "b": cudf.Series(
+                [
+                    {"sa": {"ssa": 1140062029}},
+                    None,
+                    {"sa": {"ssa": 1998862860}},
+                    {"sa": None},
+                    {"sa": {"ssa": -395088502}},
+                ]
+                * 13
+            ),
+        }
+    )
+    pdf = df.to_pandas()
+
+    assert df.__repr__() == pdf.__repr__()

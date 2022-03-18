@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,11 @@ DLDataType get_dtype()
 {
   uint8_t const bits{sizeof(T) * 8};
   uint16_t const lanes{1};
-  if (std::is_floating_point<T>::value) {
+  if (std::is_floating_point_v<T>) {
     return DLDataType{kDLFloat, bits, lanes};
-  } else if (std::is_signed<T>::value) {
+  } else if (std::is_signed_v<T>) {
     return DLDataType{kDLInt, bits, lanes};
-  } else if (std::is_unsigned<T>::value) {
+  } else if (std::is_unsigned_v<T>) {
     return DLDataType{kDLUInt, bits, lanes};
   } else {
     static_assert(true, "unsupported type");
@@ -50,9 +50,9 @@ template <typename T>
 void validate_dtype(DLDataType const& dtype)
 {
   switch (dtype.code) {
-    case kDLInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_signed<T>::value); break;
-    case kDLUInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_unsigned<T>::value); break;
-    case kDLFloat: EXPECT_TRUE(std::is_floating_point<T>::value); break;
+    case kDLInt: EXPECT_TRUE(std::is_integral_v<T> && std::is_signed_v<T>); break;
+    case kDLUInt: EXPECT_TRUE(std::is_integral_v<T> && std::is_unsigned_v<T>); break;
+    case kDLFloat: EXPECT_TRUE(std::is_floating_point_v<T>); break;
     default: FAIL();
   }
   EXPECT_EQ(1, dtype.lanes);
@@ -111,7 +111,7 @@ TEST_F(DLPackUntypedTests, UnsupportedDeviceTypeFromDlpack)
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
   // Spoof an unsupported device type
-  tensor->dl_tensor.ctx.device_type = kDLOpenCL;
+  tensor->dl_tensor.device.device_type = kDLOpenCL;
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
@@ -122,7 +122,7 @@ TEST_F(DLPackUntypedTests, InvalidDeviceIdFromDlpack)
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
   // Spoof the wrong device ID
-  tensor->dl_tensor.ctx.device_id += 1;
+  tensor->dl_tensor.device.device_id += 1;
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
@@ -210,7 +210,7 @@ template <typename T>
 class DLPackTimestampTests : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DLPackTimestampTests, ChronoTypes);
+TYPED_TEST_SUITE(DLPackTimestampTests, ChronoTypes);
 
 TYPED_TEST(DLPackTimestampTests, ChronoTypesToDlpack)
 {
@@ -227,7 +227,7 @@ class DLPackNumericTests : public BaseFixture {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5353
 using SupportedTypes =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, cudf::test::NumericTypes>;
-TYPED_TEST_CASE(DLPackNumericTests, SupportedTypes);
+TYPED_TEST_SUITE(DLPackNumericTests, SupportedTypes);
 
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {
@@ -242,7 +242,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 
   auto const& tensor = result->dl_tensor;
   validate_dtype<TypeParam>(tensor.dtype);
-  EXPECT_EQ(kDLGPU, tensor.ctx.device_type);
+  EXPECT_EQ(kDLCUDA, tensor.device.device_type);
   EXPECT_EQ(1, tensor.ndim);
   EXPECT_EQ(uint64_t{0}, tensor.byte_offset);
   EXPECT_EQ(nullptr, tensor.strides);
@@ -275,7 +275,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
 
   auto const& tensor = result->dl_tensor;
   validate_dtype<TypeParam>(tensor.dtype);
-  EXPECT_EQ(kDLGPU, tensor.ctx.device_type);
+  EXPECT_EQ(kDLCUDA, tensor.device.device_type);
   EXPECT_EQ(2, tensor.ndim);
   EXPECT_EQ(uint64_t{0}, tensor.byte_offset);
 
@@ -341,12 +341,12 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   int64_t strides[2] = {1, 5};
 
   DLManagedTensor tensor{};
-  tensor.dl_tensor.ctx.device_type = kDLCPU;
-  tensor.dl_tensor.dtype           = get_dtype<T>();
-  tensor.dl_tensor.ndim            = 2;
-  tensor.dl_tensor.byte_offset     = offset;
-  tensor.dl_tensor.shape           = shape;
-  tensor.dl_tensor.strides         = strides;
+  tensor.dl_tensor.device.device_type = kDLCPU;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = 2;
+  tensor.dl_tensor.byte_offset        = offset;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
 
   thrust::host_vector<T> host_vector(data.begin(), data.end());
   tensor.dl_tensor.data = host_vector.data();

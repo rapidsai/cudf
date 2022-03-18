@@ -4,35 +4,38 @@ import pandas as pd
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.vector cimport vector
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
+
 from enum import IntEnum
 
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.search cimport lower_bound, upper_bound
+from cudf._lib.cpp.sorting cimport (
+    is_sorted as cpp_is_sorted,
+    rank,
+    rank_method,
+    sorted_order,
+)
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.search cimport lower_bound, upper_bound
-from cudf._lib.cpp.sorting cimport(
-    rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
-)
+from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.cpp.types cimport order, null_order, null_policy
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def is_sorted(
-    Table source_table, object ascending=None, object null_position=None
+    source_table, object ascending=None, object null_position=None
 ):
     """
     Checks whether the rows of a `table` are sorted in lexicographical order.
 
     Parameters
     ----------
-    source_table : Table
-        Table whose columns are to be checked for sort order
+    source_table : Frame
+        Frame whose columns are to be checked for sort order
     ascending : None or list-like of booleans
         None or list-like of boolean values indicating expected sort order of
         each column. If list-like, size of list-like must be len(columns). If
@@ -99,7 +102,7 @@ def is_sorted(
         )
 
     cdef bool c_result
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(source_table)
     with nogil:
         c_result = cpp_is_sorted(
             source_table_view,
@@ -110,7 +113,7 @@ def is_sorted(
     return c_result
 
 
-def order_by(Table source_table, object ascending, bool na_position):
+def order_by(source_table, object ascending, str na_position):
     """
     Sorting the table ascending/descending
 
@@ -120,31 +123,27 @@ def order_by(Table source_table, object ascending, bool na_position):
     ascending : list of boolean values which correspond to each column
                 in source_table signifying order of each column
                 True - Ascending and False - Descending
-    na_position : whether null should be considered larget or smallest value
-                  0 - largest and 1 - smallest
-
+    na_position : whether null value should show up at the "first" or "last"
+                position of **all** sorted column.
     """
-
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, ignore_index=True
+    )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
-    cdef null_order pred = (
-        null_order.BEFORE
-        if na_position == 1
-        else null_order.AFTER
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            source_table._num_columns,
-            pred
-        )
-    )
+    cdef vector[null_order] null_precedence
+    null_precedence.reserve(len(ascending))
 
     for i in ascending:
         if i is True:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
+
+        if i ^ (na_position == "first"):
+            null_precedence.push_back(null_order.AFTER)
+        else:
+            null_precedence.push_back(null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -155,20 +154,22 @@ def order_by(Table source_table, object ascending, bool na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def digitize(Table source_values_table, Table bins, bool right=False):
+def digitize(source_values_table, bins, bool right=False):
     """
     Return the indices of the bins to which each value in source_table belongs.
 
     Parameters
     ----------
     source_table : Input table to be binned.
-    bins : Table containing columns of bins
+    bins : Frame containing columns of bins
     right : Indicating whether the intervals include the
             right or the left bin edge.
     """
 
-    cdef table_view bins_view = bins.view()
-    cdef table_view source_values_table_view = source_values_table.view()
+    cdef table_view bins_view = table_view_from_table(bins)
+    cdef table_view source_values_table_view = table_view_from_table(
+        source_values_table
+    )
     cdef vector[order] column_order = (
         vector[order](
             bins_view.num_columns(),
@@ -211,13 +212,15 @@ class RankMethod(IntEnum):
     DENSE = < underlying_type_t_rank_method > rank_method.DENSE
 
 
-def rank_columns(Table source_table, object method, str na_option,
+def rank_columns(source_table, object method, str na_option,
                  bool ascending, bool pct
                  ):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, ignore_index=True
+    )
 
     cdef rank_method c_rank_method = < rank_method > (
         < underlying_type_t_rank_method > method
@@ -273,9 +276,9 @@ def rank_columns(Table source_table, object method, str na_option,
 
     cdef unique_ptr[table] c_result
     c_result.reset(new table(move(c_results)))
-    out_table = Table.from_unique_ptr(
+    data, _ = data_from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names
+        column_names=source_table._column_names,
+        index_names=None
     )
-    out_table._index = source_table._index
-    return out_table
+    return data, source_table._index

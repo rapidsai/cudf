@@ -106,7 +106,7 @@ class ptx_parser {
   std::vector<std::string> parse_function_body(const std::string& src);
 
   /**
-   * @brief Remove leading white chractors and call `parse_instruction`.
+   * @brief Remove leading white characters and call `parse_instruction`.
    *
    * @param src The statement to be parsed.
    * @return The resulting CUDA statement.
@@ -124,8 +124,8 @@ class ptx_parser {
    *
    *    ---> asm volatile ("  fma.rn.f32 _f4, _f3, _f1, _f2;");
    *
-   * If a regiter from the input parameters list is used in an instruction
-   * its type is inferred from the intruction and saved in the `input_arg_list`
+   * If a register from the input parameters list is used in an instruction
+   * its type is inferred from the instruction and saved in the `input_arg_list`
    * to be used in when parsing the function header.
    *
    * See the document at https://github.com/hummingtree/cudf/wiki/PTX-parser
@@ -194,7 +194,6 @@ class ptx_parser {
    * @param output_arg_type_ The C++ type of the output parameter of the
    * function.
    * @param pointer_arg_list_ A list of the parameters that are pointers.
-   * @return The resulting code
    */
   ptx_parser(const std::string& ptx_,
              const std::string& function_name_,

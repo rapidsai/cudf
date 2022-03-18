@@ -1,14 +1,16 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf as gd
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def make_frames(index=None, nulls="none"):
@@ -62,13 +64,25 @@ def test_concat_dataframe(index, nulls, axis):
     # DataFrame
     res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas()
     sol = pd.concat([df, df2, df, df_empty1], axis=axis)
-    assert_eq(res, sol, check_names=False, check_categorical=False)
+    assert_eq(
+        res,
+        sol,
+        check_names=False,
+        check_categorical=False,
+        check_index_type=True,
+    )
 
     # Series
     for c in [i for i in ("x", "y", "z") if i != index]:
         res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas()
         sol = pd.concat([df[c], df2[c], df[c]], axis=axis)
-        assert_eq(res, sol, check_names=False, check_categorical=False)
+        assert_eq(
+            res,
+            sol,
+            check_names=False,
+            check_categorical=False,
+            check_index_type=True,
+        )
 
     # Index
     res = gd.concat([gdf.index, gdf2.index], axis=axis).to_pandas()
@@ -89,7 +103,13 @@ def test_concat_all_nulls(values):
     gb = gd.Series([None])
     gs = gd.concat([ga, gb])
 
-    assert_eq(ps, gs, check_dtype=False, check_categorical=False)
+    assert_eq(
+        ps,
+        gs,
+        check_dtype=False,
+        check_categorical=False,
+        check_index_type=True,
+    )
 
 
 def test_concat_errors():
@@ -165,7 +185,13 @@ def test_concat_misordered_columns():
     res = gd.concat([gdf, gdf2]).to_pandas()
     sol = pd.concat([df, df2], sort=False)
 
-    assert_eq(res, sol, check_names=False, check_categorical=False)
+    assert_eq(
+        res,
+        sol,
+        check_names=False,
+        check_categorical=False,
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])
@@ -180,7 +206,7 @@ def test_concat_columns(axis):
     expect = pd.concat([pdf1, pdf2], axis=axis)
     got = gd.concat([gdf1, gdf2], axis=axis)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_index_type=True)
 
 
 def test_concat_multiindex_dataframe():
@@ -199,9 +225,15 @@ def test_concat_multiindex_dataframe():
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
     assert_eq(
-        gd.concat([gdg1, gdg2]).astype("float64"), pd.concat([pdg1, pdg2])
+        gd.concat([gdg1, gdg2]).astype("float64"),
+        pd.concat([pdg1, pdg2]),
+        check_index_type=True,
     )
-    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+    assert_eq(
+        gd.concat([gdg1, gdg2], axis=1),
+        pd.concat([pdg1, pdg2], axis=1),
+        check_index_type=True,
+    )
 
 
 def test_concat_multiindex_series():
@@ -219,7 +251,9 @@ def test_concat_multiindex_series():
     pdg2 = pdg["z"]
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
-    assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
+    assert_eq(
+        gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]), check_index_type=True
+    )
     assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
 
 
@@ -239,7 +273,11 @@ def test_concat_multiindex_dataframe_and_series():
     pdg2.name = "a"
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
-    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+    assert_eq(
+        gd.concat([gdg1, gdg2], axis=1),
+        pd.concat([pdg1, pdg2], axis=1),
+        check_index_type=True,
+    )
 
 
 def test_concat_multiindex_series_and_dataframe():
@@ -258,7 +296,11 @@ def test_concat_multiindex_series_and_dataframe():
     pdg1.name = "a"
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
-    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+    assert_eq(
+        gd.concat([gdg1, gdg2], axis=1),
+        pd.concat([pdg1, pdg2], axis=1),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("myindex", ["a", "b"])
@@ -298,7 +340,9 @@ def test_pandas_concat_compatibility_axis1():
     expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
 
-    assert_eq(got, expect)
+    assert_eq(
+        got, expect, check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("index", [[0, 1, 2], [2, 1, 0], [5, 9, 10]])
@@ -320,7 +364,7 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
     ps2 = s2.to_pandas()
     got = gd.concat([s1, s2], axis=1)
     expect = pd.concat([ps1, ps2], axis=1)
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_pandas_concat_compatibility_axis1_eq_index():
@@ -361,10 +405,19 @@ def test_concat_mixed_input():
     assert_eq(
         pd.concat([pdf1, None, pdf2, None]),
         gd.concat([gdf1, None, gdf2, None]),
+        check_index_type=True,
     )
-    assert_eq(pd.concat([pdf1, None]), gd.concat([gdf1, None]))
-    assert_eq(pd.concat([None, pdf2]), gd.concat([None, gdf2]))
-    assert_eq(pd.concat([None, pdf2, pdf1]), gd.concat([None, gdf2, gdf1]))
+    assert_eq(
+        pd.concat([pdf1, None]), gd.concat([gdf1, None]), check_index_type=True
+    )
+    assert_eq(
+        pd.concat([None, pdf2]), gd.concat([None, gdf2]), check_index_type=True
+    )
+    assert_eq(
+        pd.concat([None, pdf2, pdf1]),
+        gd.concat([None, gdf2, gdf1]),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -521,11 +574,24 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     expected = pd.concat(other_pd, ignore_index=ignore_index)
     actual = gd.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
-        for key, col in actual[actual.columns].iteritems():
+        for key, col in actual[actual.columns].items():
             if is_categorical_dtype(col.dtype):
-                expected[key] = expected[key].fillna("-1")
+                if not is_categorical_dtype(expected[key].dtype):
+                    # TODO: Pandas bug:
+                    # https://github.com/pandas-dev/pandas/issues/42840
+                    expected[key] = expected[key].fillna("-1").astype("str")
+                else:
+                    expected[key] = (
+                        expected[key]
+                        .cat.add_categories(["-1"])
+                        .fillna("-1")
+                        .astype("str")
+                    )
                 actual[key] = col.astype("str").fillna("-1")
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+            else:
+                expected[key] = expected[key].fillna(-1)
+                actual[key] = col.fillna(-1)
+        assert_eq(expected, actual, check_dtype=False, check_index_type=True)
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -549,7 +615,7 @@ def test_concat_empty_and_nonempty_series(ignore_index, data, axis):
     got = gd.concat([s1, s2], axis=axis, ignore_index=ignore_index)
     expect = pd.concat([ps1, ps2], axis=axis, ignore_index=ignore_index)
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -562,7 +628,7 @@ def test_concat_two_empty_series(ignore_index, axis):
     got = gd.concat([s1, s2], axis=axis, ignore_index=ignore_index)
     expect = pd.concat([ps1, ps2], axis=axis, ignore_index=ignore_index)
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -588,10 +654,12 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     pdf1 = gdf1.to_pandas()
     pdf2 = gdf2.to_pandas()
 
-    expected = gd.concat([gdf1, gdf2], axis=1)
-    actual = pd.concat([pdf1, pdf2], axis=1)
+    actual = gd.concat([gdf1, gdf2], axis=1)
+    expected = pd.concat([pdf1, pdf2], axis=1)
 
-    assert_eq(expected, actual)
+    assert_eq(
+        expected, actual, check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -655,6 +723,7 @@ def test_concat_join(objs, ignore_index, sort, join, axis):
             ignore_index=ignore_index,
             axis=axis,
         ),
+        check_index_type=True,
     )
 
 
@@ -708,18 +777,23 @@ def test_concat_join_axis_1_dup_error(objs):
 def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
     # no duplicate columns
     gpu_objs = [gd.from_pandas(o) for o in objs]
-
+    expected = pd.concat(
+        objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
+    )
+    actual = gd.concat(
+        gpu_objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+    )
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        pd.concat(
-            objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
-        ),
-        gd.concat(
-            gpu_objs,
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -780,14 +854,23 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
     )
 
     gdf1 = gd.from_pandas(pdf1)
-
+    expected = pd.concat(
+        [pdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
+    )
+    actual = gd.concat(
+        [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
+    )
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        pd.concat(
-            [pdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
-        ),
-        gd.concat(
-            [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -817,21 +900,34 @@ def test_concat_join_no_overlapping_columns(
 ):
     gdf1 = gd.from_pandas(pdf1)
     gdf2 = gd.from_pandas(pdf2)
+
+    expected = pd.concat(
+        [pdf1, pdf2],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = gd.concat(
+        [gdf1, gdf2],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        pd.concat(
-            [pdf1, pdf2],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-        gd.concat(
-            [gdf1, gdf2],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and axis == 1
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -960,22 +1056,24 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     gdf6 = gd.from_pandas(pdf6)
     gdf_empty = gd.from_pandas(pdf_empty)
 
-    assert_eq(
-        pd.concat(
-            [pdf6, pdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ).reset_index(drop=True),
-        gd.concat(
-            [gdf6, gdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+    expected = pd.concat(
+        [pdf6, pdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
     )
+    actual = gd.concat(
+        [gdf6, gdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    # TODO: change `check_index_type` to `True`
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
+    assert_eq(expected, actual, check_index_type=False)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -993,21 +1091,32 @@ def test_concat_join_series(ignore_index, sort, join, axis):
     ps3 = s3.to_pandas()
     ps4 = s4.to_pandas()
 
+    expected = pd.concat(
+        [ps1, ps2, ps3, ps4],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = gd.concat(
+        [s1, s2, s3, s4],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        gd.concat(
-            [s1, s2, s3, s4],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-        pd.concat(
-            [ps1, ps2, ps3, ps4],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -1075,10 +1184,25 @@ def test_concat_join_empty_dataframes(
     )
     if expected.shape != df.shape:
         if axis == 0:
-            for key, col in actual[actual.columns].iteritems():
+            for key, col in actual[actual.columns].items():
                 if is_categorical_dtype(col.dtype):
-                    expected[key] = expected[key].fillna("-1")
+                    if not is_categorical_dtype(expected[key].dtype):
+                        # TODO: Pandas bug:
+                        # https://github.com/pandas-dev/pandas/issues/42840
+                        expected[key] = (
+                            expected[key].fillna("-1").astype("str")
+                        )
+                    else:
+                        expected[key] = (
+                            expected[key]
+                            .cat.add_categories(["-1"])
+                            .fillna("-1")
+                            .astype("str")
+                        )
                     actual[key] = col.astype("str").fillna("-1")
+                else:
+                    expected[key] = expected[key].fillna(-1)
+                    actual[key] = col.fillna(-1)
 
             assert_eq(
                 expected.fillna(-1),
@@ -1098,7 +1222,11 @@ def test_concat_join_empty_dataframes(
                 check_column_type=False,
             )
     assert_eq(
-        expected, actual, check_index_type=False, check_column_type=False
+        expected,
+        actual,
+        check_dtype=False,
+        check_index_type=False,
+        check_column_type=False,
     )
 
 
@@ -1178,7 +1306,7 @@ def test_concat_join_empty_dataframes_axis_1(
     )
     if expected.shape != df.shape:
         if axis == 0:
-            for key, col in actual[actual.columns].iteritems():
+            for key, col in actual[actual.columns].items():
                 if is_categorical_dtype(col.dtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")
@@ -1203,3 +1331,418 @@ def test_concat_join_empty_dataframes_axis_1(
     assert_eq(
         expected, actual, check_index_type=False, check_column_type=False
     )
+
+
+def test_concat_preserve_order():
+    """Ensure that order is preserved on 'inner' concatenations."""
+    df = pd.DataFrame([["d", 3, 4.0], ["c", 4, 5.0]], columns=["c", "b", "a"])
+    dfs = [df, df]
+
+    assert_eq(
+        pd.concat(dfs, join="inner"),
+        gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
+        check_index_type=True,
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("typ", [gd.DataFrame, gd.Series])
+def test_concat_single_object(ignore_index, typ):
+    """Ensure that concat on a single object does not change it."""
+    obj = typ([1, 2, 3])
+    assert_eq(
+        gd.concat([obj], ignore_index=ignore_index, axis=0),
+        obj,
+        check_index_type=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "ltype",
+    [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2), Decimal64Dtype(8, 4)],
+)
+@pytest.mark.parametrize(
+    "rtype",
+    [
+        Decimal64Dtype(3, 2),
+        Decimal64Dtype(8, 4),
+        gd.Decimal128Dtype(3, 2),
+        gd.Decimal32Dtype(8, 4),
+    ],
+)
+def test_concat_decimal_dataframe(ltype, rtype):
+    gdf1 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+    )
+    gdf2 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+    )
+
+    gdf1["val"] = gdf1["val"].astype(ltype)
+    gdf2["val"] = gdf2["val"].astype(rtype)
+
+    pdf1 = gdf1.to_pandas()
+    pdf2 = gdf2.to_pandas()
+
+    got = gd.concat([gdf1, gdf2])
+    expected = pd.concat([pdf1, pdf2])
+
+    assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(4, 1), Decimal64Dtype(8, 2)])
+@pytest.mark.parametrize(
+    "rtype",
+    [
+        Decimal64Dtype(4, 3),
+        Decimal64Dtype(10, 4),
+        Decimal32Dtype(8, 3),
+        Decimal128Dtype(18, 3),
+    ],
+)
+def test_concat_decimal_series(ltype, rtype):
+    gs1 = gd.Series(["228.3", "559.5", "281.1"]).astype(ltype)
+    gs2 = gd.Series(["2.345", "5.259", "8.154"]).astype(rtype)
+
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
+
+    got = gd.concat([gs1, gs2])
+    expected = pd.concat([ps1, ps2])
+
+    assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "df1, df2, df3, expected",
+    [
+        (
+            gd.DataFrame(
+                {"val": [Decimal("42.5"), Decimal("8.7")]},
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.DataFrame(
+                {"val": [Decimal("9.23"), Decimal("-67.49")]},
+                dtype=Decimal64Dtype(6, 4),
+            ),
+            gd.DataFrame({"val": [8, -5]}, dtype="int32"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("42.5"),
+                        Decimal("8.7"),
+                        Decimal("9.23"),
+                        Decimal("-67.49"),
+                        Decimal("8"),
+                        Decimal("-5"),
+                    ]
+                },
+                dtype=Decimal32Dtype(7, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("95.2"), Decimal("23.4")]},
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.DataFrame({"val": [54, 509]}, dtype="uint16"),
+            gd.DataFrame({"val": [24, -48]}, dtype="int32"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("95.2"),
+                        Decimal("23.4"),
+                        Decimal("54"),
+                        Decimal("509"),
+                        Decimal("24"),
+                        Decimal("-48"),
+                    ]
+                },
+                dtype=Decimal32Dtype(5, 2),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("36.56"), Decimal("-59.24")]},
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.DataFrame({"val": [403.21, 45.13]}, dtype="float32"),
+            gd.DataFrame({"val": [52.262, -49.25]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("36.56"),
+                        Decimal("-59.24"),
+                        Decimal("403.21"),
+                        Decimal("45.13"),
+                        Decimal("52.262"),
+                        Decimal("-49.25"),
+                    ]
+                },
+                dtype=Decimal32Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("9563.24"), Decimal("236.633")]},
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.DataFrame({"val": [5393, -95832]}, dtype="int64"),
+            gd.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("9563.24"),
+                        Decimal("236.633"),
+                        Decimal("5393"),
+                        Decimal("-95832"),
+                        Decimal("-29.234"),
+                        Decimal("-31.945"),
+                    ]
+                },
+                dtype=Decimal32Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("95633.24"), Decimal("236.633")]},
+                dtype=Decimal128Dtype(19, 4),
+            ),
+            gd.DataFrame({"val": [5393, -95832]}, dtype="int64"),
+            gd.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("95633.24"),
+                        Decimal("236.633"),
+                        Decimal("5393"),
+                        Decimal("-95832"),
+                        Decimal("-29.234"),
+                        Decimal("-31.945"),
+                    ]
+                },
+                dtype=Decimal128Dtype(19, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
+    df = gd.concat([df1, df2, df3])
+    assert_eq(df, expected, check_index_type=True)
+    assert_eq(df.val.dtype, expected.val.dtype)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, s3, expected",
+    [
+        (
+            gd.Series(
+                [Decimal("32.8"), Decimal("-87.7")], dtype=Decimal64Dtype(6, 2)
+            ),
+            gd.Series(
+                [Decimal("101.243"), Decimal("-92.449")],
+                dtype=Decimal64Dtype(9, 6),
+            ),
+            gd.Series([94, -22], dtype="int32"),
+            gd.Series(
+                [
+                    Decimal("32.8"),
+                    Decimal("-87.7"),
+                    Decimal("101.243"),
+                    Decimal("-92.449"),
+                    Decimal("94"),
+                    Decimal("-22"),
+                ],
+                dtype=Decimal64Dtype(10, 6),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("7.2"), Decimal("122.1")], dtype=Decimal64Dtype(5, 2)
+            ),
+            gd.Series([33, 984], dtype="uint32"),
+            gd.Series([593, -702], dtype="int32"),
+            gd.Series(
+                [
+                    Decimal("7.2"),
+                    Decimal("122.1"),
+                    Decimal("33"),
+                    Decimal("984"),
+                    Decimal("593"),
+                    Decimal("-702"),
+                ],
+                dtype=Decimal32Dtype(5, 2),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("982.94"), Decimal("-493.626")],
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.Series([847.98, 254.442], dtype="float32"),
+            gd.Series([5299.262, -2049.25], dtype="float64"),
+            gd.Series(
+                [
+                    Decimal("982.94"),
+                    Decimal("-493.626"),
+                    Decimal("847.98"),
+                    Decimal("254.442"),
+                    Decimal("5299.262"),
+                    Decimal("-2049.25"),
+                ],
+                dtype=Decimal32Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("492.204"), Decimal("-72824.455")],
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.Series([8438, -27462], dtype="int64"),
+            gd.Series([-40.292, 49202.953], dtype="float64"),
+            gd.Series(
+                [
+                    Decimal("492.204"),
+                    Decimal("-72824.455"),
+                    Decimal("8438"),
+                    Decimal("-27462"),
+                    Decimal("-40.292"),
+                    Decimal("49202.953"),
+                ],
+                dtype=Decimal32Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("492.204"), Decimal("-72824.455")],
+                dtype=Decimal64Dtype(10, 4),
+            ),
+            gd.Series(
+                [Decimal("8438"), Decimal("-27462")],
+                dtype=Decimal32Dtype(9, 4),
+            ),
+            gd.Series(
+                [Decimal("-40.292"), Decimal("49202.953")],
+                dtype=Decimal128Dtype(19, 4),
+            ),
+            gd.Series(
+                [
+                    Decimal("492.204"),
+                    Decimal("-72824.455"),
+                    Decimal("8438"),
+                    Decimal("-27462"),
+                    Decimal("-40.292"),
+                    Decimal("49202.953"),
+                ],
+                dtype=Decimal128Dtype(19, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_numeric_series(s1, s2, s3, expected):
+    s = gd.concat([s1, s2, s3])
+    assert_eq(s, expected, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, expected",
+    [
+        (
+            gd.Series(
+                [Decimal("955.22"), Decimal("8.2")], dtype=Decimal64Dtype(5, 2)
+            ),
+            gd.Series(["2007-06-12", "2006-03-14"], dtype="datetime64"),
+            gd.Series(
+                [
+                    "955.22",
+                    "8.20",
+                    "2007-06-12 00:00:00",
+                    "2006-03-14 00:00:00",
+                ],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("-52.44"), Decimal("365.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series(
+                np.arange(
+                    "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
+                ),
+                dtype="datetime64[s]",
+            ),
+            gd.Series(
+                [
+                    "-52.44",
+                    "365.22",
+                    "2005-02-01 12:00:00",
+                    "2005-02-01 13:00:00",
+                    "2005-02-01 14:00:00",
+                ],
+                index=[0, 1, 0, 1, 2],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("753.0"), Decimal("94.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series([np.timedelta64(111, "s"), np.timedelta64(509, "s")]),
+            gd.Series(
+                ["753.00", "94.22", "0 days 00:01:51", "0 days 00:08:29"],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("753.0"), Decimal("94.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series(
+                [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")]
+            ),
+            gd.Series(
+                ["753.00", "94.22", "10 days 21:10:52", "8 days 18:39:45"],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_non_numeric(s1, s2, expected):
+    s = gd.concat([s1, s2])
+    assert_eq(s, expected, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, expected",
+    [
+        (
+            gd.Series([{"a": 5}, {"c": "hello"}, {"b": 7}]),
+            gd.Series([{"a": 5, "c": "hello", "b": 7}]),
+            gd.Series(
+                [
+                    {"a": 5, "b": None, "c": None},
+                    {"a": None, "b": None, "c": "hello"},
+                    {"a": None, "b": 7, "c": None},
+                    {"a": 5, "b": 7, "c": "hello"},
+                ],
+                index=[0, 1, 2, 0],
+            ),
+        )
+    ],
+)
+def test_concat_struct_column(s1, s2, expected):
+    s = gd.concat([s1, s2])
+    assert_eq(s, expected, check_index_type=True)

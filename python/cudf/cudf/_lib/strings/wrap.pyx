@@ -2,14 +2,12 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.column cimport Column
 
-from cudf._lib.cpp.strings.wrap cimport (
-    wrap as cpp_wrap
-)
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.strings.wrap cimport wrap as cpp_wrap
+from cudf._lib.cpp.types cimport size_type
 
 
 def wrap(Column source_strings,

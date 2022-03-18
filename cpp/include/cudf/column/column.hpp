@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,13 +50,6 @@ class column {
   column& operator=(column&& other) = delete;
 
   /**
-   * @brief Construct a new column by deep copying the contents of `other`.
-   *
-   * @param other The column to copy
-   */
-  column(column const& other);
-
-  /**
    * @brief Construct a new column object by deep copying the contents of
    *`other`.
    *
@@ -68,7 +61,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream,
+         rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -129,12 +122,12 @@ class column {
   /**
    * @brief Returns the column's logical element type
    */
-  data_type type() const noexcept { return _type; }
+  [[nodiscard]] data_type type() const noexcept { return _type; }
 
   /**
    * @brief Returns the number of elements
    */
-  size_type size() const noexcept { return _size; }
+  [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the count of null elements.
@@ -144,7 +137,7 @@ class column {
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
    */
-  size_type null_count() const;
+  [[nodiscard]] size_type null_count() const;
 
   /**
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
@@ -165,18 +158,21 @@ class column {
   /**
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
    *
-   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
-   * of `new_null_mask` does not match the size of this column.
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size of `new_null_mask`
+   * does not match the size of this column.
    *
-   * @param new_null_mask New null value indicator bitmask (lvalue overload &
-   * copied) to set the column's null value indicator mask. May be empty if
-   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
-   * @param new_null_count Optional, the count of null elements. If unknown,
-   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
-   * computed on the first invocation of `null_count()`.
+   * @param new_null_mask New null value indicator bitmask (lvalue overload & copied) to set the
+   * column's null value indicator mask. May be empty if `new_null_count` is 0 or
+   * `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown, specify
+   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on the first invocation
+   * of `null_count()`.
+   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDA
+   * stream if none is specified.
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
-                     size_type new_null_count = UNKNOWN_NULL_COUNT);
+                     size_type new_null_count     = UNKNOWN_NULL_COUNT,
+                     rmm::cuda_stream_view stream = rmm::cuda_stream_view{});
 
   /**
    * @brief Updates the count of null elements.
@@ -203,7 +199,7 @@ class column {
    * @return true The column can hold null values
    * @return false The column cannot hold null values
    */
-  bool nullable() const noexcept { return (_null_mask.size() > 0); }
+  [[nodiscard]] bool nullable() const noexcept { return (_null_mask.size() > 0); }
 
   /**
    * @brief Indicates whether the column contains null elements.
@@ -211,12 +207,12 @@ class column {
    * @return true One or more elements are null
    * @return false Zero elements are null
    */
-  bool has_nulls() const noexcept { return (null_count() > 0); }
+  [[nodiscard]] bool has_nulls() const noexcept { return (null_count() > 0); }
 
   /**
    * @brief Returns the number of child columns
    */
-  size_type num_children() const noexcept { return _children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
   /**
    * @brief Returns a reference to the specified child
@@ -232,7 +228,10 @@ class column {
    * @param child_index Index of the desired child
    * @return column const& Const reference to the desired child
    */
-  column const& child(size_type child_index) const noexcept { return *_children[child_index]; };
+  [[nodiscard]] column const& child(size_type child_index) const noexcept
+  {
+    return *_children[child_index];
+  };
 
   /**
    * @brief Wrapper for the contents of a column.
@@ -268,7 +267,7 @@ class column {
    *
    * @return column_view The immutable, non-owning view
    */
-  column_view view() const;
+  [[nodiscard]] column_view view() const;
 
   /**
    * @brief Implicit conversion operator to a `column_view`.
@@ -297,7 +296,7 @@ class column {
   /**
    * @brief Implicit conversion operator to a `mutable_column_view`.
    *
-   * This allows pasing a `column` object into a function that accepts a
+   * This allows passing a `column` object into a function that accepts a
    *`mutable_column_view`. The conversion is automatic.
 
    * @note Creating a mutable view of a `column` invalidates the `column`'s

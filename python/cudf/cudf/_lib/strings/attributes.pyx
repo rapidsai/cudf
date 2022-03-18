@@ -3,14 +3,14 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.attributes cimport (
-    count_characters as cpp_count_characters,
     code_points as cpp_code_points,
-    count_bytes as cpp_count_bytes
+    count_bytes as cpp_count_bytes,
+    count_characters as cpp_count_characters,
 )
-from cudf._lib.column cimport Column
 
 
 def count_characters(Column source_strings):

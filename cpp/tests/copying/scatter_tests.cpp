@@ -146,7 +146,7 @@ class ScatterIndexTypeTests : public cudf::test::BaseFixture {
 };
 
 using IndexTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
-TYPED_TEST_CASE(ScatterIndexTypeTests, IndexTypes);
+TYPED_TEST_SUITE(ScatterIndexTypeTests, IndexTypes);
 
 // Throw logic error if check_bounds is set and index is out of bounds
 TYPED_TEST(ScatterIndexTypeTests, ScatterOutOfBounds)
@@ -234,7 +234,7 @@ class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
 using InvalidIndexTypes = cudf::test::Concat<cudf::test::Types<float, double, bool>,
                                              cudf::test::ChronoTypes,
                                              cudf::test::FixedPointTypes>;
-TYPED_TEST_CASE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
+TYPED_TEST_SUITE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
 
 // Throw logic error if scatter map column has invalid data type
 TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterInvalidIndexType)
@@ -273,7 +273,7 @@ template <typename T>
 class ScatterDataTypeTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
 
 // Empty scatter map returns copy of input
 TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
@@ -577,7 +577,7 @@ template <typename T>
 class BooleanMaskScatter : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 {
@@ -738,13 +738,13 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
     }
 
     static_cast<ScalarType*>(scalar.get())->set_value(value);
-    static_cast<ScalarType*>(scalar.get())->set_valid(validity);
+    static_cast<ScalarType*>(scalar.get())->set_valid_async(validity);
 
     return scalar;
   }
 };
 
-TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
 {
@@ -774,7 +774,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   bool validity = false;
   auto scalar_1 = this->form_scalar(source, validity);
   auto scalar_2 = cudf::make_string_scalar("cudf");
-  scalar_2->set_valid(true);
+  scalar_2->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar_1);
   scalar_vect.push_back(*scalar_2);
@@ -804,7 +804,7 @@ class BooleanMaskScatterScalarString : public cudf::test::BaseFixture {
 TEST_F(BooleanMaskScatterScalarString, NoNUll)
 {
   auto scalar = cudf::make_string_scalar("cudf");
-  scalar->set_valid(true);
+  scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar);
 
@@ -823,7 +823,7 @@ TEST_F(BooleanMaskScatterScalarString, NoNUll)
 TEST_F(BooleanMaskScatterScalarString, WithNUll)
 {
   auto scalar = cudf::make_string_scalar("cudf");
-  scalar->set_valid(true);
+  scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.push_back(*scalar);
   cudf::test::strings_column_wrapper target({"is", "is", "a", "udf", "api"}, {1, 0, 0, 1, 1});
@@ -899,14 +899,14 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointScatter)
+TYPED_TEST(FixedPointTestAllReps, FixedPointScatter)
 {
   using namespace numeric;
   using decimalXX = TypeParam;

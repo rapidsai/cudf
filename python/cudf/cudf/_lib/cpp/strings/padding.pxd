@@ -1,12 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
-
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.types cimport size_type
+
 
 cdef extern from "cudf/strings/padding.hpp" namespace "cudf::strings" nogil:
     ctypedef enum pad_side:

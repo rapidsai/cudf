@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "cudf_kafka/kafka_consumer.hpp"
+
 #include <librdkafka/rdkafkacpp.h>
+
 #include <chrono>
 #include <memory>
 
@@ -24,14 +25,27 @@ namespace io {
 namespace external {
 namespace kafka {
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs)
-  : kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               python_callable_type python_callable,
+                               kafka_oauth_callback_wrapper_type callable_wrapper)
+  : configs(configs),
+    python_callable_(python_callable),
+    callable_wrapper_(callable_wrapper),
+    kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  for (auto const &key_value : configs) {
+  for (auto const& key_value : configs) {
     std::string error_string;
     CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
                    kafka_conf->set(key_value.first, key_value.second, error_string),
                  "Invalid Kafka configuration");
+  }
+
+  if (python_callable_ != nullptr) {
+    std::string error_string;
+    python_oauth_refresh_callback cb(callable_wrapper_, python_callable_);
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
+                 "Failed to set Kafka oauth callback");
   }
 
   // Kafka 0.9 > requires group.id in the configuration
@@ -44,27 +58,39 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs
     RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 }
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> const &configs,
-                               std::string const &topic_name,
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               python_callable_type python_callable,
+                               kafka_oauth_callback_wrapper_type callback_wrapper,
+                               std::string const& topic_name,
                                int partition,
                                int64_t start_offset,
                                int64_t end_offset,
                                int batch_timeout,
-                               std::string const &delimiter)
-  : topic_name(topic_name),
+                               std::string const& delimiter)
+  : configs(configs),
+    python_callable_(python_callable),
+    callable_wrapper_(callback_wrapper),
+    topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),
     end_offset(end_offset),
     batch_timeout(batch_timeout),
-    delimiter(delimiter)
+    delimiter(delimiter),
+    kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-
-  for (auto const &key_value : configs) {
+  for (auto const& key_value : configs) {
     std::string error_string;
     CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
                    kafka_conf->set(key_value.first, key_value.second, error_string),
                  "Invalid Kafka configuration");
+  }
+
+  if (python_callable_ != nullptr) {
+    std::string error_string;
+    python_oauth_refresh_callback cb(callable_wrapper_, python_callable_);
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
+                 "Failed to set Kafka oauth callback");
   }
 
   // Kafka 0.9 > requires group.id in the configuration
@@ -85,10 +111,10 @@ std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t o
 {
   if (offset > buffer.size()) { return 0; }
   size = std::min(size, buffer.size() - offset);
-  return std::make_unique<non_owning_buffer>((uint8_t *)buffer.data() + offset, size);
+  return std::make_unique<non_owning_buffer>((uint8_t*)buffer.data() + offset, size);
 }
 
-size_t kafka_consumer::host_read(size_t offset, size_t size, uint8_t *dst)
+size_t kafka_consumer::host_read(size_t offset, size_t size, uint8_t* dst)
 {
   if (offset > buffer.size()) { return 0; }
   auto const read_size = std::min(size, buffer.size() - offset);
@@ -102,9 +128,9 @@ size_t kafka_consumer::size() const { return buffer.size(); }
  * Change the TOPPAR assignment for this consumer instance
  */
 RdKafka::ErrorCode kafka_consumer::update_consumer_topic_partition_assignment(
-  std::string const &topic, int partition, int64_t offset)
+  std::string const& topic, int partition, int64_t offset)
 {
-  std::vector<RdKafka::TopicPartition *> topic_partitions;
+  std::vector<RdKafka::TopicPartition*> topic_partitions;
   topic_partitions.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
   return consumer.get()->assign(topic_partitions);
 }
@@ -121,7 +147,7 @@ void kafka_consumer::consume_to_buffer()
       consumer->consume((end - std::chrono::steady_clock::now()).count())};
 
     if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
-      buffer.append(static_cast<char *>(msg->payload()));
+      buffer.append(static_cast<char*>(msg->payload()));
       buffer.append(delimiter);
       messages_read++;
     } else if (msg->err() == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
@@ -134,15 +160,15 @@ void kafka_consumer::consume_to_buffer()
 std::map<std::string, std::string> kafka_consumer::current_configs()
 {
   std::map<std::string, std::string> configs;
-  std::list<std::string> *dump = kafka_conf->dump();
+  std::list<std::string>* dump = kafka_conf->dump();
   for (auto it = dump->begin(); it != dump->end(); std::advance(it, 2))
     configs.insert({*it, *std::next(it)});
   return configs;
 }
 
-int64_t kafka_consumer::get_committed_offset(std::string const &topic, int partition)
+int64_t kafka_consumer::get_committed_offset(std::string const& topic, int partition)
 {
-  std::vector<RdKafka::TopicPartition *> toppar_list;
+  std::vector<RdKafka::TopicPartition*> toppar_list;
   toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
 
   // Query Kafka to populate the TopicPartitions with the desired offsets
@@ -160,7 +186,7 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(std::str
     auto spec_topic = std::unique_ptr<RdKafka::Topic>(
       RdKafka::Topic::create(consumer.get(), specific_topic, nullptr, errstr));
 
-    RdKafka::Metadata *md;
+    RdKafka::Metadata* md;
     CUDF_EXPECTS(
       RdKafka::ERR_NO_ERROR ==
         consumer->metadata(spec_topic == nullptr, spec_topic.get(), &md, default_timeout),
@@ -169,11 +195,11 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(std::str
   }();
   std::map<std::string, std::vector<int32_t>> topic_parts;
 
-  for (auto const &topic : *(metadata->topics())) {
-    auto &part_ids    = topic_parts[topic->topic()];
-    auto const &parts = *(topic->partitions());
+  for (auto const& topic : *(metadata->topics())) {
+    auto& part_ids    = topic_parts[topic->topic()];
+    auto const& parts = *(topic->partitions());
     std::transform(
-      parts.cbegin(), parts.cend(), std::back_inserter(part_ids), [](auto const &part) {
+      parts.cbegin(), parts.cend(), std::back_inserter(part_ids), [](auto const& part) {
         return part->id();
       });
   }
@@ -181,7 +207,7 @@ std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(std::str
   return topic_parts;
 }
 
-std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,
+std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const& topic,
                                                                     int partition,
                                                                     int timeout,
                                                                     bool cached)
@@ -212,10 +238,10 @@ std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string 
   return results;
 }
 
-void kafka_consumer::commit_offset(std::string const &topic, int partition, int64_t offset)
+void kafka_consumer::commit_offset(std::string const& topic, int partition, int64_t offset)
 {
-  std::vector<RdKafka::TopicPartition *> partitions_;
-  RdKafka::TopicPartition *toppar = RdKafka::TopicPartition::create(topic, partition, offset);
+  std::vector<RdKafka::TopicPartition*> partitions_;
+  RdKafka::TopicPartition* toppar = RdKafka::TopicPartition::create(topic, partition, offset);
   CUDF_EXPECTS(toppar != nullptr, "RdKafka failed to create TopicPartition");
   toppar->set_offset(offset);
   partitions_.push_back(toppar);

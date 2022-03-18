@@ -1,18 +1,17 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp.string cimport string
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
+
 from cudf._lib.cpp.io.avro cimport (
     avro_reader_options,
-    read_avro as libcudf_read_avro
+    read_avro as libcudf_read_avro,
 )
-
-from libcpp.string cimport string
-from libcpp.vector cimport vector
-from libcpp.utility cimport move
-
 from cudf._lib.cpp.io.types cimport table_with_metadata
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.io.utils cimport make_source_info
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
@@ -53,4 +52,4 @@ cpdef read_avro(datasource, columns=None, skip_rows=-1, num_rows=-1):
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
-    return Table.from_unique_ptr(move(c_result.tbl), column_names=names)
+    return data_from_unique_ptr(move(c_result.tbl), column_names=names)

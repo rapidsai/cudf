@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <cassert>
 #include <memory>
@@ -27,7 +28,7 @@
 
 /**
  * @file table_device_view.cuh
- * @brief Table device view class definitons
+ * @brief Table device view class definitions
  */
 
 namespace cudf {
@@ -60,9 +61,9 @@ class table_device_view_base {
     return _columns[column_index];
   }
 
-  __host__ __device__ size_type num_columns() const noexcept { return _num_columns; }
+  [[nodiscard]] __host__ __device__ size_type num_columns() const noexcept { return _num_columns; }
 
-  __host__ __device__ size_type num_rows() const noexcept { return _num_rows; }
+  [[nodiscard]] __host__ __device__ size_type num_rows() const noexcept { return _num_rows; }
 
   void destroy();
 
@@ -149,10 +150,4 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
 
-namespace detail {
-extern template bool is_relationally_comparable<table_device_view>(table_device_view const& lhs,
-                                                                   table_device_view const& rhs);
-extern template bool is_relationally_comparable<mutable_table_device_view>(
-  mutable_table_device_view const& lhs, mutable_table_device_view const& rhs);
-}  // namespace detail
 }  // namespace cudf

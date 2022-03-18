@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <nvtext/detail/tokenize.hpp>
@@ -26,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -204,7 +203,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   if (replacements.size() != 1)
     CUDF_EXPECTS(replacements.size() == targets.size(),
                  "Parameter targets and replacements must be the same size");
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   cudf::size_type const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -230,9 +229,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                                    std::move(children.first),
                                    std::move(children.second),
                                    strings.null_count(),
-                                   std::move(null_mask),
-                                   stream,
-                                   mr);
+                                   std::move(null_mask));
 }
 
 std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& strings,
@@ -242,8 +239,8 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   cudf::size_type const strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -264,9 +261,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
                                    std::move(children.first),
                                    std::move(children.second),
                                    strings.null_count(),
-                                   std::move(null_mask),
-                                   stream,
-                                   mr);
+                                   std::move(null_mask));
 }
 
 }  // namespace detail

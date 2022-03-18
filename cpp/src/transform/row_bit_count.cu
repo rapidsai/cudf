@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -115,17 +116,17 @@ struct column_info {
  *
  */
 struct hierarchy_info {
-  hierarchy_info() : simple_per_row_size(0), complex_type_count(0), max_branch_depth(0) {}
+  hierarchy_info() {}
 
   // These two fields act as an optimization. If we find that the entire table
   // is just fixed-width types, we do not need to do the more expensive kernel call that
   // traverses the individual columns. So if complex_type_count is 0, we can just
   // return a column where every row contains the value simple_per_row_size
-  size_type simple_per_row_size;  // in bits
-  size_type complex_type_count;
+  size_type simple_per_row_size{0};  // in bits
+  size_type complex_type_count{0};
 
   // max depth of span branches present in the hierarchy.
-  size_type max_branch_depth;
+  size_type max_branch_depth{0};
 };
 
 /**
@@ -166,10 +167,10 @@ struct flatten_functor {
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
                   hierarchy_info& h_info,
-                  rmm::cuda_stream_view stream,
+                  rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  thrust::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -178,15 +179,15 @@ struct flatten_functor {
   }
 
   // strings
-  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
                   hierarchy_info& h_info,
-                  rmm::cuda_stream_view stream,
+                  rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  thrust::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -194,7 +195,7 @@ struct flatten_functor {
   }
 
   // lists
-  template <typename T, std::enable_if_t<std::is_same<T, list_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -205,7 +206,7 @@ struct flatten_functor {
                   thrust::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
-    size_type const branch_depth_start = cur_branch_depth;
+    auto const branch_depth_start = cur_branch_depth;
     auto const is_list_inside_struct =
       parent_index && out[parent_index.value()].type().id() == type_id::STRUCT;
     if (is_list_inside_struct) {
@@ -219,7 +220,7 @@ struct flatten_functor {
 
     lists_column_view lcv(col);
     auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [col = lcv.get_sliced_child(stream)](auto i) { return col; });
+      0, [col = lcv.get_sliced_child(stream)](auto) { return col; });
     h_info.complex_type_count++;
 
     flatten_hierarchy(
@@ -227,7 +228,7 @@ struct flatten_functor {
   }
 
   // structs
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* = nullptr>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -235,7 +236,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  thrust::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -257,18 +258,11 @@ struct flatten_functor {
   }
 
   // everything else
-  template <typename T,
-            std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same<T, string_view>::value &&
-                             !std::is_same<T, list_view>::value &&
-                             !std::is_same<T, struct_view>::value>* = nullptr>
-  void operator()(column_view const& col,
-                  std::vector<cudf::column_view>& out,
-                  std::vector<column_info>& info,
-                  hierarchy_info& h_info,
-                  rmm::cuda_stream_view stream,
-                  size_type cur_depth,
-                  size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+  template <typename T, typename... Args>
+  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same_v<T, string_view> &&
+                     !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view>,
+                   void>
+  operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported column type in row_bit_count");
   }
@@ -341,10 +335,21 @@ template <>
 __device__ size_type row_size_functor::operator()<string_view>(column_device_view const& col,
                                                                row_span const& span)
 {
-  column_device_view const& offsets = col.child(strings_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
+  if (num_rows == 0) {
+    // For empty columns, the `span` cannot have a row size.
+    return 0;
+  }
+
+  auto const& offsets = col.child(strings_column_view::offsets_column_index);
   auto const row_start{span.row_start + col.offset()};
   auto const row_end{span.row_end + col.offset()};
+  if (row_start == row_end) {
+    // Empty row contributes 0 bits to row_bit_count().
+    // Note: Validity bit doesn't count either. There are no rows in the child column
+    //       corresponding to this span.
+    return 0;
+  }
 
   auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
@@ -364,7 +369,6 @@ template <>
 __device__ size_type row_size_functor::operator()<list_view>(column_device_view const& col,
                                                              row_span const& span)
 {
-  column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
 
   auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;
@@ -388,7 +392,7 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
 /**
  * @brief Kernel for computing per-row sizes in bits.
  *
- * @param cols An span of column_device_views represeting a column hierarcy
+ * @param cols An span of column_device_views representing a column hierarchy
  * @param info An span of column_info structs corresponding the elements in `cols`
  * @param output Output span of size (# rows) where per-row bit sizes are stored
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
@@ -405,7 +409,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
   if (tid >= num_rows) { return; }
 
   // branch stack. points to the last list prior to branching.
-  row_span* my_branch_stack = thread_branch_stacks + (tid * max_branch_depth);
+  row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
   // current row span - always starts at 1 row.
@@ -442,7 +446,7 @@ __global__ void compute_row_sizes(device_span<column_device_view const> cols,
     size += cudf::type_dispatcher(col.type(), row_size_functor{}, col, cur_span);
 
     // if this is a list column, update the working span from our offsets
-    if (col.type().id() == type_id::LIST) {
+    if (col.type().id() == type_id::LIST && col.size() > 0) {
       column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
       auto const base_offset            = offsets.data<offset_type>()[col.offset()];
       cur_span.row_start =
@@ -465,7 +469,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::mr::device_memory_resource* mr)
 {
   // no rows
-  if (t.num_rows() <= 0) { return cudf::make_empty_column(data_type{type_id::INT32}); }
+  if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
 
   // flatten the hierarchy and determine some information about it.
   std::vector<cudf::column_view> cols;
@@ -493,12 +497,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
 
   // move stack info to the gpu
-  rmm::device_uvector<column_info> d_info(info.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(d_info.data(),
-                           info.data(),
-                           sizeof(column_info) * info.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<column_info> d_info = cudf::detail::make_device_uvector_async(info, stream);
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer

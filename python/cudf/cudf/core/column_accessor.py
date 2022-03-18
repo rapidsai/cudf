@@ -1,10 +1,10 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import MutableMapping
-from functools import reduce
+from functools import cached_property, reduce
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -20,7 +20,6 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -80,6 +79,19 @@ def _to_flat_dict(d):
 
 
 class ColumnAccessor(MutableMapping):
+    """
+    Parameters
+    ----------
+    data : mapping
+        Mapping of keys to column values.
+    multiindex : bool, optional
+        Whether tuple keys represent a hierarchical
+        index with multiple "levels" (default=False).
+    level_names : tuple, optional
+        Tuple containing names for each of the levels.
+        For a non-hierarchical index, a tuple of size 1
+        may be passe.
+    """
 
     _data: "Dict[Any, ColumnBase]"
     multiindex: bool
@@ -91,19 +103,6 @@ class ColumnAccessor(MutableMapping):
         multiindex: bool = False,
         level_names=None,
     ):
-        """
-        Parameters
-        ----------
-        data : mapping
-            Mapping of keys to column values.
-        multiindex : bool, optional
-            Whether tuple keys represent a hierarchical
-            index with multiple "levels" (default=False).
-        level_names : tuple, optional
-            Tuple containing names for each of the levels.
-            For a non-hierarchical index, a tuple of size 1
-            may be passe.
-        """
         if data is None:
             data = {}
         # TODO: we should validate the keys of `data`
@@ -244,9 +243,7 @@ class ColumnAccessor(MutableMapping):
             del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
-        """"
-        Convert the keys of the ColumnAccessor to a Pandas Index object.
-        """
+        """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
@@ -362,9 +359,9 @@ class ColumnAccessor(MutableMapping):
             start, stop, step = index.indices(len(self._data))
             keys = self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
-            keys = self.names[index : index + 1]
+            keys = (self.names[index],)
         else:
-            keys = (self.names[i] for i in index)
+            keys = tuple(self.names[i] for i in index)
         data = {k: self._data[k] for k in keys}
         return self.__class__(
             data, multiindex=self.multiindex, level_names=self.level_names,
@@ -525,19 +522,42 @@ class ColumnAccessor(MutableMapping):
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"
                 )
+
             if isinstance(mapper, Mapping):
-                new_names = (
+                new_col_names = [
                     mapper.get(col_name, col_name) for col_name in self.keys()
-                )
+                ]
             else:
-                new_names = (mapper(col_name) for col_name in self.keys())
+                new_col_names = [mapper(col_name) for col_name in self.keys()]
+
+            if len(new_col_names) != len(set(new_col_names)):
+                raise ValueError("Duplicate column names are not allowed")
+
             ca = ColumnAccessor(
-                dict(zip(new_names, self.values())),
+                dict(zip(new_col_names, self.values())),
                 level_names=self.level_names,
                 multiindex=self.multiindex,
             )
 
         return self.__class__(ca)
+
+    def droplevel(self, level):
+        # drop the nth level
+        if level < 0:
+            level += self.nlevels
+
+        self._data = {
+            _remove_key_level(key, level): value
+            for key, value in self._data.items()
+        }
+        self._level_names = (
+            self._level_names[:level] + self._level_names[level + 1 :]
+        )
+
+        if (
+            len(self._level_names) == 1
+        ):  # can't use nlevels, as it depends on multiindex
+            self.multiindex = False
 
 
 def _compare_keys(target: Any, key: Any) -> bool:
@@ -556,3 +576,14 @@ def _compare_keys(target: Any, key: Any) -> bool:
         if k1 != k2:
             return False
     return True
+
+
+def _remove_key_level(key: Any, level: int) -> Any:
+    """
+    Remove a level from key. If detupleize is True, and if only a
+    single level remains, convert the tuple to a scalar.
+    """
+    result = key[:level] + key[level + 1 :]
+    if len(result) == 1:
+        return result[0]
+    return result

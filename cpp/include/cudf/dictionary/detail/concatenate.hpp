@@ -32,8 +32,8 @@ namespace detail {
  * @throw cudf::logic_error if dictionary column keys are not all the same type.
  *
  * @param columns Vector of dictionary columns to concatenate.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(

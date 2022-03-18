@@ -46,7 +46,8 @@ void create_hashed_vocab(std::string const& hash_file)
   std::vector<std::pair<int, int>> coefficients(23, {65559, 0});
   std::ofstream outfile(hash_file, std::ofstream::out);
   outfile << "1\n0\n" << coefficients.size() << "\n";
-  for (auto c : coefficients) outfile << c.first << " " << c.second << "\n";
+  for (auto c : coefficients)
+    outfile << c.first << " " << c.second << "\n";
   std::vector<uint64_t> hash_table(23, 0);
   outfile << hash_table.size() << "\n";
   hash_table[0]  = 3015668L;              // based on values
@@ -54,7 +55,8 @@ void create_hashed_vocab(std::string const& hash_file)
   hash_table[5]  = 6358029;               // bert_hash_table.txt
   hash_table[16] = 451412625363L;         // file for the test
   hash_table[20] = 6206321707968235495L;  // words above
-  for (auto h : hash_table) outfile << h << "\n";
+  for (auto h : hash_table)
+    outfile << h << "\n";
   outfile << "100\n101\n102\n\n";
 }
 
@@ -65,12 +67,13 @@ TEST(TextSubwordTest, Tokenize)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   uint32_t max_sequence_length = 16;
   uint32_t stride              = 16;
 
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         hash_file,
+                                         *vocab,
                                          max_sequence_length,
                                          stride,
                                          true,   // do_lower_case
@@ -117,12 +120,13 @@ TEST(TextSubwordTest, TokenizeMultiRow)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   uint32_t max_sequence_length = 8;
   uint32_t stride              = 6;
 
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         hash_file,
+                                         *vocab,
                                          max_sequence_length,
                                          stride,
                                          true,   // do_lower_case
@@ -146,12 +150,13 @@ TEST(TextSubwordTest, TokenizeMaxEqualsTokens)
   cudf::test::strings_column_wrapper strings({"This is a test."});
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   uint32_t max_sequence_length = 5;  // five tokens in strings;
   uint32_t stride              = 5;  // this should not effect the result
 
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         hash_file,
+                                         *vocab,
                                          max_sequence_length,
                                          stride,
                                          true,   // do_lower_case
@@ -173,8 +178,10 @@ TEST(TextSubwordTest, ParameterErrors)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
+
   EXPECT_THROW(nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                        hash_file,
+                                        *vocab,
                                         12,    // max_sequence_length
                                         13,    // stride <= max_sequence_length
                                         true,  // do_lower_case
@@ -183,7 +190,7 @@ TEST(TextSubwordTest, ParameterErrors)
                cudf::logic_error);
 
   EXPECT_THROW(nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                        hash_file,
+                                        *vocab,
                                         5,
                                         5,
                                         true,  // do_lower_case
@@ -197,8 +204,9 @@ TEST(TextSubwordTest, EmptyStrings)
   cudf::test::strings_column_wrapper strings;
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
+  auto vocab  = nvtext::load_vocabulary_file(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         hash_file,
+                                         *vocab,
                                          16,
                                          16,
                                          true,   // do_lower_case
@@ -215,8 +223,9 @@ TEST(TextSubwordTest, AllNullStrings)
   cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
+  auto vocab  = nvtext::load_vocabulary_file(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         hash_file,
+                                         *vocab,
                                          16,
                                          16,
                                          true,   // do_lower_case
@@ -335,6 +344,41 @@ TEST(TextSubwordTest, TokenizeWithSpecialTokens)
      3, 0, 3,
      4, 0, 4});
   // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}
+
+TEST(TextSubwordTest, ZeroHashBinCoefficient)
+{
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
+  {
+    std::ofstream outfile(hash_file, std::ofstream::out);
+    outfile << "26899\n27424\n2\n";
+    outfile << "6321733446031528966 0\n0 0\n9\n";  // zeroes are here
+    outfile << "6206321707968233475\n3014663\n6205475701751152646\n";
+    outfile << "451412623364\n5214737420442796033\n6173800107753209856\n";
+    outfile << "0\n6356997\n6064762127302393858\n";
+    outfile << "0\n1\n2\n";
+  }
+
+  std::vector<const char*> h_strings{".zzzz"};
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
+  auto vocab  = nvtext::load_vocabulary_file(hash_file);
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
+                                         *vocab,
+                                         8,
+                                         8,
+                                         true,  // do_lower_case
+                                         true,  // do_truncate
+                                         MAX_ROWS_TENSOR);
+
+  // clang-format off
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens({7, 0, 0, 0, 0, 0, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn(  {1, 1, 0, 0, 0, 0, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata({0, 0, 1});
+  // clang-format on
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);

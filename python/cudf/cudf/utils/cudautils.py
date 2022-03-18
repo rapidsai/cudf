@@ -2,47 +2,11 @@
 from pickle import dumps
 
 import cachetools
-import cupy
 import numpy as np
 from numba import cuda
+from numba.np import numpy_support
 
 import cudf
-from cudf.utils.utils import check_equals_float, check_equals_int
-
-try:
-    # Numba >= 0.49
-    from numba.np import numpy_support
-except ImportError:
-    # Numba <= 0.49
-    from numba import numpy_support
-
-
-# GPU array type casting
-
-
-def as_contiguous(arr):
-    assert arr.ndim == 1
-    cupy_dtype = arr.dtype
-    if np.issubdtype(cupy_dtype, np.datetime64):
-        cupy_dtype = np.dtype("int64")
-        arr = arr.view("int64")
-    out = cupy.ascontiguousarray(cupy.asarray(arr))
-    return cuda.as_cuda_array(out).view(arr.dtype)
-
-
-# Mask utils
-
-
-def full(size, value, dtype):
-    cupy_dtype = dtype
-    if np.issubdtype(cupy_dtype, np.datetime64):
-        time_unit, _ = np.datetime_data(cupy_dtype)
-        cupy_dtype = np.int64
-        value = np.datetime64(value, time_unit).view(cupy_dtype)
-
-    out = cupy.full(size, value, cupy_dtype)
-    return cuda.as_cuda_array(out).view(dtype)
-
 
 #
 # Misc kernels
@@ -77,7 +41,7 @@ def gpu_diff(in_col, out_col, out_mask, N):
 def gpu_mark_found_int(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_int(arr[i], val):
+        if arr[i] == val:
             out[i] = i
         else:
             out[i] = not_found
@@ -92,7 +56,10 @@ def gpu_mark_found_float(arr, val, out, not_found):
         # at 0.51.1, this will have a very slight
         # performance improvement. Related
         # discussion in : https://github.com/rapidsai/cudf/pull/6073
-        if check_equals_float(arr[i], float(val)):
+        val = float(val)
+
+        # NaN-aware equality comparison.
+        if (arr[i] == val) or (arr[i] != arr[i] and val != val):
             out[i] = i
         else:
             out[i] = not_found
@@ -243,6 +210,22 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
+def make_cache_key(udf, sig):
+    """
+    Build a cache key for a user defined function. Used to avoid
+    recompiling the same function for the same set of types
+    """
+    codebytes = udf.__code__.co_code
+    constants = udf.__code__.co_consts
+    if udf.__closure__ is not None:
+        cvars = tuple(x.cell_contents for x in udf.__closure__)
+        cvarbytes = dumps(cvars)
+    else:
+        cvarbytes = b""
+
+    return constants, codebytes, cvarbytes, sig
+
+
 def compile_udf(udf, type_signature):
     """Compile ``udf`` with `numba`
 
@@ -273,17 +256,9 @@ def compile_udf(udf, type_signature):
       An numpy type
 
     """
+    import cudf.core.udf
 
-    # Check if we've already compiled a similar (but possibly distinct)
-    # function before
-    codebytes = udf.__code__.co_code
-    if udf.__closure__ is not None:
-        cvars = tuple([x.cell_contents for x in udf.__closure__])
-        cvarbytes = dumps(cvars)
-    else:
-        cvarbytes = b""
-
-    key = (type_signature, codebytes, cvarbytes)
+    key = make_cache_key(udf, type_signature)
     res = _udf_code_cache.get(key)
     if res:
         return res
@@ -293,10 +268,13 @@ def compile_udf(udf, type_signature):
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
         udf, type_signature, device=True
     )
-    output_type = numpy_support.as_dtype(return_type)
+    if not isinstance(return_type, cudf.core.udf.typing.MaskedType):
+        output_type = numpy_support.as_dtype(return_type).type
+    else:
+        output_type = return_type
 
     # Populate the cache for this function
-    res = (ptx_code, output_type.type)
+    res = (ptx_code, output_type)
     _udf_code_cache[key] = res
 
     return res

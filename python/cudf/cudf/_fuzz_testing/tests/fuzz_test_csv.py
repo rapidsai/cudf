@@ -13,7 +13,7 @@ from cudf._fuzz_testing.utils import (
     compare_content,
     run_test,
 )
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pythonfuzz(data_handle=CSVReader)

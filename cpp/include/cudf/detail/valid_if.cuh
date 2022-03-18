@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/distance.h>
 
 namespace cudf {
@@ -65,7 +64,7 @@ __global__ void valid_if_kernel(
 
   size_type block_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
   if (threadIdx.x == 0) { atomicAdd(valid_count, block_count); }
-}  // namespace detail
+}
 
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is
@@ -118,7 +117,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 *         input ranges.
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
- * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predivate evaluates
+ * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
  * to true, the the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:

@@ -18,12 +18,11 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -101,9 +100,9 @@ std::unique_ptr<column> strip(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(to_strip.is_valid(), "Parameter to_strip must be valid");
+  CUDF_EXPECTS(to_strip.is_valid(stream), "Parameter to_strip must be valid");
   string_view const d_to_strip(to_strip.data(), to_strip.size());
 
   auto const d_column = column_device_view::create(strings.parent(), stream);
@@ -116,9 +115,7 @@ std::unique_ptr<column> strip(
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail

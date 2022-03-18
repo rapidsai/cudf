@@ -2,32 +2,30 @@
 
 import cudf
 
-from cudf._lib.table cimport Table
-from libcpp.vector cimport vector
-from libcpp.string cimport string
-from libcpp cimport bool
-
-from libcpp.memory cimport unique_ptr, shared_ptr
-from libcpp.utility cimport move
-
 from cpython cimport pycapsule
+from libcpp cimport bool
+from libcpp.memory cimport shared_ptr, unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
+from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
 
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from pyarrow.lib cimport CTable, pyarrow_wrap_table, pyarrow_unwrap_table
 from cudf._lib.cpp.interop cimport (
-    to_arrow as cpp_to_arrow,
+    DLManagedTensor,
+    column_metadata,
     from_arrow as cpp_from_arrow,
     from_dlpack as cpp_from_dlpack,
+    to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
-    column_metadata,
-    DLManagedTensor
 )
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def from_dlpack(dlpack_capsule):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Table object.
+    Converts a DLPack Tensor PyCapsule into a cudf Frame object.
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
@@ -42,7 +40,7 @@ def from_dlpack(dlpack_capsule):
             cpp_from_dlpack(dlpack_tensor)
         )
 
-    res = Table.from_unique_ptr(
+    res = data_from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
     )
@@ -50,9 +48,9 @@ def from_dlpack(dlpack_capsule):
     return res
 
 
-def to_dlpack(Table source_table):
+def to_dlpack(source_table):
     """
-    Converts a Table cudf object into a DLPack Tensor PyCapsule.
+    Converts a cudf Frame into a DLPack Tensor PyCapsule.
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
@@ -64,7 +62,9 @@ def to_dlpack(Table source_table):
             )
 
     cdef DLManagedTensor *dlpack_tensor
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, ignore_index=True
+    )
 
     with nogil:
         dlpack_tensor = cpp_to_dlpack(
@@ -110,10 +110,10 @@ cdef vector[column_metadata] gather_metadata(object metadata) except *:
         raise ValueError("Malformed metadata has been encountered")
 
 
-def to_arrow(Table input_table,
+def to_arrow(input_table,
              object metadata,
              bool keep_index=True):
-    """Convert from cudf Table to PyArrow Table.
+    """Convert from cudf Frame to PyArrow Table.
 
     Parameters
     ----------
@@ -129,7 +129,7 @@ def to_arrow(Table input_table,
 
     cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
     cdef table_view input_table_view = (
-        input_table.view() if keep_index else input_table.data_view()
+        table_view_from_table(input_table, not keep_index)
     )
 
     cdef shared_ptr[CTable] cpp_arrow_table
@@ -146,7 +146,7 @@ def from_arrow(
     object column_names=None,
     object index_names=None
 ):
-    """Convert from PyArrow Table to cudf Table.
+    """Convert from PyArrow Table to cudf Frame.
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ def from_arrow(
 
     Returns
     -------
-    cudf Table
+    cudf Frame
     """
     cdef shared_ptr[CTable] cpp_arrow_table = (
         pyarrow_unwrap_table(input_table)
@@ -166,10 +166,8 @@ def from_arrow(
     with nogil:
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
-    out_table = Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=column_names,
         index_names=index_names
     )
-
-    return out_table

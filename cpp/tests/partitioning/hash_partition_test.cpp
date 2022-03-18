@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
@@ -246,7 +247,7 @@ template <typename T>
 class HashPartitionFixedWidth : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
 {
@@ -310,15 +311,15 @@ void run_fixed_width_test(size_t cols,
 
   // Compute the partition number for each row
   cudf::size_type partition = 0;
-  thrust::host_vector<cudf::size_type> partitions;
+  std::vector<cudf::size_type> partitions;
   std::for_each(offsets1.begin() + 1, offsets1.end(), [&](cudf::size_type const& count) {
     std::fill_n(std::back_inserter(partitions), count, partition++);
   });
 
   // Make a table view of the partition numbers
   constexpr cudf::data_type dtype{cudf::type_id::INT32};
-  rmm::device_vector<cudf::size_type> d_partitions(partitions);
-  cudf::column_view partitions_col(dtype, rows, d_partitions.data().get());
+  auto d_partitions = cudf::detail::make_device_uvector_sync(partitions);
+  cudf::column_view partitions_col(dtype, rows, d_partitions.data());
   cudf::table_view partitions_table({partitions_col});
 
   // Sort partition numbers by the corresponding row hashes of each output

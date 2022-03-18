@@ -9,7 +9,7 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.core import make_meta, meta_nonempty
+from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
 
 import cudf
@@ -59,7 +59,7 @@ def test_from_cudf_with_generic_idx():
 
     ddf = dgd.from_cudf(cdf, npartitions=2)
 
-    assert isinstance(ddf.index.compute(), cudf.core.index.GenericIndex)
+    assert isinstance(ddf.index.compute(), cudf.RangeIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
 
 
@@ -284,7 +284,7 @@ def test_assign():
     got = dgf.assign(z=newcol)
 
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
+    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -585,20 +585,20 @@ def test_hash_object_dispatch(index):
     )
 
     # DataFrame
-    result = dd.utils.hash_object_dispatch(obj, index=index)
+    result = dd.core.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # Series
-    result = dd.utils.hash_object_dispatch(obj["x"], index=index)
+    result = dd.core.hash_object_dispatch(obj["x"], index=index)
     expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
-    result = dd.utils.hash_object_dispatch(obj_multi, index=index)
+    result = dd.core.hash_object_dispatch(obj_multi, index=index)
     expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
@@ -638,7 +638,7 @@ def test_make_meta_backends(index):
     df = df.set_index(index)
 
     # Check "empty" metadata types
-    chk_meta = make_meta(df)
+    chk_meta = dask_make_meta(df)
     dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
@@ -706,7 +706,7 @@ def test_dataframe_set_index():
 
     pddf = dd.from_pandas(pdf, npartitions=4)
     pddf = pddf.set_index("str")
-    from cudf.tests.utils import assert_eq
+    from cudf.testing._utils import assert_eq
 
     assert_eq(ddf.compute(), pddf.compute())
 
@@ -777,3 +777,65 @@ def test_index_map_partitions():
     mins_gd = gddf.index.map_partitions(M.min, meta=gddf.index).compute()
 
     dd.assert_eq(mins_pd, mins_gd)
+
+
+def test_merging_categorical_columns():
+    try:
+        from dask.dataframe.dispatch import (  # noqa: F401
+            union_categoricals_dispatch,
+        )
+    except ImportError:
+        pytest.skip(
+            "need a version of dask that has union_categoricals_dispatch"
+        )
+
+    df_1 = cudf.DataFrame(
+        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+    )
+
+    ddf_1 = dgd.from_cudf(df_1, npartitions=2)
+
+    ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
+
+    df_2 = cudf.DataFrame(
+        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+    )
+
+    ddf_2 = dgd.from_cudf(df_2, npartitions=2)
+
+    ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
+    expected = cudf.DataFrame(
+        {
+            "id_1": [2, 3],
+            "cat_col": cudf.Series(
+                ["f", "f"],
+                dtype=cudf.CategoricalDtype(
+                    categories=["a", "b", "f", "g", "h"], ordered=False
+                ),
+            ),
+            "id_2": [113, 113],
+        }
+    )
+    dd.assert_eq(ddf_1.merge(ddf_2), expected)
+
+
+def test_correct_meta():
+    try:
+        from dask.dataframe.dispatch import make_meta_obj  # noqa: F401
+    except ImportError:
+        pytest.skip("need make_meta_obj to be preset")
+
+    # Need these local imports in this specific order.
+    # For context: https://github.com/rapidsai/cudf/issues/7946
+    import pandas as pd
+
+    from dask import dataframe as dd
+
+    import dask_cudf  # noqa: F401
+
+    df = pd.DataFrame({"a": [3, 4], "b": [1, 2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    emb = ddf["a"].apply(pd.Series, meta={"c0": "int64", "c1": "int64"})
+
+    assert isinstance(emb, dd.DataFrame)
+    assert isinstance(emb._meta, pd.DataFrame)

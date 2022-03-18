@@ -40,7 +40,7 @@ void run_rank_test(table_view input,
                    bool debug = false)
 {
   int i = 0;
-  for (auto &&input_column : input) {
+  for (auto&& input_column : input) {
     // Rank
     auto got_rank_column =
       cudf::rank(input_column, method, column_order, null_handling, null_precedence, percentage);
@@ -76,8 +76,8 @@ struct Rank : public BaseFixture {
                      column_view const col3_rank,
                      bool percentage = false)
   {
-    if (std::is_same<T, bool>::value) return;
-    for (auto const &test_case : {
+    if (std::is_same_v<T, bool>) return;
+    for (auto const& test_case : {
            // Non-null column
            test_case_t{table_view{{col1}}, table_view{{col1_rank}}},
            // Null column
@@ -103,7 +103,7 @@ struct Rank : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(Rank, NumericTypes);
+TYPED_TEST_SUITE(Rank, NumericTypes);
 
 // fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
 //                                        3,   2,   1,   4,   6,   5
@@ -408,6 +408,20 @@ TYPED_TEST(Rank, min_desc_bottom_pct)
   cudf::test::fixed_width_column_wrapper<double> col3_rank{
     {0.5, 1.0 / 3.0, 1., 0.5, 1.0 / 6.0, 0.5}};
   this->run_all_tests(rank_method::MIN, desc_bottom, col1_rank, col2_rank, col3_rank, true);
+}
+
+struct RankLarge : public BaseFixture {
+};
+
+TEST_F(RankLarge, average_large)
+{
+  // testcase of https://github.com/rapidsai/cudf/issues/9703
+  auto iter = thrust::counting_iterator<int64_t>(0);
+  fixed_width_column_wrapper<int64_t> col1(iter, iter + 10558);
+  auto result =
+    cudf::rank(col1, rank_method::AVERAGE, {}, null_policy::EXCLUDE, null_order::AFTER, false);
+  fixed_width_column_wrapper<double, int> expected(iter + 1, iter + 10559);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 }  // namespace test

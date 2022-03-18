@@ -1,8 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import argparse
 import os
 import shutil
-import argparse
 from collections import namedtuple
 
 # Update url and dir where datasets needs to be copied

@@ -6,9 +6,9 @@ import pytest
 
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
 
 # import pyarrow.orc as orc
 
@@ -72,6 +72,23 @@ def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
     df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
 
     dd.assert_eq(len(df), expected_len)
+
+
+def test_read_orc_first_file_empty(tmpdir):
+
+    # Write a 3-file dataset where the first file is empty
+    # See: https://github.com/rapidsai/cudf/issues/8011
+    path = str(tmpdir)
+    os.makedirs(path, exist_ok=True)
+    df1 = cudf.DataFrame({"id": [1, 2], "float": [1.0, 2.0]})
+    df1.iloc[:0].to_orc(os.path.join(path, "data.0"))
+    df1.iloc[:1].to_orc(os.path.join(path, "data.1"))
+    df1.iloc[1:].to_orc(os.path.join(path, "data.2"))
+
+    # Read back the files with dask_cudf,
+    # and check the result.
+    df2 = dask_cudf.read_orc(os.path.join(path, "*"))
+    dd.assert_eq(df1, df2, check_index=False)
 
 
 @pytest.mark.parametrize("compute", [True, False])

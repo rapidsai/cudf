@@ -20,11 +20,11 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -40,12 +40,12 @@ std::unique_ptr<column> fill(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS((begin >= 0) && (end <= strings_count),
                "Parameters [begin,end) are outside the range of the provided strings column");
   CUDF_EXPECTS(begin <= end, "Parameters [begin,end) have invalid range values");
   if (begin == end)  // return a copy
-    return std::make_unique<column>(strings.parent());
+    return std::make_unique<column>(strings.parent(), stream, mr);
 
   // string_scalar.data() is null for valid, empty strings
   auto d_value = get_scalar_device_view(const_cast<string_scalar&>(value));
@@ -80,7 +80,7 @@ std::unique_ptr<column> fill(
   // create the chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   // fill the chars column
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
@@ -98,9 +98,7 @@ std::unique_ptr<column> fill(
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

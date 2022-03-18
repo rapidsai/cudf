@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,22 +30,43 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
  */
 public class ColumnView implements AutoCloseable, BinaryOperable {
 
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
   public static final long UNKNOWN_NULL_COUNT = -1;
 
   protected long viewHandle;
   protected final DType type;
   protected final long rows;
   protected final long nullCount;
+  protected final ColumnVector.OffHeapState offHeap;
 
   /**
    * Constructs a Column View given a native view address
    * @param address the view handle
    */
-  protected ColumnView(long address) {
+  ColumnView(long address) {
     this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+    this.offHeap = null;
+  }
+
+
+  /**
+   * Intended to be called from ColumnVector when it is being constructed. Because state creates a
+   * cudf::column_view instance and will close it in all cases, we don't want to have to double
+   * close it.
+   * @param state the state this view is based off of.
+   */
+  protected ColumnView(ColumnVector.OffHeapState state) {
+    offHeap = state;
+    viewHandle = state.getViewHandle();
+    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+    rows = ColumnView.getNativeRowCount(viewHandle);
+    nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
   /**
@@ -101,11 +122,39 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         || !nullCount.isPresent();
   }
 
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   The offsetbuffer for columns that need an offset buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer, BaseDeviceMemoryBuffer offsetBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
   private ColumnView(DType type, long rows, int nullCount,
                      BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
                      BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
     this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
-        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+        offsetBuffer, children == null ? new long[]{} :
+            Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
   }
 
   /** Creates a ColumnVector from a column view handle
@@ -141,6 +190,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the child column views for this view
+   * Please note that it is the responsibility of the caller to close these views.
+   * @return an array of child column views
+   */
+  public final ColumnView[] getChildColumnViews() {
+    int numChildren = getNumChildren();
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    ColumnView[] views = new ColumnView[numChildren];
+    try {
+      for (int i = 0; i < numChildren; i++) {
+        views[i] = getChildColumnView(i);
+      }
+      return views;
+    } catch(Throwable t) {
+      for (ColumnView v: views) {
+        if (v != null) {
+          v.close();
+        }
+      }
+      throw t;
+    }
+  }
+
+  /**
    * Returns the child column view at a given index.
    * Please note that it is the responsibility of the caller to close this view.
    * @param childIndex the index of the child
@@ -154,6 +229,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
     long childColumnView = ColumnView.getChildCvPointer(viewHandle, childIndex);
     return new ColumnView(childColumnView);
+  }
+
+  /**
+   * Get a ColumnView that is the offsets for this list.
+   */
+  ColumnView getListOffsetsView() {
+    assert(getType().equals(DType.LIST));
+    return new ColumnView(getListOffsetCvPointer(viewHandle));
   }
 
   /**
@@ -207,8 +290,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   @Override
   public void close() {
-    ColumnView.deleteColumnView(viewHandle);
+    // close the view handle so long as offHeap is not going to do it for us.
+    if (offHeap == null) {
+      ColumnView.deleteColumnView(viewHandle);
+    }
     viewHandle = 0;
+  }
+
+  @Override
+  public String toString() {
+    return "ColumnView{" +
+           "rows=" + rows +
+           ", type=" + type +
+           ", nullCount=" + nullCount +
+           '}';
   }
 
   /**
@@ -287,6 +382,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is a fixed-point, and FALSE if its not a fixed-point.
+   * A null will be returned for null entries.
+   *
+   * The sign and the exponent is optional. The decimal point may only appear once.
+   * The integer component must fit within the size limits of the underlying fixed-point
+   * storage type. The value of the integer component is based on the scale of the target
+   * decimalType.
+   *
+   * Example:
+   * vec = ["A", "nan", "Inf", "-Inf", "Infinity", "infinity", "2.1474", "112.383", "-2.14748",
+   *        "NULL", "null", null, "1.2", "1.2e-4", "0.00012"]
+   * vec.isFixedPoint() = [false, false, false, false, false, false, true, true, true, false, false,
+   *                       null, true, true, true]
+   *
+   * @param decimalType the data type that should be used for bounds checking. Note that only
+   *                Decimal types (fixed-point) are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isFixedPoint(DType decimalType) {
+    assert type.equals(DType.STRING);
+    assert decimalType.isDecimalType();
+    return new ColumnVector(isFixedPoint(getNativeView(),
+        decimalType.getTypeId().getNativeId(), decimalType.getScale()));
+  }
+
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
    * for null entries.
    *
@@ -307,11 +430,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * for null entries.
    *
    * @param intType the data type that should be used for bounds checking. Note that only
-   *                integer types are allowed.
+   *                cudf integer types are allowed including signed/unsigned int8 through int64
    * @return Boolean vector
    */
   public final ColumnVector isInteger(DType intType) {
     assert type.equals(DType.STRING);
+    assert intType.isBackedByInt() || intType.isBackedByLong() || intType.isBackedByByte()
+        || intType.isBackedByShort();
     return new ColumnVector(isIntegerWithType(getNativeView(),
         intType.getTypeId().getNativeId(), intType.getScale()));
   }
@@ -401,6 +526,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector replaceNulls(ColumnView replacements) {
     return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
+  }
+
+  public final ColumnVector replaceNulls(ReplacePolicy policy) {
+    return new ColumnVector(replaceNullsPolicy(getNativeView(), policy.isPreceding));
   }
 
   /**
@@ -585,12 +714,80 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public final ColumnVector[] split(int... indices) {
-    long[] nativeHandles = split(this.getNativeView(), indices);
-    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    ColumnView[] views = splitAsViews(indices);
+    ColumnVector[] columnVectors = new ColumnVector[views.length];
+    try {
+      for (int i = 0; i < views.length; i++) {
+        columnVectors[i] = views[i].copyToColumnVector();
+      }
+      return columnVectors;
+    } catch (Throwable t) {
+      for (ColumnVector cv : columnVectors) {
+        if (cv != null) {
+          cv.close();
+        }
+      }
+      throw t;
+    } finally {
+      for (ColumnView view : views) {
+        view.close();
+      }
     }
-    return columnVectors;
+  }
+
+  /**
+   * Splits a ColumnView (including null values) into a set of ColumnViews
+   * according to a set of indices. No data is moved or copied.
+   *
+   * IMPORTANT NOTE: Nothing is copied out from the vector and the slices will only be relevant for
+   * the lifecycle of the underlying ColumnVector.
+   *
+   * The "split" function divides the input column into multiple intervals
+   * of rows using the splits indices values and it stores the intervals into the
+   * output columns. Regarding the interval of indices, a pair of values are taken
+   * from the indices array in a consecutive manner. The pair of indices are
+   * left-closed and right-open.
+   *
+   * The indices array ('splits') is required to be a monotonic non-decreasing set.
+   * The indices in the array are required to comply with the following conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of 'a' is less or equal to the position of 'b'.
+   *
+   * The split function will take a pair of indices from the indices array
+   * ('splits') in a consecutive manner. For the first pair, the function will
+   * take the value 0 and the first element of the indices array. For the last pair,
+   * the function will take the last element of the indices array and the size of
+   * the input column.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function return an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty array of ColumnViews is returned.
+   *
+   * The output columns may have different sizes. The number of
+   * columns must be equal to the number of indices in the array plus one.
+   *
+   * Example:
+   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+   * splits: {2, 5, 9}
+   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   *
+   * Note that this is very similar to the output from a PartitionedTable.
+   *
+   *
+   * @param indices the indices to split with
+   * @return A new ColumnView array with slices from the original ColumnView
+   */
+  public ColumnView[] splitAsViews(int... indices) {
+    long[] nativeHandles = split(this.getNativeView(), indices);
+    ColumnView[] columnViews = new ColumnView[nativeHandles.length];
+    for (int i = 0; i < nativeHandles.length; i++) {
+      columnViews[i] = new ColumnView(nativeHandles[i]);
+    }
+    return columnViews;
   }
 
   /**
@@ -632,6 +829,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
 
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+  }
+
+  /**
+   * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   *
+   * The boolColumn must have the same number of rows as the current column.
+   * The result column will have the same number of rows as the current column.
+   * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   *
+   * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the row value is undefined.
+   *
+   * @param boolColumn bool column whose value is to be used as the validity mask.
+   * @return Deep copy of the column with replaced validity mask.
+   */
+  public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
+    return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -744,6 +960,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector dayOfYear() {
     assert type.isTimestampType();
     return new ColumnVector(dayOfYear(getNativeView()));
+  }
+
+  /**
+   * Get the quarter of the year from a timestamp.
+   * @return A new INT16 vector allocated on the GPU. It will be a value from {1, 2, 3, 4}
+   * corresponding to the quarter of the year.
+   */
+  public final ColumnVector quarterOfYear() {
+    assert type.isTimestampType();
+    return new ColumnVector(quarterOfYear(getNativeView()));
+  }
+
+  /**
+   * Add the specified number of months to the timestamp.
+   * @param months must be a INT16 column indicating the number of months to add. A negative number
+   *               of months works too.
+   * @return the updated timestamp
+   */
+  public final ColumnVector addCalendricalMonths(ColumnView months) {
+    return new ColumnVector(addCalendricalMonths(getNativeView(), months.getNativeView()));
+  }
+
+  /**
+   * Check to see if the year for this timestamp is a leap year or not.
+   * @return BOOL8 vector of results
+   */
+  public final ColumnVector isLeapYear() {
+    return new ColumnVector(isLeapYear(getNativeView()));
   }
 
   /**
@@ -1026,7 +1270,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(Aggregation.sum(), outType);
+    return reduce(ReductionAggregation.sum(), outType);
   }
 
   /**
@@ -1034,7 +1278,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar min() {
-    return reduce(Aggregation.min(), type);
+    return reduce(ReductionAggregation.min(), type);
   }
 
   /**
@@ -1051,7 +1295,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.min(outType);
       }
     }
-    return reduce(Aggregation.min(), outType);
+    return reduce(ReductionAggregation.min(), outType);
   }
 
   /**
@@ -1059,7 +1303,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar max() {
-    return reduce(Aggregation.max(), type);
+    return reduce(ReductionAggregation.max(), type);
   }
 
   /**
@@ -1076,7 +1320,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         return tmp.max(outType);
       }
     }
-    return reduce(Aggregation.max(), outType);
+    return reduce(ReductionAggregation.max(), outType);
   }
 
   /**
@@ -1092,7 +1336,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(Aggregation.product(), outType);
+    return reduce(ReductionAggregation.product(), outType);
   }
 
   /**
@@ -1108,7 +1352,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(Aggregation.sumOfSquares(), outType);
+    return reduce(ReductionAggregation.sumOfSquares(), outType);
   }
 
   /**
@@ -1132,7 +1376,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar mean(DType outType) {
-    return reduce(Aggregation.mean(), outType);
+    return reduce(ReductionAggregation.mean(), outType);
   }
 
   /**
@@ -1156,7 +1400,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar variance(DType outType) {
-    return reduce(Aggregation.variance(), outType);
+    return reduce(ReductionAggregation.variance(), outType);
   }
 
   /**
@@ -1181,7 +1425,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                types are currently supported.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(Aggregation.standardDeviation(), outType);
+    return reduce(ReductionAggregation.standardDeviation(), outType);
   }
 
   /**
@@ -1200,7 +1444,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(Aggregation.any(), outType);
+    return reduce(ReductionAggregation.any(), outType);
   }
 
   /**
@@ -1221,7 +1465,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Deprecated
   public Scalar all(DType outType) {
-    return reduce(Aggregation.all(), outType);
+    return reduce(ReductionAggregation.all(), outType);
   }
 
   /**
@@ -1234,7 +1478,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation) {
+  public Scalar reduce(ReductionAggregation aggregation) {
     return reduce(aggregation, type);
   }
 
@@ -1251,7 +1495,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(Aggregation aggregation, DType outType) {
+  public Scalar reduce(ReductionAggregation aggregation, DType outType) {
     long nativeId = aggregation.createNativeInstance();
     try {
       return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
@@ -1261,11 +1505,123 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Do a segmented reduce where the offsets column indicates which groups in this to combine. The
+   * output type is the same as the input type.
+   * @param offsets an INT32 column with no nulls.
+   * @param aggregation the aggregation to do
+   * @return the result.
+   */
+  public ColumnVector segmentedReduce(ColumnView offsets, SegmentedReductionAggregation aggregation) {
+    return segmentedReduce(offsets, aggregation, NullPolicy.EXCLUDE, type);
+  }
+
+  /**
+   * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   * @param offsets an INT32 column with no nulls.
+   * @param aggregation the aggregation to do
+   * @param outType the output data type.
+   * @return the result.
+   */
+  public ColumnVector segmentedReduce(ColumnView offsets, SegmentedReductionAggregation aggregation,
+      DType outType) {
+    return segmentedReduce(offsets, aggregation, NullPolicy.EXCLUDE, outType);
+  }
+
+  /**
+   * Do a segmented reduce where the offsets column indicates which groups in this to combine.
+   * @param offsets an INT32 column with no nulls.
+   * @param aggregation the aggregation to do
+   * @param nullPolicy the null policy.
+   * @param outType the output data type.
+   * @return the result.
+   */
+  public ColumnVector segmentedReduce(ColumnView offsets, SegmentedReductionAggregation aggregation,
+      NullPolicy nullPolicy, DType outType) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new ColumnVector(segmentedReduce(getNativeView(), offsets.getNativeView(), nativeId,
+          nullPolicy.includeNulls, outType.typeId.getNativeId(), outType.getScale()));
+    } finally {
+      Aggregation.close(nativeId);
+    }
+  }
+
+  /**
+   * Do a reduction on the values in a list. The output type will be the type of the data column
+   * of this list.
+   * @param aggregation the aggregation to perform
+   */
+  public ColumnVector listReduce(SegmentedReductionAggregation aggregation) {
+    if (!getType().equals(DType.LIST)) {
+      throw new IllegalArgumentException("listReduce only works on list types");
+    }
+    try (ColumnView offsets = getListOffsetsView();
+         ColumnView data = getChildColumnView(0)) {
+      return data.segmentedReduce(offsets, aggregation);
+    }
+  }
+
+  /**
+   * Do a reduction on the values in a list.
+   * @param aggregation the aggregation to perform
+   * @param outType the type of the output. Typically, this should match with the child type
+   *                of the list.
+   */
+  public ColumnVector listReduce(SegmentedReductionAggregation aggregation, DType outType) {
+    return listReduce(aggregation, NullPolicy.EXCLUDE, outType);
+  }
+
+  /**
+   * Do a reduction on the values in a list.
+   * @param aggregation the aggregation to perform
+   * @param nullPolicy should nulls be included or excluded from the aggregation.
+   * @param outType the type of the output. Typically, this should match with the child type
+   *                of the list.
+   */
+  public ColumnVector listReduce(SegmentedReductionAggregation aggregation, NullPolicy nullPolicy,
+      DType outType) {
+    if (!getType().equals(DType.LIST)) {
+      throw new IllegalArgumentException("listReduce only works on list types");
+    }
+    try (ColumnView offsets = getListOffsetsView();
+         ColumnView data = getChildColumnView(0)) {
+      return data.segmentedReduce(offsets, aggregation, nullPolicy, outType);
+    }
+  }
+
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Required percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(double[] percentiles) {
+    try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
+      return approxPercentile(cv);
+    }
+  }
+
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Column containing percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(ColumnVector percentiles) {
+    return new ColumnVector(approxPercentile(getNativeView(), percentiles.getNativeView()));
+  }
+
+  /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
-   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector quantile(QuantileMethod method, double[] quantiles) {
     return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
@@ -1280,7 +1636,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
-  public final ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
+  public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
@@ -1289,19 +1645,66 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     long nativePtr = op.createNativeInstance();
     try {
+      Scalar p = options.getPrecedingScalar();
+      Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
               op.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
-              options.getPreceding(),
-              options.getFollowing(),
+              p == null || !p.isValid() ? 0 : p.getInt(),
+              f == null || !f.isValid() ? 0 : f.getInt(),
               options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
               options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
     } finally {
       Aggregation.close(nativePtr);
     }
   }
+
+  /**
+   * Compute the prefix sum (aka cumulative sum) of the values in this column.
+   * This is just a convenience method for an inclusive scan with a SUM aggregation.
+   */
+  public final ColumnVector prefixSum() {
+    return scan(ScanAggregation.sum());
+  }
+
+  /**
+   * Computes a scan for a column. This is very similar to a running window on the column.
+   * @param aggregation the aggregation to perform
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   * @param nullPolicy how should nulls be treated. Note that some aggregations also include a
+   *                   null policy too. Currently none of those aggregations are supported so
+   *                   it is undefined how they would interact with each other.
+   */
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType, NullPolicy nullPolicy) {
+    long nativeId = aggregation.createNativeInstance();
+    try {
+      return new ColumnVector(scan(getNativeView(), nativeId,
+          scanType.isInclusive, nullPolicy.includeNulls));
+    } finally {
+      Aggregation.close(nativeId);
+    }
+  }
+
+  /**
+   * Computes a scan for a column that excludes nulls.
+   * @param aggregation the aggregation to perform
+   * @param scanType should the scan be inclusive, include the current row, or exclusive.
+   */
+  public final ColumnVector scan(ScanAggregation aggregation, ScanType scanType) {
+    return scan(aggregation, scanType, NullPolicy.EXCLUDE);
+  }
+
+  /**
+   * Computes an inclusive scan for a column that excludes nulls.
+   * @param aggregation the aggregation to perform
+   */
+  public final ColumnVector scan(ScanAggregation aggregation) {
+    return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
+  }
+
+
 
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
@@ -1367,6 +1770,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector toTitle() {
     assert type.equals(DType.STRING);
     return new ColumnVector(title(getNativeView()));
+  }
+
+  /**
+   * Returns a column of capitalized strings.
+   *
+   * If the `delimiters` is an empty string, then only the first character of each
+   * row is capitalized. Otherwise, a non-delimiter character is capitalized after
+   * any delimiter character is found.
+   *
+   * Example:
+   *     input = ["tesT1", "a Test", "Another Test", "a\tb"];
+   *     delimiters = ""
+   *     output is ["Test1", "A test", "Another test", "A\tb"]
+   *     delimiters = " "
+   *     output is ["Test1", "A Test", "Another Test", "A\tb"]
+   *
+   * Any null string entries return corresponding null output column entries.
+   *
+   * @param delimiters Used if identifying words to capitalize. Should not be null.
+   * @return a column of capitalized strings. Users should close the returned column.
+   */
+  public final ColumnVector capitalize(Scalar delimiters) {
+    if (DType.STRING.equals(type) && DType.STRING.equals(delimiters.getType())) {
+      return new ColumnVector(capitalize(getNativeView(), delimiters.getScalarHandle()));
+    }
+    throw new IllegalArgumentException("Both input column and delimiters scalar should be" +
+        " string type. But got column: " + type + ", scalar: " + delimiters.getType());
   }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
@@ -1435,23 +1865,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       map.put(indices[index], views[index]);
     });
     List<ColumnView> newChildren = new ArrayList<>(getNumChildren());
-    IntStream.range(0, getNumChildren()).forEach(i -> {
-      ColumnView view = map.remove(i);
-      ColumnView child = getChildColumnView(i);
-      if (view == null) {
-        newChildren.add(child);
-      } else {
-        if (child.getRowCount() != view.getRowCount()) {
-          throw new IllegalArgumentException("Child row count doesn't match the old child");
+    List<ColumnView> toClose = new ArrayList<>(getNumChildren());
+    try {
+      IntStream.range(0, getNumChildren()).forEach(i -> {
+        ColumnView view = map.remove(i);
+        ColumnView child = getChildColumnView(i);
+        toClose.add(child);
+        if (view == null) {
+          newChildren.add(child);
+        } else {
+          if (child.getRowCount() != view.getRowCount()) {
+            throw new IllegalArgumentException("Child row count doesn't match the old child");
+          }
+          newChildren.add(view);
         }
-        newChildren.add(view);
+      });
+      if (!map.isEmpty()) {
+        throw new IllegalArgumentException("One or more invalid child indices passed to be " +
+            "replaced");
       }
-    });
-    if (!map.isEmpty()) {
-      throw new IllegalArgumentException("One or more invalid child indices passed to be replaced");
+      return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
+          getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
+    } finally {
+      for (ColumnView columnView: toClose) {
+        columnView.close();
+      }
     }
-    return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
-        getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
   }
 
   /**
@@ -1914,6 +2353,49 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(extractListElement(getNativeView(), index));
   }
 
+  /**
+   * For each list in this column pull out the entry at the corresponding index specified in
+   * the index column. If the entry goes off the end of the list a NULL is returned instead.
+   *
+   * The index column should have the same row count with the list column.
+   *
+   * @param indices a column of 0 based offsets into the list. Negative values go backwards from
+   *                the end of the list.
+   * @return a new column of the values at those indexes.
+   */
+  public final ColumnVector extractListElement(ColumnView indices) {
+    assert type.equals(DType.LIST) : "A column of type LIST is required for .extractListElement()";
+    assert indices != null && DType.INT32.equals(indices.type)
+        : "indices should be non-null and integer type";
+    assert indices.getRowCount() == rows
+        : "indices must have the same row count with list column";
+    return new ColumnVector(extractListElementV(getNativeView(), indices.getNativeView()));
+  }
+
+  /**
+   * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
+   * producing a LIST column in which each list contain only unique elements.
+   *
+   * Order of the output elements within each list are not guaranteed to be preserved as in the
+   * input.
+   *
+   * @return A new LIST column having unique list elements.
+   */
+  public final ColumnVector dropListDuplicates() {
+    return new ColumnVector(dropListDuplicates(getNativeView()));
+  }
+
+  /**
+   * Given a LIST column in which each element is a struct containing a <key, value> pair. An output
+   * LIST column is generated by copying elements of the current column in a way such that if a list
+   * contains multiple elements having the same key then only the last element will be copied.
+   *
+   * @return A new LIST column having list elements with unique keys.
+   */
+  public final ColumnVector dropListDuplicatesWithKeysValues() {
+    return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
@@ -1975,74 +2457,128 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a list of columns by splitting each string using the specified delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  An empty string indicates split on whitespace.
-   * @return New table of strings columns.
+   * Returns a list of columns by splitting each string using the specified pattern. The number of
+   * rows in the output columns will be the same as the input column. Null entries are added for a
+   * row where split results have been exhausted. Null input entries result in all nulls in the
+   * corresponding rows of the output columns.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return list of strings columns as a table.
    */
-  public final Table stringSplit(Scalar delimiter) {
+  public final Table stringSplit(String pattern, int limit, boolean splitByRegex) {
     assert type.equals(DType.STRING) : "column type must be a String";
-    assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
-    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    assert pattern != null : "pattern is null";
+    assert pattern.length() > 0 : "empty pattern is not supported";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
+    return new Table(stringSplit(this.getNativeView(), pattern, limit, splitByRegex));
   }
 
   /**
-   * Returns a list of columns by splitting each string using whitespace as the delimiter.
-   * The number of rows in the output columns will be the same as the input column.
-   * Null entries are added for a row where split results have been exhausted.
-   * Null string entries return corresponding null output columns.
-   * @return New table of strings columns.
+   * Returns a list of columns by splitting each string using the specified pattern. The number of
+   * rows in the output columns will be the same as the input column. Null entries are added for a
+   * row where split results have been exhausted. Null input entries result in all nulls in the
+   * corresponding rows of the output columns.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return list of strings columns as a table.
    */
-  public final Table stringSplit() {
-    try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplit(emptyString);
-    }
+  public final Table stringSplit(String pattern, boolean splitByRegex) {
+    return stringSplit(pattern, -1, splitByRegex);
   }
 
   /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @return list of strings columns as a table.
    */
-  public final ColumnVector stringSplitRecord() {
-    return stringSplitRecord(-1);
+  public final Table stringSplit(String delimiter, int limit) {
+    return stringSplit(delimiter, limit, false);
   }
 
   /**
-   * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
+   * Returns a list of columns by splitting each string using the specified string literal
+   * delimiter. The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted. Null input entries
+   * result in all nulls in the corresponding rows of the output columns.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @return list of strings columns as a table.
    */
-  public final ColumnVector stringSplitRecord(int maxSplit) {
-    try (Scalar emptyString = Scalar.fromString("")) {
-      return stringSplitRecord(emptyString, maxSplit);
-    }
+  public final Table stringSplit(String delimiter) {
+    return stringSplit(delimiter, -1, false);
   }
 
   /**
-   * Returns a column of lists of strings by splitting each string using the specified delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  An empty string indicates split on whitespace.
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified pattern.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return a LIST column of string elements.
    */
-  public final ColumnVector stringSplitRecord(Scalar delimiter) {
-    return stringSplitRecord(delimiter, -1);
-  }
-
-  /**
-   * Returns a column that is a list of strings. Each string list is made by splitting each input
-   * string using the specified delimiter.
-   * @param delimiter UTF-8 encoded string identifying the split points in each string.
-   *                  An empty string indicates split on whitespace.
-   * @param maxSplit the maximum number of records to split, or -1 for all of them.
-   * @return New table of strings columns.
-   */
-  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
-    assert type.equals(DType.STRING) : "column type must be a String";
-    assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
+  public final ColumnVector stringSplitRecord(String pattern, int limit, boolean splitByRegex) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    assert pattern != null : "pattern is null";
+    assert pattern.length() > 0 : "empty pattern is not supported";
+    assert limit != 0 && limit != 1 : "split limit == 0 and limit == 1 are not supported";
     return new ColumnVector(
-        stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
+        stringSplitRecord(this.getNativeView(), pattern, limit, splitByRegex));
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified pattern.
+   *
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(String pattern, boolean splitByRegex) {
+    return stringSplitRecord(pattern, -1, splitByRegex);
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified string literal delimiter.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(String delimiter, int limit) {
+    return stringSplitRecord(delimiter, limit, false);
+  }
+
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified string literal delimiter.
+   *
+   * @param delimiter UTF-8 encoded string identifying the split delimiter for each input string.
+   * @return a LIST column of string elements.
+   */
+  public final ColumnVector stringSplitRecord(String delimiter) {
+    return stringSplitRecord(delimiter, -1, false);
   }
 
   /**
@@ -2081,6 +2617,182 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert (start.getType().equals(DType.INT32) && end.getType().equals(DType.INT32)) : "start and end " +
         "vectors must be of integer type";
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result. Each new string is created by
+   * concatenating the strings from the same row (same list element) delimited by the separator
+   * provided. This version of the function relaces nulls with empty string and returns null
+   * for empty list.
+   * @param sepCol strings column that provides separators for concatenation.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(ColumnView sepCol) {
+    try (Scalar nullString = Scalar.fromString(null);
+         Scalar emptyString = Scalar.fromString("")) {
+      return stringConcatenateListElements(sepCol, nullString, emptyString,
+          false, false);
+    }
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the row separator provided in the sepCol strings column.
+   * @param sepCol strings column that provides separators for concatenation.
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
+   *                        If set to null and the separator is null the resulting string will
+   *                        be null. If not null, this string will be used in place of a null
+   *                        separator.
+   * @param stringNarep string that should be used to replace null strings in any non-null list
+   *                     row. If set to null and the string is null the resulting string will
+   *                     be null. If not null, this string will be used in place of a null value.
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `stringNarep` is valid.
+   * @param emptyStringOutputIfEmptyList if set to true, any input row that is an empty list
+   *                          will result in an empty string. Otherwise, it will result in a null.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(ColumnView sepCol,
+      Scalar separatorNarep, Scalar stringNarep, boolean separateNulls,
+      boolean emptyStringOutputIfEmptyList) {
+    assert type.equals(DType.LIST) : "column type must be a list";
+    assert separatorNarep != null : "separator narep scalar provided may not be null";
+    assert stringNarep != null : "string narep scalar provided may not be null";
+    assert separatorNarep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert stringNarep.getType().equals(DType.STRING) : "string narep scalar must be a string scalar";
+
+    return new ColumnVector(stringConcatenationListElementsSepCol(getNativeView(),
+      sepCol.getNativeView(), separatorNarep.getScalarHandle(), stringNarep.getScalarHandle(),
+      separateNulls, emptyStringOutputIfEmptyList));
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result. Each new string is created by
+   * concatenating the strings from the same row (same list element) delimited by the
+   * separator provided.
+   * @param separator string scalar inserted between each string being merged.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any
+   *              column will be replaced by the specified string. The underlying value in the
+   *              string scalar may be null, but the object passed in may not.
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `narep` is valid.
+   * @param emptyStringOutputIfEmptyList if set to true, any input row that is an empty list
+   *                          will result in an empty string. Otherwise, it will result in a null.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(Scalar separator,
+      Scalar narep, boolean separateNulls, boolean emptyStringOutputIfEmptyList) {
+    assert type.equals(DType.LIST) : "column type must be a list";
+    assert separator != null : "separator scalar provided may not be null";
+    assert narep != null : "column narep scalar provided may not be null";
+    assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
+
+    return new ColumnVector(stringConcatenationListElements(getNativeView(),
+        separator.getScalarHandle(), narep.getScalarHandle(), separateNulls,
+        emptyStringOutputIfEmptyList));
+  }
+
+  /**
+   * Given a strings column, each string in it is repeated a number of times specified by the
+   * <code>repeatTimes</code> parameter.
+   *
+   * In special cases:
+   *  - If <code>repeatTimes</code> is not a positive number, a non-null input string will always
+   *    result in an empty output string.
+   *  - A null input string will always result in a null output string regardless of the value of
+   *    the <code>repeatTimes</code> parameter.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * @param repeatTimes The number of times each input string is repeated.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(int repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    return new ColumnVector(repeatStrings(getNativeView(), repeatTimes));
+  }
+
+  /**
+   * Given a strings column, an output strings column is generated by repeating each of the input
+   * string by a number of times given by the corresponding row in a <code>repeatTimes</code>
+   * numeric column.
+   *
+   * In special cases:
+   *  - Any null row (from either the input strings column or the <code>repeatTimes</code> column)
+   *    will always result in a null output string.
+   *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
+   *    corresponding input string is not null, the output string will be an empty string.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(ColumnView repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
+            repeatTimes.getNativeView(), 0));
+  }
+
+  /**
+   * This function is an overloaded version of {@link #repeatStrings(ColumnView) repeatStrings},
+   * with an additional parameter <code>outputStringSizes</code> that provides a column containing
+   * the pre-computed sizes of the output strings.
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @param outputStringSizes A numeric column providing the pre-computed sizes of the output strings.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(ColumnView repeatTimes, ColumnView outputStringSizes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
+            repeatTimes.getNativeView(), outputStringSizes.getNativeView()));
+  }
+
+  /** Struct to return the computed strings size column and total size */
+  public static final class StringSizes implements AutoCloseable {
+    private final ColumnVector stringSizes;
+    private final long totalSize;
+
+    StringSizes(ColumnVector stringSizes, long totalSize) {
+      this.stringSizes = stringSizes;
+      this.totalSize = totalSize;
+    }
+
+    public ColumnVector getStringSizes() { return stringSizes; }
+    public long getTotalSize() { return totalSize; }
+
+    /** Close the underlying resources */
+    @Override
+    public void close() {
+      if (stringSizes != null) {
+        stringSizes.close();
+      }
+    }
+  };
+
+  /**
+   * Compute sizes of the output strings if each string in an input strings column is repeated by
+   * a different number of times given by the corresponding row in a <code>repeatTimes</code>
+   * numeric column (i.e., compute sizes of the strings resulted from
+   * {@link #repeatStringsWithColumnRepeatTimes}).
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @return An instance of StringSizes class which stores a Java column vector containing
+   *         the computed sizes of the repeated strings, and a long value storing sum of all these
+   *         computed sizes.
+   */
+  public final StringSizes repeatStringsSizes(ColumnView repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be String";
+    final long[] sizes = repeatStringsSizes(getNativeView(), repeatTimes.getNativeView());
+    return new StringSizes(new ColumnVector(sizes[0]), sizes[1]);
   }
 
    /**
@@ -2122,6 +2834,48 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
         replace.getScalarHandle()));
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given pattern using the
+   * replacement string scalar.
+   *
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(String pattern, Scalar repl) {
+    return replaceRegex(pattern, repl, -1);
+  }
+
+  /**
+   * For each string, replaces any character sequence matching the given pattern using the
+   * replacement string scalar.
+   *
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl The string scalar to replace for each pattern match.
+   * @param maxRepl The maximum number of times a replacement should occur within each string.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceRegex(String pattern, Scalar repl, int maxRepl) {
+    if (!repl.getType().equals(DType.STRING)) {
+      throw new IllegalArgumentException("Replacement must be a string scalar");
+    }
+    return new ColumnVector(replaceRegex(getNativeView(), pattern, repl.getScalarHandle(),
+        maxRepl));
+  }
+
+  /**
+   * For each string, replaces any character sequence matching any of the regular expression
+   * patterns with the corresponding replacement strings.
+   *
+   * @param patterns The regular expression patterns to search within each string.
+   * @param repls The string scalars to replace for each corresponding pattern match.
+   * @return A new column vector containing the string results.
+   */
+  public final ColumnVector replaceMultiRegex(String[] patterns, ColumnView repls) {
+    return new ColumnVector(replaceMultiRegex(getNativeView(), patterns,
+        repls.getNativeView()));
   }
 
   /**
@@ -2490,20 +3244,38 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(urlEncode(getNativeView()));
   }
 
-  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
-   * for all the values in the struct that match the key, null otherwise.
-   * @param key the String scalar to lookup in the column
-   * @return a string column of values or nulls based on the lookup result
+  private static void assertIsSupportedMapKeyType(DType keyType) {
+    boolean isSupportedKeyType = 
+      !keyType.equals(DType.EMPTY) && !keyType.equals(DType.LIST) && !keyType.equals(DType.STRUCT);
+    assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
+  }
+
+  /** 
+   * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
+   * where each row in the output column is the Y value corresponding to the X key.
+   * If the key is not found, the corresponding output value is null.
+   * @param key the scalar key to lookup in the column
+   * @return a column of values or nulls based on the lookup result
    */
   public final ColumnVector getMapValue(Scalar key) {
-
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    assert key != null : "target string may not be null";
-    assert key.getType().equals(DType.STRING) : "target string must be a string scalar";
-
+    assert key != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(key.getType());
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
+   * column for all keys in the structs, It is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
+   * @param key the String scalar to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
+  public final ColumnVector getMapKeyExistence(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert key != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(key.getType());
+    return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
 
   /**
    * Create a new struct column view of existing column views. Note that this will NOT copy
@@ -2589,8 +3361,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key is null
    * 2. The column vector list value is null
-   * 3. The list row does not contain the key, and contains at least
-   *    one null.
    * @param key the scalar to look up
    * @return a Boolean ColumnVector with the result of the lookup
    */
@@ -2602,16 +3372,104 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a column of bool values indicating whether the list rows of the first
    * column contain the corresponding values in the second column.
+   * Output `column[i]` is set to null if one or more of the following are true:
    * 1. The key value is null
    * 2. The column vector list value is null
-   * 3. The list row does not contain the key, and contains at least
-   *    one null.
    * @param key the ColumnVector with look up values
    * @return a Boolean ColumnVector with the result of the lookup
    */
   public final ColumnVector listContainsColumn(ColumnView key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the list rows of the specified
+   * column contain null elements.
+   * Output `column[i]` is set to null iff the input list row is null.
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContainsNulls() {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsNulls(getNativeView()));
+  }
+
+  /**
+   * Enum to choose behaviour of listIndexOf functions:
+   *   1. FIND_FIRST finds the first occurrence of a search key.
+   *   2. FIND_LAST finds the last occurrence of a search key.
+   */
+  public enum FindOptions {FIND_FIRST, FIND_LAST};
+
+  /**
+   * Create a column of int32 indices, indicating the position of the scalar search key
+   * in each list row.
+   * All indices are 0-based. If a search key is not found, the index is set to -1.
+   * The index is set to null if one of the following is true:
+   * 1. The search key is null.
+   * 2. The list row is null.
+   * @param key The scalar search key
+   * @param findOption Whether to find the first index of the key, or the last.
+   * @return The resultant column of int32 indices
+   */
+  public final ColumnVector listIndexOf(Scalar key, FindOptions findOption) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
+    return new ColumnVector(listIndexOfScalar(getNativeView(), key.getScalarHandle(), isFindFirst));
+  }
+
+  /**
+   * Create a column of int32 indices, indicating the position of each row in the
+   * search key column in the corresponding row of the lists column.
+   * All indices are 0-based. If a search key is not found, the index is set to -1.
+   * The index is set to null if one of the following is true:
+   * 1. The search key row is null.
+   * 2. The list row is null.
+   * @param keys ColumnView of search keys.
+   * @param findOption Whether to find the first index of the key, or the last.
+   * @return The resultant column of int32 indices
+   */
+  public final ColumnVector listIndexOf(ColumnView keys, FindOptions findOption) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
+    return new ColumnVector(listIndexOfColumn(getNativeView(), keys.getNativeView(), isFindFirst));
+  }
+
+  /**
+   * Segmented sort of the elements within a list in each row of a list column.
+   * NOTICE: list columns with nested child are NOT supported yet.
+   *
+   * @param isDescending   whether sorting each row with descending order (or ascending order)
+   * @param isNullSmallest whether to regard the null value as the min value (or the max value)
+   * @return a List ColumnVector with elements in each list sorted
+   */
+  public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
+
+  /**
+   * Get a single item from the column at the specified index as a Scalar.
+   *
+   * Be careful. This is expensive and may involve running a kernel to copy the data out.
+   *
+   * @param index the index to look at
+   * @return the value at that index as a scalar.
+   * @throws CudfException if the index is out of bounds.
+   */
+  public final Scalar getScalarElement(int index) {
+    return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
+  /**
+   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
+   * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
+   */
+  static long getValidityBufferSize(int numRows) {
+    // number of bytes required = Math.ceil(number of bits / 8)
+    long actualBytes = ((long) numRows + 7) >> 3;
+    // padding to the multiplies of the padding boundary(64 bytes)
+    return ((actualBytes + 63) >> 6) << 6;
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2666,6 +3524,125 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
 
+
+  private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
+
+  /**
+   * Native method to concatenate a list column of strings (each row is a list of strings),
+   * concatenates the strings within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the row separator provided in the `separators` strings column.
+   * @param listColumnHandle long holding the native handle of the column containing lists of strings
+   *                         to concatenate.
+   * @param sepColumn long holding the native handle of the strings column that provides separators
+   *                  for concatenation.
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
+   *                       If set to null and the separator is null the resulting string will
+   *                       be null. If not null, this string will be used in place of a null
+   *                       separator.
+   * @param colNarep string String scalar that should be used in place of any null strings
+   *                 found in any column.
+   * @param separateNulls boolean if true, then the separator is included for null rows if
+   *                     `colNarep` is valid.
+   * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
+   *                                     will result in an empty string. Otherwise, it will
+   *                                     result in a null.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationListElementsSepCol(long listColumnHandle,
+                                                                   long sepColumn,
+                                                                   long separatorNarep,
+                                                                   long colNarep,
+                                                                   boolean separateNulls,
+                                                                   boolean emptyStringOutputIfEmptyList);
+
+  /**
+   * Native method to concatenate a list column of strings (each row is a list of strings),
+   * concatenates the strings within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the separator provided.
+   * @param listColumnHandle long holding the native handle of the column containing lists of strings
+   *                     to concatenate.
+   * @param separator string scalar inserted between each string being merged, may not be null.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any
+   *              column will be replaced by the specified string. The underlying value in the
+   *              string scalar may be null, but the object passed in may not.
+   * @param separateNulls boolean if true, then the separator is included for null rows if
+   *                      `narep` is valid.
+   * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
+   *                                     will result in an empty string. Otherwise, it will
+   *                                     result in a null.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationListElements(long listColumnHandle,
+                                                             long separator,
+                                                             long narep,
+                                                             boolean separateNulls,
+                                                             boolean emptyStringOutputIfEmptyList);
+
+  /**
+   * Native method to repeat each string in the given input strings column a number of times
+   * specified by the <code>repeatTimes</code> parameter.
+   *
+   * In special cases:
+   *  - If <code>repeatTimes</code> is not a positive number, a non-null input string will always
+   *    result in an empty output string.
+   *  - A null input string will always result in a null output string regardless of the value of
+   *    the <code>repeatTimes</code> parameter.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * @param viewHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimes The number of times each input string is repeated.
+   * @return native handle of the resulting cudf strings column containing repeated strings.
+   */
+  private static native long repeatStrings(long viewHandle, int repeatTimes);
+
+  /**
+   * Native method to repeat strings in the given input strings column, each string is repeated
+   * by a different number of times given by the corresponding row in a <code>repeatTimes</code>
+   * numeric column.
+   *
+   * In special cases:
+   *  - Any null row (from either the input strings column or the <code>repeatTimes</code> column)
+   *    will always result in a null output string.
+   *  - If any value in the <code>repeatTimes</code> column is not a positive number and its
+   *    corresponding input string is not null, the output string will be an empty string.
+   *
+   * The caller is responsible for checking the output column size will not exceed the maximum size
+   * of a strings column (number of total characters is less than the value {@link Integer#MAX_VALUE}).
+   *
+   * If the input <code>repeatTimesHandle</code> column does not have a numeric type, or it has a
+   * size that is different from size of the input strings column, an exception will be thrown.
+   *
+   * @param stringsHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimesHandle long holding the native handle of the column containing  the numbers
+   *        of times each input string is repeated.
+   * @param outputStringSizesHandle long holding the native handle of the column containing the
+   *                                pre-computed sizes of the output strings, can be specified as
+   *                                <code>0</code> value if that column is not available.
+   * @return native handle of the resulting cudf strings column containing repeated strings.
+   */
+    private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
+      long repeatTimesHandle, long outputStringSizesHandle);
+
+  /**
+   * Native method to compute sizes of the output strings if each string in the input strings
+   * column is repeated by a different number of times given by the corresponding row in a
+   * <code>repeatTimes</code> numeric column (i.e., compute sizes of the strings resulted from
+   * {@link #repeatStringsWithColumnRepeatTimes}).
+   *
+   * @param stringsHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimesHandle long holding the native handle of the column containing  the numbers
+   *        of times each input string is repeated.
+   * @return An array of two long values, the first one holds native handle of a numeric column
+   *         containing the computed sizes of the repeated strings, and the second value is the sum
+   *         of all those string sizes.
+   */
+  private static native long[] repeatStringsSizes(long stringsHandle, long repeatTimesHandle);
+
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
   /**
@@ -2711,14 +3688,36 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Native method which returns array of columns by splitting each string using the specified
-   * delimiter.
-   * @param columnView native handle of the cudf::column_view being operated on.
-   * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   * Returns a list of columns by splitting each string using the specified pattern. The number of
+   * rows in the output columns will be the same as the input column. Null entries are added for a
+   * row where split results have been exhausted. Null input entries result in all nulls in the
+   * corresponding rows of the output columns.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
    */
-  private static native long[] stringSplit(long columnView, long delimiter);
+  private static native long[] stringSplit(long nativeHandle, String pattern, int limit,
+                                           boolean splitByRegex);
 
-  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
+  /**
+   * Returns a column that are lists of strings in which each list is made by splitting the
+   * corresponding input string using the specified string literal delimiter.
+   *
+   * @param nativeHandle native handle of the input strings column that being operated on.
+   * @param pattern UTF-8 encoded string identifying the split pattern for each input string.
+   * @param limit the maximum size of the list resulting from splitting each input string,
+   *              or -1 for all possible splits. Note that limit = 0 (all possible splits without
+   *              trailing empty strings) and limit = 1 (no split at all) are not supported.
+   * @param splitByRegex a boolean flag indicating whether the input strings will be split by a
+   *                     regular expression pattern or just by a string literal delimiter.
+   */
+  private static native long stringSplitRecord(long nativeHandle, String pattern, int limit,
+                                               boolean splitByRegex);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -2744,6 +3743,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param repl handle of scalar containing the string to replace.
    */
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+
+  /**
+   * Native method for replacing each regular expression pattern match with the specified
+   * replacement string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param pattern The regular expression pattern to search within each string.
+   * @param repl native handle of the cudf::scalar containing the replacement string.
+   * @param maxRepl maximum number of times to replace the pattern within a string
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long replaceRegex(long columnView, String pattern,
+                                          long repl, long maxRepl) throws CudfException;
+
+  /**
+   * Native method for multiple instance regular expression replacement.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param patterns native handle of the cudf::column_view containing the regex patterns.
+   * @param repls The replacement template for creating the output string.
+   * @return native handle of the resulting cudf column containing the string results.
+   */
+  private static native long replaceMultiRegex(long columnView, String[] patterns,
+                                               long repls) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given pattern
@@ -2815,20 +3836,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long urlEncode(long cudfViewHandle);
 
   /**
-   * Native method to concatenate columns of strings together, combining a row from
-   * each colunm into a single string.
-   * @param columnViews array of longs holding the native handles of the column_views to combine.
-   * @param separator string scalar inserted between each string being merged, may not be null.
-   * @param narep string scalar indicating null behavior. If set to null and any string in the row is null
-   *              the resulting string will be null. If not null, null values in any column will be
-   *              replaced by the specified string. The underlying value in the string scalar may be null,
-   *              but the object passed in may not.
-   * @return native handle of the resulting cudf column, used to construct the Java column
-   *         by the stringConcatenate method.
-   */
-  protected static native long stringConcatenation(long[] columnViews, long separator, long narep);
-
-  /**
    * Native method for map lookup over a column of List<Struct<String,String>>
    * @param columnView the column view handle of the map
    * @param key the string scalar that is the key for lookup
@@ -2836,6 +3843,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return boolean column handle of the result
+   * @throws CudfException
+   */
+  private static native long mapContains(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */
@@ -2853,6 +3869,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long extractListElement(long nativeView, int index);
 
+  private static native long extractListElementV(long nativeView, long indicesView);
+
+  private static native long dropListDuplicates(long nativeView);
+
+  private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
+
   /**
    * Native method for list lookup
    * @param nativeView the column view handle of the list
@@ -2868,6 +3890,37 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return column handle of the resultant
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
+
+  /**
+   * Native method to search list rows for null elements.
+   * @param nativeView the column view handle of the list
+   * @return column handle of the resultant boolean column
+   */
+  private static native long listContainsNulls(long nativeView);
+
+  /**
+   * Native method to find the first (or last) index of a specified scalar key,
+   * in each row of a list column.
+   * @param nativeView the column view handle of the list
+   * @param scalarKeyHandle handle to the scalar search key
+   * @param isFindFirst Whether to find the first index of the key, or the last.
+   * @return column handle of the resultant column of int32 indices
+   */
+  private static native long listIndexOfScalar(long nativeView, long scalarKeyHandle, boolean isFindFirst);
+
+  /**
+   * Native method to find the first (or last) index of each search key in the specified column,
+   * in each row of a list column.
+   * @param nativeView the column view handle of the list
+   * @param keyColumnHandle handle to the search key column
+   * @param isFindFirst Whether to find the first index of the key, or the last.
+   * @return column handle of the resultant column of int32 indices
+   */
+  private static native long listIndexOfColumn(long nativeView, long keyColumnHandle, boolean isFindFirst);
+
+  private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
+
+  private static native long getElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
@@ -2898,6 +3951,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long upperStrings(long cudfViewHandle);
 
+  /**
+   * Native method to compute approx percentiles.
+   * @param cudfColumnHandle T-Digest column
+   * @param percentilesHandle Percentiles
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the approxPercentile method.
+   */
+  private static native long approxPercentile(long cudfColumnHandle, long percentilesHandle) throws CudfException;
+
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
   private static native long rollingWindow(
@@ -2910,6 +3972,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       long preceding_col,
       long following_col);
 
+  private static native long scan(long viewHandle, long aggregation,
+      boolean isInclusive, boolean includeNulls) throws CudfException;
+
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
   private static native long charLengths(long viewHandle) throws CudfException;
@@ -2917,6 +3982,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
 
   private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
+
+  private static native long replaceNullsPolicy(long nativeView, boolean isPreceding) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
@@ -2927,6 +3994,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
 
   private static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
+
+  private static native long segmentedReduce(long dataViewHandle, long offsetsViewHandle,
+      long aggregation, boolean includeNulls, int dtype, int scale) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
 
@@ -2962,6 +4032,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long dayOfYear(long viewHandle) throws CudfException;
 
+  private static native long quarterOfYear(long viewHandle) throws CudfException;
+
+  private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
+
+  private static native long isLeapYear(long viewHandle) throws CudfException;
+
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
   private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
@@ -2972,6 +4048,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
   protected static native long title(long handle);
+
+  private static native long capitalize(long strsColHandle, long delimitersHandle);
 
   private static native long makeStructView(long[] handles, long rowCount);
 
@@ -2999,9 +4077,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                         int nullConfig) throws CudfException;
 
   /**
-   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
+   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   *
+   * The boolColumn must have the same number of rows as the exemplar column.
+   * The result column will have the same number of rows as the exemplar.
+   * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   *
+   * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the resultant row value is undefined.
+   *
+   * @param exemplarViewHandle column view of the column that is deep copied.
+   * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
+   * @return Deep copy of the column with replaced null mask.
    */
-  static native long getNativeValidPointerSize(int size);
+  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle,
+                                                             long boolColumnViewHandle) throws CudfException;
 
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
@@ -3032,6 +4124,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
 
   static native long getChildCvPointer(long viewHandle, int childIndex) throws CudfException;
+
+  private static native long getListOffsetCvPointer(long viewHandle) throws CudfException;
 
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
@@ -3092,7 +4186,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       DeviceMemoryBuffer mainValidDevBuff = null;
       DeviceMemoryBuffer mainOffsetsDevBuff = null;
       if (mainColValid != null) {
-        long validLen = getNativeValidPointerSize(mainColRows);
+        long validLen = getValidityBufferSize(mainColRows);
         mainValidDevBuff = DeviceMemoryBuffer.allocate(validLen);
         mainValidDevBuff.copyFromHostBuffer(mainColValid, 0, validLen);
       }
@@ -3103,20 +4197,29 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       if (mainColOffsets != null) {
         // The offset buffer has (no. of rows + 1) entries, where each entry is INT32.sizeInBytes
-        long offsetsLen = OFFSET_SIZE * (mainColRows + 1);
+        long offsetsLen = OFFSET_SIZE * (((long)mainColRows) + 1);
         mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
       long[] childHandles = new long[devChildren.size()];
-      for (ColumnView.NestedColumnVector ncv : devChildren) {
-        toClose.addAll(ncv.getBuffersToClose());
+      try {
+        for (ColumnView.NestedColumnVector ncv : devChildren) {
+          toClose.addAll(ncv.getBuffersToClose());
+        }
+        for (int i = 0; i < devChildren.size(); i++) {
+          childHandles[i] = devChildren.get(i).createViewHandle();
+        }
+        return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
+            mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
+      } finally {
+        for (int i = 0; i < childHandles.length; i++) {
+          if (childHandles[i] != 0) {
+            ColumnView.deleteColumnView(childHandles[i]);
+            childHandles[i] = 0;
+          }
+        }
       }
-      for (int i = 0; i < devChildren.size(); i++) {
-        childHandles[i] = devChildren.get(i).getViewHandle();
-      }
-      return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
-        mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
     }
 
     private static NestedColumnVector createNewNestedColumnVector(
@@ -3139,21 +4242,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         children);
     }
 
-    long getViewHandle() {
+    private long createViewHandle() {
       long[] childrenColViews = null;
-      if (children != null) {
-        childrenColViews = new long[children.size()];
-        for (int i = 0; i < children.size(); i++) {
-          childrenColViews[i] = children.get(i).getViewHandle();
+      try {
+        if (children != null) {
+          childrenColViews = new long[children.size()];
+          for (int i = 0; i < children.size(); i++) {
+            childrenColViews[i] = children.get(i).createViewHandle();
+          }
+        }
+        long dataAddr = data == null ? 0 : data.address;
+        long dataLen = data == null ? 0 : data.length;
+        long offsetAddr = offsets == null ? 0 : offsets.address;
+        long validAddr = valid == null ? 0 : valid.address;
+        int nc = nullCount.orElse(ColumnVector.OffHeapState.UNKNOWN_NULL_COUNT).intValue();
+        return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale(), dataAddr, dataLen,
+            offsetAddr, validAddr, nc, (int) rows, childrenColViews);
+      } finally {
+        if (childrenColViews != null) {
+          for (int i = 0; i < childrenColViews.length; i++) {
+            if (childrenColViews[i] != 0) {
+              deleteColumnView(childrenColViews[i]);
+              childrenColViews[i] = 0;
+            }
+          }
         }
       }
-      long dataAddr = data == null ? 0 : data.address;
-      long dataLen = data == null ? 0 : data.length;
-      long offsetAddr = offsets == null ? 0 : offsets.address;
-      long validAddr = valid == null ? 0 : valid.address;
-      int nc = nullCount.orElse(ColumnVector.OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale() , dataAddr, dataLen,
-          offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 
     List<DeviceMemoryBuffer> getBuffersToClose() {
@@ -3201,7 +4315,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         data.copyFromHostBuffer(dataBuffer, 0, dataLen);
       }
       if (validityBuffer != null) {
-        long validLen = getNativeValidPointerSize((int)rows);
+        long validLen = getValidityBufferSize((int)rows);
         valid = DeviceMemoryBuffer.allocate(validLen);
         valid.copyFromHostBuffer(validityBuffer, 0, validLen);
       }

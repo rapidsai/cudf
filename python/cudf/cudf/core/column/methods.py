@@ -2,44 +2,46 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union, overload
+from typing import Optional, Union, overload
 
 from typing_extensions import Literal
 
 import cudf
 
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
+ParentType = Union["cudf.Series", "cudf.core.index.GenericIndex"]
 
 
-class ColumnMethodsMixin:
-    _column: ColumnBase
-    _parent: Optional[Union["cudf.Series", "cudf.Index"]]
+class ColumnMethods:
+    _parent: ParentType
 
-    def __init__(
-        self,
-        column: ColumnBase,
-        parent: Union["cudf.Series", "cudf.Index"] = None,
-    ):
-        self._column = column
+    def __init__(self, parent: ParentType):
         self._parent = parent
+        self._column = self._parent._column
 
     @overload
     def _return_or_inplace(
-        self, new_col, inplace: Literal[False], expand=False, retain_index=True
-    ) -> Union["cudf.Series", "cudf.Index"]:
-        ...
-
-    @overload
-    def _return_or_inplace(
-        self, new_col, expand: bool = False, retain_index: bool = True
-    ) -> Union["cudf.Series", "cudf.Index"]:
-        ...
-
-    @overload
-    def _return_or_inplace(
-        self, new_col, inplace: Literal[True], expand=False, retain_index=True
+        self,
+        new_col,
+        inplace: Literal[True],
+        expand: bool = False,
+        retain_index: bool = True,
     ) -> None:
+        ...
+
+    @overload
+    def _return_or_inplace(
+        self,
+        new_col,
+        inplace: Literal[False],
+        expand: bool = False,
+        retain_index: bool = True,
+    ) -> ParentType:
+        ...
+
+    @overload
+    def _return_or_inplace(
+        self, new_col, expand: bool = False, retain_index: bool = True,
+    ) -> ParentType:
         ...
 
     @overload
@@ -49,7 +51,7 @@ class ColumnMethodsMixin:
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> Optional[Union["cudf.Series", "cudf.Index"]]:
+    ) -> Optional[ParentType]:
         ...
 
     def _return_or_inplace(
@@ -60,20 +62,14 @@ class ColumnMethodsMixin:
         of the owner (Series or Index) to mimic an inplace operation
         """
         if inplace:
-            if self._parent is not None:
-                self._parent._mimic_inplace(
-                    self._parent.__class__._from_table(
-                        cudf._lib.table.Table({self._parent.name: new_col})
-                    ),
-                    inplace=True,
-                )
-                return None
-            else:
-                self._column._mimic_inplace(new_col, inplace=True)
-                return None
+            self._parent._mimic_inplace(
+                self._parent.__class__._from_data(
+                    {self._parent.name: new_col}
+                ),
+                inplace=True,
+            )
+            return None
         else:
-            if self._parent is None:
-                return new_col
             if expand or isinstance(
                 self._parent, (cudf.DataFrame, cudf.MultiIndex)
             ):
@@ -81,14 +77,14 @@ class ColumnMethodsMixin:
                 # is a Table
                 table = new_col
 
-                if isinstance(self._parent, cudf.Index):
-                    idx = self._parent._constructor_expanddim._from_table(
-                        table=table
+                if isinstance(self._parent, cudf.BaseIndex):
+                    idx = self._parent._constructor_expanddim._from_data(
+                        table._data, table._index
                     )
                     idx.names = None
                     return idx
                 else:
-                    return self._parent._constructor_expanddim(
+                    return self._parent._constructor_expanddim._from_data(
                         data=table._data, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
@@ -100,7 +96,7 @@ class ColumnMethodsMixin:
                     )
                 else:
                     return cudf.Series(new_col, name=self._parent.name)
-            elif isinstance(self._parent, cudf.Index):
+            elif isinstance(self._parent, cudf.BaseIndex):
                 return cudf.core.index.as_index(
                     new_col, name=self._parent.name
                 )

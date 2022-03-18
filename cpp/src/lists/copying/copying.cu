@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_range.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -35,7 +38,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (lists.is_empty()) { return cudf::empty_like(lists.parent()); }
+  if (lists.is_empty() or start == end) { return cudf::empty_like(lists.parent()); }
   if (end < 0 || end > lists.size()) end = lists.size();
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid slice range.");
   auto lists_count   = end - start;
@@ -81,8 +84,11 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            std::move(offsets),
                            std::move(child),
                            cudf::UNKNOWN_NULL_COUNT,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf

@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import glob
 import math
 import os
@@ -6,10 +7,11 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 from dask import dataframe as dd
-from dask.utils import natural_sort_key, parse_bytes
+from dask.utils import natural_sort_key
 
 import cudf
 
@@ -39,12 +41,7 @@ def test_roundtrip_from_dask(tmpdir, stats):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
     files = sorted(
-        [
-            os.path.join(tmpdir, f)
-            for f in os.listdir(tmpdir)
-            # TODO: Allow "_metadata" in list after dask#6047
-            if not f.endswith("_metadata")
-        ],
+        (os.path.join(tmpdir, f) for f in os.listdir(tmpdir)),
         key=natural_sort_key,
     )
 
@@ -83,6 +80,17 @@ def test_roundtrip_from_dask_index_false(tmpdir):
 
     ddf2 = dask_cudf.read_parquet(tmpdir, index=False)
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
+
+
+def test_roundtrip_from_dask_none_index_false(tmpdir):
+    tmpdir = str(tmpdir)
+    path = os.path.join(tmpdir, "test.parquet")
+
+    df2 = ddf.reset_index(drop=True).compute()
+    df2.to_parquet(path, engine="pyarrow")
+
+    ddf3 = dask_cudf.read_parquet(path, index=False)
+    dd.assert_eq(df2, ddf3)
 
 
 @pytest.mark.parametrize("write_meta", [True, False])
@@ -287,6 +295,15 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             if not fn.startswith("_"):
                 assert "part" in fn
 
+    if parse_version(dask.__version__) > parse_version("2021.07.0"):
+        # This version of Dask supports `aggregate_files=True`.
+        # Check that we can aggregate by a partition name.
+        df_read = dd.read_parquet(
+            tmpdir, engine="pyarrow", aggregate_files="year"
+        )
+        gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
+        dd.assert_eq(df_read, gdf_read)
+
 
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
@@ -294,7 +311,6 @@ def test_chunksize(tmpdir, chunksize, metadata):
     nparts = 2
     df_size = 100
     row_group_size = 5
-    row_group_byte_size = 451  # Empirically measured
 
     df = pd.DataFrame(
         {
@@ -327,6 +343,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
         split_row_groups=True,
         gather_statistics=True,
     )
+    ddf2.compute(scheduler="synchronous")
 
     dd.assert_eq(ddf1, ddf2, check_divisions=False)
 
@@ -334,12 +351,33 @@ def test_chunksize(tmpdir, chunksize, metadata):
     if not chunksize:
         assert ddf2.npartitions == num_row_groups
     else:
-        # Check that we are really aggregating
-        df_byte_size = row_group_byte_size * num_row_groups
-        expected = df_byte_size // parse_bytes(chunksize)
-        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
-        expected += int(remainder) * nparts
-        assert ddf2.npartitions == max(nparts, expected)
+        assert ddf2.npartitions < num_row_groups
+
+    if parse_version(dask.__version__) > parse_version("2021.07.0"):
+        # This version of Dask supports `aggregate_files=True`.
+        # Test that it works as expected.
+        ddf3 = dask_cudf.read_parquet(
+            path,
+            chunksize=chunksize,
+            split_row_groups=True,
+            gather_statistics=True,
+            aggregate_files=True,
+        )
+
+        dd.assert_eq(ddf1, ddf3, check_divisions=False)
+
+        if not chunksize:
+            # Files should not be aggregated
+            assert ddf3.npartitions == num_row_groups
+        elif chunksize == "1MiB":
+            # All files should be aggregated into
+            # one output partition
+            assert ddf3.npartitions == 1
+        else:
+            # Files can be aggregated together, but
+            # chunksize is not large enough to produce
+            # a single output partition
+            assert ddf3.npartitions < num_row_groups
 
 
 @pytest.mark.parametrize("row_groups", [1, 3, 10, 12])
@@ -434,17 +472,63 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     p1 = os.path.join(tmpdir, "part.1.parquet")
     df1.to_parquet(p1, engine="pyarrow")
 
-    with pytest.raises(RuntimeError):
-        # Pyarrow will fail to aggregate metadata
-        # if gather_statistics=True
-        dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    # New pyarrow-dataset base can handle an inconsistent
+    # schema (even without a _metadata file), but computing
+    # and dtype validation may fail
+    ddf1 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
 
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
-    # consistency.  Once the _metadata file is avaible,
-    # parsing metadata should no longer be a problem
+    # consistency.
     dask_cudf.io.parquet.create_metadata_file([p0, p1])
 
-    # Check that we can now read the ddf
+    # Check that we can still read the ddf
     # with the _metadata file present
-    dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+    ddf2 = dask_cudf.read_parquet(str(tmpdir), gather_statistics=True)
+
+    # Check that the result is the same with and
+    # without the _metadata file.  Note that we must
+    # call `compute` on `ddf1`, because the dtype of
+    # the inconsistent column ("a") may be "object"
+    # before computing, and "int" after
+    dd.assert_eq(ddf1.compute(), ddf2)
+    dd.assert_eq(ddf1.compute(), ddf2.compute())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["dog", "cat", "fish"],
+        [[0], [1, 2], [3]],
+        [None, [1, 2], [3]],
+        [{"f1": 1}, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
+        [None, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
+    ],
+)
+def test_cudf_dtypes_from_pandas(tmpdir, data):
+    # Simple test that we can read in list and struct types
+    fn = str(tmpdir.join("test.parquet"))
+    dfp = pd.DataFrame({"data": data})
+    dfp.to_parquet(fn, engine="pyarrow", index=True)
+    # Use `split_row_groups=True` to avoid "fast path" where
+    # schema is not is passed through in older Dask versions
+    ddf2 = dask_cudf.read_parquet(fn, split_row_groups=True)
+    dd.assert_eq(cudf.from_pandas(dfp), ddf2)
+
+
+def test_cudf_list_struct_write(tmpdir):
+    df = cudf.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": [[[1, 2]], [[2, 3]], None],
+            "c": [[[["a", "z"]]], [[["b", "d", "e"]]], None],
+        }
+    )
+    df["d"] = df.to_struct()
+
+    ddf = dask_cudf.from_cudf(df, 3)
+    temp_file = str(tmpdir.join("list_struct.parquet"))
+
+    ddf.to_parquet(temp_file)
+    new_ddf = dask_cudf.read_parquet(temp_file)
+    dd.assert_eq(df, new_ddf)

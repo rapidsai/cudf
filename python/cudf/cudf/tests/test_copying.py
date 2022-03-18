@@ -1,12 +1,10 @@
-from __future__ import division, print_function
-
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
-from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
+from cudf import Series
+from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)

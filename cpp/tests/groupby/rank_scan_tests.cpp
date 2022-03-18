@@ -1,0 +1,553 @@
+/*
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <tests/groupby/groupby_test_util.hpp>
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/aggregation/aggregation.hpp>
+
+namespace cudf {
+namespace test {
+
+using namespace iterators;
+
+template <typename T>
+using input           = fixed_width_column_wrapper<T>;
+using rank_result_col = fixed_width_column_wrapper<size_type>;
+using percent_result_t =
+  cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
+using null_iter_t        = decltype(nulls_at({}));
+
+auto constexpr X     = int32_t{0};  // Placeholder for NULL rows.
+auto const all_valid = nulls_at({});
+
+inline void test_rank_scans(column_view const& keys,
+                            column_view const& order,
+                            column_view const& expected_dense,
+                            column_view const& expected_rank,
+                            column_view const& expected_percent_rank)
+{
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_dense,
+                   make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_rank,
+                   make_rank_aggregation<groupby_scan_aggregation>(),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+  test_single_scan(keys,
+                   order,
+                   keys,
+                   expected_percent_rank,
+                   make_percent_rank_aggregation<groupby_scan_aggregation>(),
+                   null_policy::INCLUDE,
+                   sorted::YES);
+}
+
+struct groupby_rank_scan_test : public BaseFixture {
+};
+
+struct groupby_rank_scan_test_failures : public BaseFixture {
+};
+
+template <typename T>
+struct typed_groupby_rank_scan_test : public BaseFixture {
+};
+
+using testing_type_set =
+  Concat<IntegralTypesNotBool, FloatingPointTypes, FixedPointTypes, ChronoTypes>;
+
+TYPED_TEST_SUITE(typed_groupby_rank_scan_test, testing_type_set);
+
+TYPED_TEST(typed_groupby_rank_scan_test, empty_cols)
+{
+  using T = TypeParam;
+
+  auto const keys            = input<T>{};
+  auto const order_by        = input<T>{};
+  auto const order_by_struct = structs_column_wrapper{};
+
+  auto const expected_dense   = rank_result_col{};
+  auto const expected_rank    = rank_result_col{};
+  auto const expected_percent = percent_result_col{};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_struct, expected_dense, expected_rank, expected_percent);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_keys)
+{
+  using T = TypeParam;
+
+  auto const keys            = input<T>{{X, X, X}, all_nulls()};
+  auto const order_by        = input<T>{{3, 3, 1}};
+  auto const order_by_struct = [] {
+    auto member_1 = input<T>{{3, 3, 1}};
+    auto member_2 = input<T>{{3, 3, 1}};
+    return structs_column_wrapper{member_1, member_2};
+  }();
+
+  auto const dense_rank_results  = rank_result_col{1, 1, 2};
+  auto const rank_results        = rank_result_col{1, 1, 3};
+  auto const percent_rank_result = percent_result_col{0, 0, 1};
+
+  test_rank_scans(keys, order_by, dense_rank_results, rank_results, percent_rank_result);
+  test_rank_scans(keys, order_by_struct, dense_rank_results, rank_results, percent_rank_result);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, zero_valid_orders)
+{
+  using T           = TypeParam;
+  using null_iter_t = decltype(all_nulls());
+
+  auto const keys                 = input<T>{{1, 1, 3, 3}};
+  auto const make_order_by        = [&] { return input<T>{{X, X, X, X}, all_nulls()}; };
+  auto const make_struct_order_by = [&](null_iter_t const& null_iter = no_nulls()) {
+    auto member1 = make_order_by();
+    auto member2 = make_order_by();
+    return structs_column_wrapper{{member1, member2}, null_iter};
+  };
+  auto const order_by                  = make_order_by();
+  auto const order_by_struct           = make_struct_order_by();
+  auto const order_by_struct_all_nulls = make_struct_order_by(all_nulls());
+
+  auto const expected_dense   = rank_result_col{1, 1, 1, 1};
+  auto const expected_rank    = rank_result_col{1, 1, 1, 1};
+  auto const expected_percent = percent_result_col{0, 0, 0, 0};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_struct, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_struct_all_nulls, expected_dense, expected_rank, expected_percent);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, basic)
+{
+  using T = TypeParam;
+
+  auto const keys            = input<T>{0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const make_order_by   = [&] { return input<T>{5, 5, 5, 4, 4, 4, 3, 3, 2, 2, 1, 1}; };
+  auto const order_by        = make_order_by();
+  auto const order_by_struct = [&] {
+    auto order2 = make_order_by();
+    auto order3 = make_order_by();
+    return structs_column_wrapper{order2, order3};
+  }();
+
+  auto const expected_dense   = rank_result_col{1, 1, 1, 2, 2, 2, 3, 1, 2, 2, 3, 3};
+  auto const expected_rank    = rank_result_col{1, 1, 1, 4, 4, 4, 7, 1, 2, 2, 4, 4};
+  auto const expected_percent = percent_result_col{
+    0.0, 0.0, 0.0, 3.0 / 6, 3.0 / 6, 3.0 / 6, 6.0 / 6, 0.0, 1.0 / 4, 1.0 / 4, 3.0 / 4, 3.0 / 4};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_struct, expected_dense, expected_rank, expected_percent);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, null_orders)
+{
+  using T = TypeParam;
+
+  auto const null_mask     = nulls_at({2, 8});
+  auto const keys          = input<T>{{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+  auto const make_order_by = [&] {
+    return input<T>{{-1, -2, X, -2, -3, -3, -4, -4, X, -5, -5, -5}, null_mask};
+  };
+  auto const make_struct_order_by = [&](null_iter_t const& null_iter = all_valid) {
+    auto member1 = make_order_by();
+    auto member2 = make_order_by();
+    return structs_column_wrapper{{member1, member2}, null_iter};
+  };
+  auto const order_by                   = make_order_by();
+  auto const order_by_struct            = make_struct_order_by();
+  auto const order_by_struct_with_nulls = make_struct_order_by(null_mask);
+
+  auto const expected_dense   = rank_result_col{1, 2, 3, 4, 5, 5, 1, 1, 2, 3, 3, 3};
+  auto const expected_rank    = rank_result_col{1, 2, 3, 4, 5, 5, 1, 1, 3, 4, 4, 4};
+  auto const expected_percent = percent_result_col{
+    0.0, 1.0 / 5, 2.0 / 5, 3.0 / 5, 4.0 / 5, 4.0 / 5, 0.0, 0.0, 2.0 / 5, 3.0 / 5, 3.0 / 5, 3.0 / 5};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_struct, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(
+    keys, order_by_struct_with_nulls, expected_dense, expected_rank, expected_percent);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, null_orders_and_keys)
+{
+  using T = TypeParam;
+
+  auto const null_mask     = nulls_at({2, 8});
+  auto const keys          = input<T>{{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1}, nulls_at({9, 10, 11})};
+  auto const make_order_by = [&] {
+    return input<T>{{-1, -2, -2, -2, -3, -3, -4, -4, -4, -5, -5, -6}, null_mask};
+  };
+  auto const make_struct_order_by = [&](null_iter_t const& null_iter = all_valid) {
+    auto member1 = make_order_by();
+    auto member2 = make_order_by();
+    return structs_column_wrapper{{member1, member2}, null_iter};
+  };
+  auto const order_by                   = make_order_by();
+  auto const order_by_struct            = make_struct_order_by();
+  auto const order_by_struct_with_nulls = make_struct_order_by(null_mask);
+
+  auto const expected_dense   = rank_result_col{{1, 2, 3, 4, 5, 5, 1, 1, 2, 1, 1, 2}};
+  auto const expected_rank    = rank_result_col{{1, 2, 3, 4, 5, 5, 1, 1, 3, 1, 1, 3}};
+  auto const expected_percent = percent_result_col{
+    {0.0, 1.0 / 5, 2.0 / 5, 3.0 / 5, 4.0 / 5, 4.0 / 5, 0.0, 0.0, 2.0 / 2, 0.0, 0.0, 2.0 / 2}};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_struct, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(
+    keys, order_by_struct_with_nulls, expected_dense, expected_rank, expected_percent);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
+{
+  auto const struct_col = [] {
+    auto nums    = input<TypeParam>{{0, 0, 7, 7, 7, X, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    auto strings = strings_column_wrapper{
+      {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "XX", "9", "9", "10d"}, null_at(8)};
+    return structs_column_wrapper{{nums, strings}, null_at(11)}.release();
+  }();
+
+  auto const keys = strings_column_wrapper{
+    {"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"}, nulls_at({9, 10, 11})};
+
+  auto const expected_dense   = rank_result_col{1, 1, 2, 2, 3, 4, 1, 1, 2, 1, 1, 2};
+  auto const expected_rank    = rank_result_col{1, 1, 3, 3, 5, 6, 1, 1, 3, 1, 1, 3};
+  auto const expected_percent = percent_result_col{
+    0.0, 0.0, 2.0 / 5, 2.0 / 5, 4.0 / 5, 5.0 / 5, 0.0, 0.0, 2.0 / 2, 0.0, 0.0, 2.0 / 2};
+
+  std::vector<groupby::scan_request> requests;
+  requests.emplace_back(groupby::scan_request());
+  requests[0].values = *struct_col;
+  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_percent_rank_aggregation<groupby_scan_aggregation>());
+
+  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  auto [result_keys, agg_results] = gb_obj.scan(requests);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result_keys->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[0], expected_dense);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[1], expected_rank);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[2], expected_percent);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
+{
+  using T = TypeParam;
+
+  auto nested_structs = [] {
+    auto structs_member = [] {
+      auto nums_member    = input<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+      auto strings_member = strings_column_wrapper{
+        {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+      return structs_column_wrapper{nums_member, strings_member};
+    }();
+    auto nums_member = input<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    return structs_column_wrapper{structs_member, nums_member}.release();
+  }();
+
+  auto flat_struct = [] {
+    auto nums_member    = input<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    auto strings_member = strings_column_wrapper{
+      {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+    auto nuther_nums =
+      fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    return structs_column_wrapper{nums_member, strings_member, nuther_nums}.release();
+  }();
+
+  auto const keys = strings_column_wrapper{
+    {"0", "0", "0", "0", "0", "0", "1", "1", "1", "1", "0", "1"}, nulls_at({9, 10, 11})};
+
+  std::vector<groupby::scan_request> requests;
+  requests.emplace_back(groupby::scan_request());
+  requests.emplace_back(groupby::scan_request());
+  requests[0].values = *nested_structs;
+  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].values = *flat_struct;
+  requests[1].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_percent_rank_aggregation<groupby_scan_aggregation>());
+
+  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  auto [result_keys, agg_results] = gb_obj.scan(requests);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result_keys->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[0], *agg_results[1].results[0]);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[1], *agg_results[1].results[1]);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[2], *agg_results[1].results[2]);
+}
+
+TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
+{
+  using T = TypeParam;
+
+  auto constexpr num_rows = 12;
+
+  auto get_struct_column = [] {
+    auto nums_member =
+      fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+    auto strings_member = strings_column_wrapper{
+      {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+    auto struct_column = structs_column_wrapper{nums_member, strings_member}.release();
+    // Reset null-mask, a posteriori. Nulls will not be pushed down to children.
+    auto const null_iter = nulls_at({1, 2, 11});
+    struct_column->set_null_mask(
+      cudf::test::detail::make_null_mask(null_iter, null_iter + num_rows));
+    return struct_column;
+  };
+
+  auto const possibly_null_structs = get_struct_column();
+
+  auto const definitely_null_structs = [&] {
+    auto struct_column = get_struct_column();
+    struct_column->set_null_mask(create_null_mask(num_rows, mask_state::ALL_NULL));
+    return struct_column;
+  }();
+
+  strings_column_wrapper keys = {{"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"},
+                                 nulls_at({9, 10, 11})};
+
+  std::vector<groupby::scan_request> requests;
+  requests.emplace_back(groupby::scan_request());
+  requests.emplace_back(groupby::scan_request());
+  requests[0].values = *possibly_null_structs;
+  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].values = *definitely_null_structs;
+  requests[1].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_percent_rank_aggregation<groupby_scan_aggregation>());
+
+  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  auto [result_keys, agg_results] = gb_obj.scan(requests);
+
+  auto expected_dense   = rank_result_col{1, 2, 2, 3, 4, 5, 1, 1, 2, 1, 1, 2};
+  auto expected_rank    = rank_result_col{1, 2, 2, 4, 5, 6, 1, 1, 3, 1, 1, 3};
+  auto expected_percent = percent_result_col{
+    0.0, 1.0 / 5, 1.0 / 5, 3.0 / 5, 4.0 / 5, 5.0 / 5, 0.0, 0.0, 2.0 / 2, 0.0, 0.0, 2.0 / 2};
+  auto expected_rank_for_null = rank_result_col{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto expected_percent_for_null =
+    percent_result_col{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[0], expected_dense);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[1], expected_rank);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[0].results[2], expected_percent);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[1].results[0], expected_rank_for_null);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[1].results[1], expected_rank_for_null);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*agg_results[1].results[2], expected_percent_for_null);
+}
+
+/* List support dependent on https://github.com/rapidsai/cudf/issues/8683
+template <typename T>
+struct list_groupby_rank_scan_test : public BaseFixture {
+};
+
+using list_test_type_set = Concat<IntegralTypesNotBool,
+                                              FloatingPointTypes,
+                                              FixedPointTypes>;
+
+TYPED_TEST_SUITE(list_groupby_rank_scan_test, list_test_type_set);
+
+TYPED_TEST(list_groupby_rank_scan_test, lists)
+{
+  using T = TypeParam;
+
+  auto list_col = lists_column_wrapper<T>{
+    {0, 0},
+    {0, 0},
+    {7, 2},
+    {7, 2},
+    {7, 3},
+    {5, 5},
+    {4, 6},
+    {4, 6},
+    {4, 6},
+    {9, 9},
+    {9, 9},
+    {9, 10}}.release();
+  fixed_width_column_wrapper<T> element1{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9};
+  fixed_width_column_wrapper<T> element2{0, 0, 2, 2, 3, 5, 6, 6, 6, 9, 9, 10};
+  auto struct_col = structs_column_wrapper{element1, element2}.release();
+
+  fixed_width_column_wrapper<T> keys = {{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1},
+                                        {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
+
+  std::vector<groupby::scan_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = list_col;
+  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].values = struct_col;
+  requests[1].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+
+  groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
+  auto result = gb_obj.scan(requests);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({keys}), result.first->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *result.second[0].results[0], *result.second[1].results[0]);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    *result.second[0].results[2], *result.second[1].results[2]);
+}
+*/
+
+TEST(groupby_rank_scan_test, bools)
+{
+  using bools       = fixed_width_column_wrapper<bool>;
+  using null_iter_t = decltype(nulls_at({}));
+
+  auto const keys          = bools{{0, 0, 0, 0, 0, 0, 1, 1, 1, X, X, X}, nulls_at({9, 10, 11})};
+  auto const nulls_6_8     = nulls_at({6, 8});
+  auto const make_order_by = [&] { return bools{{0, 0, 1, 1, 1, 1, X, 1, X, 0, 0, 1}, nulls_6_8}; };
+  auto const make_structs  = [&](null_iter_t const& null_iter = all_valid) {
+    auto member_1 = make_order_by();
+    auto member_2 = make_order_by();
+    return structs_column_wrapper{{member_1, member_2}, null_iter};
+  };
+
+  auto const order_by                    = make_order_by();
+  auto const order_by_structs            = make_structs();
+  auto const order_by_structs_with_nulls = make_structs(nulls_6_8);
+
+  auto const expected_dense   = rank_result_col{{1, 1, 2, 2, 2, 2, 1, 2, 3, 1, 1, 2}};
+  auto const expected_rank    = rank_result_col{{1, 1, 3, 3, 3, 3, 1, 2, 3, 1, 1, 3}};
+  auto const expected_percent = percent_result_col{
+    {0.0, 0.0, 2.0 / 5, 2.0 / 5, 2.0 / 5, 2.0 / 5, 0.0, 1.0 / 2, 2.0 / 2, 0.0, 0.0, 2.0 / 2}};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_structs, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(
+    keys, order_by_structs_with_nulls, expected_dense, expected_rank, expected_percent);
+}
+
+TEST(groupby_rank_scan_test, strings)
+{
+  using strings     = strings_column_wrapper;
+  using null_iter_t = decltype(nulls_at({}));
+
+  auto const keys =
+    strings{{"0", "0", "0", "0", "0", "0", "1", "1", "1", "X", "X", "X"}, nulls_at({9, 10, 11})};
+  auto const nulls_2_8     = nulls_at({2, 8});
+  auto const make_order_by = [&] {
+    return strings{{"-1", "-2", "X", "-2", "-3", "-3", "-4", "-4", "X", "-5", "-5", "-6"},
+                   nulls_2_8};
+  };
+  auto const make_structs = [&](null_iter_t const& null_iter = all_valid) {
+    auto member_1 = make_order_by();
+    auto member_2 = make_order_by();
+    return structs_column_wrapper{{member_1, member_2}, null_iter};
+  };
+
+  auto const order_by                    = make_order_by();
+  auto const order_by_structs            = make_structs();
+  auto const order_by_structs_with_nulls = make_structs(nulls_at({4, 5, 11}));
+
+  auto const expected_dense   = rank_result_col{{1, 2, 3, 4, 5, 5, 1, 1, 2, 1, 1, 2}};
+  auto const expected_rank    = rank_result_col{{1, 2, 3, 4, 5, 5, 1, 1, 3, 1, 1, 3}};
+  auto const expected_percent = percent_result_col{
+    {0.0, 1.0 / 5, 2.0 / 5, 3.0 / 5, 4.0 / 5, 4.0 / 5, 0.0, 0.0, 2.0 / 2, 0.0, 0.0, 2.0 / 2}};
+
+  test_rank_scans(keys, order_by, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(keys, order_by_structs, expected_dense, expected_rank, expected_percent);
+  test_rank_scans(
+    keys, order_by_structs_with_nulls, expected_dense, expected_rank, expected_percent);
+}
+
+TEST_F(groupby_rank_scan_test_failures, test_exception_triggers)
+{
+  using T = uint32_t;
+
+  auto const keys = input<T>{{1, 2, 3}, null_at(2)};
+  auto const col  = input<T>{3, 3, 1};
+
+  CUDF_EXPECT_THROW_MESSAGE(
+    test_single_scan(keys,
+                     col,
+                     keys,
+                     col,
+                     make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                     null_policy::INCLUDE,
+                     sorted::NO),
+    "Dense rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys,
+                                             col,
+                                             keys,
+                                             col,
+                                             make_rank_aggregation<groupby_scan_aggregation>(),
+                                             null_policy::INCLUDE,
+                                             sorted::NO),
+                            "Rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(
+    test_single_scan(keys,
+                     col,
+                     keys,
+                     col,
+                     make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                     null_policy::EXCLUDE,
+                     sorted::YES),
+    "Dense rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys,
+                                             col,
+                                             keys,
+                                             col,
+                                             make_rank_aggregation<groupby_scan_aggregation>(),
+                                             null_policy::EXCLUDE,
+                                             sorted::YES),
+                            "Rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(
+    test_single_scan(keys,
+                     col,
+                     keys,
+                     col,
+                     make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                     null_policy::EXCLUDE,
+                     sorted::NO),
+    "Dense rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys,
+                                             col,
+                                             keys,
+                                             col,
+                                             make_rank_aggregation<groupby_scan_aggregation>(),
+                                             null_policy::EXCLUDE,
+                                             sorted::NO),
+                            "Rank aggregate in groupby scan requires the keys to be presorted");
+}
+
+}  // namespace test
+}  // namespace cudf

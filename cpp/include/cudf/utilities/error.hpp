@@ -37,7 +37,7 @@ struct cuda_error : public std::runtime_error {
 }  // namespace cudf
 
 #define STRINGIFY_DETAIL(x) #x
-#define CUDF_STRINGIFY(x) STRINGIFY_DETAIL(x)
+#define CUDF_STRINGIFY(x)   STRINGIFY_DETAIL(x)
 
 /**
  * @addtogroup utility_error

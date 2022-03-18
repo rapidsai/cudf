@@ -239,7 +239,7 @@ class concurrent_unordered_multimap {
    * @param[in] precomputed_hash A flag indicating whether or not a precomputed
    * hash value is passed in
    * @param[in] precomputed_hash_value A precomputed hash value to use for
-   * determing the write location of the key into the hash map instead of
+   * determining the write location of the key into the hash map instead of
    * computing the the hash value directly from the key
    * @tparam hash_value_type The datatype of the hash value
    *
@@ -284,7 +284,7 @@ class concurrent_unordered_multimap {
    * @param[in] precomputed_hash A flag indicating whether or not a precomputed
    * hash value is passed in
    * @param[in] precomputed_hash_value A precomputed hash value to use for
-   * determing the write location of the key into the hash map instead of
+   * determining the write location of the key into the hash map instead of
    * computing the the hash value directly from the key
    * @param[in] keys_are_equal An optional functor for comparing if two keys are
    * equal
@@ -375,7 +375,7 @@ class concurrent_unordered_multimap {
    * @param[in] precomputed_hash A flag indicating whether or not a precomputed
    * hash value is passed in
    * @param[in] precomputed_hash_value A precomputed hash value to use for
-   * determing the write location of the key into the hash map instead of
+   * determining the write location of the key into the hash map instead of
    * computing the the hash value directly from the key
    * @param[in] keys_are_equal An optional functor for comparing if two keys are
    * equal
@@ -423,7 +423,7 @@ class concurrent_unordered_multimap {
    * @param[in] precomputed_hash A flag indicating whether or not a precomputed
    * hash value is passed in
    * @param[in] precomputed_hash_value A precomputed hash value to use for
-   * determing the write location of the key into the hash map instead of
+   * determining the write location of the key into the hash map instead of
    * computing the the hash value directly from the key
    * @param[in] keys_are_equal An optional functor for comparing if two keys are
    * equal
@@ -503,7 +503,7 @@ class concurrent_unordered_multimap {
     if (count_collisions) m_collisions = 0;
   }
 
-  unsigned long long get_num_collisions() const { return m_collisions; }
+  [[nodiscard]] unsigned long long get_num_collisions() const { return m_collisions; }
 
   void print()
   {

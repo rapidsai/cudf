@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,17 +33,17 @@ struct byte_list_conversion {
    * @brief Function object for converting primitive types and string columns to lists of bytes.
    */
   template <typename T>
-  std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>(), std::unique_ptr<column>>
-  operator()(column_view const& input_column,
-             flip_endianness configuration,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+  std::enable_if_t<!std::is_integral_v<T> and !is_floating_point<T>(), std::unique_ptr<column>>
+  operator()(column_view const&,
+             flip_endianness,
+             rmm::cuda_stream_view,
+             rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Unsupported non-numeric and non-string column");
   }
 
   template <typename T>
-  std::enable_if_t<is_floating_point<T>() or std::is_integral<T>::value, std::unique_ptr<column>>
+  std::enable_if_t<is_floating_point<T>() or std::is_integral_v<T>, std::unique_ptr<column>>
   operator()(column_view const& input_column,
              flip_endianness configuration,
              rmm::cuda_stream_view stream,
@@ -87,7 +87,7 @@ struct byte_list_conversion {
 template <>
 std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
   column_view const& input_column,
-  flip_endianness configuration,
+  flip_endianness,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
@@ -108,7 +108,7 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
 }  // namespace
 
 /**
- * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -124,7 +124,7 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
 }  // namespace detail
 
 /**
- * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   flip_endianness endian_configuration,

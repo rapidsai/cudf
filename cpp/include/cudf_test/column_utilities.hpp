@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,22 +18,40 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include "cudf/utilities/traits.hpp"
-#include "thrust/iterator/transform_iterator.h"
+
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace test {
+
+/**
+ * @brief Verbosity level of output from column and table comparison functions.
+ */
+enum class debug_output_level {
+  FIRST_ERROR = 0,  // print first error only
+  ALL_ERRORS,       // print all errors
+  QUIET             // no debug output
+};
+
+constexpr size_type default_ulp = 4;
+
 /**
  * @brief Verifies the property equality of two columns.
  *
  * @param lhs The first column
  * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the column properties are equal, false otherwise
  */
-void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
+bool expect_column_properties_equal(cudf::column_view const& lhs,
+                                    cudf::column_view const& rhs,
+                                    debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the property equivalence of two columns.
@@ -44,22 +62,29 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  *
  * @param lhs The first column
  * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the column properties are equivalent, false otherwise
  */
-void expect_column_properties_equivalent(cudf::column_view const& lhs,
-                                         cudf::column_view const& rhs);
+bool expect_column_properties_equivalent(
+  cudf::column_view const& lhs,
+  cudf::column_view const& rhs,
+  debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
  *
  * Treats null elements as equivalent.
  *
- * @param lhs                   The first column
- * @param rhs                   The second column
- * @param print_all_differences If true display all differences
+ * @param lhs The first column
+ * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ *
+ * @returns True if the columns (and their properties) are equal, false otherwise
  */
-void expect_columns_equal(cudf::column_view const& lhs,
+bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
-                          bool print_all_differences = false);
+                          debug_output_level verbosity = debug_output_level::FIRST_ERROR);
 
 /**
  * @brief Verifies the element-wise equivalence of two columns.
@@ -67,13 +92,18 @@ void expect_columns_equal(cudf::column_view const& lhs,
  * Uses machine epsilon to compare floating point types.
  * Treats null elements as equivalent.
  *
- * @param lhs                   The first column
- * @param rhs                   The second column
- * @param print_all_differences If true display all differences
+ * @param lhs The first column
+ * @param rhs The second column
+ * @param verbosity Level of debug output verbosity
+ * @param fp_ulps # of ulps of tolerance to allow when comparing
+ * floating point values
+ *
+ * @returns True if the columns (and their properties) are equivalent, false otherwise
  */
-void expect_columns_equivalent(cudf::column_view const& lhs,
+bool expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               bool print_all_differences = false);
+                               debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+                               size_type fp_ulps            = cudf::test::default_ulp);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -148,7 +178,7 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T, typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
@@ -167,7 +197,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   using namespace numeric;
@@ -198,26 +228,24 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 template <>
 inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
 {
-  auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
-  thrust::host_vector<char> h_chars(strings_data.first.size());
-  thrust::host_vector<size_type> h_offsets(strings_data.second.size());
-  CUDA_TRY(
-    cudaMemcpy(h_chars.data(), strings_data.first.data(), h_chars.size(), cudaMemcpyDeviceToHost));
-  CUDA_TRY(cudaMemcpy(h_offsets.data(),
-                      strings_data.second.data(),
-                      h_offsets.size() * sizeof(cudf::size_type),
-                      cudaMemcpyDeviceToHost));
+  auto const scv     = strings_column_view(c);
+  auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+    cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
+    rmm::cuda_stream_default);
+  auto const h_offsets = cudf::detail::make_std_vector_sync(
+    cudf::device_span<cudf::offset_type const>(
+      scv.offsets().data<cudf::offset_type>() + scv.offset(), scv.size() + 1),
+    rmm::cuda_stream_default);
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;
   host_data.reserve(c.size());
-
-  // When C++17, replace this loop with std::adjacent_difference()
-  for (size_type idx = 0; idx < c.size(); ++idx) {
-    auto offset = h_offsets[idx];
-    auto length = h_offsets[idx + 1] - offset;
-    host_data.push_back(std::string(h_chars.data() + offset, length));
-  }
+  std::transform(
+    std::begin(h_offsets),
+    std::end(h_offsets) - 1,
+    std::begin(h_offsets) + 1,
+    std::back_inserter(host_data),
+    [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
 
   return {host_data, bitmask_to_host(c)};
 }

@@ -16,8 +16,10 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stdio.h>
+#include <io/utilities/column_buffer.hpp>
+
+#include <cstdint>
+#include <cstdio>
 
 namespace cudf {
 namespace io {
@@ -55,6 +57,8 @@ enum type_kind_e {
   type_union,
   type_array,
 };
+
+using cudf::io::detail::string_index_pair;
 
 }  // namespace avro
 }  // namespace io

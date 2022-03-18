@@ -1,53 +1,54 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+
 import rmm
 
 import cudf
-
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype
-)
 import cudf._lib as libcudfxx
+from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
+from cudf.core.buffer import Buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
-from libcpp.pair cimport pair
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr, make_unique
-from libcpp.vector cimport vector
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.pair cimport pair
 from libcpp.utility cimport move
-from cudf._lib.cpp.strings.convert.convert_integers cimport (
-    from_integers as cpp_from_integers
-)
+from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
-from cudf._lib.types cimport (
-    underlying_type_t_type_id,
-    dtype_from_column_view,
-    dtype_to_data_type
+from cudf._lib.cpp.strings.convert.convert_integers cimport (
+    from_integers as cpp_from_integers,
 )
+
+from cudf._lib.types import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+)
+
+from cudf._lib.types cimport (
+    dtype_from_column_view,
+    dtype_to_data_type,
+    underlying_type_t_type_id,
+)
+
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
+cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
-    make_numeric_column
+    make_numeric_column,
 )
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.unary as libcudf_unary
 
 
 cdef class Column:
@@ -73,7 +74,7 @@ cdef class Column:
     ):
 
         self._size = size
-        self._cached_sizeof = None
+        self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
@@ -139,8 +140,7 @@ cdef class Column:
     def nullable(self):
         return self.base_mask is not None
 
-    @property
-    def has_nulls(self):
+    def has_nulls(self, include_nan=False):
         return self.null_count != 0
 
     @property
@@ -197,9 +197,18 @@ cdef class Column:
                 raise ValueError(error_msg)
 
         self._mask = None
-        self._null_count = None
         self._children = None
         self._base_mask = value
+        self._clear_cache()
+
+    def _clear_cache(self):
+        self._distinct_count = {}
+        try:
+            del self.memory_usage
+        except AttributeError:
+            # `self.memory_usage` was never called before, So ignore.
+            pass
+        self._null_count = None
 
     def set_mask(self, value):
         """
@@ -279,9 +288,17 @@ cdef class Column:
             if self.base_children == ():
                 self._children = ()
             else:
-                self._children = Column.from_unique_ptr(
+                children = Column.from_unique_ptr(
                     make_unique[column](self.view())
                 ).base_children
+                dtypes = [
+                    base_child.dtype for base_child in self.base_children
+                ]
+                self._children = [
+                    child._with_type_metadata(dtype) for child, dtype in zip(
+                        children, dtypes
+                    )
+                ]
         return self._children
 
     def set_base_children(self, value):
@@ -326,12 +343,7 @@ cdef class Column:
             col = self
         data_dtype = col.dtype
 
-        cdef libcudf_types.type_id tid = <libcudf_types.type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(data_dtype)]
-            )
-        )
-        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data

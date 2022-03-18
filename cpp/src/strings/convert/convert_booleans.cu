@@ -21,13 +21,12 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -47,7 +46,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{type_id::BOOL8}, 0);
 
-  CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
+  CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,
                "Parameter true_string must not be empty.");
   auto d_true = string_view(true_string.data(), true_string.size());
 
@@ -97,13 +96,13 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = booleans.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(booleans.type().id() == type_id::BOOL8, "Input column must be boolean type");
-  CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
+  CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,
                "Parameter true_string must not be empty.");
   auto d_true = string_view(true_string.data(), true_string.size());
-  CUDF_EXPECTS(false_string.is_valid() && false_string.size() > 0,
+  CUDF_EXPECTS(false_string.is_valid(stream) && false_string.size() > 0,
                "Parameter false_string must not be empty.");
   auto d_false = string_view(false_string.data(), false_string.size());
 
@@ -126,7 +125,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
@@ -141,9 +140,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                              std::move(offsets_column),
                              std::move(chars_column),
                              booleans.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

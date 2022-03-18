@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,14 @@
  */
 #pragma once
 
+#include "kafka_callback.hpp"
+
+#include <cudf/io/datasource.hpp>
+
 #include <librdkafka/rdkafkacpp.h>
+
 #include <algorithm>
 #include <chrono>
-#include <cudf/io/datasource.hpp>
 #include <map>
 #include <memory>
 #include <string>
@@ -48,8 +52,15 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
+   * @param python_callable `python_callable_type` pointer to a Python functools.partial object
+   * @param callable_wrapper `kafka_oauth_callback_wrapper_type` Cython wrapper that will
+   *                 be used to invoke the `python_callable`. This wrapper serves the purpose
+   *                 of preventing us from having to link against the Python development library
+   *                 in libcudf_kafka.
    */
-  kafka_consumer(std::map<std::string, std::string> const &configs);
+  kafka_consumer(std::map<std::string, std::string> configs,
+                 python_callable_type python_callable,
+                 kafka_oauth_callback_wrapper_type callable_wrapper);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -57,6 +68,11 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
+   * @param python_callable `python_callable_type` pointer to a Python functools.partial object
+   * @param callable_wrapper `kafka_oauth_callback_wrapper_type` Cython wrapper that will
+   *                 be used to invoke the `python_callable`. This wrapper serves the purpose
+   *                 of preventing us from having to link against the Python development library
+   *                 in libcudf_kafka.
    * @param topic_name name of the Kafka topic to consume from
    * @param partition partition index to consume from between `0` and `TOPIC_NUM_PARTITIONS - 1`
    * inclusive
@@ -66,13 +82,15 @@ class kafka_consumer : public cudf::io::datasource {
    * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
-  kafka_consumer(std::map<std::string, std::string> const &configs,
-                 std::string const &topic_name,
+  kafka_consumer(std::map<std::string, std::string> configs,
+                 python_callable_type python_callable,
+                 kafka_oauth_callback_wrapper_type callable_wrapper,
+                 std::string const& topic_name,
                  int partition,
                  int64_t start_offset,
                  int64_t end_offset,
                  int batch_timeout,
-                 std::string const &delimiter);
+                 std::string const& delimiter);
 
   /**
    * @brief Returns a buffer with a subset of data from Kafka Topic
@@ -100,7 +118,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return The number of bytes read (can be smaller than size)
    */
-  size_t host_read(size_t offset, size_t size, uint8_t *dst) override;
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override;
 
   /**
    * @brief Commits an offset to a specified Kafka Topic/Partition instance
@@ -112,7 +130,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param[in] offset Offset that should be set for the topic/partition pair
    *
    */
-  void commit_offset(std::string const &topic, int partition, int64_t offset);
+  void commit_offset(std::string const& topic, int partition, int64_t offset);
 
   /**
    * @brief Retrieve the watermark offset values for a topic/partition
@@ -124,7 +142,7 @@ class kafka_consumer : public cudf::io::datasource {
    *            the latest value will be retrieved from the Kafka broker by making a network
    *            request.
    */
-  std::map<std::string, int64_t> get_watermark_offset(std::string const &topic,
+  std::map<std::string, int64_t> get_watermark_offset(std::string const& topic,
                                                       int partition,
                                                       int timeout,
                                                       bool cached);
@@ -144,7 +162,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @return Latest offset for the specified topic/partition pair
    */
-  int64_t get_committed_offset(std::string const &topic, int partition);
+  int64_t get_committed_offset(std::string const& topic, int partition);
 
   /**
    * @brief Query the Kafka broker for the list of Topic partitions for a Topic. If no topic is
@@ -178,6 +196,10 @@ class kafka_consumer : public cudf::io::datasource {
   std::unique_ptr<RdKafka::Conf> kafka_conf;  // RDKafka configuration object
   std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
+  std::map<std::string, std::string> configs;
+  python_callable_type python_callable_;
+  kafka_oauth_callback_wrapper_type callable_wrapper_;
+
   std::string topic_name;
   int partition;
   int64_t start_offset;
@@ -189,7 +211,7 @@ class kafka_consumer : public cudf::io::datasource {
   std::string buffer;
 
  private:
-  RdKafka::ErrorCode update_consumer_topic_partition_assignment(std::string const &topic,
+  RdKafka::ErrorCode update_consumer_topic_partition_assignment(std::string const& topic,
                                                                 int partition,
                                                                 int64_t offset);
 

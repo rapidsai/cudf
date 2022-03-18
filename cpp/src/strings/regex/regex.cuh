@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,13 @@
 
 #include <strings/regex/regcomp.h>
 
+#include <cudf/strings/regex/flags.hpp>
+#include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 #include <functional>
 #include <memory>
@@ -32,6 +38,27 @@ namespace detail {
 struct reljunk;
 struct reinst;
 class reprog;
+
+using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
+using match_result = thrust::optional<match_pair>;
+
+constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
+constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
+constexpr int32_t RX_STACK_LARGE  = 10128;  ///< fast stack size
+constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
+
+/**
+ * @brief Mapping the number of instructions to device code stack memory size.
+ *
+ * ```
+ * 10128 ≈ 1000 instructions
+ * Formula is based on relist::data_size_for() calculation;
+ * Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
+ * ```
+ */
+constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
+constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
+constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
 
 /**
  * @brief Regex class stored on the device and executed by reprog_device.
@@ -69,18 +96,34 @@ class reprog_device {
    * regex.
    *
    * @param pattern The regex pattern to compile.
-   * @param cp_flags The code-point lookup table for character types.
+   * @param codepoint_flags The code point lookup table for character types.
    * @param strings_count Number of strings that will be evaluated.
-   * @param stream CUDA stream for asynchronous memory allocations. To ensure correct
-   * synchronization on destruction, the same stream should be used for all operations with the
-   * created objects.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
     std::string const& pattern,
-    const uint8_t* cp_flags,
-    int32_t strings_count,
+    uint8_t const* codepoint_flags,
+    size_type strings_count,
     rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Create the device program instance from a regex pattern.
+   *
+   * @param pattern The regex pattern to compile.
+   * @param re_flags Regex flags for interpreting special characters in the pattern.
+   * @param codepoint_flags The code point lookup table for character types.
+   * @param strings_count Number of strings that will be evaluated.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return The program device object.
+   */
+  static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
+    std::string const& pattern,
+    regex_flags const re_flags,
+    uint8_t const* codepoint_flags,
+    size_type strings_count,
+    rmm::cuda_stream_view stream);
+
   /**
    * @brief Called automatically by the unique_ptr returned from create().
    */
@@ -89,43 +132,43 @@ class reprog_device {
   /**
    * @brief Returns the number of regex instructions.
    */
-  __host__ __device__ int32_t insts_counts() const { return _insts_count; }
+  [[nodiscard]] __host__ __device__ int32_t insts_counts() const { return _insts_count; }
 
   /**
    * @brief Returns true if this is an empty program.
    */
-  __device__ bool is_empty() const { return insts_counts() == 0 || get_inst(0)->type == END; }
+  [[nodiscard]] __device__ bool is_empty() const
+  {
+    return insts_counts() == 0 || get_inst(0)->type == END;
+  }
 
   /**
    * @brief Returns the number of regex groups found in the expression.
    */
-  int32_t group_counts() const { return _num_capturing_groups; }
-
-  /**
-   * @brief This sets up the memory used for keeping track of the regex progress.
-   *
-   * Call this for each string before calling find or extract.
-   */
-  __device__ inline void set_stack_mem(u_char* s1, u_char* s2);
+  [[nodiscard]] CUDF_HOST_DEVICE inline int32_t group_counts() const
+  {
+    return _num_capturing_groups;
+  }
 
   /**
    * @brief Returns the regex instruction object for a given index.
    */
-  __device__ inline reinst* get_inst(int32_t idx) const;
+  [[nodiscard]] __device__ inline reinst* get_inst(int32_t idx) const;
 
   /**
    * @brief Returns the regex class object for a given index.
    */
-  __device__ inline reclass_device get_class(int32_t idx) const;
+  [[nodiscard]] __device__ inline reclass_device get_class(int32_t idx) const;
 
   /**
    * @brief Returns the start-instruction-ids vector.
    */
-  __device__ inline int32_t* startinst_ids() const;
+  [[nodiscard]] __device__ inline int32_t* startinst_ids() const;
 
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.
    *
+   * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
    * @param idx The string index used for mapping the state memory for this string in global memory
    * (if necessary).
    * @param d_str The string to search.
@@ -135,6 +178,7 @@ class reprog_device {
    * matching in the string.
    * @return Returns 0 if no match is found.
    */
+  template <int stack_size>
   __device__ inline int32_t find(int32_t idx,
                                  string_view const& d_str,
                                  int32_t& begin,
@@ -144,19 +188,26 @@ class reprog_device {
    * @brief Does an extract evaluation using the compiled expression on the given string.
    *
    * This will find a specific match within the string when more than match occurs.
+   * The find() function should be called first to locate the begin/end bounds of the
+   * the matched section.
    *
+   * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
    * @param idx The string index used for mapping the state memory for this string in global memory
    * (if necessary).
    * @param d_str The string to search.
-   * @param[in,out] begin Position index to begin the search. If found, returns the position found
+   * @param begin Position index to begin the search. If found, returns the position found
    * in the string.
-   * @param[in,out] end Position index to end the search. If found, returns the last position
+   * @param end Position index to end the search. If found, returns the last position
    * matching in the string.
-   * @param column The specific instance to return if more than one match is found.
-   * @return Returns 0 if no match is found.
+   * @param group_id The specific group to return its matching position values.
+   * @return If valid, returns the character position of the matched group in the given string,
    */
-  __device__ inline int32_t extract(
-    int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t column);
+  template <int stack_size>
+  __device__ inline match_result extract(cudf::size_type idx,
+                                         string_view const& d_str,
+                                         cudf::size_type begin,
+                                         cudf::size_type end,
+                                         cudf::size_type group_id);
 
  private:
   int32_t _startinst_id, _num_capturing_groups;
@@ -166,36 +217,22 @@ class reprog_device {
   int32_t* _startinst_ids{};          // array of start instruction ids
   reclass_device* _classes{};         // array of regex classes
   void* _relists_mem{};               // runtime relist memory for regexec
-  u_char* _stack_mem1{};              // memory for relist object 1
-  u_char* _stack_mem2{};              // memory for relist object 2
 
   /**
    * @brief Executes the regex pattern on the given string.
    */
   __device__ inline int32_t regexec(
-    string_view const& d_str, reljunk& jnk, int32_t& begin, int32_t& end, int32_t groupid = 0);
+    string_view const& d_str, reljunk& jnk, int32_t& begin, int32_t& end, int32_t group_id = 0);
 
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
+  template <int stack_size>
   __device__ inline int32_t call_regexec(
-    int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t groupid = 0);
+    int32_t idx, string_view const& d_str, int32_t& begin, int32_t& end, int32_t group_id = 0);
 
   reprog_device(reprog&);  // must use create()
 };
-
-// 10128 ≈ 1000 instructions
-// Formula is based on relist::data_size_for() calculation;
-// Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
-constexpr int32_t MAX_STACK_INSTS = 1000;
-
-constexpr int32_t RX_STACK_SMALL  = 112;
-constexpr int32_t RX_STACK_MEDIUM = 1104;
-constexpr int32_t RX_STACK_LARGE  = 10128;
-
-constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
-constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
-constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
 
 }  // namespace detail
 }  // namespace strings

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
 
@@ -92,21 +93,21 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT                                                        = From,
-            typename ToT                                                          = To,
-            typename std::enable_if<std::is_same<FromT, ToT>::value, void>::type* = nullptr>
+  template <typename FromT                                      = From,
+            typename ToT                                        = To,
+            std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT                       = From,
-            typename ToT                         = To,
-            typename std::enable_if<!std::is_same<FromT, ToT>::value &&
-                                      (cudf::is_convertible<FromT, ToT>::value ||
-                                       std::is_constructible<ToT, FromT>::value),
-                                    void>::type* = nullptr>
+  template <
+    typename FromT          = From,
+    typename ToT            = To,
+    std::enable_if_t<!std::is_same_v<FromT, ToT> && (cudf::is_convertible<FromT, ToT>::value ||
+                                                     std::is_constructible_v<ToT, FromT>),
+                     void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return static_cast<ToT>(element);
@@ -114,10 +115,9 @@ struct fixed_width_type_converter {
 
   // Convert integral values to timestamps
   template <
-    typename FromT                       = From,
-    typename ToT                         = To,
-    typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
-                            void>::type* = nullptr>
+    typename FromT                                                                  = From,
+    typename ToT                                                                    = To,
+    std::enable_if_t<std::is_integral_v<FromT> && cudf::is_timestamp<ToT>(), void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return ToT{typename ToT::duration{element}};
@@ -137,7 +137,7 @@ struct fixed_width_type_converter {
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
@@ -145,7 +145,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
+  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), rmm::cuda_stream_default};
 }
 
 /**
@@ -162,8 +162,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
+                           cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using RepType        = typename ElementTo::rep;
@@ -171,7 +171,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
 }
 
 /**
@@ -187,8 +187,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
+                           cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
@@ -198,7 +198,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
 }
 
 /**
@@ -245,7 +245,8 @@ rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
 {
   auto null_mask = make_null_mask_vector(begin, end);
   return rmm::device_buffer{null_mask.data(),
-                            null_mask.size() * sizeof(decltype(null_mask.front()))};
+                            null_mask.size() * sizeof(decltype(null_mask.front())),
+                            rmm::cuda_stream_default};
 }
 
 /**
@@ -371,7 +372,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param elements The list of elements
    */
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
@@ -508,14 +509,15 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
-    wrapped.reset(
-      new cudf::column{data_type, size, rmm::device_buffer{elements.data(), size * sizeof(Rep)}});
+    wrapped.reset(new cudf::column{
+      data_type,
+      size,
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default}});
   }
 
   /**
@@ -571,17 +573,17 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
-    wrapped.reset(new cudf::column{data_type,
-                                   size,
-                                   rmm::device_buffer{elements.data(), size * sizeof(Rep)},
-                                   detail::make_null_mask(v, v + size),
-                                   cudf::UNKNOWN_NULL_COUNT});
+    wrapped.reset(new cudf::column{
+      data_type,
+      size,
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default},
+      detail::make_null_mask(v, v + size),
+      cudf::UNKNOWN_NULL_COUNT});
   }
 
   /**
@@ -864,7 +866,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    */
   dictionary_column_wrapper() : column_wrapper{}
   {
-    wrapped = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
+    wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
   }
 
   /**
@@ -937,7 +939,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * // keys = {1, 2, 3}, indices = {0, 1, 2, 0}
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param elements The list of elements
    */
   template <typename ElementFrom>
   dictionary_column_wrapper(std::initializer_list<ElementFrom> elements)
@@ -1038,11 +1040,13 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
 
   /**
    * @brief Access keys column view
+   * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
 
@@ -1235,7 +1239,7 @@ class lists_column_wrapper : public detail::column_wrapper {
 
   /**
    * @brief  Construct a lists column containing a single list of fixed-width
-   * type from an interator range.
+   * type from an iterator range.
    *
    * Example:
    * @code{.cpp}
@@ -1323,8 +1327,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    */
-  template <typename Element                                                   = T,
-            std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+  template <typename Element                                              = T,
+            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements) : column_wrapper{}
   {
     build_from_non_nested(
@@ -1348,7 +1352,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   template <typename Element = T,
             typename ValidityIterator,
-            std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator v)
     : column_wrapper{}
   {
@@ -1397,7 +1401,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   lists_column_wrapper() : column_wrapper{}
   {
-    build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
+    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
   }
 
   /**
@@ -1497,11 +1501,8 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(std::cbegin(cols),
-                    std::cend(cols),
-                    valids,  // stencil
-                    std::back_inserter(children),
-                    thrust::identity<bool>{});
+    thrust::copy_if(
+      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 
@@ -1514,7 +1515,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                         std::move(offsets),
                         std::move(data),
                         v.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
-                        v.size() <= 0 ? rmm::device_buffer{0}
+                        v.size() <= 0 ? rmm::device_buffer{}
                                       : cudf::test::detail::make_null_mask(v.begin(), v.end()));
   }
 
@@ -1544,7 +1545,7 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     size_type num_elements = offsets->size() == 0 ? 0 : offsets->size() - 1;
     wrapped =
-      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});
+      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{});
   }
 
   /**
@@ -1617,7 +1618,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                    std::back_inserter(cols),
                    [&](lists_column_wrapper const& l) -> column_view {
                      // depth mismatch.  attempt to normalize the short column.
-                     // this function will also catch if this is a legitmately broken
+                     // this function will also catch if this is a legitimately broken
                      // set of input
                      if (l.depth < expected_depth) {
                        if (l.root) {
@@ -1708,7 +1709,7 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {struct_column_wrapper.release()};
    * @endcode
    *
-   * @param child_columns_wrappers The list of child column wrappers
+   * @param child_column_wrappers The list of child column wrappers
    * @param validity The vector of bools representing the column validity values
    */
   structs_column_wrapper(
@@ -1741,8 +1742,8 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {struct_column_wrapper.release()};
    * @endcode
    *
-   * @param child_columns_wrappers The list of child column wrappers
-   * @param validity Iterator returning the per-row validity bool
+   * @param child_column_wrappers The list of child column wrappers
+   * @param validity_iter Iterator returning the per-row validity bool
    */
   template <typename V>
   structs_column_wrapper(
@@ -1776,7 +1777,7 @@ class structs_column_wrapper : public detail::column_wrapper {
       num_rows,
       std::move(child_columns),
       validity.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
-      validity.size() <= 0 ? rmm::device_buffer{0}
+      validity.size() <= 0 ? rmm::device_buffer{}
                            : detail::make_null_mask(validity.begin(), validity.end()));
   }
 

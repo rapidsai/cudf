@@ -40,7 +40,7 @@ TEST_F(ValidIfTest, EmptyRange)
 {
   auto actual = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0), odds_valid{});
-  auto buffer = actual.first;
+  auto const& buffer = actual.first;
   EXPECT_EQ(0u, buffer.size());
   EXPECT_EQ(nullptr, buffer.data());
   EXPECT_EQ(0, actual.second);

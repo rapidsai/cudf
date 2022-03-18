@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -11,8 +11,8 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
-from cudf.tests import utils as utils
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing import _utils as utils
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -109,7 +109,10 @@ def test_timedelta_from_typecast(data, dtype, cast_dtype):
     )
     gsr = cudf.Series(data, dtype=dtype)
 
-    assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
+    if cast_dtype == "int64":
+        assert_eq(psr.values.view(cast_dtype), gsr.astype(cast_dtype).values)
+    else:
+        assert_eq(psr.astype(cast_dtype), gsr.astype(cast_dtype))
 
 
 @pytest.mark.parametrize(
@@ -167,17 +170,15 @@ def test_timedelta_from_pandas(data, dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize("fillna", [None, "pandas"])
-def test_timedelta_series_to_array(data, dtype, fillna):
+def test_timedelta_series_to_numpy(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
 
     expected = np.array(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
     )
-    if fillna is None:
-        expected = expected[~np.isnan(expected)]
+    expected = expected[~np.isnan(expected)]
 
-    actual = gsr.to_array(fillna=fillna)
+    actual = gsr.dropna().to_numpy()
 
     np.testing.assert_array_equal(expected, actual)
 
@@ -624,7 +625,11 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    expected = getattr(psr, reduction_op)()
+    if len(psr) > 0 and psr.isnull().all() and reduction_op == "median":
+        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
+            expected = getattr(psr, reduction_op)()
+    else:
+        expected = getattr(psr, reduction_op)()
     actual = getattr(gsr, reduction_op)()
     if pd.isna(expected) and pd.isna(actual):
         pass
@@ -811,6 +816,7 @@ def test_timedelta_datetime_index_ops_misc(
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -874,6 +880,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         ),
     ],
 )
+@pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
 def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
@@ -1245,7 +1252,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
         expected_error_message=re.escape(
-            f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
+            f"Division of {sr.dtype} with {dt_sr.dtype} "
             f"cannot be performed."
         ),
     )
@@ -1289,14 +1296,27 @@ def test_timedelta_datetime_cast_invalid():
     psr = sr.to_pandas()
 
     assert_exceptions_equal(
-        psr.astype, sr.astype, (["datetime64[ns]"],), (["datetime64[ns]"],)
+        psr.astype,
+        sr.astype,
+        (["datetime64[ns]"],),
+        (["datetime64[ns]"],),
+        expected_error_message=re.escape(
+            "cannot astype a timedelta from timedelta64[ns] to datetime64[ns]"
+        ),
     )
 
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     psr = sr.to_pandas()
 
     assert_exceptions_equal(
-        psr.astype, sr.astype, (["timedelta64[ns]"],), (["timedelta64[ns]"],)
+        psr.astype,
+        sr.astype,
+        (["timedelta64[ns]"],),
+        (["timedelta64[ns]"],),
+        expected_error_message=re.escape(
+            "cannot astype a datetimelike from "
+            "datetime64[ns] to timedelta64[ns]"
+        ),
     )
 
 
@@ -1386,3 +1406,22 @@ def test_timedelta_reductions(data, op, dtype):
         assert True
     else:
         assert_eq(expected.to_numpy(), actual)
+
+
+def test_error_values():
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    with pytest.raises(
+        NotImplementedError,
+        match="TimeDelta Arrays is not yet implemented in cudf",
+    ):
+        s.values
+
+
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize("name", [None, "delta-index"])
+def test_create_TimedeltaIndex(dtype, name):
+    gdi = cudf.TimedeltaIndex(
+        [1132223, 2023232, 342234324, 4234324], dtype=dtype, name=name
+    )
+    pdi = gdi.to_pandas()
+    assert_eq(pdi, gdi)

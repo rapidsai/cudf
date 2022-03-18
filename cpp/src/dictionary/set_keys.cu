@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/detail/encode.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -30,14 +32,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <algorithm>
 #include <iterator>
+#include <thrust/binary_search.h>
 
 namespace cudf {
 namespace dictionary {
 namespace detail {
 namespace {
+
 /**
  * @brief Type-dispatch functor for remapping the old indices to new values based on the new
  * key-set.
@@ -47,24 +50,18 @@ namespace {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
              column_view const& new_keys,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
-    auto d_dictionary    = *dictionary_view;
-    auto keys_view       = column_device_view::create(input.keys(), stream);
-    auto dictionary_itr  = thrust::make_permutation_iterator(
-      keys_view->begin<Element>(),
-      thrust::make_transform_iterator(
-        thrust::make_counting_iterator<size_type>(0), [d_dictionary] __device__(size_type idx) {
-          if (d_dictionary.is_null(idx)) return 0;
-          return static_cast<size_type>(d_dictionary.element<dictionary32>(idx));
-        }));
-    auto new_keys_view = column_device_view::create(new_keys, stream);
+    auto dictionary_itr  = make_dictionary_iterator<Element>(*dictionary_view);
+    auto new_keys_view   = column_device_view::create(new_keys, stream);
+
+    auto begin = new_keys_view->begin<Element>();
+    auto end   = new_keys_view->end<Element>();
 
     // create output indices column
     auto result = make_numeric_column(get_indices_type_for_size(new_keys.size()),
@@ -74,26 +71,38 @@ struct dispatch_compute_indices {
                                       mr);
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
+
+#ifdef NDEBUG
     thrust::lower_bound(rmm::exec_policy(stream),
-                        new_keys_view->begin<Element>(),
-                        new_keys_view->end<Element>(),
+                        begin,
+                        end,
                         dictionary_itr,
                         dictionary_itr + input.size(),
                         result_itr,
                         thrust::less<Element>());
+#else
+    // There is a problem with thrust::lower_bound and the output_indexalator
+    // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
+    // This is a workaround.
+    thrust::transform(rmm::exec_policy(stream),
+                      dictionary_itr,
+                      dictionary_itr + input.size(),
+                      result_itr,
+                      [begin, end] __device__(auto key) {
+                        auto itr = thrust::lower_bound(thrust::seq, begin, end, key);
+                        return static_cast<size_type>(thrust::distance(begin, itr));
+                      });
+#endif
     result->set_null_count(0);
+
     return result;
   }
 
-  template <typename Element>
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
-  operator()(dictionary_column_view const& input,
-             column_view const& new_keys,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  template <typename Element, typename... Args>
+  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
+  operator()(Args&&...)
   {
-    CUDF_FAIL("list_view dictionary set_keys not supported yet");
+    CUDF_FAIL("dictionary set_keys not supported for this column type");
   }
 };
 
@@ -110,15 +119,17 @@ std::unique_ptr<column> set_keys(
   auto keys = dictionary_column.keys();
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
-  // copy the keys -- use drop_duplicates to make sure they are sorted and unique
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{new_keys}},
-                                                  std::vector<size_type>{0},
-                                                  duplicate_keep_option::KEEP_FIRST,
-                                                  null_equality::EQUAL,
-                                                  stream,
-                                                  mr)
-                      ->release();
-  std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+  // copy the keys -- use cudf::distinct to make sure there are no duplicates,
+  // then sort the results.
+  auto distinct_keys = cudf::detail::distinct(
+    table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
+  auto sorted_keys = cudf::detail::sort(distinct_keys->view(),
+                                        std::vector<order>{order::ASCENDING},
+                                        std::vector<null_order>{null_order::BEFORE},
+                                        stream,
+                                        mr)
+                       ->release();
+  std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // compute the new nulls
   auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
@@ -152,9 +163,10 @@ std::unique_ptr<column> set_keys(
                                 new_nulls.second);
 }
 
-std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_column_view> input,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
@@ -193,7 +205,8 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_d
       auto dict_cols = dictionary::detail::match_dictionaries(dict_views, stream, mr);
       // replace the updated_columns vector entries for the set of columns at col_idx
       auto dict_col_idx = 0;
-      for (auto& v : updated_columns) v[col_idx] = dict_cols[dict_col_idx++]->view();
+      for (auto& v : updated_columns)
+        v[col_idx] = dict_cols[dict_col_idx++]->view();
       // move the updated dictionary columns into the main output vector
       std::move(dict_cols.begin(), dict_cols.end(), std::back_inserter(dictionary_columns));
     }
@@ -221,6 +234,13 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 {
   CUDF_FUNC_RANGE();
   return detail::set_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
+}
+
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::match_dictionaries(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ public final class DType {
 
   public static final int DECIMAL32_MAX_PRECISION = 9;
   public static final int DECIMAL64_MAX_PRECISION = 18;
+  public static final int DECIMAL128_MAX_PRECISION = 38;
 
   /* enum representing various types. Whenever a new non-decimal type is added please make sure
   below sections are updated as well:
@@ -30,65 +31,62 @@ public final class DType {
   2. Update SINGLETON_DTYPE_LOOKUP to reflect new type. The order should be maintained between
   DTypeEnum and SINGLETON_DTYPE_LOOKUP */
   public enum DTypeEnum {
-    EMPTY(0, 0, "NOT SUPPORTED"),
-    INT8(1, 1, "byte"),
-    INT16(2, 2, "short"),
-    INT32(4, 3, "int"),
-    INT64(8, 4, "long"),
-    UINT8(1, 5, "uint8"),
-    UINT16(2, 6, "uint16"),
-    UINT32(4, 7, "uint32"),
-    UINT64(8, 8, "uint64"),
-    FLOAT32(4, 9, "float"),
-    FLOAT64(8, 10, "double"),
+    EMPTY(0, 0),
+    INT8(1, 1),
+    INT16(2, 2),
+    INT32(4, 3),
+    INT64(8, 4),
+    UINT8(1, 5),
+    UINT16(2, 6),
+    UINT32(4, 7),
+    UINT64(8, 8),
+    FLOAT32(4, 9),
+    FLOAT64(8, 10),
     /**
      * Byte wise true non-0/false 0.  In general true will be 1.
      */
-    BOOL8(1, 11, "bool"),
+    BOOL8(1, 11),
     /**
      * Days since the UNIX epoch
      */
-    TIMESTAMP_DAYS(4, 12, "date32"),
+    TIMESTAMP_DAYS(4, 12),
     /**
      * s since the UNIX epoch
      */
-    TIMESTAMP_SECONDS(8, 13, "timestamp[s]"),
+    TIMESTAMP_SECONDS(8, 13),
     /**
      * ms since the UNIX epoch
      */
-    TIMESTAMP_MILLISECONDS(8, 14, "timestamp[ms]"),
+    TIMESTAMP_MILLISECONDS(8, 14),
     /**
      * microseconds since the UNIX epoch
      */
-    TIMESTAMP_MICROSECONDS(8, 15, "timestamp[us]"),
+    TIMESTAMP_MICROSECONDS(8, 15),
     /**
      * ns since the UNIX epoch
      */
-    TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
+    TIMESTAMP_NANOSECONDS(8, 16),
 
-    //We currently don't have mappings for duration type to I/O files, and these
-    //simpleNames might change in future when we do
-    DURATION_DAYS(4, 17, "int32"),
-    DURATION_SECONDS(8, 18, "int64"),
-    DURATION_MILLISECONDS(8, 19, "int64"),
-    DURATION_MICROSECONDS(8, 20, "int64"),
-    DURATION_NANOSECONDS(8, 21, "int64"),
-    //DICTIONARY32(4, 22, "NO IDEA"),
+    DURATION_DAYS(4, 17),
+    DURATION_SECONDS(8, 18),
+    DURATION_MILLISECONDS(8, 19),
+    DURATION_MICROSECONDS(8, 20),
+    DURATION_NANOSECONDS(8, 21),
+    //DICTIONARY32(4, 22),
 
-    STRING(0, 23, "str"),
-    LIST(0, 24, "list"),
-    DECIMAL32(4, 25, "decimal32"),
-    DECIMAL64(8, 26, "decimal64"),
-    STRUCT(0, 27, "struct");
+    STRING(0, 23),
+    LIST(0, 24),
+    DECIMAL32(4, 25),
+    DECIMAL64(8, 26),
+    DECIMAL128(16, 27),
+    STRUCT(0, 28);
 
     final int sizeInBytes;
     final int nativeId;
-    final String simpleName;
 
-    DTypeEnum(int sizeInBytes, int nativeId, String simpleName) {
+    DTypeEnum(int sizeInBytes, int nativeId) {
       this.sizeInBytes = sizeInBytes;
       this.nativeId = nativeId;
-      this.simpleName = simpleName;
     }
 
     public int getNativeId() { return nativeId; }
@@ -171,8 +169,40 @@ public final class DType {
       LIST,
       null, // DECIMAL32
       null, // DECIMAL64
+      null, // DECIMAL128
       STRUCT
   };
+
+  /**
+   * Returns max precision for Decimal Type.
+   * @return max precision this Decimal Type can hold
+   */
+  public int getDecimalMaxPrecision() {
+    if (!isDecimalType()) {
+      throw new IllegalArgumentException("not a decimal type: " + this);
+    }
+    if (typeId == DTypeEnum.DECIMAL32) return DECIMAL32_MAX_PRECISION;
+    if (typeId == DTypeEnum.DECIMAL64) return DECIMAL64_MAX_PRECISION;
+    return DType.DECIMAL128_MAX_PRECISION;
+  }
+
+  /**
+   * Get the number of decimal places needed to hold the Integral Type.
+   * NOTE: this method is NOT for Decimal Type but for Integral Type.
+   * @return the minimum decimal precision (places) for Integral Type
+   */
+  public int getPrecisionForInt() {
+    // -128 to 127
+    if (typeId == DTypeEnum.INT8) return 3;
+    // -32768 to 32767
+    if (typeId == DTypeEnum.INT16) return 5;
+    // -2147483648 to 2147483647
+    if (typeId == DTypeEnum.INT32) return 10;
+    // -9223372036854775808 to 9223372036854775807
+    if (typeId == DTypeEnum.INT64) return 19;
+
+    throw new IllegalArgumentException("not an integral type: " + this);
+  }
 
   /**
    * This only works for fixed width types. Variable width types like strings the value is
@@ -190,12 +220,6 @@ public final class DType {
    *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
    */
   public int getScale() { return scale; }
-
-  /**
-   * Returns string name mapped to type.
-   * @return name corresponding to type
-   */
-  public String getSimpleName() { return typeId.simpleName; }
 
   /**
    * Return enum for this DType
@@ -286,6 +310,13 @@ public final class DType {
         }
         return new DType(DTypeEnum.DECIMAL64, scale);
       }
+      if (nativeId == DTypeEnum.DECIMAL128.nativeId) {
+        if (-scale > DECIMAL128_MAX_PRECISION) {
+          throw new IllegalArgumentException(
+              "Scale " + (-scale) + " exceeds DECIMAL128_MAX_PRECISION " + DECIMAL128_MAX_PRECISION);
+        }
+        return new DType(DTypeEnum.DECIMAL128, scale);
+      }
     }
     throw new IllegalArgumentException("Could not translate " + nativeId + " into a DType");
   }
@@ -303,9 +334,11 @@ public final class DType {
       return new DType(DTypeEnum.DECIMAL32, -dec.scale());
     } else if (dec.precision() <= DECIMAL64_MAX_PRECISION) {
       return new DType(DTypeEnum.DECIMAL64, -dec.scale());
+    } else if (dec.precision() <= DECIMAL128_MAX_PRECISION) {
+      return new DType(DTypeEnum.DECIMAL128, -dec.scale());
     }
     throw new IllegalArgumentException("Precision " + dec.precision() +
-        " exceeds max precision cuDF can support " + DECIMAL64_MAX_PRECISION);
+        " exceeds max precision cuDF can support " + DECIMAL128_MAX_PRECISION);
   }
 
   /**
@@ -460,7 +493,8 @@ public final class DType {
 
   private static final EnumSet<DTypeEnum> DECIMALS = EnumSet.of(
       DTypeEnum.DECIMAL32,
-      DTypeEnum.DECIMAL64
+      DTypeEnum.DECIMAL64,
+      DTypeEnum.DECIMAL128
   );
 
   private static final EnumSet<DTypeEnum> NESTED_TYPE = EnumSet.of(

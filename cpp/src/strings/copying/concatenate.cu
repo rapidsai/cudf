@@ -16,8 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -27,12 +26,11 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
-#include "thrust/iterator/transform_iterator.h"
 
 #include <thrust/binary_search.h>
-#include <thrust/for_each.h>
-#include <thrust/transform_reduce.h>
+#include <thrust/execution_policy.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -91,15 +89,14 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
-  size_t zero{0};
-  d_partition_offsets.set_element_async(0, zero, stream);  // zero first element
+  d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
   thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                    device_views_ptr,
                                    device_views_ptr + views.size(),
                                    std::next(d_partition_offsets.begin()),
                                    chars_size_transform{},
-                                   thrust::plus<size_t>{});
+                                   thrust::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
@@ -217,7 +214,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_strings_column(stream, mr); }
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings is too large for cudf column");
@@ -228,9 +225,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
 
   // create chars column
-  auto chars_column =
-    make_numeric_column(data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
-  auto d_new_chars = chars_column->mutable_view().data<char>();
+  auto chars_column = create_chars_child_column(total_bytes, stream, mr);
+  auto d_new_chars  = chars_column->mutable_view().data<char>();
   chars_column->set_null_count(0);
 
   // create offsets column
@@ -247,7 +243,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   }
 
   {  // Copy offsets columns with single kernel launch
-    rmm::device_scalar<size_type> d_valid_count(0);
+    rmm::device_scalar<size_type> d_valid_count(0, stream);
 
     constexpr size_type block_size{256};
     cudf::detail::grid_1d config(offsets_count, block_size);
@@ -289,12 +285,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         column_view offsets_child = column->child(strings_column_view::offsets_column_index);
         column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
-        auto d_offsets       = offsets_child.data<int32_t>() + column_offset;
-        int32_t bytes_offset = thrust::device_pointer_cast(d_offsets)[0];
+        auto bytes_offset =
+          cudf::detail::get_value<offset_type>(offsets_child, column_offset, stream);
 
         // copy the chars column data
-        auto d_chars    = chars_child.data<char>() + bytes_offset;
-        size_type bytes = thrust::device_pointer_cast(d_offsets)[column_size] - bytes_offset;
+        auto d_chars = chars_child.data<char>() + bytes_offset;
+        auto const bytes =
+          cudf::detail::get_value<offset_type>(offsets_child, column_size + column_offset, stream) -
+          bytes_offset;
+
         CUDA_TRY(
           cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
 
@@ -308,9 +307,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

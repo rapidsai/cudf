@@ -38,7 +38,7 @@ template <typename T>
 struct SegmentedSort : public BaseFixture {
 };
 
-TYPED_TEST_CASE(SegmentedSort, NumericTypes);
+TYPED_TEST_SUITE(SegmentedSort, NumericTypes);
 using SegmentedSortInt = SegmentedSort<int>;
 
 /* Summary of test cases.
@@ -144,7 +144,7 @@ TYPED_TEST(SegmentedSort, NoNull)
 TYPED_TEST(SegmentedSort, Null)
 {
   using T = TypeParam;
-  if (std::is_same<T, bool>::value) return;
+  if (std::is_same_v<T, bool>) return;
 
   // segments                 {0   1   2} {3   4} {5} {6   7   8   9  10}{11  12}{13}{14  15}
   column_wrapper<T> col1{{1, 3, 2, 4, 5, 23, 6, 8, 7, 9, 7, 37, 43, 26, 21, 16},
@@ -264,7 +264,7 @@ TEST_F(SegmentedSortInt, ErrorsMismatchArgSizes)
                                            {order::ASCENDING, order::ASCENDING},
                                            {null_order::AFTER, null_order::AFTER}),
                logic_error);
-  // segmented_offsets beyond num_rows - undefined behaviour, no throw.
+  // segmented_offsets beyond num_rows - undefined behavior, no throw.
   CUDF_EXPECT_NO_THROW(cudf::segmented_sort_by_key(input1, input1, col2));
 }
 

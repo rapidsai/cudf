@@ -15,8 +15,9 @@
  */
 #pragma once
 
-#include <cudf/types.hpp>
 #include <jni.h>
+
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace jni {
@@ -25,9 +26,7 @@ namespace jni {
 inline cudf::data_type timestamp_to_duration(cudf::data_type dt) {
   cudf::type_id duration_type_id;
   switch (dt.id()) {
-    case cudf::type_id::TIMESTAMP_DAYS:
-      duration_type_id = cudf::type_id::DURATION_DAYS;
-      break;
+    case cudf::type_id::TIMESTAMP_DAYS: duration_type_id = cudf::type_id::DURATION_DAYS; break;
     case cudf::type_id::TIMESTAMP_SECONDS:
       duration_type_id = cudf::type_id::DURATION_SECONDS;
       break;
@@ -40,14 +39,14 @@ inline cudf::data_type timestamp_to_duration(cudf::data_type dt) {
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
       duration_type_id = cudf::type_id::DURATION_NANOSECONDS;
       break;
-    default:
-      throw std::logic_error("Unexpected type in timestamp_to_duration");
+    default: throw std::logic_error("Unexpected type in timestamp_to_duration");
   }
   return cudf::data_type(duration_type_id);
 }
 
 inline bool is_decimal_type(cudf::type_id n_type) {
-  return n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ;
+  return n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ||
+         n_type == cudf::type_id::DECIMAL128;
 }
 
 // create data_type including scale for decimal type

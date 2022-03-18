@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <thrust/optional.h>
+
 namespace cudf {
 namespace strings {
 
@@ -25,6 +27,79 @@ namespace strings {
  * @{
  * @file
  */
+
+/**
+ * @brief Settings for `get_json_object()`.
+ */
+class get_json_object_options {
+  // allow single quotes to represent strings in JSON
+  bool allow_single_quotes = false;
+
+  // individual string values are returned with quotes stripped.
+  bool strip_quotes_from_single_strings = true;
+
+ public:
+  /**
+   * @brief Default constructor.
+   */
+  explicit get_json_object_options() = default;
+
+  /**
+   * @brief Returns true/false depending on whether single-quotes for representing strings
+   * are allowed.
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool get_allow_single_quotes() const
+  {
+    return allow_single_quotes;
+  }
+
+  /**
+   * @brief Returns true/false depending on whether individually returned string values have
+   * their quotes stripped.
+   *
+   * When set to true, if the return value for a given row is an individual string
+   * (not an object, or an array of strings), strip the quotes from the string and return only the
+   * contents of the string itself.  Example:
+   *
+   * @code{.pseudo}
+   *
+   * With strip_quotes_from_single_strings OFF:
+   * Input  = {"a" : "b"}
+   * Query  = $.a
+   * Output = "b"
+   *
+   * With strip_quotes_from_single_strings ON:
+   * Input  = {"a" : "b"}
+   * Query  = $.a
+   * Output = b
+   *
+   * @endcode
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool get_strip_quotes_from_single_strings() const
+  {
+    return strip_quotes_from_single_strings;
+  }
+
+  /**
+   * @brief Set whether single-quotes for strings are allowed.
+   *
+   * @param _allow_single_quotes bool indicating desired behavior.
+   */
+  void set_allow_single_quotes(bool _allow_single_quotes)
+  {
+    allow_single_quotes = _allow_single_quotes;
+  }
+
+  /**
+   * @brief Set whether individually returned string values have their quotes stripped.
+   *
+   * @param _strip_quotes_from_single_strings bool indicating desired behavior.
+   */
+  void set_strip_quotes_from_single_strings(bool _strip_quotes_from_single_strings)
+  {
+    strip_quotes_from_single_strings = _strip_quotes_from_single_strings;
+  }
+};
 
 /**
  * @brief Apply a JSONPath string to all rows in an input strings column.
@@ -37,12 +112,14 @@ namespace strings {
  *
  * @param col The input strings column. Each row must contain a valid json string
  * @param json_path The JSONPath string to be applied to each row
+ * @param options Options for controlling the behavior of the function
  * @param mr Resource for allocating device memory.
  * @return New strings column containing the retrieved json object strings
  */
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
   cudf::string_scalar const& json_path,
+  get_json_object_options options     = get_json_object_options{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

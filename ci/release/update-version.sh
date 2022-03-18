@@ -4,42 +4,26 @@
 ########################
 
 ## Usage
-# bash update-version.sh <type>
-#     where <type> is either `major`, `minor`, `patch`
+# bash update-version.sh <new_version>
 
-set -e
 
-# Grab argument for release type
-RELEASE_TYPE=$1
+# Format is YY.MM.PP - no leading 'v' or trailing 'a'
+NEXT_FULL_TAG=$1
 
-# Get current version and calculate next versions
-CURRENT_TAG=`git tag | grep -xE 'v[0-9\.]+' | sort --version-sort | tail -n 1 | tr -d 'v'`
-CURRENT_MAJOR=`echo $CURRENT_TAG | awk '{split($0, a, "."); print a[1]}'`
-CURRENT_MINOR=`echo $CURRENT_TAG | awk '{split($0, a, "."); print a[2]}'`
-CURRENT_PATCH=`echo $CURRENT_TAG | awk '{split($0, a, "."); print a[3]}'`
-NEXT_MAJOR=$((CURRENT_MAJOR + 1))
-NEXT_MINOR=$((CURRENT_MINOR + 1))
-NEXT_PATCH=$((CURRENT_PATCH + 1))
+# Get current version
+CURRENT_TAG=$(git tag --merged HEAD | grep -xE '^v.*' | sort --version-sort | tail -n 1 | tr -d 'v')
+CURRENT_MAJOR=$(echo $CURRENT_TAG | awk '{split($0, a, "."); print a[1]}')
+CURRENT_MINOR=$(echo $CURRENT_TAG | awk '{split($0, a, "."); print a[2]}')
+CURRENT_PATCH=$(echo $CURRENT_TAG | awk '{split($0, a, "."); print a[3]}')
 CURRENT_SHORT_TAG=${CURRENT_MAJOR}.${CURRENT_MINOR}
-NEXT_FULL_TAG=""
-NEXT_SHORT_TAG=""
 
-# Determine release type
-if [ "$RELEASE_TYPE" == "major" ]; then
-  NEXT_FULL_TAG="${NEXT_MAJOR}.0.0"
-  NEXT_SHORT_TAG="${NEXT_MAJOR}.0"
-elif [ "$RELEASE_TYPE" == "minor" ]; then
-  NEXT_FULL_TAG="${CURRENT_MAJOR}.${NEXT_MINOR}.0"
-  NEXT_SHORT_TAG="${CURRENT_MAJOR}.${NEXT_MINOR}"
-elif [ "$RELEASE_TYPE" == "patch" ]; then
-  NEXT_FULL_TAG="${CURRENT_MAJOR}.${CURRENT_MINOR}.${NEXT_PATCH}"
-  NEXT_SHORT_TAG="${CURRENT_MAJOR}.${CURRENT_MINOR}"
-else
-  echo "Incorrect release type; use 'major', 'minor', or 'patch' as an argument"
-  exit 1
-fi
+#Get <major>.<minor> for next version
+NEXT_MAJOR=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[1]}')
+NEXT_MINOR=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[2]}')
+NEXT_SHORT_TAG=${NEXT_MAJOR}.${NEXT_MINOR}
+NEXT_UCX_PY_VERSION="$(curl -sL https://version.gpuci.io/rapids/${NEXT_SHORT_TAG}).*"
 
-echo "Preparing '$RELEASE_TYPE' release [$CURRENT_TAG -> $NEXT_FULL_TAG]"
+echo "Preparing release $CURRENT_TAG => $NEXT_FULL_TAG"
 
 # Inplace sed replace; workaround for Linux and Mac
 function sed_runner() {
@@ -47,18 +31,24 @@ function sed_runner() {
 }
 
 # cpp update
-sed_runner 's/'"CUDF VERSION .* LANGUAGES"'/'"CUDF VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
+sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/CMakeLists.txt
 
 # cpp libcudf_kafka update
-sed_runner 's/'"CUDA_KAFKA VERSION .* LANGUAGES"'/'"CUDA_KAFKA VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/libcudf_kafka/CMakeLists.txt
+sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/libcudf_kafka/CMakeLists.txt
 
 # cpp cudf_jni update
-sed_runner 's/'"CUDF_JNI VERSION .* LANGUAGES"'/'"CUDF_JNI VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' java/src/main/native/CMakeLists.txt
+sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' java/src/main/native/CMakeLists.txt
+
+# rapids-cmake version
+sed_runner 's/'"branch-.*\/RAPIDS.cmake"'/'"branch-${NEXT_SHORT_TAG}\/RAPIDS.cmake"'/g' fetch_rapids.cmake
+
+# cmake-format rapids-cmake definitions
+sed_runner 's/'"branch-.*\/cmake-format-rapids-cmake.json"'/'"branch-${NEXT_SHORT_TAG}\/cmake-format-rapids-cmake.json"'/g' ci/checks/style.sh
 
 # doxyfile update
 sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_TAG}'/g' cpp/doxygen/Doxyfile
 
-# RTD update
+# sphinx docs update
 sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/cudf/source/conf.py
 sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/cudf/source/conf.py
 
@@ -73,3 +63,10 @@ sed_runner "s|\(TAGFILES.*librmm/\).*|\1${NEXT_SHORT_TAG}|" cpp/doxygen/Doxyfile
 # README.md update
 sed_runner "s/version == ${CURRENT_SHORT_TAG}/version == ${NEXT_SHORT_TAG}/g" README.md
 sed_runner "s/cudf=${CURRENT_SHORT_TAG}/cudf=${NEXT_SHORT_TAG}/g" README.md
+
+# Libcudf examples update
+sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/basic/CMakeLists.txt
+
+# ucx-py version update
+sed_runner "s/export UCX_PY_VERSION=.*/export UCX_PY_VERSION='${NEXT_UCX_PY_VERSION}'/g" ci/gpu/build.sh
+sed_runner "s/export UCX_PY_VERSION=.*/export UCX_PY_VERSION='${NEXT_UCX_PY_VERSION}'/g" ci/gpu/java.sh

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,115 +16,138 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <hash/hash_constants.hpp>
+
+#include <thrust/iterator/reverse_iterator.h>
 
 using hash_value_type = uint32_t;
 
 namespace cudf {
 namespace detail {
-namespace {
-/**
- * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
- * updating the hash value so far. Does not zero out the buffer contents.
- */
-void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
-{
-  uint32_t A = hash_state->hash_value[0];
-  uint32_t B = hash_state->hash_value[1];
-  uint32_t C = hash_state->hash_value[2];
-  uint32_t D = hash_state->hash_value[3];
 
-  for (unsigned int j = 0; j < 64; j++) {
-    uint32_t F;
-    uint32_t g;
-    switch (j / 16) {
-      case 0:
-        F = (B & C) | ((~B) & D);
-        g = j;
-        break;
-      case 1:
-        F = (D & B) | ((~D) & C);
-        g = (5 * j + 1) % 16;
-        break;
-      case 2:
-        F = B ^ C ^ D;
-        g = (3 * j + 5) % 16;
-        break;
-      case 3:
-        F = C ^ (B | (~D));
-        g = (7 * j) % 16;
-        break;
+/**
+ * Normalization of floating point NaNs and zeros, passthrough for all other values.
+ */
+template <typename T>
+T __device__ inline normalize_nans_and_zeros(T const& key)
+{
+  if constexpr (cudf::is_floating_point<T>()) {
+    if (std::isnan(key)) {
+      return std::numeric_limits<T>::quiet_NaN();
+    } else if (key == T{0.0}) {
+      return T{0.0};
     }
-
-    uint32_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
-    F = F + A + md5_hash_constants[j] + buffer_element_as_int;
-    A = D;
-    D = C;
-    C = B;
-    B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
   }
-
-  hash_state->hash_value[0] += A;
-  hash_state->hash_value[1] += B;
-  hash_state->hash_value[2] += C;
-  hash_state->hash_value[3] += D;
-
-  hash_state->buffer_length = 0;
+  return key;
 }
 
-/**
- * @brief Core MD5 element processing function
- */
-template <typename TKey>
-void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* hash_state)
+__device__ inline uint32_t rotate_bits_left(uint32_t x, uint32_t r)
 {
-  uint32_t const len  = sizeof(TKey);
-  uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
-  hash_state->message_length += len;
+  // This function is equivalent to (x << r) | (x >> (32 - r))
+  return __funnelshift_l(x, x, r);
+}
 
-  // 64 bytes for the number of byt es processed in a given step
-  constexpr int md5_chunk_size = 64;
-  if (hash_state->buffer_length + len < md5_chunk_size) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
-    hash_state->buffer_length += len;
-  } else {
-    uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
+__device__ inline uint32_t rotate_bits_right(uint32_t x, uint32_t r)
+{
+  // This function is equivalent to (x >> r) | (x << (32 - r))
+  return __funnelshift_r(x, x, r);
+}
 
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
-    md5_hash_step(hash_state);
+__device__ inline uint64_t rotate_bits_right(uint64_t x, uint32_t r)
+{
+  return (x >> r) | (x << (64 - r));
+}
 
-    while (len > md5_chunk_size + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, md5_chunk_size, hash_state->buffer);
-      md5_hash_step(hash_state);
-      copylen += md5_chunk_size;
+// Swap the endianness of a 32 bit value
+__device__ inline uint32_t swap_endian(uint32_t x)
+{
+  // The selector 0x0123 reverses the byte order
+  return __byte_perm(x, 0, 0x0123);
+}
+
+// Swap the endianness of a 64 bit value
+// There is no CUDA intrinsic for permuting bytes in 64 bit integers
+__device__ inline uint64_t swap_endian(uint64_t x)
+{
+  // Reverse the endianness of each 32 bit section
+  uint32_t low_bits  = swap_endian(static_cast<uint32_t>(x));
+  uint32_t high_bits = swap_endian(static_cast<uint32_t>(x >> 32));
+  // Reassemble a 64 bit result, swapping the low bits and high bits
+  return (static_cast<uint64_t>(low_bits) << 32) | (static_cast<uint64_t>(high_bits));
+};
+
+template <int capacity, typename hash_step_callable>
+struct hash_circular_buffer {
+  uint8_t storage[capacity];
+  uint8_t* cur;
+  int available_space{capacity};
+  hash_step_callable hash_step;
+
+  __device__ inline hash_circular_buffer(hash_step_callable hash_step)
+    : cur{storage}, hash_step{hash_step}
+  {
+  }
+
+  __device__ inline void put(uint8_t const* in, int size)
+  {
+    int copy_start = 0;
+    while (size >= available_space) {
+      // The buffer will be filled by this chunk of data. Copy a chunk of the
+      // data to fill the buffer and trigger a hash step.
+      memcpy(cur, in + copy_start, available_space);
+      hash_step(storage);
+      size -= available_space;
+      copy_start += available_space;
+      cur             = storage;
+      available_space = capacity;
     }
-
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
-    hash_state->buffer_length = len - copylen;
+    // The buffer will not be filled by the remaining data. That is, `size >= 0
+    // && size < capacity`. We copy the remaining data into the buffer but do
+    // not trigger a hash step.
+    memcpy(cur, in + copy_start, size);
+    cur += size;
+    available_space -= size;
   }
-}
 
-/**
- * Normalization of floating point NANs and zeros helper
- */
-template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
+  __device__ inline void pad(int const space_to_leave)
+  {
+    if (space_to_leave > available_space) {
+      memset(cur, 0x00, available_space);
+      hash_step(storage);
+      cur             = storage;
+      available_space = capacity;
+    }
+    memset(cur, 0x00, available_space - space_to_leave);
+    cur += available_space - space_to_leave;
+    available_space = space_to_leave;
+  }
+
+  __device__ inline const uint8_t& operator[](int idx) const { return storage[idx]; }
+};
+
+// Get a uint8_t pointer to a column element and its size as a pair.
+template <typename Element>
+auto __device__ inline get_element_pointer_and_size(Element const& element)
 {
-  if (isnan(key)) {
-    return std::numeric_limits<T>::quiet_NaN();
-  } else if (key == T{0.0}) {
-    return T{0.0};
+  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
   } else {
-    return key;
+    cudf_assert(false && "Unsupported type.");
   }
 }
-}  // namespace
+
+template <>
+auto __device__ inline get_element_pointer_and_size(string_view const& element)
+{
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
+}
 
 /**
  * Modified GPU implementation of
@@ -133,7 +156,7 @@ T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
  * Licensed under the MIT license.
  * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
  */
-void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destination)
+void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destination)
 {
   // Transform 0xABCD1234 => 0x0000ABCD00001234 => 0x0B0A0D0C02010403
   uint64_t x = num;
@@ -146,221 +169,9 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
 
   x |= 0x3030303030303030;
   x += offsets;
-  thrust::copy_n(thrust::seq, reinterpret_cast<uint8_t*>(&x), 8, destination);
+  std::memcpy(destination, reinterpret_cast<uint8_t*>(&x), 8);
 }
 
-struct MD5ListHasher {
-  template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view data_col,
-                             size_type offset_begin,
-                             size_type offset_end,
-                             md5_intermediate_data* hash_state) const
-  {
-    cudf_assert(false && "MD5 Unsupported chrono type column");
-  }
-
-  template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view data_col,
-                             size_type offset_begin,
-                             size_type offset_end,
-                             md5_intermediate_data* hash_state) const
-  {
-    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
-  }
-
-  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  void __device__ operator()(column_device_view data_col,
-                             size_type offset_begin,
-                             size_type offset_end,
-                             md5_intermediate_data* hash_state) const
-  {
-    for (int i = offset_begin; i < offset_end; i++) {
-      if (!data_col.is_null(i)) {
-        md5_process(normalize_nans_and_zeros_helper<T>(data_col.element<T>(i)), hash_state);
-      }
-    }
-  }
-
-  template <
-    typename T,
-    std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() && !is_chrono<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
-                                       size_type offset_begin,
-                                       size_type offset_end,
-                                       md5_intermediate_data* hash_state) const
-  {
-    for (int i = offset_begin; i < offset_end; i++) {
-      if (!data_col.is_null(i)) md5_process(data_col.element<T>(i), hash_state);
-    }
-  }
-};
-
-template <>
-void CUDA_DEVICE_CALLABLE
-MD5ListHasher::operator()<string_view>(column_device_view data_col,
-                                       size_type offset_begin,
-                                       size_type offset_end,
-                                       md5_intermediate_data* hash_state) const
-{
-  for (int i = offset_begin; i < offset_end; i++) {
-    if (!data_col.is_null(i)) {
-      string_view key     = data_col.element<string_view>(i);
-      uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-      uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-
-      hash_state->message_length += len;
-
-      if (hash_state->buffer_length + len < 64) {
-        thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
-        hash_state->buffer_length += len;
-      } else {
-        uint32_t copylen = 64 - hash_state->buffer_length;
-        thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
-        md5_hash_step(hash_state);
-
-        while (len > 64 + copylen) {
-          thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
-          md5_hash_step(hash_state);
-          copylen += 64;
-        }
-
-        thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
-        hash_state->buffer_length = len - copylen;
-      }
-    }
-  }
-}
-
-struct MD5Hash {
-  MD5Hash() = default;
-  constexpr MD5Hash(uint32_t seed) : m_seed(seed) {}
-
-  void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
-  {
-    auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
-    thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
-
-    // 64 bytes for the number of bytes processed in a given step
-    constexpr int md5_chunk_size = 64;
-    // 8 bytes for the total message length, appended to the end of the last chunk processed
-    constexpr int message_length_size = 8;
-    // 1 byte for the end of the message flag
-    constexpr int end_of_message_size = 1;
-    if (hash_state->buffer_length + message_length_size + end_of_message_size <= md5_chunk_size) {
-      thrust::fill_n(
-        thrust::seq,
-        hash_state->buffer + hash_state->buffer_length + 1,
-        (md5_chunk_size - message_length_size - end_of_message_size - hash_state->buffer_length),
-        0x00);
-    } else {
-      thrust::fill_n(thrust::seq,
-                     hash_state->buffer + hash_state->buffer_length + 1,
-                     (md5_chunk_size - hash_state->buffer_length),
-                     0x00);
-      md5_hash_step(hash_state);
-
-      thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
-    }
-
-    thrust::copy_n(thrust::seq,
-                   reinterpret_cast<uint8_t const*>(&full_length),
-                   message_length_size,
-                   hash_state->buffer + md5_chunk_size - message_length_size);
-    md5_hash_step(hash_state);
-
-#pragma unroll
-    for (int i = 0; i < 4; ++i)
-      uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
-  }
-
-  template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             md5_intermediate_data* hash_state) const
-  {
-    cudf_assert(false && "MD5 Unsupported chrono type column");
-  }
-
-  template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             md5_intermediate_data* hash_state) const
-  {
-    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
-  }
-
-  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             md5_intermediate_data* hash_state) const
-  {
-    md5_process(normalize_nans_and_zeros_helper<T>(col.element<T>(row_index)), hash_state);
-  }
-
-  template <
-    typename T,
-    std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() && !is_chrono<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       md5_intermediate_data* hash_state) const
-  {
-    md5_process(col.element<T>(row_index), hash_state);
-  }
-
- private:
-  uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
-};
-
-template <>
-void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view col,
-                                                           size_type row_index,
-                                                           md5_intermediate_data* hash_state) const
-{
-  string_view key     = col.element<string_view>(row_index);
-  uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-  uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-
-  hash_state->message_length += len;
-
-  if (hash_state->buffer_length + len < 64) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
-    hash_state->buffer_length += len;
-  } else {
-    uint32_t copylen = 64 - hash_state->buffer_length;
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
-    md5_hash_step(hash_state);
-
-    while (len > 64 + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
-      md5_hash_step(hash_state);
-      copylen += 64;
-    }
-
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
-    hash_state->buffer_length = len - copylen;
-  }
-}
-
-template <>
-void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
-                                                         size_type row_index,
-                                                         md5_intermediate_data* hash_state) const
-{
-  static constexpr size_type offsets_column_index{0};
-  static constexpr size_type data_column_index{1};
-
-  column_device_view offsets = col.child(offsets_column_index);
-  column_device_view data    = col.child(data_column_index);
-
-  if (data.type().id() == type_id::LIST) cudf_assert(false && "Nested list unsupported");
-
-  cudf::type_dispatcher(data.type(),
-                        MD5ListHasher{},
-                        data,
-                        offsets.element<size_type>(row_index),
-                        offsets.element<size_type>(row_index + 1),
-                        hash_state);
-}
 }  // namespace detail
 }  // namespace cudf
 
@@ -375,18 +186,12 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
 // non-native version will be less than optimal.
 template <typename Key>
 struct MurmurHash3_32 {
-  using argument_type = Key;
-  using result_type   = hash_value_type;
+  using result_type = hash_value_type;
 
   MurmurHash3_32() = default;
   constexpr MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    return (x << r) | (x >> (32 - r));
-  }
-
-  CUDA_DEVICE_CALLABLE uint32_t fmix32(uint32_t h) const
+  [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
     h *= 0x85ebca6b;
@@ -396,35 +201,28 @@ struct MurmurHash3_32 {
     return h;
   }
 
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  CUDA_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
   {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
+    // Read a 4-byte value from the data pointer as individual bytes for safe
+    // unaligned access (very likely for string types).
+    auto const block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
   }
 
-  result_type CUDA_DEVICE_CALLABLE operator()(Key const& key) const { return compute(key); }
+  // TODO Do we need this operator() and/or compute? Probably not both.
+  [[nodiscard]] result_type __device__ inline operator()(Key const& key) const
+  {
+    return compute(key);
+  }
 
   // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  hash_value_type CUDA_DEVICE_CALLABLE compute_floating_point(T const& key) const
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
       return compute(T{0.0});
-    } else if (isnan(key)) {
+    } else if (std::isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
@@ -432,44 +230,49 @@ struct MurmurHash3_32 {
     }
   }
 
-  template <typename TKey>
-  result_type CUDA_DEVICE_CALLABLE compute(TKey const& key) const
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
   {
-    constexpr int len         = sizeof(argument_type);
-    uint8_t const* const data = reinterpret_cast<uint8_t const*>(&key);
-    constexpr int nblocks     = len / 4;
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+  }
 
-    uint32_t h1           = m_seed;
-    constexpr uint32_t c1 = 0xcc9e2d51;
-    constexpr uint32_t c2 = 0x1b873593;
-    //----------
-    // body
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-    for (int i = -nblocks; i; i++) {
-      uint32_t k1 = blocks[i];  // getblock32(blocks,i);
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    cudf::size_type const tail_offset    = nblocks * BLOCK_SIZE;
+    result_type h1                       = m_seed;
+    constexpr uint32_t c1                = 0xcc9e2d51;
+    constexpr uint32_t c2                = 0x1b873593;
+    constexpr uint32_t c3                = 0xe6546b64;
+    constexpr uint32_t rot_c1            = 15;
+    constexpr uint32_t rot_c2            = 13;
+
+    // Process all four-byte chunks.
+    for (cudf::size_type i = 0; i < nblocks; i++) {
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
-    //----------
-    // tail
-    uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
-    uint32_t k1         = 0;
-    switch (len & 3) {
-      case 3: k1 ^= tail[2] << 16;
-      case 2: k1 ^= tail[1] << 8;
+
+    // Process remaining bytes that do not fill a four-byte chunk.
+    uint32_t k1 = 0;
+    switch (len % 4) {
+      case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16;
+      case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8;
       case 1:
-        k1 ^= tail[0];
+        k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = rotl32(k1, 15);
+        k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
         k1 *= c2;
         h1 ^= k1;
     };
-    //----------
-    // finalization
+
+    // Finalize hash.
     h1 ^= len;
     h1 = fmix32(h1);
     return h1;
@@ -480,86 +283,64 @@ struct MurmurHash3_32 {
 };
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<bool>::operator()(bool const& key) const
+hash_value_type __device__ inline MurmurHash3_32<bool>::operator()(bool const& key) const
 {
   return this->compute(static_cast<uint8_t>(key));
 }
 
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
-{
-  auto const len        = key.size_bytes();
-  uint8_t const* data   = reinterpret_cast<uint8_t const*>(key.data());
-  int const nblocks     = len / 4;
-  result_type h1        = m_seed;
-  constexpr uint32_t c1 = 0xcc9e2d51;
-  constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
-    // Individual byte reads for unaligned accesses (very likely)
-    auto q = (uint8_t const*)(p + i);
-    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-  };
-
-  //----------
-  // body
-  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-  for (int i = -nblocks; i; i++) {
-    uint32_t k1 = getblock32(blocks, i);
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // tail
-  uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
-  uint32_t k1         = 0;
-  switch (len & 3) {
-    case 3: k1 ^= tail[2] << 16;
-    case 2: k1 ^= tail[1] << 8;
-    case 1:
-      k1 ^= tail[0];
-      k1 *= c1;
-      k1 = rotl32(k1, 15);
-      k1 *= c2;
-      h1 ^= k1;
-  };
-  //----------
-  // finalization
-  h1 ^= len;
-  h1 = fmix32(h1);
-  return h1;
-}
-
-template <>
-hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<float>::operator()(float const& key) const
+hash_value_type __device__ inline MurmurHash3_32<float>::operator()(float const& key) const
 {
   return this->compute_floating_point(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double const& key) const
+hash_value_type __device__ inline MurmurHash3_32<double>::operator()(double const& key) const
 {
   return this->compute_floating_point(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-MurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<numeric::decimal32>::operator()(
+  numeric::decimal32 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<numeric::decimal64>::operator()(
+  numeric::decimal64 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<numeric::decimal128>::operator()(
+  numeric::decimal128 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type __device__ inline MurmurHash3_32<cudf::list_view>::operator()(
+  cudf::list_view const& key) const
 {
   cudf_assert(false && "List column hashing is not supported");
   return 0;
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-MurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
+  cudf::struct_view const& key) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
@@ -567,18 +348,12 @@ MurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) cons
 
 template <typename Key>
 struct SparkMurmurHash3_32 {
-  using argument_type = Key;
-  using result_type   = hash_value_type;
+  using result_type = hash_value_type;
 
   SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
-  CUDA_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
-  {
-    return (x << r) | (x >> (32 - r));
-  }
-
-  CUDA_DEVICE_CALLABLE uint32_t fmix32(uint32_t h) const
+  __device__ inline uint32_t fmix32(uint32_t h) const
   {
     h ^= h >> 16;
     h *= 0x85ebca6b;
@@ -588,13 +363,13 @@ struct SparkMurmurHash3_32 {
     return h;
   }
 
-  result_type CUDA_DEVICE_CALLABLE operator()(Key const& key) const { return compute(key); }
+  result_type __device__ inline operator()(Key const& key) const { return compute(key); }
 
   // compute wrapper for floating point types
-  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  hash_value_type CUDA_DEVICE_CALLABLE compute_floating_point(T const& key) const
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  hash_value_type __device__ inline compute_floating_point(T const& key) const
   {
-    if (isnan(key)) {
+    if (std::isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
     } else {
@@ -602,41 +377,59 @@ struct SparkMurmurHash3_32 {
     }
   }
 
-  template <typename TKey>
-  result_type CUDA_DEVICE_CALLABLE compute(TKey const& key) const
+  template <typename T>
+  result_type __device__ inline compute(T const& key) const
   {
-    constexpr int len        = sizeof(TKey);
-    int8_t const* const data = reinterpret_cast<int8_t const*>(&key);
-    constexpr int nblocks    = len / 4;
+    return compute_bytes(reinterpret_cast<std::byte const*>(&key), sizeof(T));
+  }
 
-    uint32_t h1           = m_seed;
-    constexpr uint32_t c1 = 0xcc9e2d51;
-    constexpr uint32_t c2 = 0x1b873593;
-    //----------
-    // body
-    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-    for (int i = -nblocks; i; i++) {
-      uint32_t k1 = blocks[i];
+  [[nodiscard]] __device__ inline uint32_t getblock32(std::byte const* data,
+                                                      cudf::size_type offset) const
+  {
+    // Individual byte reads for unaligned accesses (very likely for strings)
+    auto block = reinterpret_cast<uint8_t const*>(data + offset);
+    return block[0] | (block[1] << 8) | (block[2] << 16) | (block[3] << 24);
+  }
+
+  result_type __device__ compute_bytes(std::byte const* data, cudf::size_type const len) const
+  {
+    constexpr cudf::size_type BLOCK_SIZE = 4;
+    cudf::size_type const nblocks        = len / BLOCK_SIZE;
+    result_type h1                       = m_seed;
+    constexpr uint32_t c1                = 0xcc9e2d51;
+    constexpr uint32_t c2                = 0x1b873593;
+    constexpr uint32_t c3                = 0xe6546b64;
+    constexpr uint32_t rot_c1            = 15;
+    constexpr uint32_t rot_c2            = 13;
+
+    // Process all four-byte chunks.
+    for (cudf::size_type i = 0; i < nblocks; i++) {
+      uint32_t k1 = getblock32(data, i * BLOCK_SIZE);
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
-    //----------
-    // byte by byte tail processing
-    for (int i = nblocks * 4; i < len; i++) {
-      int32_t k1 = data[i];
+
+    // Process remaining bytes that do not fill a four-byte chunk using Spark's approach
+    // (does not conform to normal MurmurHash3).
+    for (cudf::size_type i = nblocks * 4; i < len; i++) {
+      // We require a two-step cast to get the k1 value from the byte. First,
+      // we must cast to a signed int8_t. Then, the sign bit is preserved when
+      // casting to uint32_t under 2's complement. Java preserves the
+      // signedness when casting byte-to-int, but C++ does not.
+      uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = rotl32(k1, 15);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h1 ^= k1;
-      h1 = rotl32(h1, 13);
-      h1 = h1 * 5 + 0xe6546b64;
+      h1 = cudf::detail::rotate_bits_left(h1, rot_c2);
+      h1 = h1 * 5 + c3;
     }
-    //----------
-    // finalization
+
+    // Finalize hash.
     h1 ^= len;
     h1 = fmix32(h1);
     return h1;
@@ -647,129 +440,127 @@ struct SparkMurmurHash3_32 {
 };
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE SparkMurmurHash3_32<bool>::operator()(bool const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<bool>::operator()(bool const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<int8_t>::operator()(int8_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<int8_t>::operator()(int8_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<uint8_t>::operator()(uint8_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<uint8_t>::operator()(uint8_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<int16_t>::operator()(int16_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<int16_t>::operator()(int16_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<uint16_t>::operator()(uint16_t const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<uint16_t>::operator()(
+  uint16_t const& key) const
 {
   return this->compute<uint32_t>(key);
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<float>::operator()(float const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<double>::operator()(double const& key) const
+{
+  return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::string_view>::operator()(
+  cudf::string_view const& key) const
+{
+  auto const data = reinterpret_cast<std::byte const*>(key.data());
+  auto const len  = key.size_bytes();
+  return this->compute_bytes(data, len);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal32>::operator()(
+  numeric::decimal32 const& key) const
 {
   return this->compute<uint64_t>(key.value());
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal64>::operator()(
+  numeric::decimal64 const& key) const
 {
   return this->compute<uint64_t>(key.value());
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<numeric::decimal128>::operator()(
+  numeric::decimal128 const& key) const
+{
+  // Generates the Spark MurmurHash3 hash value, mimicking the conversion:
+  // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
+  // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
+  __int128_t const val               = key.value();
+  constexpr cudf::size_type key_size = sizeof(__int128_t);
+  std::byte const* data              = reinterpret_cast<std::byte const*>(&val);
+
+  // Small negative values start with 0xff..., small positive values start with 0x00...
+  bool const is_negative     = val < 0;
+  std::byte const zero_value = is_negative ? std::byte{0xff} : std::byte{0x00};
+
+  // If the value can be represented with a shorter than 16-byte integer, the
+  // leading bytes of the little-endian value are truncated and are not hashed.
+  auto const reverse_begin = thrust::reverse_iterator(data + key_size);
+  auto const reverse_end   = thrust::reverse_iterator(data);
+  auto const first_nonzero_byte =
+    thrust::find_if_not(thrust::seq, reverse_begin, reverse_end, [zero_value](std::byte const& v) {
+      return v == zero_value;
+    }).base();
+  // Max handles special case of 0 and -1 which would shorten to 0 length otherwise
+  cudf::size_type length =
+    std::max(1, static_cast<cudf::size_type>(thrust::distance(data, first_nonzero_byte)));
+
+  // Preserve the 2's complement sign bit by adding a byte back on if necessary.
+  // e.g. 0x0000ff would shorten to 0x00ff. The 0x00 byte is retained to
+  // preserve the sign bit, rather than leaving an "f" at the front which would
+  // change the sign bit. However, 0x00007f would shorten to 0x7f. No extra byte
+  // is needed because the leftmost bit matches the sign bit. Similarly for
+  // negative values: 0xffff00 --> 0xff00 and 0xffff80 --> 0x80.
+  if ((length < key_size) && (is_negative ^ bool(data[length - 1] & std::byte{0x80}))) { ++length; }
+
+  // Convert to big endian by reversing the range of nonzero bytes. Only those bytes are hashed.
+  __int128_t big_endian_value = 0;
+  auto big_endian_data        = reinterpret_cast<std::byte*>(&big_endian_value);
+  thrust::reverse_copy(thrust::seq, data, data + length, big_endian_data);
+  return this->compute_bytes(big_endian_data, length);
+}
+
+template <>
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::list_view>::operator()(
+  cudf::list_view const& key) const
 {
   cudf_assert(false && "List column hashing is not supported");
   return 0;
 }
 
 template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
+hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operator()(
+  cudf::struct_view const& key) const
 {
   cudf_assert(false && "Direct hashing of struct_view is not supported");
   return 0;
-}
-
-/**
- * @brief Specialization of MurmurHash3_32 operator for strings.
- */
-template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
-{
-  auto const len        = key.size_bytes();
-  int8_t const* data    = reinterpret_cast<int8_t const*>(key.data());
-  int const nblocks     = len / 4;
-  result_type h1        = m_seed;
-  constexpr uint32_t c1 = 0xcc9e2d51;
-  constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
-    // Individual byte reads for unaligned accesses (very likely)
-    auto q = (const uint8_t*)(p + i);
-    return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
-  };
-
-  //----------
-  // body
-  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-  for (int i = -nblocks; i; i++) {
-    uint32_t k1 = getblock32(blocks, i);
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // Spark's byte by byte tail processing
-  for (int i = nblocks * 4; i < len; i++) {
-    int32_t k1 = data[i];
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // finalization
-  h1 ^= len;
-  h1 = fmix32(h1);
-  return h1;
-}
-
-template <>
-hash_value_type CUDA_DEVICE_CALLABLE SparkMurmurHash3_32<float>::operator()(float const& key) const
-{
-  return this->compute_floating_point(key);
-}
-
-template <>
-hash_value_type CUDA_DEVICE_CALLABLE
-SparkMurmurHash3_32<double>::operator()(double const& key) const
-{
-  return this->compute_floating_point(key);
 }
 
 /**
@@ -782,28 +573,8 @@ struct IdentityHash {
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  constexpr result_type hash_combine(result_type lhs, result_type rhs) const
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<!std::is_arithmetic<Key>::value, return_type> operator()(
+  constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
     cudf_assert(false && "IdentityHash does not support this data type");
@@ -811,7 +582,7 @@ struct IdentityHash {
   }
 
   template <typename return_type = result_type>
-  constexpr std::enable_if_t<std::is_arithmetic<Key>::value, return_type> operator()(
+  constexpr std::enable_if_t<std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
     return static_cast<result_type>(key);

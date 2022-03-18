@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
 
-#include <tests/strings/utilities.h>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
-#include <thrust/sequence.h>
 #include <string>
+#include <thrust/sequence.h>
 #include <vector>
 
 struct StringsSubstringsTest : public cudf::test::BaseFixture {
@@ -49,11 +49,11 @@ TEST_F(StringsSubstringsTest, Substring)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-class SubstringParmsTest : public StringsSubstringsTest,
-                           public testing::WithParamInterface<cudf::size_type> {
+class Parameters : public StringsSubstringsTest,
+                   public testing::WithParamInterface<cudf::size_type> {
 };
 
-TEST_P(SubstringParmsTest, Substring)
+TEST_P(Parameters, Substring)
 {
   std::vector<std::string> h_strings{"basic strings", "that can", "be used", "with STL"};
   cudf::size_type start = GetParam();
@@ -70,7 +70,7 @@ TEST_P(SubstringParmsTest, Substring)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_P(SubstringParmsTest, Substring_From)
+TEST_P(Parameters, Substring_From)
 {
   std::vector<std::string> h_strings{"basic strings", "that can", "be used", "with STL"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
@@ -94,7 +94,7 @@ TEST_P(SubstringParmsTest, Substring_From)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_P(SubstringParmsTest, AllEmpty)
+TEST_P(Parameters, AllEmpty)
 {
   std::vector<std::string> h_strings{"", "", "", ""};
   cudf::size_type start = GetParam();
@@ -116,7 +116,7 @@ TEST_P(SubstringParmsTest, AllEmpty)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_P(SubstringParmsTest, AllNulls)
+TEST_P(Parameters, AllNulls)
 {
   std::vector<const char*> h_strings{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
@@ -145,22 +145,8 @@ TEST_P(SubstringParmsTest, AllNulls)
 }
 
 INSTANTIATE_TEST_CASE_P(StringsSubstringsTest,
-                        SubstringParmsTest,
+                        Parameters,
                         testing::ValuesIn(std::array<cudf::size_type, 3>{1, 2, 3}));
-
-TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
-{
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_column = cudf::strings_column_view(zero_size_strings_column);
-  auto results        = cudf::strings::slice_strings(strings_column, 1, 2);
-  cudf::test::expect_strings_empty(results->view());
-
-  cudf::column_view starts_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
-  cudf::column_view stops_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
-  results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
-  cudf::test::expect_strings_empty(results->view());
-}
 
 TEST_F(StringsSubstringsTest, NegativePositions)
 {
@@ -268,34 +254,59 @@ TEST_F(StringsSubstringsTest, MaxPositions)
 TEST_F(StringsSubstringsTest, Error)
 {
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
-  auto strings_column = cudf::strings_column_view(strings);
-  EXPECT_THROW(cudf::strings::slice_strings(strings_column, 0, 0, 0), cudf::logic_error);
+  auto strings_view = cudf::strings_column_view(strings);
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, 0, 0, 0), cudf::logic_error);
+
+  auto delim_col = cudf::test::strings_column_wrapper({"", ""});
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, cudf::strings_column_view{delim_col}, -1),
+               cudf::logic_error);
+
+  auto indexes = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes, indexes), cudf::logic_error);
+
+  auto indexes_null = cudf::test::fixed_width_column_wrapper<int32_t>({1}, {0});
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_null, indexes_null),
+               cudf::logic_error);
+
+  auto indexes_bad = cudf::test::fixed_width_column_wrapper<float>({1});
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_bad, indexes_bad),
+               cudf::logic_error);
 }
 
-struct StringsSubstringsScalarDelimiterTest : public cudf::test::BaseFixture {
-};
-
-TEST_F(StringsSubstringsScalarDelimiterTest, ZeroSizeStringsColumn)
+TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(col0);
+  cudf::column_view zero_size_strings_column(
+    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
 
-  auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("foo"), 1);
+  auto results = cudf::strings::slice_strings(strings_view, 1, 2);
+  cudf::test::expect_strings_empty(results->view());
+
+  results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("foo"), 1);
+  cudf::test::expect_strings_empty(results->view());
+
+  cudf::column_view starts_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
+  cudf::column_view stops_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
+  results = cudf::strings::slice_strings(strings_view, starts_column, stops_column);
+  cudf::test::expect_strings_empty(results->view());
+
+  results = cudf::strings::slice_strings(strings_view, strings_view, 1);
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsSubstringsScalarDelimiterTest, AllEmpty)
+TEST_F(StringsSubstringsTest, AllEmpty)
 {
   auto strings_col  = cudf::test::strings_column_wrapper({"", "", "", "", ""});
   auto strings_view = cudf::strings_column_view(strings_col);
-
-  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", ""});
+  auto exp_results  = cudf::column_view(strings_col);
 
   auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("e"), -1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
+  results = cudf::strings::slice_strings(strings_view, strings_view, -1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
 }
 
-TEST_F(StringsSubstringsScalarDelimiterTest, EmptyDelimiter)
+TEST_F(StringsSubstringsTest, EmptyDelimiter)
 {
   auto strings_col = cudf::test::strings_column_wrapper(
     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
@@ -304,11 +315,18 @@ TEST_F(StringsSubstringsScalarDelimiterTest, EmptyDelimiter)
 
   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
                                                         {true, true, false, true, true, true});
-  auto results     = cudf::strings::slice_strings(strings_view, cudf::string_scalar(""), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+
+  auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar(""), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
+
+  auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                      {true, false, true, false, true, false});
+
+  results = cudf::strings::slice_strings(strings_view, cudf::strings_column_view{delim_col}, 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
 }
 
-TEST_F(StringsSubstringsScalarDelimiterTest, ZeroCount)
+TEST_F(StringsSubstringsTest, ZeroCount)
 {
   auto strings_col = cudf::test::strings_column_wrapper(
     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
@@ -319,10 +337,16 @@ TEST_F(StringsSubstringsScalarDelimiterTest, ZeroCount)
                                                         {true, true, false, true, true, true});
 
   auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 0);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
+
+  auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
+                                                      {true, false, true, false, true, false});
+
+  results = cudf::strings::slice_strings(strings_view, cudf::strings_column_view{delim_col}, 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
 }
 
-TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
+TEST_F(StringsSubstringsTest, SearchScalarDelimiter)
 {
   auto strings_col = cudf::test::strings_column_wrapper(
     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
@@ -334,7 +358,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
                                                           {true, true, false, true, true, true});
 
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -342,17 +366,17 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
       {"llo", "", "", "lease", "st strings", ""}, {true, true, false, true, true, true});
 
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), -1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), 2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_view.parent(), true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_col);
   }
 
   {
     auto results = cudf::strings::slice_strings(strings_view, cudf::string_scalar("é"), -2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_view.parent(), true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings_col);
   }
 
   {
@@ -365,7 +389,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("o"), 2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -378,7 +402,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("o"), -2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -392,7 +416,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("éé"), 3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -406,7 +430,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("éé"), -3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -422,7 +446,7 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar("."), 3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -439,76 +463,11 @@ TEST_F(StringsSubstringsScalarDelimiterTest, SearchDelimiter)
 
     auto results =
       cudf::strings::slice_strings(cudf::strings_column_view{col0}, cudf::string_scalar(".."), -2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 }
 
-struct StringsSubstringsColumnDelimiterTest : public cudf::test::BaseFixture {
-};
-
-TEST_F(StringsSubstringsColumnDelimiterTest, ZeroSizeStringsColumn)
-{
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(col0);
-
-  auto results = cudf::strings::slice_strings(strings_view, strings_view, 1);
-  // Check empty column
-  cudf::test::expect_strings_empty(results->view());
-}
-
-TEST_F(StringsSubstringsColumnDelimiterTest, GenerateExceptions)
-{
-  auto col0      = cudf::test::strings_column_wrapper({"", "", "", "", ""});
-  auto delim_col = cudf::test::strings_column_wrapper({"", "foo", "bar", "."});
-
-  EXPECT_THROW(cudf::strings::slice_strings(
-                 cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1),
-               cudf::logic_error);
-}
-
-TEST_F(StringsSubstringsColumnDelimiterTest, ColumnAllEmpty)
-{
-  auto col0      = cudf::test::strings_column_wrapper({"", "", "", "", ""});
-  auto delim_col = cudf::test::strings_column_wrapper({"", "foo", "bar", ".", "/"});
-
-  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", ""});
-
-  auto results = cudf::strings::slice_strings(
-    cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
-}
-
-TEST_F(StringsSubstringsColumnDelimiterTest, DelimiterAllEmptyAndInvalid)
-{
-  auto col0 = cudf::test::strings_column_wrapper(
-    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
-  auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-                                                      {true, false, true, false, true, false});
-
-  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-                                                        {true, true, false, true, true, true});
-
-  auto results = cudf::strings::slice_strings(
-    cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
-}
-
-TEST_F(StringsSubstringsColumnDelimiterTest, ZeroDelimiterCount)
-{
-  auto col0 = cudf::test::strings_column_wrapper(
-    {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
-  auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-                                                      {true, false, true, false, true, false});
-
-  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-                                                        {true, true, false, true, true, true});
-
-  auto results = cudf::strings::slice_strings(
-    cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 0);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
-}
-
-TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
+TEST_F(StringsSubstringsTest, SearchColumnDelimiter)
 {
   {
     auto col0 = cudf::test::strings_column_wrapper(
@@ -521,7 +480,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -539,7 +498,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -563,7 +522,7 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 
   {
@@ -585,6 +544,6 @@ TEST_F(StringsSubstringsColumnDelimiterTest, SearchDelimiter)
 
     auto results = cudf::strings::slice_strings(
       cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -3);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results);
   }
 }

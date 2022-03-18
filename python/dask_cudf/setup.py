@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -10,21 +10,21 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask==2021.4.0",
-    "distributed>=2.22.0,<=2021.4.0",
+    "dask>=2022.02.1",
+    "distributed>=2022.02.1",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.3.0dev0",
+    "pandas>=1.0,<1.4.0dev0",
 ]
 
 extras_require = {
     "test": [
         "numpy",
-        "pandas>=1.0,<1.3.0dev0",
+        "pandas>=1.0,<1.4.0dev0",
         "pytest",
-        "numba>=0.49.0,!=0.51.0",
-        "dask==2021.4.0",
-        "distributed>=2.22.0,<=2021.4.0",
+        "numba>=0.53.1",
+        "dask>=2021.09.1",
+        "distributed>=2021.09.1",
     ]
 }
 
@@ -33,9 +33,7 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
 
     cuda_version = None
 
-    with open(
-        os.path.join(cuda_include_dir, "cuda.h"), "r", encoding="utf-8"
-    ) as f:
+    with open(os.path.join(cuda_include_dir, "cuda.h"), encoding="utf-8") as f:
         for line in f.readlines():
             if re.search(r"#define CUDA_VERSION ", line) is not None:
                 cuda_version = line

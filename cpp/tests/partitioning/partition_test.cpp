@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ using types =
 
 // using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 
-TYPED_TEST_CASE(PartitionTest, types);
+TYPED_TEST_SUITE(PartitionTest, types);
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
@@ -234,7 +234,7 @@ template <typename T>
 class PartitionTestFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(PartitionTestFixedPoint, Partition)
 {
@@ -279,4 +279,54 @@ TYPED_TEST(PartitionTestFixedPoint, Partition2)
   auto const offsets  = std::vector<cudf::size_type>{0, 2, 4, 6};
 
   run_partition_test(cudf::table_view{{input}}, map, 3, cudf::table_view{{expected}}, offsets);
+}
+
+struct PartitionTestNotTyped : public cudf::test::BaseFixture {
+};
+
+TEST_F(PartitionTestNotTyped, ListOfStringsEmpty)
+{
+  cudf::test::lists_column_wrapper<cudf::string_view> list{{}, {}};
+  auto table_to_partition = cudf::table_view{{list}};
+  fixed_width_column_wrapper<int32_t> map{0, 0};
+
+  auto result = cudf::partition(table_to_partition, map, 2);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
+  EXPECT_EQ(3, result.second.size());
+}
+
+TEST_F(PartitionTestNotTyped, ListOfListOfIntEmpty)
+{
+  cudf::test::lists_column_wrapper<int32_t> level_2_list;
+
+  fixed_width_column_wrapper<int32_t> level_1_offsets{0, 0, 0};
+  std::unique_ptr<cudf::column> level_1_list =
+    cudf::make_lists_column(2, level_1_offsets.release(), level_2_list.release(), 0, {});
+
+  auto table_to_partition = cudf::table_view{{*level_1_list}};
+  fixed_width_column_wrapper<int32_t> map{0, 0};
+
+  auto result = cudf::partition(table_to_partition, map, 2);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
+  EXPECT_EQ(3, result.second.size());
+}
+
+TEST_F(PartitionTestNotTyped, ListOfListOfListOfIntEmpty)
+{
+  cudf::test::lists_column_wrapper<int32_t> level_3_list{};
+
+  fixed_width_column_wrapper<int32_t> level_2_offsets{};
+  std::unique_ptr<cudf::column> level_2_list =
+    cudf::make_lists_column(0, level_2_offsets.release(), level_3_list.release(), 0, {});
+
+  fixed_width_column_wrapper<int32_t> level_1_offsets{0, 0};
+  std::unique_ptr<cudf::column> level_1_list =
+    cudf::make_lists_column(1, level_1_offsets.release(), std::move(level_2_list), 0, {});
+
+  auto table_to_partition = cudf::table_view{{*level_1_list}};
+  fixed_width_column_wrapper<int32_t> map{0};
+
+  auto result = cudf::partition(table_to_partition, map, 2);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
+  EXPECT_EQ(3, result.second.size());
 }

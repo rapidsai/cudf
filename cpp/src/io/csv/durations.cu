@@ -18,13 +18,13 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <strings/convert/utilities.cuh>
-#include <strings/utilities.cuh>
 
 namespace cudf {
 namespace io {
@@ -49,7 +49,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
   timeparts->is_negative = (duration < T{0});
   timeparts->day         = cuda::std::chrono::floor<duration_D>(duration).count();
 
-  if (cuda::std::is_same<T, duration_D>::value) return;
+  if (cuda::std::is_same_v<T, duration_D>) return;
 
   // adjust for pandas format
   if (timeparts->is_negative) {
@@ -63,7 +63,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
                        cuda::std::chrono::hours(1))
                         .count();
   timeparts->second = (seconds % cuda::std::chrono::minutes(1)).count();
-  if (not cuda::std::is_same<T, duration_s>::value) {
+  if (not cuda::std::is_same_v<T, duration_s>) {
     timeparts->nanosecond =
       (cuda::std::chrono::duration_cast<duration_ns>(duration) % duration_s(1)).count();
   }
@@ -190,10 +190,9 @@ struct dispatch_from_durations_fn {
     // build chars column
     auto const chars_bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-    auto chars_column =
-      strings::detail::create_chars_child_column(strings_count, chars_bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto chars_column = strings::detail::create_chars_child_column(chars_bytes, stream, mr);
+    auto chars_view   = chars_column->mutable_view();
+    auto d_chars      = chars_view.template data<char>();
 
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
@@ -205,9 +204,7 @@ struct dispatch_from_durations_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                durations.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-duration types throw an exception
@@ -227,7 +224,7 @@ std::unique_ptr<column> pandas_format_durations(column_view const& durations,
                                                 rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, stream, mr);
 }

@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ import pytest
 import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
@@ -28,8 +29,37 @@ dtypes = sorted(
 
 @pytest.fixture(params=dtypes, ids=dtypes)
 def pandas_input(request):
-    data = np.random.randint(0, 1000, 100)
-    return pd.Series(data, dtype=request.param)
+    dtype = request.param
+    rng = np.random.default_rng()
+    size = 100
+
+    def random_ints(dtype, size):
+        dtype_min = np.iinfo(dtype).min
+        dtype_max = np.iinfo(dtype).max
+        return rng.integers(dtype_min, dtype_max, size=size, dtype=dtype)
+
+    try:
+        dtype = np.dtype(dtype)
+    except TypeError:
+        if dtype == "category":
+            data = random_ints(np.int64, size)
+        else:
+            raise
+    else:
+        if dtype.kind == "b":
+            data = rng.choice([False, True], size=size)
+        elif dtype.kind in ("m", "M"):
+            # datetime or timedelta
+            data = random_ints(np.int64, size)
+        elif dtype.kind == "U":
+            # Unicode strings of integers like "12345"
+            data = random_ints(np.int64, size).astype(dtype.str)
+        elif dtype.kind == "f":
+            # floats in [0.0, 1.0)
+            data = rng.random(size=size, dtype=dtype)
+        else:
+            data = random_ints(dtype, size)
+    return pd.Series(data, dtype=dtype)
 
 
 def str_host_view(list_of_str, to_dtype):
@@ -51,10 +81,10 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
-    if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
+    if cudf.api.types.is_categorical_dtype(col.dtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif cudf.utils.dtypes.is_string_dtype(col.dtype):
+    elif cudf.api.types.is_string_dtype(col.dtype):
         if col.size > 0:
             assert col.size == (col.children[0].size - 1)
             assert col.size == (
@@ -91,7 +121,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
     else:
         pd_series = series.to_pandas()
 
-    if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
+    if cudf.api.types.is_categorical_dtype(col.dtype):
         # The cudf.Series is constructed from an already sliced column, whereas
         # the pandas.Series is constructed from the unsliced series and then
         # sliced, so the indexes should be different and we must ignore it.
@@ -102,7 +132,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
             sliced_series.reset_index(drop=True),
         )
     else:
-        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_array())
+        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_numpy())
 
 
 @pytest.mark.parametrize("offset", [0, 1, 15])
@@ -116,9 +146,13 @@ def test_column_slicing(pandas_input, offset, size):
 @pytest.mark.parametrize("size", [50, 10, 0])
 @pytest.mark.parametrize("precision", [2, 3, 5])
 @pytest.mark.parametrize("scale", [0, 1, 2])
-def test_decimal_column_slicing(offset, size, precision, scale):
+@pytest.mark.parametrize(
+    "decimal_type",
+    [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
+)
+def test_decimal_column_slicing(offset, size, precision, scale, decimal_type):
     col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
-    col = col.astype(cudf.Decimal64Dtype(precision, scale))
+    col = col.astype(decimal_type(precision, scale))
     column_slicing_test(col, offset, size, True)
 
 
@@ -140,8 +174,8 @@ def test_column_series_multi_dim(data):
 @pytest.mark.parametrize(
     ("data", "error"),
     [
-        ([1, "1.0", "2", -3], TypeError),
-        ([np.nan, 0, "null", cp.nan], TypeError),
+        ([1, "1.0", "2", -3], pa.lib.ArrowInvalid),
+        ([np.nan, 0, "null", cp.nan], pa.lib.ArrowInvalid),
         (
             [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],
             None,
@@ -152,7 +186,7 @@ def test_column_mixed_dtype(data, error):
     if error is None:
         cudf.Series(data)
     else:
-        with pytest.raises(TypeError):
+        with pytest.raises(error):
             cudf.Series(data)
 
 
@@ -161,11 +195,17 @@ def test_as_column_scalar_with_nan(nan_as_null):
     size = 10
     scalar = np.nan
 
-    expected = cudf.Series([np.nan] * size, nan_as_null=nan_as_null).to_array()
+    expected = (
+        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        .dropna()
+        .to_numpy()
+    )
 
-    got = cudf.Series(
-        as_column(scalar, length=size, nan_as_null=nan_as_null)
-    ).to_array()
+    got = (
+        cudf.Series(as_column(scalar, length=size, nan_as_null=nan_as_null))
+        .dropna()
+        .to_numpy()
+    )
 
     np.testing.assert_equal(expected, got)
 
@@ -362,9 +402,28 @@ def test_column_view_string_slice(slc):
 )
 def test_as_column_buffer(data, expected):
     actual_column = cudf.core.column.as_column(
-        cudf.core.Buffer(data), dtype=data.dtype
+        cudf.core.buffer.Buffer(data), dtype=data.dtype
     )
     assert_eq(cudf.Series(actual_column), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "data,pyarrow_kwargs,cudf_kwargs",
+    [
+        (
+            [100, 200, 300],
+            {"type": pa.decimal128(3)},
+            {"dtype": cudf.core.dtypes.Decimal128Dtype(3, 0)},
+        ),
+        ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], {}, {},),
+        ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], {}, {},),
+    ],
+)
+def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
+    pyarrow_data = pa.array(data, **pyarrow_kwargs)
+    cudf_from_pyarrow = as_column(pyarrow_data)
+    expected = as_column(data, **cudf_kwargs)
+    assert_eq(cudf.Series(cudf_from_pyarrow), cudf.Series(expected))
 
 
 @pytest.mark.parametrize(
@@ -400,7 +459,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     expect_mask = [True if x is not pd.NA else False for x in pd_data["a"]]
     got_mask = mask_to_bools(
         gd_data["a"]._column.base_mask, 0, len(gd_data)
-    ).to_array()
+    ).values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -438,6 +497,46 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
     expect_mask = [True if x is not pd.NA else False for x in pd_data]
     got_mask = mask_to_bools(
         gd_data._column.base_mask, 0, len(gd_data)
-    ).to_array()
+    ).values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
+
+
+def test_concatenate_large_column_strings():
+    num_strings = 1_000_000
+    string_scale_f = 100
+
+    s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
+    s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
+
+    with pytest.raises(
+        OverflowError,
+        match="total size of output is too large for a cudf column",
+    ):
+        cudf.concat([s_1, s_2])
+
+
+@pytest.mark.parametrize(
+    "alias,expect_dtype",
+    [
+        ("UInt8", "uint8"),
+        ("UInt16", "uint16"),
+        ("UInt32", "uint32"),
+        ("UInt64", "uint64"),
+        ("Int8", "int8"),
+        ("Int16", "int16"),
+        ("Int32", "int32"),
+        ("Int64", "int64"),
+        ("boolean", "bool"),
+        ("Float32", "float32"),
+        ("Float64", "float64"),
+    ],
+)
+@pytest.mark.parametrize(
+    "data", [[1, 2, 0]],
+)
+def test_astype_with_aliases(alias, expect_dtype, data):
+    pd_data = pd.Series(data)
+    gd_data = cudf.Series.from_pandas(pd_data)
+
+    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))

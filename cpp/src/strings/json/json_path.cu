@@ -21,6 +21,8 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
@@ -70,22 +72,22 @@ enum class parse_result {
  */
 class parser {
  protected:
-  CUDA_HOST_DEVICE_CALLABLE parser() : input(nullptr), input_len(0), pos(nullptr) {}
-  CUDA_HOST_DEVICE_CALLABLE parser(const char* _input, int64_t _input_len)
+  CUDF_HOST_DEVICE inline parser() {}
+  CUDF_HOST_DEVICE inline parser(const char* _input, int64_t _input_len)
     : input(_input), input_len(_input_len), pos(_input)
   {
     parse_whitespace();
   }
 
-  CUDA_HOST_DEVICE_CALLABLE parser(parser const& p)
+  CUDF_HOST_DEVICE inline parser(parser const& p)
     : input(p.input), input_len(p.input_len), pos(p.pos)
   {
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool eof(const char* p) { return p - input >= input_len; }
-  CUDA_HOST_DEVICE_CALLABLE bool eof() { return eof(pos); }
+  CUDF_HOST_DEVICE inline bool eof(const char* p) { return p - input >= input_len; }
+  CUDF_HOST_DEVICE inline bool eof() { return eof(pos); }
 
-  CUDA_HOST_DEVICE_CALLABLE bool parse_whitespace()
+  CUDF_HOST_DEVICE inline bool parse_whitespace()
   {
     while (!eof()) {
       if (is_whitespace(*pos)) {
@@ -97,81 +99,89 @@ class parser {
     return false;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE parse_result parse_string(string_view& str,
-                                                      bool can_be_empty,
-                                                      char quote)
+  CUDF_HOST_DEVICE inline bool is_hex_digit(char c)
+  {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+  }
+
+  CUDF_HOST_DEVICE inline int64_t chars_left() { return input_len - ((pos - input) + 1); }
+
+  /**
+   * @brief Parse an escape sequence.
+   *
+   * Must be a valid sequence as specified by the JSON format
+   * https://www.json.org/json-en.html
+   *
+   * @returns True on success or false on fail.
+   */
+  CUDF_HOST_DEVICE inline bool parse_escape_seq()
+  {
+    if (*pos != '\\') { return false; }
+    char c = *++pos;
+
+    // simple case
+    if (c == '\"' || c == '\\' || c == '/' || c == 'b' || c == 'f' || c == 'n' || c == 'r' ||
+        c == 't') {
+      pos++;
+      return true;
+    }
+
+    // hex digits: must be of the form uXXXX  where each X is a valid hex digit
+    if (c == 'u' && chars_left() >= 4 && is_hex_digit(pos[1]) && is_hex_digit(pos[2]) &&
+        is_hex_digit(pos[3]) && is_hex_digit(pos[4])) {
+      pos += 5;
+      return true;
+    }
+
+    // an illegal escape sequence.
+    return false;
+  }
+
+  /**
+   * @brief Parse a quote-enclosed JSON string.
+   *
+   * @param[out] str The resulting string.
+   * @param can_be_empty Parameter indicating whether it is valid for the string
+   * to not be present.
+   * @param quote Character expected as the surrounding quotes.  A value of 0
+   * indicates allowing either single or double quotes (but not a mixture of both).
+   * @returns A result code indicating success, failure or other result.
+   */
+  CUDF_HOST_DEVICE inline parse_result parse_string(string_view& str, bool can_be_empty, char quote)
   {
     str = string_view(nullptr, 0);
 
-    if (parse_whitespace() && *pos == quote) {
-      const char* start = ++pos;
-      while (!eof()) {
-        if (*pos == quote) {
-          str = string_view(start, pos - start);
-          pos++;
-          return parse_result::SUCCESS;
+    if (parse_whitespace()) {
+      // if the user specifies 0 for quote, allow either ' or ". otherwise
+      // use the char directly
+      if ((quote == 0 && (*pos == '\'' || *pos == '\"')) || (quote == *pos)) {
+        quote = *pos;
+
+        const char* start = ++pos;
+        while (!eof()) {
+          // handle escaped characters
+          if (*pos == '\\') {
+            if (!parse_escape_seq()) { return parse_result::ERROR; }
+          } else if (*pos == quote) {
+            str = string_view(start, pos - start);
+            pos++;
+            return parse_result::SUCCESS;
+          } else {
+            pos++;
+          }
         }
-        pos++;
       }
     }
 
     return can_be_empty ? parse_result::EMPTY : parse_result::ERROR;
   }
 
-  // a name means:
-  // - a string followed by a :
-  // - no string
-  CUDA_HOST_DEVICE_CALLABLE parse_result parse_name(string_view& name,
-                                                    bool can_be_empty,
-                                                    char quote)
-  {
-    if (parse_string(name, can_be_empty, quote) == parse_result::ERROR) {
-      return parse_result::ERROR;
-    }
-
-    // if we got a real string, the next char must be a :
-    if (name.size_bytes() > 0) {
-      if (!parse_whitespace()) { return parse_result::ERROR; }
-      if (*pos == ':') {
-        pos++;
-        return parse_result::SUCCESS;
-      }
-    }
-    return parse_result::EMPTY;
-  }
-
-  // numbers, true, false, null.
-  // this function is not particularly strong. badly formed values will get
-  // consumed without throwing any errors
-  CUDA_HOST_DEVICE_CALLABLE parse_result parse_non_string_value(string_view& val)
-  {
-    if (!parse_whitespace()) { return parse_result::ERROR; }
-
-    // parse to the end of the value
-    char const* start = pos;
-    char const* end   = start;
-    while (!eof(end)) {
-      char const c = *end;
-      if (c == ',' || c == '}' || c == ']' || is_whitespace(c)) { break; }
-
-      // illegal chars
-      if (c == '[' || c == '{' || c == ':' || c == '\"') { return parse_result::ERROR; }
-      end++;
-    }
-    pos = end;
-
-    val = string_view(start, end - start);
-
-    return parse_result::SUCCESS;
-  }
-
  protected:
-  char const* input;
-  int64_t input_len;
-  char const* pos;
+  char const* input{nullptr};
+  int64_t input_len{0};
+  char const* pos{nullptr};
 
- private:
-  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c <= ' '; }
+  CUDF_HOST_DEVICE inline bool is_whitespace(char c) { return c <= ' '; }
 };
 
 /**
@@ -210,18 +220,11 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
  */
 class json_state : private parser {
  public:
-  __device__ json_state()
-    : parser(),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE)
-  {
-  }
-  __device__ json_state(const char* _input, int64_t _input_len)
+  __device__ json_state() : parser() {}
+  __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
-      cur_el_start(nullptr),
-      cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE)
+
+      options(_options)
   {
   }
 
@@ -229,7 +232,8 @@ class json_state : private parser {
     : parser(j),
       cur_el_start(j.cur_el_start),
       cur_el_type(j.cur_el_type),
-      parent_el_type(j.parent_el_type)
+      parent_el_type(j.parent_el_type),
+      options(j.options)
   {
   }
 
@@ -245,10 +249,9 @@ class json_state : private parser {
       if (parse_value() != parse_result::SUCCESS) { return parse_result::ERROR; }
       end = pos;
 
-      // SPARK-specific behavior.  if this is a non-list-element wrapped in quotes,
-      // strip them. we may need to make this behavior configurable in some way
-      // later on.
-      if (!list_element && *start == '\"' && *(end - 1) == '\"') {
+      // potentially strip quotes from individually returned string values.
+      if (options.get_strip_quotes_from_single_strings() && !list_element && is_quote(*start) &&
+          *(end - 1) == *start) {
         start++;
         end--;
       }
@@ -259,15 +262,22 @@ class json_state : private parser {
       int arr_count = 0;
 
       while (!eof(end)) {
-        // could do some additional checks here. we know our current
-        // element type, so we could be more strict on what kinds of
-        // characters we expect to see.
-        switch (*end++) {
-          case '{': obj_count++; break;
-          case '}': obj_count--; break;
-          case '[': arr_count++; break;
-          case ']': arr_count--; break;
-          default: break;
+        // parse strings explicitly so we handle all interesting corner cases (such as strings
+        // containing {, }, [ or ]
+        if (is_quote(*end)) {
+          string_view str;
+          pos = end;
+          if (parse_string(str, false, *end) == parse_result::ERROR) { return parse_result::ERROR; }
+          end = pos;
+        } else {
+          char const c = *end++;
+          switch (c) {
+            case '{': obj_count++; break;
+            case '}': obj_count--; break;
+            case '[': arr_count++; break;
+            case ']': arr_count--; break;
+            default: break;
+          }
         }
         if (obj_count == 0 && arr_count == 0) { break; }
       }
@@ -322,12 +332,85 @@ class json_state : private parser {
       // next
       parse_result result = next_element_internal(false);
       if (result != parse_result::SUCCESS) { return result; }
-    } while (1);
+    } while (true);
 
     return parse_result::ERROR;
   }
 
+  /**
+   * @brief Parse a name field for a JSON element.
+   *
+   * When parsing JSON objects, it is not always a requirement that the name
+   * actually exists.  For example, the outer object bounded by {} here has
+   * no name, while the inner element "a" does.
+   *
+   * ```
+   * {
+   *    "a" : "b"
+   * }
+   * ```
+   *
+   * The user can specify whether or not the name string must be present via
+   * the `can_be_empty` flag.
+   *
+   * When a name is present, it must be followed by a colon `:`
+   *
+   * @param[out] name The resulting name.
+   * @param can_be_empty Parameter indicating whether it is valid for the name
+   * to not be present.
+   * @returns A result code indicating success, failure or other result.
+   */
+  CUDF_HOST_DEVICE inline parse_result parse_name(string_view& name, bool can_be_empty)
+  {
+    char const quote = options.get_allow_single_quotes() ? 0 : '\"';
+
+    if (parse_string(name, can_be_empty, quote) == parse_result::ERROR) {
+      return parse_result::ERROR;
+    }
+
+    // if we got a real string, the next char must be a :
+    if (name.size_bytes() > 0) {
+      if (!parse_whitespace()) { return parse_result::ERROR; }
+      if (*pos == ':') {
+        pos++;
+        return parse_result::SUCCESS;
+      }
+    }
+    return parse_result::EMPTY;
+  }
+
  private:
+  /**
+   * @brief Parse a non-string JSON value.
+   *
+   * Non-string values include numbers, true, false, or null. This function does not
+   * do any validation of the value.
+   *
+   * @param val (Output) The string containing the parsed value
+   * @returns A result code indicating success, failure or other result.
+   */
+  CUDF_HOST_DEVICE inline parse_result parse_non_string_value(string_view& val)
+  {
+    if (!parse_whitespace()) { return parse_result::ERROR; }
+
+    // parse to the end of the value
+    char const* start = pos;
+    char const* end   = start;
+    while (!eof(end)) {
+      char const c = *end;
+      if (c == ',' || c == '}' || c == ']' || is_whitespace(c)) { break; }
+
+      // illegal chars
+      if (c == '[' || c == '{' || c == ':' || is_quote(c)) { return parse_result::ERROR; }
+      end++;
+    }
+    pos = end;
+
+    val = string_view(start, end - start);
+
+    return parse_result::SUCCESS;
+  }
+
   // parse a value - either a string or a number/null/bool
   __device__ parse_result parse_value()
   {
@@ -335,7 +418,7 @@ class json_state : private parser {
 
     // string or number?
     string_view unused;
-    return *pos == '\"' ? parse_string(unused, false, '\"') : parse_non_string_value(unused);
+    return is_quote(*pos) ? parse_string(unused, false, *pos) : parse_non_string_value(unused);
   }
 
   __device__ parse_result next_element_internal(bool child)
@@ -363,7 +446,7 @@ class json_state : private parser {
     // if we're not accessing elements of an array, check for name.
     bool const array_access =
       (cur_el_type == ARRAY && child) || (parent_el_type == ARRAY && !child);
-    if (!array_access && parse_name(cur_el_name, true, '\"') == parse_result::ERROR) {
+    if (!array_access && parse_name(cur_el_name, true) == parse_result::ERROR) {
       return parse_result::ERROR;
     }
 
@@ -374,8 +457,12 @@ class json_state : private parser {
       case '{': cur_el_type = OBJECT; break;
 
       case ',':
-      case ':':
-      case '\'': return parse_result::ERROR;
+      case ':': return parse_result::ERROR;
+
+      case '\'':
+        if (!options.get_allow_single_quotes()) { return parse_result::ERROR; }
+        cur_el_type = VALUE;
+        break;
 
       // value type
       default: cur_el_type = VALUE; break;
@@ -386,11 +473,17 @@ class json_state : private parser {
     return parse_result::SUCCESS;
   }
 
-  const char* cur_el_start;          // pointer to the first character of the -value- of the current
-                                     // element - not the name
-  string_view cur_el_name;           // name of the current element (if applicable)
-  json_element_type cur_el_type;     // type of the current element
-  json_element_type parent_el_type;  // parent element type
+  CUDF_HOST_DEVICE inline bool is_quote(char c)
+  {
+    return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
+  }
+
+  const char* cur_el_start{nullptr};  // pointer to the first character of the -value- of the
+                                      // current element - not the name
+  string_view cur_el_name;            // name of the current element (if applicable)
+  json_element_type cur_el_type{json_element_type::NONE};     // type of the current element
+  json_element_type parent_el_type{json_element_type::NONE};  // parent element type
+  get_json_object_options options;                            // behavior options
 };
 
 enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR, END };
@@ -400,26 +493,23 @@ enum class path_operator_type { ROOT, CHILD, CHILD_WILDCARD, CHILD_INDEX, ERROR,
  * an array of these operators applied to the incoming json string,
  */
 struct path_operator {
-  CUDA_HOST_DEVICE_CALLABLE path_operator()
-    : type(path_operator_type::ERROR), index(-1), expected_type{NONE}
-  {
-  }
-  CUDA_HOST_DEVICE_CALLABLE path_operator(path_operator_type _type,
-                                          json_element_type _expected_type = NONE)
-    : type(_type), index(-1), expected_type{_expected_type}
+  CUDF_HOST_DEVICE inline path_operator() {}
+  CUDF_HOST_DEVICE inline path_operator(path_operator_type _type,
+                                        json_element_type _expected_type = NONE)
+    : type(_type), expected_type{_expected_type}
   {
   }
 
-  path_operator_type type;  // operator type
+  path_operator_type type{path_operator_type::ERROR};  // operator type
   // the expected element type we're applying this operation to.
   // for example:
   //    - you cannot retrieve a subscripted field (eg [5]) from an object.
   //    - you cannot retrieve a field by name (eg  .book) from an array.
   //    - you -can- use .* for both arrays and objects
   // a value of NONE imples any type accepted
-  json_element_type expected_type;  // the expected type of the element we're working with
-  string_view name;                 // name to match against (if applicable)
-  int index;                        // index for subscript operator
+  json_element_type expected_type{NONE};  // the expected type of the element we're working with
+  string_view name;                       // name to match against (if applicable)
+  int index{-1};                          // index for subscript operator
 };
 
 /**
@@ -566,7 +656,7 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
     if (op.type == path_operator_type::ROOT) {
       CUDF_EXPECTS(h_operators.size() == 0, "Root operator ($) can only exist at the root");
     }
-    // if we havent' gotten a root operator to start, and we're not empty, quietly push a
+    // if we have not gotten a root operator to start, and we're not empty, quietly push a
     // root operator now.
     if (h_operators.size() == 0 && op.type != path_operator_type::ROOT &&
         op.type != path_operator_type::END) {
@@ -762,6 +852,7 @@ constexpr int max_command_stack_depth = 8;
  * @param out_buf Buffer user to store the results of the query (nullptr in the size computation
  * step)
  * @param out_buf_size Size of the output buffer
+ * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
 __device__ thrust::pair<parse_result, json_output> get_json_object_single(
@@ -769,9 +860,10 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
   size_t input_len,
   path_operator const* const commands,
   char* out_buf,
-  size_t out_buf_size)
+  size_t out_buf_size,
+  get_json_object_options options)
 {
-  json_state j_state(input, input_len);
+  json_state j_state(input, input_len, options);
   json_output output{out_buf_size, out_buf};
 
   auto const result = parse_json_path<max_command_stack_depth>(j_state, commands, output);
@@ -792,6 +884,7 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * @param out_buf Buffer used to store the results of the query
  * @param out_validity Output validity buffer
  * @param out_valid_count Output count of # of valid bits
+ * @param options Options controlling behavior
  */
 template <int block_size>
 __launch_bounds__(block_size) __global__
@@ -800,7 +893,8 @@ __launch_bounds__(block_size) __global__
                               offset_type* output_offsets,
                               thrust::optional<char*> out_buf,
                               thrust::optional<bitmask_type*> out_validity,
-                              thrust::optional<size_type*> out_valid_count)
+                              thrust::optional<size_type*> out_valid_count,
+                              get_json_object_options options)
 {
   size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
   size_type stride = blockDim.x * gridDim.x;
@@ -821,7 +915,7 @@ __launch_bounds__(block_size) __global__
       parse_result result;
       json_output out;
       thrust::tie(result, out) =
-        get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size);
+        get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size, options);
       output_size = out.output_len.value_or(0);
       if (out.output_len.has_value() && result == parse_result::SUCCESS) { is_valid = true; }
     }
@@ -857,6 +951,7 @@ __launch_bounds__(block_size) __global__
  */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
+                                              get_json_object_options options,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
@@ -893,7 +988,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       offsets_view.head<offset_type>(),
       thrust::nullopt,
       thrust::nullopt,
-      thrust::nullopt);
+      thrust::nullopt,
+      options);
 
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
@@ -905,8 +1001,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::get_value<offset_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
-  auto chars = cudf::make_fixed_width_column(
-    data_type{type_id::INT8}, output_size, mask_state::UNALLOCATED, stream, mr);
+  auto chars = create_chars_child_column(output_size, stream, mr);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether
@@ -923,15 +1018,14 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       offsets_view.head<offset_type>(),
       chars_view.head<char>(),
       static_cast<bitmask_type*>(validity.data()),
-      d_valid_count.data());
+      d_valid_count.data(),
+      options);
 
   return make_strings_column(col.size(),
                              std::move(offsets),
                              std::move(chars),
-                             col.size() - d_valid_count.value(),
-                             std::move(validity),
-                             stream,
-                             mr);
+                             col.size() - d_valid_count.value(stream),
+                             std::move(validity));
 }
 
 }  // namespace
@@ -942,10 +1036,11 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
  */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
+                                              get_json_object_options options,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, 0, mr);
+  return detail::get_json_object(col, json_path, options, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

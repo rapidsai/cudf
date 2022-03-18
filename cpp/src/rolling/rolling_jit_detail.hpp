@@ -30,8 +30,8 @@ T minimum(T a, T b)
 }
 
 struct preceding_window_wrapper {
-  const cudf::size_type *d_group_offsets;
-  const cudf::size_type *d_group_labels;
+  const cudf::size_type* d_group_offsets;
+  const cudf::size_type* d_group_labels;
   cudf::size_type preceding_window;
 
   cudf::size_type operator[](cudf::size_type idx)
@@ -43,8 +43,8 @@ struct preceding_window_wrapper {
 };
 
 struct following_window_wrapper {
-  const cudf::size_type *d_group_offsets;
-  const cudf::size_type *d_group_labels;
+  const cudf::size_type* d_group_offsets;
+  const cudf::size_type* d_group_labels;
   cudf::size_type following_window;
 
   cudf::size_type operator[](cudf::size_type idx)

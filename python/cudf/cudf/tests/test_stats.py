@@ -1,6 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -9,7 +8,7 @@ import pytest
 
 import cudf
 from cudf.datasets import randomdata
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -32,7 +31,8 @@ def test_series_reductions(method, dtype, skipna):
     arr = arr.astype(dtype)
     if dtype in (np.float32, np.float64):
         arr[[2, 5, 14, 19, 50, 70]] = np.nan
-    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+    sr = cudf.Series(arr)
+    sr[~mask] = None
     psr = sr.to_pandas()
     psr[~mask] = np.nan
 
@@ -83,8 +83,9 @@ def test_series_unique():
     for size in [10 ** x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
-        assert set(arr[mask]) == set(sr.unique().to_array())
+        sr = cudf.Series(arr)
+        sr[~mask] = None
+        assert set(arr[mask]) == set(sr.unique().dropna().to_numpy())
         assert len(set(arr[mask])) == sr.nunique()
 
 
@@ -239,12 +240,12 @@ def test_kurtosis(data, null_flag):
         pdata.iloc[[0, 2]] = None
 
     got = data.kurtosis()
-    got = got if np.isscalar(got) else got.to_array()
+    got = got if np.isscalar(got) else got.to_numpy()
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
     got = data.kurt()
-    got = got if np.isscalar(got) else got.to_array()
+    got = got if np.isscalar(got) else got.to_numpy()
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
@@ -281,7 +282,7 @@ def test_skew(data, null_flag):
 
     got = data.skew()
     expected = pdata.skew()
-    got = got if np.isscalar(got) else got.to_array()
+    got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
 
     with pytest.raises(NotImplementedError):
@@ -298,7 +299,8 @@ def test_series_median(dtype, num_na):
     mask = np.arange(100) >= num_na
 
     arr = arr.astype(dtype)
-    sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+    sr = cudf.Series(arr)
+    sr[~mask] = None
     arr2 = arr[mask]
     ps = pd.Series(arr2, dtype=dtype)
 
@@ -314,6 +316,32 @@ def test_series_median(dtype, num_na):
         actual = sr.median(skipna=False)
         desired = ps.median(skipna=False)
         np.testing.assert_approx_equal(actual, desired)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
+        cudf.Series([]),
+        cudf.Series([-3]),
+    ],
+)
+@pytest.mark.parametrize("periods", range(-5, 5))
+@pytest.mark.parametrize("fill_method", ["ffill", "bfill", "pad", "backfill"])
+def test_series_pct_change(data, periods, fill_method):
+    cs = cudf.Series(data)
+    ps = cs.to_pandas()
+
+    if np.abs(periods) <= len(cs):
+        got = cs.pct_change(periods=periods, fill_method=fill_method)
+        expected = ps.pct_change(periods=periods, fill_method=fill_method)
+        np.testing.assert_array_almost_equal(
+            got.to_numpy(na_value=np.nan), expected
+        )
 
 
 @pytest.mark.parametrize(
@@ -436,7 +464,8 @@ def test_df_corr(method):
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_nans_stats(data, ops, skipna):
     psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
+
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
@@ -462,7 +491,7 @@ def test_nans_stats(data, ops, skipna):
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
 def test_min_count_ops(data, ops, skipna, min_count):
     psr = pd.Series(data)
-    gsr = cudf.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
@@ -485,9 +514,7 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.corr,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -495,7 +522,5 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.cov,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform covarience with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )

@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -53,7 +53,9 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
   if (keys_column->has_nulls()) {
     keys_column = std::make_unique<column>(
-      slice(keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}).front(),
+      cudf::detail::slice(
+        keys_column->view(), std::vector<size_type>{0, keys_column->size() - 1}, stream)
+        .front(),
       stream,
       mr);
     keys_column->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // remove the null-mask

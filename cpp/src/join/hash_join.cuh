@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,13 @@
  */
 #pragma once
 
-#include <cudf/detail/concatenate.cuh>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
+#include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
-#include <join/join_kernels.cuh>
 
+#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -33,21 +34,53 @@
 
 #include <thrust/sequence.h>
 
+#include <cstddef>
 #include <limits>
 
 namespace cudf {
 namespace detail {
+
 /**
- * @brief Gives an estimate of the size of the join output produced when
+ * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
+ *
+ * @param hash The hash value to potentially remap
+ * @param sentinel The reserved value
+ */
+template <typename H, typename S>
+constexpr auto remap_sentinel_hash(H hash, S sentinel)
+{
+  // Arbitrarily choose hash - 1
+  return (hash == sentinel) ? (hash - 1) : hash;
+}
+
+/**
+ * @brief Device functor to create a pair of hash value and index for a given row.
+ */
+class make_pair_function {
+ public:
+  CUDF_HOST_DEVICE make_pair_function(row_hash const& hash,
+                                      hash_value_type const empty_key_sentinel)
+    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
+  {
+  }
+
+  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  {
+    // Compute the hash value of row `i`
+    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
+    return cuco::make_pair(row_hash_value, i);
+  }
+
+ private:
+  row_hash _hash;
+  hash_value_type const _empty_key_sentinel;
+};
+
+/**
+ * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
  *
- * If the two tables are of relatively equal size, then the returned output
- * size will be the exact output size. However, if the probe table is
- * significantly larger than the build table, then we attempt to estimate the
- * output size by using only a subset of the rows in the probe table.
- *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
- * @throw cudf::logic_error if the estimated size overflows cudf::size_type
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
@@ -56,33 +89,25 @@ namespace detail {
  * @param probe_table The left hand table
  * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
- * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param nulls_equal Flag to denote nulls are equal or not.
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @return An estimate of the size of the output of the join operation
+ * @return The exact size of the output of the join operation
  */
 template <join_kind JoinKind, typename multimap_type>
-size_type estimate_join_output_size(table_device_view build_table,
-                                    table_device_view probe_table,
-                                    multimap_type const& hash_table,
-                                    null_equality compare_nulls,
-                                    rmm::cuda_stream_view stream)
+std::size_t compute_join_output_size(table_device_view build_table,
+                                     table_device_view probe_table,
+                                     multimap_type const& hash_table,
+                                     bool const has_nulls,
+                                     cudf::null_equality const nulls_equal,
+                                     rmm::cuda_stream_view stream)
 {
-  using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
-
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
 
-  // If the probe table is significantly larger (5x) than the build table,
-  // then we attempt to only use a subset of the probe table rows to compute an
-  // estimate of the join output size.
-  size_type probe_to_build_ratio{0};
-  if (build_table_num_rows > 0) {
-    probe_to_build_ratio = static_cast<size_type>(
-      std::ceil(static_cast<float>(probe_table_num_rows) / build_table_num_rows));
-  } else {
-    // If the build table is empty, we know exactly how large the output
-    // will be for the different types of joins and can return immediately
+  // If the build table is empty, we know exactly how large the output
+  // will be for the different types of joins and can return immediately
+  if (0 == build_table_num_rows) {
     switch (JoinKind) {
       // Inner join with an empty table will have no output
       case join_kind::INNER_JOIN: return 0;
@@ -95,110 +120,23 @@ size_type estimate_join_output_size(table_device_view build_table,
     }
   }
 
-  size_type sample_probe_num_rows{probe_table_num_rows};
-  constexpr size_type MAX_RATIO{5};
-  if (probe_to_build_ratio > MAX_RATIO) { sample_probe_num_rows = build_table_num_rows; }
+  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+  pair_equality equality{probe_table, build_table, probe_nulls, nulls_equal};
 
-  // Allocate storage for the counter used to get the size of the join output
-  estimate_size_type h_size_estimate{0};
-  rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
+  row_hash hash_probe{probe_nulls, probe_table};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  CHECK_CUDA(stream.value());
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  int numBlocks{-1};
+  std::size_t size;
+  if constexpr (JoinKind == join_kind::LEFT_JOIN) {
+    size = hash_table.pair_count_outer(iter, iter + probe_table_num_rows, equality, stream.value());
+  } else {
+    size = hash_table.pair_count(iter, iter + probe_table_num_rows, equality, stream.value());
+  }
 
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_join_output_size<JoinKind, multimap_type, block_size>, block_size, 0));
-
-  int dev_id{-1};
-  CUDA_TRY(cudaGetDevice(&dev_id));
-
-  int num_sms{-1};
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-
-  // Continue probing with a subset of the probe table until either:
-  // a non-zero output size estimate is found OR
-  // all of the rows in the probe table have been sampled
-  do {
-    sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
-
-    size_estimate.set_value_zero(stream);
-
-    row_hash hash_probe{probe_table};
-    row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
-    // Probe the hash table without actually building the output to simply
-    // find what the size of the output will be.
-    compute_join_output_size<JoinKind, multimap_type, block_size>
-      <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table,
-                                                               build_table,
-                                                               probe_table,
-                                                               hash_probe,
-                                                               equality,
-                                                               sample_probe_num_rows,
-                                                               size_estimate.data());
-    CHECK_CUDA(stream.value());
-
-    // Only in case subset of probe table is chosen,
-    // increase the estimated output size by a factor of the ratio between the
-    // probe and build tables
-    if (sample_probe_num_rows < probe_table_num_rows) {
-      h_size_estimate = size_estimate.value(stream) * probe_to_build_ratio;
-    } else {
-      h_size_estimate = size_estimate.value(stream);
-    }
-
-    // Detect overflow
-    CUDF_EXPECTS(h_size_estimate <
-                   static_cast<estimate_size_type>(std::numeric_limits<cudf::size_type>::max()),
-                 "Maximum join output size exceeded");
-
-    // If the size estimate is non-zero, then we have a valid estimate and can break
-    // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
-    // probe table, in which case the estimate is exact and we can break
-    if ((h_size_estimate > 0) || (sample_probe_num_rows >= probe_table_num_rows)) { break; }
-
-    // If the size estimate is zero, then double the number of sampled rows in the probe
-    // table. Reduce the ratio of the number of probe rows sampled to the number of rows
-    // in the build table by the same factor
-    if (0 == h_size_estimate) {
-      constexpr size_type GROW_RATIO{2};
-      sample_probe_num_rows *= GROW_RATIO;
-      probe_to_build_ratio =
-        static_cast<size_type>(std::ceil(static_cast<float>(probe_to_build_ratio) / GROW_RATIO));
-    }
-
-  } while (true);
-
-  return static_cast<cudf::size_type>(h_size_estimate);
-}
-
-/**
- * @brief Computes the trivial left join operation for the case when the
- * right table is empty. In this case all the valid indices of the left table
- * are returned with their corresponding right indices being set to
- * JoinNoneValue, i.e. -1.
- *
- * @param left Table of left columns to join
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the result
- *
- * @return Join output indices vector pair
- */
-inline std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-                 std::unique_ptr<rmm::device_uvector<size_type>>>
-get_trivial_left_join_indices(
-  table_view const& left,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
-  thrust::sequence(rmm::exec_policy(stream), left_indices->begin(), left_indices->end(), 0);
-  auto right_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
-  thrust::fill(
-    rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  return size;
 }
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
@@ -207,6 +145,46 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
 
+/**
+ * @brief Builds the hash table based on the given `build_table`.
+ *
+ * @tparam MultimapType The type of the hash table
+ *
+ * @param build Table of columns used to build join hash.
+ * @param hash_table Build hash table.
+ * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ */
+template <typename MultimapType>
+void build_join_hash_table(cudf::table_view const& build,
+                           MultimapType& hash_table,
+                           null_equality const nulls_equal,
+                           rmm::cuda_stream_view stream)
+{
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+
+  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+
+  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+  size_type const build_table_num_rows{build_table_ptr->num_rows()};
+  if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
+    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    thrust::counting_iterator<size_type> stencil(0);
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+    // insert valid rows
+    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+  }
+}
 }  // namespace detail
 
 struct hash_join::hash_join_impl {
@@ -219,9 +197,12 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
+  bool const _is_empty;
+  cudf::null_equality const _nulls_equal;
   cudf::table_view _build;
-  std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
-    _hash_table;
+  std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
+  cudf::structs::detail::flattened_table _flattened_build_table;
+  cudf::detail::multimap_type _hash_table;
 
  public:
   /**
@@ -232,6 +213,7 @@ struct hash_join::hash_join_impl {
    *
    * @param build The build table, from which the hash table is built.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   hash_join_impl(cudf::table_view const& build,
                  null_equality compare_nulls,
@@ -240,44 +222,55 @@ struct hash_join::hash_join_impl {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             null_equality compare_nulls,
+             std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr) const;
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
-            null_equality compare_nulls,
+            std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
             rmm::mr::device_memory_resource* mr) const;
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
-            null_equality compare_nulls,
+            std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
             rmm::mr::device_memory_resource* mr) const;
+
+  [[nodiscard]] std::size_t inner_join_size(cudf::table_view const& probe,
+                                            rmm::cuda_stream_view stream) const;
+
+  [[nodiscard]] std::size_t left_join_size(cudf::table_view const& probe,
+                                           rmm::cuda_stream_view stream) const;
+
+  std::size_t full_join_size(cudf::table_view const& probe,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr) const;
 
  private:
   template <cudf::detail::join_kind JoinKind>
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   compute_hash_join(cudf::table_view const& probe,
-                    null_equality compare_nulls,
+                    std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr) const;
 
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
    * and returns the output indices of `build_table` and `probe_table` as a combined table,
-   * i.e. if full join is specified as the join type then left join is called.
+   * i.e. if full join is specified as the join type then left join is called. Behavior
+   * is undefined if the provided `output_size` is smaller than the actual output size.
    *
    * @throw cudf::logic_error if hash table is null.
    *
    * @tparam JoinKind The type of join to be performed.
    *
    * @param probe_table Table of probe side columns to join.
-   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned vectors.
    *
@@ -286,8 +279,8 @@ struct hash_join::hash_join_impl {
   template <cudf::detail::join_kind JoinKind>
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  probe_join_indices(cudf::table_view const& probe,
-                     null_equality compare_nulls,
+  probe_join_indices(cudf::table_view const& probe_table,
+                     std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const;
 };

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.function.Function;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimestampColumnVectorTest extends CudfTestBase {
@@ -307,6 +307,78 @@ public class TimestampColumnVectorTest extends CudfTestBase {
     try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
          ColumnVector result = timestampColumnVector.dayOfYear();
          ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testQuarterOfYear() {
+    short[] EXPECTED = new short[]{4, 3, 1, 4, 3};
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.quarterOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.quarterOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
+         ColumnVector result = timestampColumnVector.quarterOfYear();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testAddMonths() {
+    long[] EXPECTED = new long[]{
+        -131968727762L,   //'1965-10-26 14:01:12.238' Tuesday
+        1533384000115L,   //'2018-08-04 12:00:00.115' Saturday
+        1679729532929L,   //'2023-03-25 07:32:12.929' Saturday
+        -124019927762L,   //'1966-01-26 14:01:12.238' Wednesday
+        1520164800115L};  //'2018-03-04 12:00:00.115' Sunday
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector months = ColumnVector.fromShorts(
+             (short)0, (short)1, (short)2, (short)3, (short)-4);
+         ColumnVector result = timestampColumnVector.addCalendricalMonths(months);
+         ColumnVector expected = ColumnVector.timestampMilliSecondsFromLongs(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testIsLeapYear() {
+    Boolean[] EXPECTED = new Boolean[]{false, false, false, false, false};
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.daysFromInts(TIMES_DAY);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    final long[] LEAP_TIMES_S = {1073865600L,   // Monday, January 12, 2004 0:00:00
+        947635200L, // Wednesday, January 12, 2000 0:00:00
+        -2208038400L // Friday, January 12, 1900 0:00:00
+    };
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(LEAP_TIMES_S);
+         ColumnVector result = timestampColumnVector.isLeapYear();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false)) {
       assertColumnsAreEqual(expected, result);
     }
   }

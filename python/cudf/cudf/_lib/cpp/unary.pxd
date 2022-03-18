@@ -2,15 +2,10 @@
 
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
-from cudf._lib.cpp.column.column_view cimport (
-    column_view
-)
-from cudf._lib.cpp.column.column cimport (
-    column
-)
-from cudf._lib.cpp.types cimport (
-    data_type
-)
+
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.types cimport data_type
 
 ctypedef int32_t underlying_type_t_unary_op
 

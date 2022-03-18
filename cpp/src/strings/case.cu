@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/is_flags.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,12 +21,14 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <strings/char_types/char_cases.h>
+#include <strings/char_types/is_flags.h>
 
-#include <strings/utilities.cuh>
+#include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -125,7 +125,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -144,9 +144,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace

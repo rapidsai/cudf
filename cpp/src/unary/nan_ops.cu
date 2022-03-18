@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,13 +28,13 @@ namespace cudf {
 namespace detail {
 struct nan_dispatcher {
   template <typename T, typename Predicate>
-  std::enable_if_t<std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
     cudf::column_view const& input,
     Predicate predicate,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    auto input_device_view = column_device_view::create(input);
+    auto input_device_view = column_device_view::create(input, stream);
 
     if (input.has_nulls()) {
       auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
@@ -56,7 +56,7 @@ struct nan_dispatcher {
   }
 
   template <typename T, typename Predicate>
-  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<!std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
     cudf::column_view const& input,
     Predicate predicate,
     rmm::cuda_stream_view stream,

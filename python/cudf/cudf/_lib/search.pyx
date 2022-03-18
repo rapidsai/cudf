@@ -1,30 +1,29 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.search as cpp_search
+cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table
-
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-cimport cudf._lib.cpp.types as libcudf_types
-cimport cudf._lib.cpp.search as cpp_search
+from cudf._lib.utils cimport table_view_from_table
 
 
 def search_sorted(
-    Table table, Table values, side, ascending=True, na_position="last"
+    table, values, side, ascending=True, na_position="last"
 ):
     """Find indices where elements should be inserted to maintain order
 
     Parameters
     ----------
-    table : Table
-        Table to search in
-    values : Table
-        Table of values to search for
+    table : Frame
+        Frame to search in
+    values : Frame
+        Frame of values to search for
     side : str {‘left’, ‘right’} optional
         If ‘left’, the index of the first suitable location is given.
         If ‘right’, return the last such index
@@ -34,8 +33,10 @@ def search_sorted(
     cdef vector[libcudf_types.null_order] c_null_precedence
     cdef libcudf_types.order c_order
     cdef libcudf_types.null_order c_null_order
-    cdef table_view c_table_data = table.data_view()
-    cdef table_view c_values_data = values.data_view()
+    cdef table_view c_table_data = table_view_from_table(
+        table, ignore_index=True)
+    cdef table_view c_values_data = table_view_from_table(
+        values, ignore_index=True)
 
     # Note: We are ignoring index columns here
     c_order = (libcudf_types.order.ASCENDING

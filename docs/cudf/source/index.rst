@@ -1,24 +1,25 @@
 Welcome to cuDF's documentation!
 =================================
 
+cuDF is a Python GPU DataFrame library (built on the `Apache Arrow
+<http://arrow.apache.org/>`_ columnar memory format) for loading, joining,
+aggregating, filtering, and otherwise manipulating data. cuDF also provides a
+pandas-like API that will be familiar to data engineers & data scientists, so
+they can use it to easily accelerate their workflows without going into
+the details of CUDA programming.
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   api.rst
-   10min.ipynb
-   basics.rst
-   io.rst
-   groupby.md
-   dask-cudf.md
-   10min-cudf-cupy.ipynb
-   guide-to-udfs.ipynb
-   internals.md
-   Working-with-missing-data.ipynb
+   user_guide/index
+   basics/index
+   api_docs/index
+
 
 Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`

@@ -2,9 +2,9 @@
 
 import pandas as pd
 import pytest
-import cudf as gd
 
-from cudf.tests.utils import assert_eq
+import cudf as gd
+from cudf.testing._utils import assert_eq
 
 
 @gd.api.extensions.register_dataframe_accessor("point")
@@ -44,7 +44,7 @@ def test_dataframe_accessor(gdf):
     "gdf2", [gd.datasets.randomdata(nrows=1, dtypes={"x": int, "y": int})]
 )
 def test_dataframe_accessor_idendity(gdf1, gdf2):
-    """Test for accessor idendities
+    """Test for accessor identities
     - An object should hold persistent reference to the same accessor
     - Different objects should hold difference instances of the accessor
     """

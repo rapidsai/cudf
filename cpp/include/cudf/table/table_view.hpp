@@ -48,8 +48,8 @@ namespace detail {
  */
 template <typename ColumnView>
 class table_view_base {
-  static_assert(std::is_same<ColumnView, column_view>::value or
-                  std::is_same<ColumnView, mutable_column_view>::value,
+  static_assert(std::is_same_v<ColumnView, column_view> or
+                  std::is_same_v<ColumnView, mutable_column_view>,
                 "table_view_base can only be instantiated with column_view or "
                 "column_view_base.");
 
@@ -87,7 +87,7 @@ class table_view_base {
   /**
    * @brief Returns an iterator to the first view in the `table`.
    */
-  const_iterator begin() const noexcept { return std::begin(_columns); }
+  [[nodiscard]] const_iterator begin() const noexcept { return std::begin(_columns); }
 
   /**
    * @brief Returns an iterator one past the last column view in the `table`.
@@ -103,7 +103,7 @@ class table_view_base {
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
    */
-  const_iterator end() const noexcept { return std::end(_columns); }
+  [[nodiscard]] const_iterator end() const noexcept { return std::end(_columns); }
 
   /**
    * @brief Returns a reference to the view of the specified column
@@ -119,17 +119,17 @@ class table_view_base {
   /**
    * @brief Returns the number of columns
    */
-  size_type num_columns() const noexcept { return _columns.size(); }
+  [[nodiscard]] size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
    */
-  size_type num_rows() const noexcept { return _num_rows; }
+  [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Returns true if `num_columns()` returns zero, or false otherwise
    */
-  size_type is_empty() const noexcept { return num_columns() == 0; }
+  [[nodiscard]] size_type is_empty() const noexcept { return num_columns() == 0; }
 
   table_view_base() = default;
 
@@ -208,7 +208,7 @@ class table_view : public detail::table_view_base<column_view> {
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
    */
-  table_view select(std::vector<size_type> const& column_indices) const;
+  [[nodiscard]] table_view select(std::vector<size_type> const& column_indices) const;
 };
 
 /**
@@ -227,7 +227,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
 
   mutable_table_view() = default;
 
-  mutable_column_view& column(size_type column_index) const
+  [[nodiscard]] mutable_column_view& column(size_type column_index) const
   {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
@@ -257,9 +257,24 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
-inline bool has_nulls(table_view view)
+inline bool nullable(table_view const& view)
 {
-  return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.nullable(); });
+}
+
+inline bool has_nulls(table_view const& view)
+{
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.has_nulls(); });
+}
+
+inline bool has_nested_nulls(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.has_nulls() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nulls(table_view{{child_col}});
+           });
+  });
 }
 
 /**

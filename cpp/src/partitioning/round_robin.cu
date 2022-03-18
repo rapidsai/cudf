@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table.hpp>
@@ -27,7 +28,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
@@ -44,8 +45,7 @@
 #include <vector>
 
 namespace {
-template <typename T>
-using VectorT = rmm::device_vector<T>;
+
 /**
  * @brief Handles the "degenerate" case num_partitions >= num_rows.
  *
@@ -65,13 +65,13 @@ using VectorT = rmm::device_vector<T>;
  * (offsets, indices) = (row_offsets, col_indices) of transpose_dbg;
  * where (row_offsets, col_indices) are the CSR format of the graph;
  *
- * @Param[in] input The input table to be round-robin partitioned
- * @Param[in] num_partitions Number of partitions for the table
- * @Param[in] start_partition Index of the 1st partition
- * @Param[in] mr Device memory resource used to allocate the returned table's device memory
- * @Param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] input The input table to be round-robin partitioned
+ * @param[in] num_partitions Number of partitions for the table
+ * @param[in] start_partition Index of the 1st partition
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
- * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
+ * @returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
  * offsets for each partition within the table
  */
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate_partitions(
@@ -84,7 +84,6 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
   auto nrows = input.num_rows();
 
   // iterator for partition index rotated right by start_partition positions:
-  //
   auto rotated_iter_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator<cudf::size_type>(0),
     [num_partitions, start_partition] __device__(auto index) {
@@ -92,7 +91,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     });
 
   if (num_partitions == nrows) {
-    VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
+    rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
     thrust::sequence(rmm::exec_policy(stream), partition_offsets.begin(), partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
@@ -102,25 +101,14 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          stream,
                                          mr);
 
-    auto ret_pair =
-      std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
-
-    CUDA_TRY(cudaMemcpyAsync(ret_pair.second.data(),
-                             partition_offsets.data().get(),
-                             sizeof(cudf::size_type) * num_partitions,
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-
-    stream.synchronize();
-
-    return ret_pair;
+    return std::make_pair(std::move(uniq_tbl),
+                          cudf::detail::make_std_vector_sync(partition_offsets, stream));
   } else {  //( num_partitions > nrows )
-    VectorT<cudf::size_type> d_row_indices(nrows, cudf::size_type{0});
+    rmm::device_uvector<cudf::size_type> d_row_indices(nrows, stream);
 
     // copy rotated right partition indexes that
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
-    //
     thrust::copy_if(rmm::exec_policy(stream),
                     rotated_iter_begin,
                     rotated_iter_begin + num_partitions,
@@ -128,7 +116,6 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                     [nrows] __device__(auto index) { return (index < nrows); });
 
     //...and then use the result, d_row_indices, as gather map:
-    //
     auto uniq_tbl = cudf::detail::gather(input,
                                          d_row_indices.begin(),
                                          d_row_indices.end(),  // map
@@ -136,34 +123,22 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          stream,
                                          mr);
 
-    auto ret_pair =
-      std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
-
     // offsets (part 1: compute partition sizes);
     // iterator for number of edges of the transposed bipartite graph;
     // this composes rotated_iter transform (above) iterator with
     // calculating number of edges of transposed bi-graph:
-    //
     auto nedges_iter_begin = thrust::make_transform_iterator(
       rotated_iter_begin, [nrows] __device__(auto index) { return (index < nrows ? 1 : 0); });
 
     // offsets (part 2: compute partition offsets):
-    //
-    VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
+    rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
     thrust::exclusive_scan(rmm::exec_policy(stream),
                            nedges_iter_begin,
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
 
-    CUDA_TRY(cudaMemcpyAsync(ret_pair.second.data(),
-                             partition_offsets.data().get(),
-                             sizeof(cudf::size_type) * num_partitions,
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-
-    stream.synchronize();
-
-    return ret_pair;
+    return std::make_pair(std::move(uniq_tbl),
+                          cudf::detail::make_std_vector_sync(partition_offsets, stream));
   }
 }
 }  // namespace

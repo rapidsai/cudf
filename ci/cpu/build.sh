@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 ##############################################
 # cuDF CPU conda build script for CI         #
 ##############################################
@@ -10,7 +10,7 @@ export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
 export PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Set home to the job's workspace
-export HOME=$WORKSPACE
+export HOME="$WORKSPACE"
 
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
@@ -21,15 +21,19 @@ export GPUCI_CONDA_RETRY_SLEEP=30
 
 # Use Ninja to build, setup Conda Build Dir
 export CMAKE_GENERATOR="Ninja"
-export CONDA_BLD_DIR="${WORKSPACE}/.conda-bld"
+export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
 
 # Switch to project root; also root of repo checkout
-cd $WORKSPACE
+cd "$WORKSPACE"
 
 # If nightly build, append current YYMMDD to version
 if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
   export VERSION_SUFFIX=`date +%y%m%d`
 fi
+
+export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
+export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
+export CMAKE_C_COMPILER_LAUNCHER="sccache"
 
 ################################################################################
 # SETUP - Check environment
@@ -41,6 +45,12 @@ env
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
+
+# Remove `rapidsai-nightly` & `dask/label/dev` channel if we are building main branch
+if [ "$SOURCE_BRANCH" = "main" ]; then
+  conda config --system --remove channels rapidsai-nightly
+  conda config --system --remove channels dask/label/dev
+fi
 
 gpuci_logger "Check compiler versions"
 python --version
@@ -72,12 +82,28 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
+  gpuci_logger "sccache stats"
+  sccache --show-stats
 
+  # Copy libcudf build metrics results
+  LIBCUDF_BUILD_DIR=$CONDA_BLD_DIR/libcudf/work/cpp/build
+  echo "Checking for build metrics log $LIBCUDF_BUILD_DIR/ninja_log.html"
+  if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
+      gpuci_logger "Copying build metrics results"
+      mkdir -p "$WORKSPACE/build-metrics"
+      cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+      cp "$LIBCUDF_BUILD_DIR/ninja.log" "$WORKSPACE/build-metrics/ninja.log"
+  fi
 
   gpuci_logger "Build conda pkg for libcudf_kafka"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf_kafka/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_kafka/work
+
+  gpuci_logger "Building libcudf examples"
+  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_example $CONDA_BUILD_ARGS
+  mkdir -p ${CONDA_BLD_DIR}/libcudf_example/work
+  cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_example/work
 fi
 
 if [ "$BUILD_CUDF" == '1' ]; then

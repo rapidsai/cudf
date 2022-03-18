@@ -70,7 +70,7 @@ public class CuFileTest extends CudfTestBase {
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
-         HostMemoryBuffer dest = HostMemoryBuffer.allocate(16);) {
+         HostMemoryBuffer dest = HostMemoryBuffer.allocate(16)) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
       CuFile.writeDeviceBufferToFile(tempFile, 0, from);
@@ -84,20 +84,69 @@ public class CuFileTest extends CudfTestBase {
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
          DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(16);
-         HostMemoryBuffer dest = HostMemoryBuffer.allocate(16);) {
+         HostMemoryBuffer dest = HostMemoryBuffer.allocate(16)) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
-      CuFile.appendDeviceBufferToFile(tempFile, from);
+      assertEquals(0, CuFile.appendDeviceBufferToFile(tempFile, from));
 
       orig.setLong(0, 987654321);
       from.copyFromHostBuffer(orig);
-      CuFile.appendDeviceBufferToFile(tempFile, from);
+      assertEquals(16, CuFile.appendDeviceBufferToFile(tempFile, from));
 
       CuFile.readFileToDeviceBuffer(to, tempFile, 0);
       dest.copyFromDeviceBuffer(to);
       assertEquals(123456789, dest.getLong(0));
 
       CuFile.readFileToDeviceBuffer(to, tempFile, 16);
+      dest.copyFromDeviceBuffer(to);
+      assertEquals(987654321, dest.getLong(0));
+    }
+  }
+
+  @Test
+  public void testRegisteringUnalignedBufferThrowsException() {
+    assumeTrue(CuFile.libraryLoaded());
+    assertThrows(IllegalArgumentException.class, () -> {
+      //noinspection EmptyTryBlock
+      try (CuFileBuffer ignored = CuFileBuffer.allocate(4095, true)) {
+      }
+    });
+  }
+
+  @Test
+  public void testReadWriteUnregisteredBuffer(@TempDir File tempDir) {
+    assumeTrue(CuFile.libraryLoaded());
+    File tempFile = new File(tempDir, "tempFile");
+    verifyReadWrite(tempFile, 16, false);
+  }
+
+  @Test
+  public void testReadWriteRegisteredBuffer(@TempDir File tempDir) {
+    assumeTrue(CuFile.libraryLoaded());
+    File tempFile = new File(tempDir, "tempFile");
+    verifyReadWrite(tempFile, 4096, true);
+  }
+
+  private void verifyReadWrite(File tempFile, int length, boolean registerBuffer) {
+    try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(length);
+         CuFileBuffer from = CuFileBuffer.allocate(length, registerBuffer);
+         CuFileWriteHandle writer = new CuFileWriteHandle(tempFile.getAbsolutePath())) {
+      orig.setLong(0, 123456789);
+      from.copyFromHostBuffer(orig);
+      writer.write(from, length, 0);
+
+      orig.setLong(0, 987654321);
+      from.copyFromHostBuffer(orig);
+      assertEquals(length, writer.append(from, length));
+    }
+    try (CuFileBuffer to = CuFileBuffer.allocate(length, registerBuffer);
+         CuFileReadHandle reader = new CuFileReadHandle(tempFile.getAbsolutePath());
+         HostMemoryBuffer dest = HostMemoryBuffer.allocate(length)) {
+      reader.read(to, 0);
+      dest.copyFromDeviceBuffer(to);
+      assertEquals(123456789, dest.getLong(0));
+
+      reader.read(to, length);
       dest.copyFromDeviceBuffer(to);
       assertEquals(987654321, dest.getLong(0));
     }

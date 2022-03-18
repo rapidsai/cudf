@@ -31,7 +31,7 @@ struct EmptyLikeTest : public cudf::test::BaseFixture {
 
 using numeric_types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(EmptyLikeTest, numeric_types);
+TYPED_TEST_SUITE(EmptyLikeTest, numeric_types);
 
 TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
 {
@@ -70,6 +70,84 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest)
 
   auto got = cudf::empty_like(strings);
   check_empty_string_columns(got->view(), strings);
+}
+
+template <typename T>
+struct EmptyLikeScalarTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_SUITE(EmptyLikeScalarTest, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
+{
+  // make a column
+  auto input = make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{});
+  // get a scalar out of it
+  std::unique_ptr<cudf::scalar> sc = cudf::get_element(*input, 0);
+
+  // empty_like(column) -> column
+  auto expected = cudf::empty_like(*input);
+  // empty_like(scalar) -> column
+  auto result = cudf::empty_like(*sc);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
+}
+
+struct EmptyLikeScalarStringTest : public EmptyLikeScalarTest<std::string> {
+};
+
+TEST_F(EmptyLikeScalarStringTest, String)
+{
+  // make a column
+  cudf::test::strings_column_wrapper input{"abc"};
+
+  // get a scalar out of it
+  std::unique_ptr<cudf::scalar> sc = cudf::get_element(input, 0);
+
+  // empty_like(column) -> column
+  auto expected = cudf::empty_like(input);
+  // empty_like(scalar) -> column
+  auto result = cudf::empty_like(*sc);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
+}
+
+struct EmptyLikeScalarListTest : public EmptyLikeScalarTest<cudf::list_view> {
+};
+
+TEST_F(EmptyLikeScalarListTest, List)
+{
+  // make a column
+  cudf::test::lists_column_wrapper<cudf::string_view> input{{{"abc", "def"}, {"h", "ijk"}},
+                                                            {{"123", "456"}, {"78"}}};
+  // get a scalar out of it
+  std::unique_ptr<cudf::scalar> sc = cudf::get_element(input, 0);
+
+  // empty_like(column) -> column
+  auto expected = cudf::empty_like(input);
+  // empty_like(scalar) -> column
+  auto result = cudf::empty_like(*sc);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
+}
+
+struct EmptyLikeScalarStructTest : public EmptyLikeScalarTest<cudf::struct_view> {
+};
+
+TEST_F(EmptyLikeScalarStructTest, Struct)
+{
+  cudf::test::lists_column_wrapper<cudf::string_view> col0{{{"abc", "def"}, {"h", "ijk"}}};
+  cudf::test::strings_column_wrapper col1{"abc"};
+  cudf::test::fixed_width_column_wrapper<float> col2{1.0f};
+  // scalar. TODO:  make cudf::get_element() work for struct scalars
+  cudf::table_view tbl({col0, col1, col2});
+  cudf::struct_scalar sc(tbl);
+  // column
+  cudf::test::structs_column_wrapper input({col0, col1, col2});
+
+  // empty_like(column) -> column
+  auto expected = cudf::empty_like(input);
+  // empty_like(scalar) -> column
+  auto result = cudf::empty_like(sc);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
 
 std::unique_ptr<cudf::table> create_table(cudf::size_type size, cudf::mask_state state)
@@ -113,7 +191,7 @@ struct AllocateLikeTest : public cudf::test::BaseFixture {
 };
 ;
 
-TYPED_TEST_CASE(AllocateLikeTest, numeric_types);
+TYPED_TEST_SUITE(AllocateLikeTest, numeric_types);
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
 {

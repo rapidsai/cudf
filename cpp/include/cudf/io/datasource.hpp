@@ -22,10 +22,15 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <arrow/buffer.h>
+#include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
+#include <arrow/result.h>
+#include <arrow/status.h>
 
+#include <future>
 #include <memory>
 
 namespace cudf {
@@ -47,12 +52,12 @@ class datasource {
     /**
      * @brief Returns the buffer size in bytes.
      */
-    virtual size_t size() const = 0;
+    [[nodiscard]] virtual size_t size() const = 0;
 
     /**
      * @brief Returns the address of the data in the buffer.
      */
-    virtual uint8_t const* data() const = 0;
+    [[nodiscard]] virtual uint8_t const* data() const = 0;
 
     /**
      * @brief Base class destructor
@@ -150,7 +155,7 @@ class datasource {
    *
    * @return bool Whether this source supports device_read() calls
    */
-  virtual bool supports_device_read() const { return false; }
+  [[nodiscard]] virtual bool supports_device_read() const { return false; }
 
   /**
    * @brief Estimates whether a direct device read would be more optimal for the given size.
@@ -158,7 +163,10 @@ class datasource {
    * @param size Number of bytes to read
    * @return whether the device read is expected to be more performant for the given size
    */
-  virtual bool is_device_read_preferred(size_t size) const { return supports_device_read(); }
+  [[nodiscard]] virtual bool is_device_read_preferred(size_t size) const
+  {
+    return supports_device_read();
+  }
 
   /**
    * @brief Returns a device buffer with a subset of data from the source.
@@ -206,35 +214,63 @@ class datasource {
   }
 
   /**
+   * @brief Asynchronously reads a selected range into a preallocated device buffer
+   *
+   * Returns a future value that contains the number of bytes read. Calling `get()` method of the
+   * return value synchronizes this function.
+   *
+   * For optimal performance, should only be called when `is_device_read_preferred` returns `true`.
+   * Data source implementations that don't support direct device reads don't need to override this
+   * function.
+   *
+   *  @throws cudf::logic_error when the object does not support direct device reads, i.e.
+   * `supports_device_read` returns `false`.
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use
+   *
+   * @return The number of bytes read as a future value (can be smaller than size)
+   */
+  virtual std::future<size_t> device_read_async(size_t offset,
+                                                size_t size,
+                                                uint8_t* dst,
+                                                rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("datasource classes that support device_read_async must override it.");
+  }
+
+  /**
    * @brief Returns the size of the data in the source.
    *
    * @return size_t The size of the source data in bytes
    */
-  virtual size_t size() const = 0;
+  [[nodiscard]] virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
    * @return bool True if there is data, False otherwise
    */
-  virtual bool is_empty() const { return size() == 0; }
+  [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
 
   /**
    * @brief Implementation for non owning buffer where datasource holds buffer until destruction.
    */
   class non_owning_buffer : public buffer {
    public:
-    non_owning_buffer() : _data(0), _size(0) {}
+    non_owning_buffer() {}
 
     non_owning_buffer(uint8_t* data, size_t size) : _data(data), _size(size) {}
 
-    size_t size() const override { return _size; }
+    [[nodiscard]] size_t size() const override { return _size; }
 
-    uint8_t const* data() const override { return _data; }
+    [[nodiscard]] uint8_t const* data() const override { return _data; }
 
    private:
-    uint8_t* const _data;
-    size_t const _size;
+    uint8_t* const _data{nullptr};
+    size_t const _size{0};
   };
 
   /**
@@ -264,9 +300,12 @@ class datasource {
     {
     }
 
-    size_t size() const override { return _size; }
+    [[nodiscard]] size_t size() const override { return _size; }
 
-    uint8_t const* data() const override { return static_cast<uint8_t const*>(_data_ptr); }
+    [[nodiscard]] uint8_t const* data() const override
+    {
+      return static_cast<uint8_t const*>(_data_ptr);
+    }
 
    private:
     Container _data;
@@ -297,11 +336,39 @@ class arrow_io_source : public datasource {
       : arrow_buffer(arrow_buffer)
     {
     }
-    size_t size() const override { return arrow_buffer->size(); }
-    uint8_t const* data() const override { return arrow_buffer->data(); }
+    [[nodiscard]] size_t size() const override { return arrow_buffer->size(); }
+    [[nodiscard]] uint8_t const* data() const override { return arrow_buffer->data(); }
   };
 
  public:
+  /**
+   * @brief Constructs an object from an Apache Arrow Filesystem URI
+   *
+   * @param arrow_uri Apache Arrow Filesystem URI
+   */
+  explicit arrow_io_source(std::string_view arrow_uri)
+  {
+    const std::string uri_start_delimiter = "//";
+    const std::string uri_end_delimiter   = "?";
+
+    arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
+      arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));
+    CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI.");
+    filesystem = result.ValueOrDie();
+
+    // Parse the path from the URI
+    size_t start          = arrow_uri.find(uri_start_delimiter) == std::string::npos
+                              ? 0
+                              : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
+    size_t end            = arrow_uri.find(uri_end_delimiter) - start;
+    std::string_view path = arrow_uri.substr(start, end);
+
+    arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
+      filesystem->OpenInputFile(static_cast<std::string>(path).c_str());
+    CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
+    arrow_file = in_stream.ValueOrDie();
+  }
+
   /**
    * @brief Constructs an object from an `arrow` source object.
    *
@@ -332,7 +399,7 @@ class arrow_io_source : public datasource {
   /**
    * @brief Returns the size of the data in the `arrow` source.
    */
-  size_t size() const override
+  [[nodiscard]] size_t size() const override
   {
     auto result = arrow_file->GetSize();
     CUDF_EXPECTS(result.ok(), "Cannot get file size");
@@ -340,6 +407,7 @@ class arrow_io_source : public datasource {
   }
 
  private:
+  std::shared_ptr<arrow::fs::FileSystem> filesystem;
   std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
 };
 

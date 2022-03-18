@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -57,9 +58,6 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     column_device_view::create(std::declval<column_view>(), std::declval<rmm::cuda_stream_view>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(views.begin(), views.end(), device_view_owners.begin(), [stream](auto const& col) {
-    // TODO creating this device view can invoke null count computation
-    // even though it isn't used. See this issue:
-    // https://github.com/rapidsai/cudf/issues/4368
     return column_device_view::create(col, stream);
   });
 
@@ -70,10 +68,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  device_view_owners.cend(),
                  std::back_inserter(device_views),
                  [](auto const& col) { return *col; });
-  // TODO each of these device vector copies invoke stream synchronization
-  // which appears to add unnecessary overhead. See this issue:
-  // https://github.com/rapidsai/rmm/issues/120
-  auto d_views = make_device_uvector_async(device_views);
+
+  auto d_views = make_device_uvector_async(device_views, stream);
 
   // Compute the partition offsets
   auto offsets = thrust::host_vector<size_t>(views.size() + 1);
@@ -83,8 +79,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     device_views.cend(),
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
-    thrust::plus<size_t>{});
-  auto d_offsets         = make_device_uvector_async(offsets);
+    thrust::plus{});
+  auto d_offsets         = make_device_uvector_async(offsets, stream);
   auto const output_size = offsets.back();
 
   return std::make_tuple(
@@ -117,7 +113,7 @@ __global__ void concatenate_masks_kernel(column_device_view const* views,
       thrust::upper_bound(
         thrust::seq, output_offsets, output_offsets + number_of_views, mask_index) -
       output_offsets - 1;
-    bool bit_is_set = 1;
+    bool bit_is_set = true;
     if (source_view_index < number_of_views) {
       size_type const column_element_index = mask_index - output_offsets[source_view_index];
       bit_is_set = views[source_view_index].is_valid(column_element_index);
@@ -170,7 +166,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   auto const output_size = output_view.size();
   auto* output_data      = output_view.data<T>();
 
-  size_type output_index     = threadIdx.x + blockIdx.x * blockDim.x;
+  int64_t output_index       = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
@@ -226,7 +222,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto const& d_offsets   = std::get<2>(device_views);
   auto const output_size  = std::get<3>(device_views);
 
-  CUDF_EXPECTS(output_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range");
 
   // Allocate output
@@ -334,58 +330,140 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
 
 namespace {
 
+void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream);
+
+/**
+ * @brief Functor for traversing child columns and recursively verifying concatenation
+ * bounds and types.
+ */
+class traverse_children {
+ public:
+  // nothing to do for simple types.
+  template <typename T>
+  void operator()(host_span<column_view const>, rmm::cuda_stream_view)
+  {
+  }
+
+ private:
+  // verify length of concatenated offsets.
+  void check_offsets_size(host_span<column_view const> cols)
+  {
+    // offsets.  we can't just add up the total sizes of all offset child columns because each one
+    // has an extra value, regardless of the # of parent rows.  So we have to add up the total # of
+    // rows in the base column and add 1 at the end
+    size_t const total_offset_count =
+      std::accumulate(cols.begin(),
+                      cols.end(),
+                      std::size_t{},
+                      [](size_t a, auto const& b) -> size_t { return a + b.size(); }) +
+      1;
+    // note:  output text must include "exceeds size_type range" for python error handling
+    CUDF_EXPECTS(total_offset_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+                 "Total number of concatenated offsets exceeds size_type range");
+  }
+};
+
+template <>
+void traverse_children::operator()<cudf::string_view>(host_span<column_view const> cols,
+                                                      rmm::cuda_stream_view stream)
+{
+  // verify offsets
+  check_offsets_size(cols);
+
+  // chars
+  size_t const total_char_count = std::accumulate(
+    cols.begin(), cols.end(), std::size_t{}, [stream](size_t a, auto const& b) -> size_t {
+      strings_column_view scv(b);
+      return a + (scv.is_empty() ? 0
+                  // if the column is unsliced, skip the offset retrieval.
+                  : scv.offset() > 0
+                    ? cudf::detail::get_value<offset_type>(
+                        scv.offsets(), scv.offset() + scv.size(), stream) -
+                        cudf::detail::get_value<offset_type>(scv.offsets(), scv.offset(), stream)
+                  // if the offset() is 0, it can still be sliced to a shorter length. in this case
+                  // we only need to read a single offset. otherwise just return the full length
+                  // (chars_size())
+                  : scv.size() + 1 == scv.offsets().size()
+                    ? scv.chars_size()
+                    : cudf::detail::get_value<offset_type>(scv.offsets(), scv.size(), stream));
+    });
+  // note:  output text must include "exceeds size_type range" for python error handling
+  CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "Total number of concatenated chars exceeds size_type range");
+}
+
+template <>
+void traverse_children::operator()<cudf::struct_view>(host_span<column_view const> cols,
+                                                      rmm::cuda_stream_view stream)
+{
+  // march each child
+  auto child_iter         = thrust::make_counting_iterator(0);
+  auto const num_children = cols.front().num_children();
+  std::vector<column_view> nth_children;
+  nth_children.reserve(cols.size());
+  std::for_each(child_iter, child_iter + num_children, [&](auto child_index) {
+    std::transform(cols.begin(),
+                   cols.end(),
+                   std::back_inserter(nth_children),
+                   [child_index, stream](column_view const& col) {
+                     structs_column_view scv(col);
+                     return scv.get_sliced_child(child_index);
+                   });
+
+    bounds_and_type_check(nth_children, stream);
+    nth_children.clear();
+  });
+}
+
+template <>
+void traverse_children::operator()<cudf::list_view>(host_span<column_view const> cols,
+                                                    rmm::cuda_stream_view stream)
+{
+  // verify offsets
+  check_offsets_size(cols);
+
+  // recurse into the child columns
+  std::vector<column_view> nth_children;
+  nth_children.reserve(cols.size());
+  std::transform(
+    cols.begin(), cols.end(), std::back_inserter(nth_children), [stream](column_view const& col) {
+      lists_column_view lcv(col);
+      return lcv.get_sliced_child(stream);
+    });
+  bounds_and_type_check(nth_children, stream);
+}
+
 /**
  * @brief Verifies that the sum of the sizes of all the columns to be concatenated
  * will not exceed the max value of size_type, and verifies all column types match
  *
- * @param begin Beginning of range of columns to check
- * @param end End of range of columns to check
+ * @param columns_to_concat Span of columns to check
  *
  * @throws cudf::logic_error if the total length of the concatenated columns would
  * exceed the max value of size_type
  *
  * @throws cudf::logic_error if all of the input column types don't match
  */
-template <typename ColIter>
-void bounds_and_type_check(ColIter begin, ColIter end)
+void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(std::all_of(begin,
-                           end,
-                           [expected_type = (*begin).type()](auto const& c) {
+  CUDF_EXPECTS(std::all_of(cols.begin(),
+                           cols.end(),
+                           [expected_type = cols.front().type()](auto const& c) {
                              return c.type() == expected_type;
                            }),
                "Type mismatch in columns to concatenate.");
 
   // total size of all concatenated rows
   size_t const total_row_count =
-    std::accumulate(begin, end, std::size_t{}, [](size_t a, auto const& b) {
+    std::accumulate(cols.begin(), cols.end(), std::size_t{}, [](size_t a, auto const& b) {
       return a + static_cast<size_t>(b.size());
     });
-  CUDF_EXPECTS(total_row_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+  // note:  output text must include "exceeds size_type range" for python error handling
+  CUDF_EXPECTS(total_row_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range");
 
-  // march each child
-  auto child_iter         = thrust::make_counting_iterator(0);
-  auto const num_children = (*begin).num_children();
-  std::for_each(child_iter, child_iter + num_children, [&](auto child_index) {
-    std::vector<column_view> nth_children;
-    nth_children.reserve(std::distance(begin, end));
-
-    // we cannot do this via a transform iterator + std::copy_if because some columns
-    // can have no children if they are empty.  so if we had 3 input string columns
-    // and 1 of them was empty, 2 of them would have 2 children, and 1 of them would have
-    // 0 children. so it is not safe to index col.child() directly.
-    std::for_each(begin, end, [child_index, &nth_children](column_view const& col) {
-      if (col.num_children() <= child_index) {
-        CUDF_EXPECTS(col.num_children() == 0,
-                     "Encountered a child column with an unexpected # of children");
-      } else {
-        nth_children.push_back(col.child(child_index));
-      }
-    });
-
-    bounds_and_type_check(nth_children.begin(), nth_children.end());
-  });
+  // traverse children
+  cudf::type_dispatcher(cols.front().type(), traverse_children{}, cols, stream);
 }
 
 }  // anonymous namespace
@@ -398,7 +476,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
   CUDF_EXPECTS(not columns_to_concat.empty(), "Unexpected empty list of columns to concatenate.");
 
   // verify all types match and that we won't overflow size_type in output size
-  bounds_and_type_check(columns_to_concat.begin(), columns_to_concat.end());
+  bounds_and_type_check(columns_to_concat, stream);
 
   if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(), [](column_view const& c) {
         return c.is_empty();
@@ -433,7 +511,7 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                    [i](auto const& t) { return t.column(i); });
 
     // verify all types match and that we won't overflow size_type in output size
-    bounds_and_type_check(cols.begin(), cols.end());
+    bounds_and_type_check(cols, stream);
     concat_columns.emplace_back(detail::concatenate(cols, stream, mr));
   }
   return std::make_unique<table>(std::move(concat_columns));

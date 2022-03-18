@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <hash/concurrent_unordered_multimap.cuh>
 #include <hash/hash_allocator.cuh>
 
-#include <cudf_test/base_fixture.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/device_vector.h>
 
 #include <gtest/gtest.h>
 
-#include <cstdlib>
-#include <iostream>
 #include <limits>
-#include <vector>
 
 // This is necessary to do a parametrized typed-test over multiple template
 // arguments
@@ -70,22 +66,21 @@ class MultimapTest : public cudf::test::BaseFixture {
     rmm::cuda_stream_default.synchronize();
   }
 
-  ~MultimapTest() {}
+  ~MultimapTest() override {}
 };
 
 // Google Test can only do a parameterized typed-test over a single type, so we
 // have to nest multiple types inside of the KeyValueTypes struct above
 // KeyValueTypes<type1, type2> implies key_type = type1, value_type = type2
 // This list is the types across which Google Test will run our tests
-typedef ::testing::Types<KeyValueTypes<int, int>,
-                         KeyValueTypes<int, long long int>,
-                         KeyValueTypes<int, unsigned long long int>,
-                         KeyValueTypes<unsigned long long int, int>,
-                         KeyValueTypes<unsigned long long int, long long int>,
-                         KeyValueTypes<unsigned long long int, unsigned long long int>>
-  Implementations;
+using Implementations = ::testing::Types<KeyValueTypes<int, int>,
+                                         KeyValueTypes<int, long long>,
+                                         KeyValueTypes<int, unsigned long long>,
+                                         KeyValueTypes<unsigned long long, int>,
+                                         KeyValueTypes<unsigned long long, long long>,
+                                         KeyValueTypes<unsigned long long, unsigned long long>>;
 
-TYPED_TEST_CASE(MultimapTest, Implementations);
+TYPED_TEST_SUITE(MultimapTest, Implementations);
 
 TYPED_TEST(MultimapTest, InitialState)
 {

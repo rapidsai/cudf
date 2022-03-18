@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/transform.h>
+#include <thrust/gather.h>
 
 namespace cudf {
 namespace groupby {
@@ -34,34 +34,29 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      rmm::mr::device_memory_resource* mr)
 {
   auto indices = type_dispatcher(values.type(),
-                                 reduce_functor<aggregation::ARGMAX>{},
+                                 group_reduction_dispatcher<aggregation::ARGMAX>{},
                                  values,
                                  num_groups,
                                  group_labels,
                                  stream,
-                                 rmm::mr::get_current_device_resource());
+                                 mr);
 
   // The functor returns the index of maximum in the sorted values.
   // We need the index of maximum in the original unsorted values.
   // So use indices to gather the sort order used to sort `values`.
   // Gather map cannot be null so we make a view with the mask removed.
   // The values in data buffer of indices corresponding to null values was
-  // initialized to ARGMAX_SENTINEL which is an out of bounds index value (-1)
-  // and causes the gathered value to be null.
-  column_view null_removed_indices(
-    data_type(type_to_id<size_type>()),
-    indices->size(),
-    static_cast<void const*>(indices->view().template data<size_type>()));
-  auto result_table =
-    cudf::detail::gather(table_view({key_sort_order}),
-                         null_removed_indices,
-                         indices->nullable() ? cudf::out_of_bounds_policy::NULLIFY
-                                             : cudf::out_of_bounds_policy::DONT_CHECK,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         stream,
-                         mr);
-
-  return std::move(result_table->release()[0]);
+  // initialized to ARGMAX_SENTINEL. Using gather_if.
+  // This can't use gather because nulls in gathered column will not store ARGMAX_SENTINEL.
+  auto indices_view = indices->mutable_view();
+  thrust::gather_if(rmm::exec_policy(stream),
+                    indices_view.begin<size_type>(),    // map first
+                    indices_view.end<size_type>(),      // map last
+                    indices_view.begin<size_type>(),    // stencil
+                    key_sort_order.begin<size_type>(),  // input
+                    indices_view.begin<size_type>(),    // result
+                    [] __device__(auto i) { return (i != cudf::detail::ARGMAX_SENTINEL); });
+  return indices;
 }
 
 }  // namespace detail

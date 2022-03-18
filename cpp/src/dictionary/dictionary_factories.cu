@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
-  if (keys_column.is_empty()) return make_empty_column(data_type{type_id::DICTIONARY32});
+  if (keys_column.is_empty()) return make_empty_column(type_id::DICTIONARY32);
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
   auto indices_copy =
@@ -134,7 +134,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
     // If the types match, then just commandeer the column's data buffer.
     if (new_type.id() == indices_type) {
       return std::make_unique<column>(
-        new_type, indices_size, *(contents.data.release()), rmm::device_buffer{0, stream, mr}, 0);
+        new_type, indices_size, std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};

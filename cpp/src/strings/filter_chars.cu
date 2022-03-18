@@ -21,12 +21,11 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
-
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -117,8 +116,8 @@ std::unique_ptr<column> filter_characters(
   rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
-  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   cudf::string_view d_replacement(replacement.data(), replacement.size());
 
   // convert input table for copy to device memory
@@ -128,12 +127,7 @@ std::unique_ptr<column> filter_characters(
     characters_to_filter.begin(), characters_to_filter.end(), htable.begin(), [](auto entry) {
       return char_range{entry.first, entry.second};
     });
-  rmm::device_uvector<char_range> table(table_size, stream);
-  CUDA_TRY(cudaMemcpyAsync(table.data(),
-                           htable.data(),
-                           table_size * sizeof(char_range),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<char_range> table = cudf::detail::make_device_uvector_async(htable, stream);
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
@@ -145,9 +139,7 @@ std::unique_ptr<column> filter_characters(
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail

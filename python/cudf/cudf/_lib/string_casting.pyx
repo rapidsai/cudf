@@ -3,56 +3,57 @@
 import numpy as np
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar import as_device_scalar
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id
 
-from cudf.core.column.column import as_column
+from cudf._lib.scalar import as_device_scalar
+
+from cudf._lib.scalar cimport DeviceScalar
+
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+
+from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.convert.convert_booleans cimport (
+    from_booleans as cpp_from_booleans,
     to_booleans as cpp_to_booleans,
-    from_booleans as cpp_from_booleans
 )
 from cudf._lib.cpp.strings.convert.convert_datetime cimport (
-    to_timestamps as cpp_to_timestamps,
     from_timestamps as cpp_from_timestamps,
-    is_timestamp as cpp_is_timestamp
-)
-from cudf._lib.cpp.strings.convert.convert_floats cimport (
-    to_floats as cpp_to_floats,
-    from_floats as cpp_from_floats
-)
-from cudf._lib.cpp.strings.convert.convert_integers cimport (
-    to_integers as cpp_to_integers,
-    from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers,
-    is_hex as cpp_is_hex
-)
-from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
-    ipv4_to_integers as cpp_ipv4_to_integers,
-    integers_to_ipv4 as cpp_integers_to_ipv4,
-    is_ipv4 as cpp_is_ipv4
-)
-from cudf._lib.cpp.strings.convert.convert_urls cimport (
-    url_encode as cpp_url_encode,
-    url_decode as cpp_url_decode
+    is_timestamp as cpp_is_timestamp,
+    to_timestamps as cpp_to_timestamps,
 )
 from cudf._lib.cpp.strings.convert.convert_durations cimport (
+    from_durations as cpp_from_durations,
     to_durations as cpp_to_durations,
-    from_durations as cpp_from_durations
 )
-from cudf._lib.cpp.types cimport (
-    type_id,
-    data_type,
+from cudf._lib.cpp.strings.convert.convert_floats cimport (
+    from_floats as cpp_from_floats,
+    to_floats as cpp_to_floats,
 )
+from cudf._lib.cpp.strings.convert.convert_integers cimport (
+    from_integers as cpp_from_integers,
+    hex_to_integers as cpp_hex_to_integers,
+    integers_to_hex as cpp_integers_to_hex,
+    is_hex as cpp_is_hex,
+    to_integers as cpp_to_integers,
+)
+from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
+    integers_to_ipv4 as cpp_integers_to_ipv4,
+    ipv4_to_integers as cpp_ipv4_to_integers,
+    is_ipv4 as cpp_is_ipv4,
+)
+from cudf._lib.cpp.strings.convert.convert_urls cimport (
+    url_decode as cpp_url_decode,
+    url_encode as cpp_url_encode,
+)
+from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.types cimport underlying_type_t_type_id
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.string cimport string
+import cudf
 
 
 def floating_to_string(Column input_col):
@@ -71,7 +72,7 @@ def string_to_floating(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -113,7 +114,7 @@ def stod(Column input_col, **kwargs):
     A Column with strings cast to double
     """
 
-    return string_to_floating(input_col, np.dtype("float64"))
+    return string_to_floating(input_col, cudf.dtype("float64"))
 
 
 def ftos(Column input_col):
@@ -145,7 +146,7 @@ def stof(Column input_col, **kwargs):
     A Column with strings cast to float
     """
 
-    return string_to_floating(input_col, np.dtype("float32"))
+    return string_to_floating(input_col, cudf.dtype("float32"))
 
 
 def integer_to_string(Column input_col):
@@ -164,7 +165,7 @@ def string_to_integer(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -206,7 +207,7 @@ def stoi8(Column input_col, **kwargs):
     A Column with strings cast to int8
     """
 
-    return string_to_integer(input_col, np.dtype("int8"))
+    return string_to_integer(input_col, cudf.dtype("int8"))
 
 
 def i16tos(Column input_col):
@@ -238,7 +239,7 @@ def stoi16(Column input_col):
     A Column with strings cast to int16
     """
 
-    return string_to_integer(input_col, np.dtype("int16"))
+    return string_to_integer(input_col, cudf.dtype("int16"))
 
 
 def itos(Column input_col):
@@ -270,7 +271,7 @@ def stoi(Column input_col):
     A Column with strings cast to int32
     """
 
-    return string_to_integer(input_col, np.dtype("int32"))
+    return string_to_integer(input_col, cudf.dtype("int32"))
 
 
 def ltos(Column input_col):
@@ -302,7 +303,7 @@ def stol(Column input_col, **kwargs):
     A Column with strings cast to int64
     """
 
-    return string_to_integer(input_col, np.dtype("int64"))
+    return string_to_integer(input_col, cudf.dtype("int64"))
 
 
 def ui8tos(Column input_col):
@@ -334,7 +335,7 @@ def stoui8(Column input_col, **kwargs):
     A Column with strings cast to uint8
     """
 
-    return string_to_integer(input_col, np.dtype("uint8"))
+    return string_to_integer(input_col, cudf.dtype("uint8"))
 
 
 def ui16tos(Column input_col):
@@ -366,7 +367,7 @@ def stoui16(Column input_col, **kwargs):
     A Column with strings cast to uint16
     """
 
-    return string_to_integer(input_col, np.dtype("uint16"))
+    return string_to_integer(input_col, cudf.dtype("uint16"))
 
 
 def uitos(Column input_col):
@@ -398,7 +399,7 @@ def stoui(Column input_col, **kwargs):
     A Column with strings cast to uint32
     """
 
-    return string_to_integer(input_col, np.dtype("uint32"))
+    return string_to_integer(input_col, cudf.dtype("uint32"))
 
 
 def ultos(Column input_col):
@@ -430,7 +431,7 @@ def stoul(Column input_col, **kwargs):
     A Column with strings cast to uint64
     """
 
-    return string_to_integer(input_col, np.dtype("uint64"))
+    return string_to_integer(input_col, cudf.dtype("uint64"))
 
 
 def _to_booleans(Column input_col, object string_true="True"):
@@ -508,7 +509,8 @@ def from_booleans(Column input_col):
 
 def int2timestamp(
         Column input_col,
-        format):
+        str format,
+        Column names):
     """
     Converting/Casting input date-time column to string
     column with specified format
@@ -516,6 +518,9 @@ def int2timestamp(
     Parameters
     ----------
     input_col : input column of type timestamp in integer format
+    format : The string specifying output format
+    names : The string names to use for weekdays ("%a", "%A") and
+    months ("%b", "%B")
 
     Returns
     -------
@@ -524,12 +529,15 @@ def int2timestamp(
     """
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = format.encode("UTF-8")
+    cdef column_view input_strings_names = names.view()
+
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
             cpp_from_timestamps(
                 input_column_view,
-                c_timestamp_format))
+                c_timestamp_format,
+                input_strings_names))
 
     return Column.from_unique_ptr(move(c_result))
 
@@ -551,7 +559,7 @@ def timestamp2int(Column input_col, dtype, format):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[dtype]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
@@ -586,7 +594,7 @@ def istimestamp(
 
     """
     if input_col.size == 0:
-        return as_column([], dtype=kwargs.get('dtype'))
+        return cudf.core.column.as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
     cdef unique_ptr[column] c_result
@@ -616,7 +624,7 @@ def timedelta2int(Column input_col, dtype, format):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[dtype]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
@@ -743,7 +751,9 @@ def htoi(Column input_col, **kwargs):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype', np.dtype("int64"))]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
+                kwargs.get('dtype', cudf.dtype("int64"))
+            ]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -769,5 +779,28 @@ def is_hex(Column source_strings):
         c_result = move(cpp_is_hex(
             source_view
         ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def itoh(Column input_col):
+    """
+    Converting input column of type integer to a string
+    column with hexadecimal character digits.
+
+    Parameters
+    ----------
+    input_col : input column of type integer
+
+    Returns
+    -------
+    A Column of strings with hexadecimal characters.
+    """
+
+    cdef column_view input_column_view = input_col.view()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_integers_to_hex(input_column_view))
 
     return Column.from_unique_ptr(move(c_result))

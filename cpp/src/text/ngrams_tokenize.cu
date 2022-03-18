@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
+#include <text/utilities/tokenize_ops.cuh>
+
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/ngrams_tokenize.hpp>
-
-#include <strings/utilities.cuh>
-
-#include <text/utilities/tokenize_ops.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -139,9 +138,9 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view d_separator(separator.data(), separator.size());
 
   CUDF_EXPECTS(ngrams >= 1, "Parameter ngrams should be an integer value of 1 or greater");
@@ -166,8 +165,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
                                    d_token_offsets + 1,
                                    strings_tokenizer{d_strings, d_delimiter},
                                    thrust::plus<int32_t>());
-  int32_t const zero = 0;
-  token_offsets.set_element_async(0, zero, stream);
+  token_offsets.set_element_to_zero_async(0, stream);
   auto const total_tokens = token_offsets.back_element(stream);  // Ex. 5 tokens
 
   // get the token positions (in bytes) per string
@@ -194,7 +192,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
       return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
     },
     thrust::plus<int32_t>());
-  ngram_offsets.set_element_async(0, zero, stream);
+  ngram_offsets.set_element_to_zero_async(0, stream);
   auto const total_ngrams = ngram_offsets.back_element(stream);
 
   // Compute the total size of the ngrams for each string (not for each ngram)
@@ -214,7 +212,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
     d_chars_offsets + 1,
     ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions},
     thrust::plus<int32_t>());
-  chars_offsets.set_element_async(0, zero, stream);
+  chars_offsets.set_element_to_zero_async(0, stream);
   auto const output_chars_size = chars_offsets.back_element(stream);  // Ex. 14 output bytes total
 
   rmm::device_uvector<int32_t> ngram_sizes(total_ngrams, stream);  // size in bytes of each
@@ -222,7 +220,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
 
   // build chars column
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, output_chars_size, stream, mr);
+    cudf::strings::detail::create_chars_child_column(output_chars_size, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   // Generate the ngrams into the chars column data buffer.
   // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
@@ -245,13 +243,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
-  return make_strings_column(total_ngrams,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             0,
-                             rmm::device_buffer{0, stream, mr},
-                             stream,
-                             mr);
+  return make_strings_column(
+    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

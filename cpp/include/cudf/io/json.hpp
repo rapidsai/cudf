@@ -23,7 +23,9 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <map>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace cudf {
@@ -66,7 +68,7 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::vector<std::string> _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -109,12 +111,15 @@ class json_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns data types of the columns.
    */
-  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
+  {
+    return _dtypes;
+  }
 
   /**
    * @brief Returns compression format of the source.
@@ -132,6 +137,38 @@ class json_reader_options {
   size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
+   * @brief Returns number of bytes to read with padding.
+   */
+  size_t get_byte_range_size_with_padding() const
+  {
+    if (_byte_range_size == 0) {
+      return 0;
+    } else {
+      return _byte_range_size + get_byte_range_padding();
+    }
+  }
+
+  /**
+   * @brief Returns number of bytes to pad when reading.
+   */
+  size_t get_byte_range_padding() const
+  {
+    auto const num_columns = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+
+    auto const max_row_bytes = 16 * 1024;  // 16KB
+    auto const column_bytes  = 64;
+    auto const base_padding  = 1024;  // 1KB
+
+    if (num_columns == 0) {
+      // Use flat size if the number of columns is not known
+      return max_row_bytes;
+    }
+
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes;
+  }
+
+  /**
    * @brief Whether to read the file as a json object per line.
    */
   bool is_enabled_lines() const { return _lines; }
@@ -144,16 +181,23 @@ class json_reader_options {
   /**
    * @brief Set data types for columns to be read.
    *
+   * @param types Vector of dtypes
+   */
+  void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
    * @param types Vector dtypes in string format.
    */
-  void dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Set the compression type.
    *
    * @param comp_type The compression type used.
    */
-  void compression(compression_type comp_type) { _compression = comp_type; }
+  void set_compression(compression_type comp_type) { _compression = comp_type; }
 
   /**
    * @brief Set number of bytes to skip from source start.
@@ -205,10 +249,22 @@ class json_reader_options_builder {
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Vector dtypes in string format.
-   * @return this for chaining.
+   * @param types Vector of dtypes
+   * @return this for chaining
    */
-  json_reader_options_builder& dtypes(std::vector<std::string> types)
+  json_reader_options_builder& dtypes(std::vector<data_type> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> dtype map.
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(std::map<std::string, data_type> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -277,7 +333,7 @@ class json_reader_options_builder {
   /**
    * @brief move json_reader_options member once it's built.
    */
-  operator json_reader_options &&() { return std::move(options); }
+  operator json_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move json_reader_options member once it's built.
@@ -292,11 +348,9 @@ class json_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.json";
- *  cudf::read_json_options options = cudf::read_json_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_json(options);
+ *  auto source  = cudf::io::source_info("dataset.json");
+ *  auto options = cudf::io::read_json_options::builder(source);
+ *  auto result  = cudf::io::read_json(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
@@ -306,7 +360,7 @@ class json_reader_options_builder {
  * @return The set of columns along with metadata.
  */
 table_with_metadata read_json(
-  json_reader_options const& options,
+  json_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

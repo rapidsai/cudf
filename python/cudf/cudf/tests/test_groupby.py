@@ -13,31 +13,46 @@ from numpy.testing import assert_array_equal
 import rmm
 
 import cudf
-from cudf.core import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import (
+from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_130, PANDAS_LT_140
+from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
 )
+from cudf.testing.dataset_generator import rand_dataframe
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
-_index_type_aggs = {"count", "idxmin", "idxmax"}
+_index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
 
 
-def assert_groupby_results_equal(expect, got, sort=True, **kwargs):
+def assert_groupby_results_equal(
+    expect, got, sort=True, as_index=True, by=None, **kwargs
+):
     # Because we don't sort by index by default in groupby,
-    # sort expect and got by index before comparing
+    # sort expect and got by index before comparing.
     if sort:
-        expect = expect.sort_index()
-        got = got.sort_index()
-    else:
-        assert_eq(expect.sort_index(), got.sort_index(), **kwargs)
+        if as_index:
+            expect = expect.sort_index()
+            got = got.sort_index()
+        else:
+            assert by is not None
+            if isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
+                expect = expect.sort_values(by=by).reset_index(drop=True)
+            else:
+                expect = expect.sort_values().reset_index(drop=True)
+
+            if isinstance(got, cudf.DataFrame):
+                got = got.sort_values(by=by).reset_index(drop=True)
+            else:
+                got = got.sort_values().reset_index(drop=True)
+
+    assert_eq(expect, got, **kwargs)
 
 
 def make_frame(
@@ -67,11 +82,6 @@ def make_frame(
         ).astype("datetime64[ns]")
 
     return df
-
-
-def get_nelem():
-    for elem in [2, 3, 1000]:
-        yield elem
 
 
 @pytest.fixture
@@ -181,7 +191,7 @@ def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     else:
         # column names don't match - check just the values
         for gcol, pcol in zip(gdf, pdf):
-            assert_array_equal(gdf[gcol].to_array(), pdf[pcol].values)
+            assert_array_equal(gdf[gcol].to_numpy(), pdf[pcol].values)
 
 
 def test_groupby_default(pdf, gdf):
@@ -201,10 +211,16 @@ def test_groupby_getitem_getattr(as_index):
     pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("x")["y"].sum(), gdf.groupby("x")["y"].sum(),
+        pdf.groupby("x")["y"].sum(),
+        gdf.groupby("x")["y"].sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x").y.sum(), gdf.groupby("x").y.sum(),
+        pdf.groupby("x").y.sum(),
+        gdf.groupby("x").y.sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
         pdf.groupby("x")[["y"]].sum(), gdf.groupby("x")[["y"]].sum(),
@@ -212,6 +228,8 @@ def test_groupby_getitem_getattr(as_index):
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
         gdf.groupby(["x", "y"], as_index=as_index).sum(),
+        as_index=as_index,
+        by=["x", "y"],
     )
 
 
@@ -221,7 +239,7 @@ def test_groupby_cats():
     df["vals"] = np.random.random(len(df))
 
     cats = df["cats"].values_host
-    vals = df["vals"].to_array()
+    vals = df["vals"].to_numpy()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
 
@@ -314,7 +332,18 @@ def test_groupby_apply_grouped():
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
-    ["mean", "std", "var", "min", "max", "idxmin", "idxmax", "count", "sum"],
+    [
+        "mean",
+        "std",
+        "var",
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "count",
+        "sum",
+        "prod",
+    ],
 )
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multiIndex)
@@ -335,6 +364,10 @@ def test_groupby_2keys_agg(nelem, func):
     # TODO: Replace the above line with the one below once
     # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
+)
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits after the decimal to use.
@@ -390,7 +423,7 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
 )
 def test_series_groupby(agg):
     s = pd.Series([1, 2, 3])
@@ -404,7 +437,7 @@ def test_series_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
 )
 def test_series_groupby_agg(agg):
     s = pd.Series([1, 2, 3])
@@ -422,6 +455,7 @@ def test_series_groupby_agg(agg):
         "max",
         "count",
         "sum",
+        "prod",
         "mean",
         pytest.param(
             "idxmin",
@@ -451,6 +485,7 @@ def test_groupby_level_zero(agg):
         "max",
         "count",
         "sum",
+        "prod",
         "mean",
         pytest.param(
             "idxmin",
@@ -815,7 +850,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmax", "idxmax", "sum", "count", "mean"]
+    "agg", ["min", "max", "idxmax", "idxmax", "sum", "prod", "count", "mean"]
 )
 def test_groupby_nulls_basic(agg):
     check_dtype = False if agg in _index_type_aggs else True
@@ -855,7 +890,7 @@ def test_groupby_nulls_basic(agg):
     # Pandas' null semantics. Should we change it?
     assert_groupby_results_equal(
         getattr(pdf.groupby("a"), agg)().fillna(0),
-        getattr(gdf.groupby("a"), agg)().fillna(0),
+        getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
         check_dtype=check_dtype,
     )
 
@@ -949,7 +984,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert isinstance(res.index, cudf.core.index.StringIndex)
+    assert isinstance(res.index, cudf.StringIndex)
 
 
 @pytest.mark.parametrize(
@@ -1026,7 +1061,37 @@ def test_groupby_size():
     )
 
 
-@pytest.mark.parametrize("nelem", get_nelem())
+def test_groupby_cumcount():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").cumcount(),
+        gdf.groupby("a").cumcount(),
+        check_dtype=False,
+    )
+
+    assert_groupby_results_equal(
+        pdf.groupby(["a", "b", "c"]).cumcount(),
+        gdf.groupby(["a", "b", "c"]).cumcount(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_groupby_results_equal(
+        pdf.groupby(sr).cumcount(),
+        gdf.groupby(sr).cumcount(),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 1000])
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmin", "idxmax", "mean", "count"]
@@ -1045,7 +1110,13 @@ def test_groupby_datetime(nelem, as_index, agg):
     else:
         pdres = pdg.agg({"datetime": agg})
         gdres = gdg.agg({"datetime": agg})
-    assert_groupby_results_equal(pdres, gdres, check_dtype=check_dtype)
+    assert_groupby_results_equal(
+        pdres,
+        gdres,
+        check_dtype=check_dtype,
+        as_index=as_index,
+        by=["datetime"],
+    )
 
 
 def test_groupby_dropna():
@@ -1231,12 +1302,20 @@ def test_groupby_nth(n, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43209",
+)
 def test_raise_data_error():
 
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    assert_exceptions_equal(pdf.groupby("a").mean, gdf.groupby("a").mean)
+    assert_exceptions_equal(
+        pdf.groupby("a").mean,
+        gdf.groupby("a").mean,
+        compare_error_message=False,
+    )
 
 
 def test_drop_unsupported_multi_agg():
@@ -1302,6 +1381,8 @@ def test_reset_index_after_empty_groupby():
     assert_groupby_results_equal(
         pdf.groupby("a").sum().reset_index(),
         gdf.groupby("a").sum().reset_index(),
+        as_index=False,
+        by="a",
     )
 
 
@@ -1415,6 +1496,27 @@ def test_groupby_list_of_lists(list_agg):
         gdf.groupby("a").agg({"b": list_agg}),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_of_structs(list_agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [
+                {"c": "1", "d": 1},
+                {"c": "2", "d": 2},
+                {"c": "3", "d": 3},
+                {"c": "4", "d": 4},
+                {"c": "5", "d": 5},
+                {"c": "6", "d": 6},
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.raises(pd.core.base.DataError):
+        gdf.groupby("a").agg({"b": list_agg}),
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
@@ -1551,6 +1653,7 @@ def test_groupby_apply_no_keys(pdf):
     assert_groupby_results_equal(
         pdf.groupby([]).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
+        check_index_type=False,  # Int64Index v/s Float64Index
     )
 
 
@@ -1588,3 +1691,732 @@ def test_groupby_unique(by, data, dtype):
     expect = pdf.groupby("by")["data"].unique()
     got = gdf.groupby("by")["data"].unique()
     assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+def test_groupby_2keys_scan(nelem, func):
+    pdf = make_frame(pd.DataFrame, nelem=nelem)
+    expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
+    got_df = (
+        make_frame(DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .agg(func)
+    )
+    # pd.groupby.cumcount returns a series.
+    if isinstance(expect_df, pd.Series):
+        expect_df = expect_df.to_frame("val")
+
+    check_dtype = False if func in _index_type_aggs else True
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+
+def test_groupby_mix_agg_scan():
+    err_msg = "Cannot perform both aggregation and scan in one operation"
+    func = ["cumsum", "sum"]
+    gb = make_frame(DataFrame, nelem=10).groupby(["x", "y"], sort=True)
+
+    gb.agg(func[0])
+    gb.agg(func[1])
+    gb.agg(func[1:])
+    with pytest.raises(NotImplementedError, match=err_msg):
+        gb.agg(func)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+@pytest.mark.parametrize("fill_value", [None, np.nan, 42])
+def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
+    pdf = make_frame(pd.DataFrame, nelem=nelem, extra_vals=["val2"])
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["x", "y"]).shift(
+        periods=n_shift, fill_value=fill_value
+    )
+    got = gdf.groupby(["x", "y"]).shift(periods=n_shift, fill_value=fill_value)
+
+    assert_groupby_results_equal(
+        expected[["val", "val2"]], got[["val", "val2"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+@pytest.mark.parametrize("fill_value", [None, 0, 42])
+def test_groupby_shift_row_mixed_numerics(
+    nelem, shift_perc, direction, fill_value
+):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
+    got = gdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+# TODO: Shifting list columns is currently unsupported because we cannot
+# construct a null list scalar in python. Support once it is added.
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["0"]).shift(periods=n_shift)
+    got = gdf.groupby(["0"]).shift(periods=n_shift)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        [
+            42,
+            "fill",
+            np.datetime64(123, "ns"),
+            cudf.Scalar(456, dtype="timedelta64[ns]"),
+        ]
+    ],
+)
+def test_groupby_shift_row_mixed_fill(
+    nelem, shift_perc, direction, fill_value
+):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    # Pandas does not support specifing different fill_value by column, so we
+    # simulate it column by column
+    expected = pdf.copy()
+    for col, single_fill in zip(pdf.iloc[:, 1:], fill_value):
+        if isinstance(single_fill, cudf.Scalar):
+            single_fill = single_fill._host_value
+        expected[col] = (
+            pdf[col]
+            .groupby(pdf["0"])
+            .shift(periods=n_shift, fill_value=single_fill)
+        )
+
+    got = gdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("fill_value", [None, 0, 42])
+def test_groupby_shift_row_zero_shift(nelem, fill_value):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    gdf = cudf.from_pandas(t.to_pandas())
+
+    expected = gdf
+    got = gdf.groupby(["0"]).shift(periods=0, fill_value=fill_value)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+def test_groupby_diff_row(nelem, shift_perc, direction):
+    pdf = make_frame(pd.DataFrame, nelem=nelem, extra_vals=["val2"])
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["x", "y"]).diff(periods=n_shift)
+    got = gdf.groupby(["x", "y"]).diff(periods=n_shift)
+
+    assert_groupby_results_equal(
+        expected[["val", "val2"]], got[["val", "val2"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+def test_groupby_diff_row_mixed_numerics(nelem, shift_perc, direction):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["0"]).diff(periods=n_shift)
+    got = gdf.groupby(["0"]).diff(periods=n_shift)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4", "5"]], got[["1", "2", "3", "4", "5"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+def test_groupby_diff_row_zero_shift(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    gdf = cudf.from_pandas(t.to_pandas())
+
+    expected = gdf
+    got = gdf.groupby(["0"]).shift(periods=0)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+# TODO: test for category columns when cudf.Scalar supports category type
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+def test_groupby_fillna_multi_value(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ms]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5", "6"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    # fill the dataframe with the first non-null item in the column
+    fill_values = {
+        name: pdf[name].loc[pdf[name].first_valid_index()]
+        for name in value_cols
+    }
+    # cudf can't fillna with a pandas.Timedelta type
+    fill_values["4"] = fill_values["4"].to_numpy()
+
+    expect = pdf.groupby(key_col).fillna(value=fill_values)
+
+    got = gdf.groupby(key_col).fillna(value=fill_values)
+
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
+
+
+# TODO: test for category columns when cudf.Scalar supports category type
+# TODO: cudf.fillna does not support decimal column to column fill yet
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+def test_groupby_fillna_multi_value_df(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ms]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    # fill the dataframe with the first non-null item in the column
+    fill_values = {
+        name: pdf[name].loc[pdf[name].first_valid_index()]
+        for name in value_cols
+    }
+    # cudf can't fillna with a pandas.Timedelta type
+    fill_values["4"] = fill_values["4"].to_numpy()
+    fill_values = pd.DataFrame(fill_values, index=pdf.index)
+
+    expect = pdf.groupby(key_col).fillna(value=fill_values)
+
+    fill_values = cudf.from_pandas(fill_values)
+    got = gdf.groupby(key_col).fillna(value=fill_values)
+
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
+
+
+@pytest.mark.parametrize(
+    "by",
+    [pd.Series([1, 1, 2, 2, 3, 4]), lambda x: x % 2 == 0, pd.Grouper(level=0)],
+)
+@pytest.mark.parametrize(
+    "data", [[1, None, 2, None, 3, None], [1, 2, 3, 4, 5, 6]]
+)
+@pytest.mark.parametrize("args", [{"value": 42}, {"method": "ffill"}])
+def test_groupby_various_by_fillna(by, data, args):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.groupby(by).fillna(**args)
+    if isinstance(by, pd.Grouper):
+        by = cudf.Grouper(level=by.level)
+    got = gs.groupby(by).fillna(**args)
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+@pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
+def test_groupby_fillna_method(nelem, method):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "list",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+                "lists_max_length": 10,
+                "nesting_max_depth": 3,
+                "value_type": "int64",
+            },
+            {"dtype": "category", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5", "6", "7", "8"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(key_col).fillna(method=method)
+    got = gdf.groupby(key_col).fillna(method=method)
+
+    assert_groupby_results_equal(
+        expect[value_cols], got[value_cols], sort=False
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"Speed": [380.0, 370.0, 24.0, 26.0], "Score": [50, 30, 90, 80]},
+        {
+            "Speed": [380.0, 370.0, 24.0, 26.0],
+            "Score": [50, 30, 90, 80],
+            "Other": [10, 20, 30, 40],
+        },
+    ],
+)
+@pytest.mark.parametrize("group", ["Score", "Speed"])
+def test_groupby_describe(data, group):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.groupby(group).describe()
+    expect = pdf.groupby(group).describe()
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [], "b": []},
+        {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]},
+        {"a": [None], "b": [None]},
+        {"a": [2, 1, 1], "b": [None, 1, 0], "c": [None, 0, 1]},
+    ],
+)
+@pytest.mark.parametrize("agg", ["first", "last", ["first", "last"]])
+def test_groupby_first(data, agg):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby("a").agg(agg)
+    got = gdf.groupby("a").agg(agg)
+    assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+def test_groupby_apply_series():
+    def foo(x):
+        return x.sum()
+
+    got = make_frame(DataFrame, 100).groupby("x").y.apply(foo)
+    expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo)
+
+    assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_week(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-01"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-07"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1W", label=label, closed=closed)
+    ).mean()
+    assert_eq(expect, got, check_like=True, check_dtype=False)
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_day(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-03"),
+                pd.Timestamp("2000-01-01"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-07"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3D", label=label, closed=closed)
+    ).mean()
+    assert_eq(expect, got, check_like=True, check_dtype=False)
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_min(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 12:01:00"),
+                pd.Timestamp("2000-01-01 12:05:00"),
+                pd.Timestamp("2000-01-01 15:30:00"),
+                pd.Timestamp("2000-01-02 00:00:00"),
+                pd.Timestamp("2000-01-01 23:47:00"),
+                pd.Timestamp("2000-01-02 00:05:00"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="1h", label=label, closed=closed)
+    ).mean()
+    assert_eq(expect, got, check_like=True, check_dtype=False)
+
+
+@pytest.mark.parametrize("label", [None, "left", "right"])
+@pytest.mark.parametrize("closed", [None, "left", "right"])
+def test_groupby_freq_s(label, closed):
+    pdf = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-01 00:00:07"),
+                pd.Timestamp("2000-01-01 00:00:02"),
+                pd.Timestamp("2000-01-02 00:00:15"),
+                pd.Timestamp("2000-01-01 00:00:05"),
+                pd.Timestamp("2000-01-02 00:00:09"),
+            ],
+            "ID": [0, 1, 2, 3, 4, 5],
+            "Price": [10, 20, 30, 40, 50, 60],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby(
+        pd.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    got = gdf.groupby(
+        cudf.Grouper(key="Publish date", freq="3s", label=label, closed=closed)
+    ).mean()
+    assert_eq(expect, got, check_like=True, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "pdf, group, name, obj",
+    [
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "A",
+            None,
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "B",
+            None,
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "X",
+            "A",
+            pd.DataFrame({"a": [1, 2, 4, 5, 10, 11]}),
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "Y",
+            1,
+            pd.DataFrame({"a": [1, 2, 4, 5, 10, 11]}),
+        ),
+        (
+            pd.DataFrame({"X": ["A", "B", "A", "B"], "Y": [1, 4, 3, 2]}),
+            "Y",
+            3,
+            pd.DataFrame({"a": [1, 2, 0, 11]}),
+        ),
+    ],
+)
+def test_groupby_get_group(pdf, group, name, obj):
+    gdf = cudf.from_pandas(pdf)
+
+    if isinstance(obj, pd.DataFrame):
+        gobj = cudf.from_pandas(obj)
+    else:
+        gobj = obj
+
+    expected = pdf.groupby(group).get_group(name=name, obj=obj)
+    actual = gdf.groupby(group).get_group(name=name, obj=gobj)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        ["a", "b"],
+        pd.Series([2, 1, 1, 2, 2]),
+        pd.Series(["b", "a", "a", "b", "b"]),
+    ],
+)
+@pytest.mark.parametrize("agg", ["sum", "mean", lambda df: df.mean()])
+def test_groupby_transform_aggregation(by, agg):
+    gdf = cudf.DataFrame(
+        {"a": [2, 2, 1, 2, 1], "b": [1, 1, 1, 2, 2], "c": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+
+    expected = pdf.groupby(by).transform(agg)
+    actual = gdf.groupby(by).transform(agg)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_select_then_ffill():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2],
+            "b": [1, None, None, 2, None],
+            "c": [3, None, None, 4, None],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].ffill()
+    actual = gdf.groupby("a")["c"].ffill()
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_select_then_shift():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].shift(1)
+    actual = gdf.groupby("a")["c"].shift(1)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_select_then_diff():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].diff(1)
+    actual = gdf.groupby("a")["c"].diff(1)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+# TODO: Add a test including datetime64[ms] column in input data

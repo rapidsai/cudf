@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include <strings/char_types/is_flags.h>
-#include <strings/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -23,7 +22,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -99,7 +98,7 @@ std::unique_ptr<column> wrap(
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
@@ -126,9 +125,7 @@ std::unique_ptr<column> wrap(
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

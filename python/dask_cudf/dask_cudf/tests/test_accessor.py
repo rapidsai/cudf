@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,10 +7,10 @@ from pandas.testing import assert_series_equal
 
 from dask import dataframe as dd
 
-import dask_cudf as dgd
-
 from cudf import DataFrame, Series
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq, does_not_raise
+
+import dask_cudf as dgd
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -41,7 +43,7 @@ def test_series(data):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
 
-    np.testing.assert_equal(np.array(pdsr), dsr.compute().to_array())
+    np.testing.assert_equal(np.array(pdsr), dsr.compute().values_host)
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -114,7 +116,7 @@ def test_categorical_basic(data):
     sr = Series(cat)
     dsr = dgd.from_cudf(sr, npartitions=2)
     result = dsr.compute()
-    np.testing.assert_array_equal(cat.codes, result.to_array())
+    np.testing.assert_array_equal(cat.codes, result.cat.codes.values_host)
 
     assert dsr.dtype.to_pandas() == pdsr.dtype
     # Test attributes
@@ -122,7 +124,9 @@ def test_categorical_basic(data):
 
     assert_eq(pdsr.cat.categories, dsr.cat.categories)
 
-    np.testing.assert_array_equal(pdsr.cat.codes.values, result.to_array())
+    np.testing.assert_array_equal(
+        pdsr.cat.codes.values, result.cat.codes.values_host
+    )
 
     string = str(result)
     expect_str = """
@@ -188,7 +192,10 @@ def test_categorical_compare_unordered(data):
 
     with pytest.raises(
         (TypeError, ValueError),
-        match="Unordered Categoricals can only compare equality or not",
+        match=(
+            "The only binary operations supported by unordered categorical "
+            "columns are equality and inequality."
+        ),
     ):
         dsr < dsr
 
@@ -207,12 +214,12 @@ def test_categorical_compare_ordered(data):
     # Test equality
     out = dsr1 == dsr1
     assert out.dtype == np.bool_
-    assert np.all(out.compute().to_array())
+    assert np.all(out.compute().values_host)
     assert np.all(pdsr1 == pdsr1)
 
     # Test inequality
     out = dsr1 != dsr1
-    assert not np.any(out.compute().to_array())
+    assert not np.any(out.compute().values_host)
     assert not np.any(pdsr1 != pdsr1)
 
     assert dsr1.cat.ordered
@@ -220,10 +227,10 @@ def test_categorical_compare_ordered(data):
 
     # Test ordered operators
     np.testing.assert_array_equal(
-        pdsr1 < pdsr2, (dsr1 < dsr2).compute().to_array()
+        pdsr1 < pdsr2, (dsr1 < dsr2).compute().values_host
     )
     np.testing.assert_array_equal(
-        pdsr1 > pdsr2, (dsr1 > dsr2).compute().to_array()
+        pdsr1 > pdsr2, (dsr1 > dsr2).compute().values_host
     )
 
 
@@ -290,3 +297,227 @@ def test_str_slice():
         pdf.a.str.split(",", expand=True, n=2),
         ddf.a.str.split(",", expand=True, n=2),
     )
+
+
+#############################################################################
+#                              List Accessor                                #
+#############################################################################
+
+
+def data_test_1():
+    return [list(range(100)) for _ in range(100)]
+
+
+def data_test_2():
+    return [list(i for _ in range(i)) for i in range(500)]
+
+
+def data_test_non_numeric():
+    return [list(chr(97 + i % 20) for _ in range(i)) for i in range(500)]
+
+
+def data_test_nested():
+    return [
+        list(list(y for y in range(x % 5)) for x in range(i))
+        for i in range(40)
+    ]
+
+
+def data_test_sort():
+    return [[1, 2, 3, 1, 2, 5] for _ in range(20)]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[]],
+        [[[]]],
+        [[0]],
+        [[0, 1]],
+        [[0, 1], [2, 3]],
+        [[[0, 1], [2]], [[3, 4]]],
+        [[None]],
+        [[[None]]],
+        [[None], None],
+        [[1, None], [1]],
+        [[1, None], None],
+        [[[1, None], None], None],
+    ],
+)
+def test_create_list_series(data):
+    expect = pd.Series(data)
+    ds_got = dgd.from_cudf(Series(data), 4)
+    assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", [data_test_1(), data_test_2(), data_test_non_numeric()],
+)
+def test_unique(data):
+    expect = Series(data).list.unique()
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.unique().compute())
+
+
+@pytest.mark.parametrize(
+    "data", [data_test_2(), data_test_non_numeric()],
+)
+def test_len(data):
+    expect = Series(data).list.len()
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.len().compute())
+
+
+@pytest.mark.parametrize(
+    "data, search_key", [(data_test_2(), 1)],
+)
+def test_contains(data, search_key):
+    expect = Series(data).list.contains(search_key)
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.contains(search_key).compute())
+
+
+@pytest.mark.parametrize(
+    "data, index, expectation",
+    [
+        (data_test_1(), 1, does_not_raise()),
+        (data_test_2(), 2, pytest.raises(IndexError)),
+    ],
+)
+def test_get(data, index, expectation):
+    with expectation:
+        expect = Series(data).list.get(index)
+
+    if expectation == does_not_raise():
+        ds = dgd.from_cudf(Series(data), 5)
+        assert_eq(expect, ds.list.get(index).compute())
+
+
+@pytest.mark.parametrize(
+    "data", [data_test_1(), data_test_2(), data_test_nested()],
+)
+def test_leaves(data):
+    expect = Series(data).list.leaves
+    ds = dgd.from_cudf(Series(data), 5)
+    got = ds.list.leaves.compute().reset_index(drop=True)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, list_indices, expectation",
+    [
+        (
+            data_test_1(),
+            [[0, 1] for _ in range(len(data_test_1()))],
+            does_not_raise(),
+        ),
+        (data_test_2(), [[0]], pytest.raises(ValueError)),
+    ],
+)
+def test_take(data, list_indices, expectation):
+    with expectation:
+        expect = Series(data).list.take(list_indices)
+
+    if expectation == does_not_raise():
+        ds = dgd.from_cudf(Series(data), 5)
+        assert_eq(expect, ds.list.take(list_indices).compute())
+
+
+@pytest.mark.parametrize(
+    "data, ascending, na_position, ignore_index",
+    [
+        (data_test_sort(), True, "first", False),
+        (data_test_sort(), False, "last", True),
+    ],
+)
+def test_sorting(data, ascending, na_position, ignore_index):
+    expect = Series(data).list.sort_values(
+        ascending=ascending, na_position=na_position, ignore_index=ignore_index
+    )
+    got = (
+        dgd.from_cudf(Series(data), 5)
+        .list.sort_values(
+            ascending=ascending,
+            na_position=na_position,
+            ignore_index=ignore_index,
+        )
+        .compute()
+        .reset_index(drop=True)
+    )
+    assert_eq(expect, got)
+
+
+#############################################################################
+#                            Struct Accessor                                #
+#############################################################################
+struct_accessor_data_params = [
+    [{"a": 5, "b": 10}, {"a": 3, "b": 7}, {"a": -3, "b": 11}],
+    [{"a": None, "b": 1}, {"a": None, "b": 0}, {"a": -3, "b": None}],
+    [{"a": 1, "b": 2}],
+    [{"a": 1, "b": 3, "c": 4}],
+]
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_create_struct_series(data):
+    expect = pd.Series(data)
+    ds_got = dgd.from_cudf(Series(data), 2)
+    assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_struct_field_str(data):
+    for test_key in ["a", "b"]:
+        expect = Series(data).struct.field(test_key)
+        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_struct_field_integer(data):
+    for test_key in [0, 1]:
+        expect = Series(data).struct.field(test_key)
+        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        assert_eq(expect, ds_got.compute())
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_dask_struct_field_Key_Error(data):
+    got = dgd.from_cudf(Series(data), 2)
+
+    with pytest.raises(KeyError):
+        got.struct.field("notakey").compute()
+
+
+@pytest.mark.parametrize(
+    "data", struct_accessor_data_params,
+)
+def test_dask_struct_field_Int_Error(data):
+    # breakpoint()
+    got = dgd.from_cudf(Series(data), 2)
+
+    with pytest.raises(IndexError):
+        got.struct.field(1000).compute()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}, {}, {}],
+        [{"a": 100, "b": "abc"}, {"a": 42, "b": "def"}, {"a": -87, "b": ""}],
+        [{"a": [1, 2, 3], "b": {"c": 101}}, {"a": [4, 5], "b": {"c": 102}}],
+    ],
+)
+def test_struct_explode(data):
+    expect = Series(data).struct.explode()
+    got = dgd.from_cudf(Series(data), 2).struct.explode()
+
+    assert_eq(expect, got.compute())

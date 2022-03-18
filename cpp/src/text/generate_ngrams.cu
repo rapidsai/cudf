@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,6 +21,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -42,7 +41,7 @@ namespace {
 /**
  * @brief Generate ngrams from strings column.
  *
- * Adjacent strings are concatented with the provided separator.
+ * Adjacent strings are concatenated with the provided separator.
  * The number of adjacent strings join depends on the specified ngrams value.
  * For example: for bigrams (ngrams=2), pairs of strings are concatenated.
  */
@@ -87,7 +86,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view const d_separator(separator.data(), separator.size());
   CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
 
@@ -101,7 +100,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
     cudf::column_view offsets_view(
-      cudf::data_type{cudf::type_id::INT32}, strings_count + 1, strings.offsets().data<int32_t>());
+      cudf::data_type{cudf::type_id::INT32}, strings_count + 1, strings.offsets_begin());
     auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {
@@ -135,13 +134,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(ngrams_count,
-                                   std::move(children.first),
-                                   std::move(children.second),
-                                   0,
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    ngrams_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -244,21 +238,15 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   // build the chars column
   auto const chars_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), total_ngrams, stream);
-  auto chars_column =
-    cudf::strings::detail::create_chars_child_column(total_ngrams, chars_bytes, stream, mr);
+  auto chars_column = cudf::strings::detail::create_chars_child_column(chars_bytes, stream, mr);
   generator.d_chars = chars_column->mutable_view().data<char>();  // output chars
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      generator);
 
-  return cudf::make_strings_column(total_ngrams,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,  // no nulls in the result
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

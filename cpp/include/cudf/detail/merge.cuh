@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,12 @@ enum class side : bool { LEFT, RIGHT };
  * @brief Tagged index type: `thrust::get<0>` indicates left/right side,
  * `thrust::get<1>` indicates the row index
  */
-using index_type = thrust::tuple<side, cudf::size_type>;
+using index_type = thrust::pair<side, cudf::size_type>;
 
 /**
  * @brief Vector of `index_type` values.
  */
-using index_vector = rmm::device_vector<index_type>;
+using index_vector = rmm::device_uvector<index_type>;
 
 /**
  * @brief tagged_element_relational_comparator uses element_relational_comparator to provide
@@ -77,21 +77,17 @@ struct tagged_element_relational_comparator {
   {
   }
 
-  __device__ weak_ordering compare(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept
+  [[nodiscard]] __device__ weak_ordering compare(index_type lhs_tagged_index,
+                                                 index_type rhs_tagged_index) const noexcept
   {
-    side l_side = thrust::get<0>(lhs_tagged_index);
-    side r_side = thrust::get<0>(rhs_tagged_index);
-
-    cudf::size_type l_indx = thrust::get<1>(lhs_tagged_index);
-    cudf::size_type r_indx = thrust::get<1>(rhs_tagged_index);
+    auto const [l_side, l_indx] = lhs_tagged_index;
+    auto const [r_side, r_indx] = rhs_tagged_index;
 
     column_device_view const* ptr_left_dview{l_side == side::LEFT ? &lhs : &rhs};
-
     column_device_view const* ptr_right_dview{r_side == side::LEFT ? &lhs : &rhs};
 
-    auto erl_comparator =
-      element_relational_comparator<has_nulls>(*ptr_left_dview, *ptr_right_dview, null_precedence);
+    auto erl_comparator = element_relational_comparator(
+      nullate::DYNAMIC{has_nulls}, *ptr_left_dview, *ptr_right_dview, null_precedence);
 
     return cudf::type_dispatcher(lhs.type(), erl_comparator, l_indx, r_indx);
   }
@@ -117,8 +113,8 @@ struct row_lexicographic_tagged_comparator {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
-  __device__ bool operator()(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept
+  __device__ bool operator()(index_type lhs_tagged_index,
+                             index_type rhs_tagged_index) const noexcept
   {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
@@ -144,6 +140,23 @@ struct row_lexicographic_tagged_comparator {
   null_order const* _null_precedence{};
   order const* _column_order{};
 };
+
+/**
+ * @copydoc std::unique_ptr<cudf::table> merge(
+ *            std::vector<table_view> const& tables_to_merge,
+ *            std::vector<cudf::size_type> const& key_cols,
+ *            std::vector<cudf::order> const& column_order,
+ *            std::vector<cudf::null_order> const& null_precedence,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merge,
+                                   std::vector<cudf::size_type> const& key_cols,
+                                   std::vector<cudf::order> const& column_order,
+                                   std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

@@ -74,22 +74,22 @@ class avro_reader_options {
   /**
    * @brief Returns source info.
    */
-  source_info const& get_source() const { return _source; }
+  [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to be read.
    */
-  std::vector<std::string> get_columns() const { return _columns; }
+  [[nodiscard]] std::vector<std::string> get_columns() const { return _columns; }
 
   /**
    * @brief Returns number of rows to skip from the start.
    */
-  size_type get_skip_rows() const { return _skip_rows; }
+  [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
    */
-  size_type get_num_rows() const { return _num_rows; }
+  [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Set names of the column to be read.
@@ -102,7 +102,6 @@ class avro_reader_options {
    * @brief Sets number of rows to skip.
    *
    * @param val Number of rows to skip from start.
-   * @return this for chaining.
    */
   void set_skip_rows(size_type val) { _skip_rows = val; }
 
@@ -110,7 +109,6 @@ class avro_reader_options {
    * @brief Sets number of rows to read.
    *
    * @param val Number of rows to read after skip.
-   * @return this for chaining.
    */
   void set_num_rows(size_type val) { _num_rows = val; }
 
@@ -180,7 +178,7 @@ class avro_reader_options_builder {
   /**
    * @brief move avro_reader_options member once it's built.
    */
-  operator avro_reader_options &&() { return std::move(options); }
+  operator avro_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move avro_reader_options member once it's built.
@@ -195,12 +193,9 @@ class avro_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.avro";
- *  cudf::avro_reader_options options =
- * cudf::avro_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_avro(options);
+ *  auto source  = cudf::io::source_info("dataset.avro");
+ *  auto options = cudf::io::avro_reader_options::builder(source);
+ *  auto result  = cudf::io::read_avro(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.

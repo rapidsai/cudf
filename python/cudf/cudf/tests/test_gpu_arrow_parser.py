@@ -1,4 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import logging
 
 import numpy as np
@@ -8,7 +9,7 @@ from numba import cuda
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
-from cudf.tests.utils import INTEGER_TYPES
+from cudf.testing._utils import INTEGER_TYPES
 
 
 def make_gpu_parse_arrow_data_batch():
@@ -52,8 +53,8 @@ def test_gpu_parse_arrow_data_cpu_schema():
     np.testing.assert_array_less(-105, lon)
 
     dct = reader.to_dict()
-    np.testing.assert_array_equal(lat, dct["dest_lat"].to_array())
-    np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
+    np.testing.assert_array_equal(lat, dct["dest_lat"].to_numpy())
+    np.testing.assert_array_equal(lon, dct["dest_lon"].to_numpy())
 
 
 def test_gpu_parse_arrow_data_gpu_schema():
@@ -85,8 +86,8 @@ def test_gpu_parse_arrow_data_gpu_schema():
     np.testing.assert_array_less(-105, lon)
 
     dct = reader.to_dict()
-    np.testing.assert_array_equal(lat, dct["dest_lat"].to_array())
-    np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
+    np.testing.assert_array_equal(lat, dct["dest_lat"].to_numpy())
+    np.testing.assert_array_equal(lon, dct["dest_lon"].to_numpy())
 
 
 def test_gpu_parse_arrow_data_bad_cpu_schema_good_gpu_schema():
@@ -118,8 +119,8 @@ def test_gpu_parse_arrow_data_bad_cpu_schema_good_gpu_schema():
     np.testing.assert_array_less(-105, lon)
 
     dct = reader.to_dict()
-    np.testing.assert_array_equal(lat, dct["dest_lat"].to_array())
-    np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
+    np.testing.assert_array_equal(lat, dct["dest_lat"].to_numpy())
+    np.testing.assert_array_equal(lon, dct["dest_lon"].to_numpy())
 
 
 expected_values = """
@@ -287,9 +288,9 @@ def test_gpu_parse_arrow_timestamps(dtype):
     reader = GpuArrowReader(cpu_schema, gpu_data)
     assert reader[0].name == "timestamp"
     timestamp_arr = reader[0].data.copy_to_host()
-    np.testing.assert_array_equal(timestamp_arr, gdf["timestamp"].to_array())
+    np.testing.assert_array_equal(timestamp_arr, gdf["timestamp"].to_numpy())
     dct = reader.to_dict()
-    np.testing.assert_array_equal(timestamp_arr, dct["timestamp"].to_array())
+    np.testing.assert_array_equal(timestamp_arr, dct["timestamp"].to_numpy())
 
 
 if __name__ == "__main__":

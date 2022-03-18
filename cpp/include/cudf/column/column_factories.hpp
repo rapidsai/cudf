@@ -41,6 +41,16 @@ namespace cudf {
 std::unique_ptr<column> make_empty_column(data_type type);
 
 /**
+ * @brief Creates an empty column of the specified type.
+ *
+ * An empty column contains zero elements and no validity mask.
+ *
+ * @param[in] id The column type id
+ * @return Empty column with specified type
+ */
+std::unique_ptr<column> make_empty_column(type_id id);
+
+/**
  * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
  * specified numeric `data_type` with an optional null mask.
  *
@@ -399,7 +409,7 @@ std::unique_ptr<column> make_strings_column(
  *  one more than the total number of strings so the `offsets.back()` is the total number of bytes
  *  in the strings array. `offsets.front()` must always be 0 to point to the beginning of `strings`.
  * @param[in] null_mask Device span containing the null element indicator bitmask. Arrow format for
- *  nulls is used for interpeting this bitmask.
+ *  nulls is used for interpreting this bitmask.
  * @param[in] null_count The number of null string entries. If equal to `UNKNOWN_NULL_COUNT`, the
  *  null count will be computed dynamically on the first invocation of `column::null_count()`
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
@@ -420,27 +430,41 @@ std::unique_ptr<column> make_strings_column(
  *
  * The columns and mask are moved into the resulting strings column.
  *
- * @param[in] num_strings The number of strings the column represents.
- * @param[in] offsets_column The column of offset values for this column. The number of elements is
+ * @param num_strings The number of strings the column represents.
+ * @param offsets_column The column of offset values for this column. The number of elements is
  *  one more than the total number of strings so the `offset[last] - offset[0]` is the total number
  *  of bytes in the strings vector.
- * @param[in] chars_column The column of char bytes for all the strings for this column. Individual
+ * @param chars_column The column of char bytes for all the strings for this column. Individual
  *  strings are identified by the offsets and the nullmask.
- * @param[in] null_count The number of null string entries.
- * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
- *  nulls is used for interpeting this bitmask.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
- * columns' device memory.
+ * @param null_count The number of null string entries.
+ * @param null_mask The bits specifying the null strings in device memory. Arrow format for
+ *  nulls is used for interpreting this bitmask.
  */
-std::unique_ptr<column> make_strings_column(
-  size_type num_strings,
-  std::unique_ptr<column> offsets_column,
-  std::unique_ptr<column> chars_column,
-  size_type null_count,
-  rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            std::unique_ptr<column> offsets_column,
+                                            std::unique_ptr<column> chars_column,
+                                            size_type null_count,
+                                            rmm::device_buffer&& null_mask);
+
+/**
+ * @brief Construct a STRING type column given offsets, columns, and optional null count and null
+ * mask.
+ *
+ * @param[in] num_strings The number of strings the column represents.
+ * @param[in] offsets The offset values for this column. The number of elements is one more than the
+ * total number of strings so the `offset[last] - offset[0]` is the total number of bytes in the
+ * strings vector.
+ * @param[in] chars The char bytes for all the strings for this column. Individual strings are
+ * identified by the offsets and the nullmask.
+ * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
+ *  nulls is used for interpreting this bitmask.
+ * @param[in] null_count The number of null string entries.
+ */
+std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            rmm::device_uvector<size_type>&& offsets,
+                                            rmm::device_uvector<char>&& chars,
+                                            rmm::device_buffer&& null_mask = {},
+                                            size_type null_count = cudf::UNKNOWN_NULL_COUNT);
 
 /**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null
@@ -480,7 +504,7 @@ std::unique_ptr<column> make_strings_column(
  * data    (depth 1)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
- * @param[in] num_lists The number of lists the column represents.
+ * @param[in] num_rows The number of lists the column represents.
  * @param[in] offsets_column The column of offset values for this column. Each value should
  * represent the starting offset into the child elements that corresponds to the beginning of the
  * row, with the first row starting at 0. The length of row N can be determined by subtracting
@@ -491,14 +515,14 @@ std::unique_ptr<column> make_strings_column(
  *                     further nested.
  * @param[in] null_count The number of null list entries.
  * @param[in] null_mask The bits specifying the null lists in device memory.
- *                  Arrow format for nulls is used for interpeting this bitmask.
+ *                  Arrow format for nulls is used for interpreting this bitmask.
  * @param[in] stream Optional stream for use with all memory allocation
  *               and device kernels
  * @param[in] mr Optional resource to use for device memory
  *           allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<cudf::column> make_lists_column(
-  size_type num_lists,
+  size_type num_rows,
   std::unique_ptr<column> offsets_column,
   std::unique_ptr<column> child_column,
   size_type null_count,
@@ -541,7 +565,8 @@ std::unique_ptr<cudf::column> make_structs_column(
  *
  * The output column will have the same type as `s.type()`
  * The output column will contain all null rows if `s.invalid()==false`
- * The output column will be empty if `size==0`.
+ * The output column will be empty if `size==0`. For LIST scalars, the column hierarchy
+ * from @p s is preserved.
  *
  * @param[in] s The scalar to use for values in the column.
  * @param[in] size The number of rows for the output column.

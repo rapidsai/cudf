@@ -20,11 +20,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.cuh>
+
+#include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -150,7 +152,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   if (types_to_remove == ALL_TYPES)
     CUDF_EXPECTS(types_to_keep != ALL_TYPES,
                  "Parameters types_to_remove and types_to_keep must not be both ALL_TYPES");
@@ -180,12 +182,25 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
+
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
+{
+  return static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+}
+
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
+{
+  lhs = static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+  return lhs;
+}
 
 // external API
 

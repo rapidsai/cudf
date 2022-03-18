@@ -34,5 +34,16 @@ std::unique_ptr<table> tile(
   size_type count,
   rmm::cuda_stream_view               = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::interleave_columns
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+std::unique_ptr<column> interleave_columns(
+  table_view const& input,
+  rmm::cuda_stream_view               = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf

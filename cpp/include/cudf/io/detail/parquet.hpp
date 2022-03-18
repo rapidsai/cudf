@@ -50,17 +50,6 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const& filepaths,
-                  parquet_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-  /**
    * @brief Constructor from an array of datasources
    *
    * @param sources Input `datasource` objects to read the dataset from
@@ -69,7 +58,7 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -100,34 +89,34 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param sink The data sink to write the data to
+   * @param sinks The data sinks to write the data to
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   parquet_writer_options const& options,
-                  SingleWriteMode mode                = SingleWriteMode::YES,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+                  SingleWriteMode mode,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor for writer to handle chunked parquet options.
    *
-   * @param sink The data sink to write the data to
+   * @param sinks The data sinks to write the data to
    * @param options Settings for controlling writing behavior for chunked writer
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   chunked_parquet_writer_options const& options,
-                  SingleWriteMode mode                = SingleWriteMode::NO,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+                  SingleWriteMode mode,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -138,8 +127,10 @@ class writer {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
    */
-  void write(table_view const& table);
+  void write(table_view const& table, std::vector<partition_info> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -149,7 +140,8 @@ class writer {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
    * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_path = {});
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob
@@ -157,7 +149,7 @@ class writer {
    * @param[in] metadata_list List of input file metadata
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  static std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  static std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
     const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 

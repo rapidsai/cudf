@@ -145,7 +145,7 @@ packed_columns pack(cudf::table_view const& input,
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
   auto contig_split_result = cudf::detail::contiguous_split(input, {}, stream, mr);
-  return std::move(contig_split_result[0].data);
+  return contig_split_result.empty() ? packed_columns{} : std::move(contig_split_result[0].data);
 }
 
 template <typename ColumnIter>
@@ -229,7 +229,9 @@ packed_columns::metadata pack_metadata(table_view const& table,
                                        size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
+  return table.is_empty()
+           ? packed_columns::metadata{}
+           : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
 }
 
 /**
@@ -238,12 +240,14 @@ packed_columns::metadata pack_metadata(table_view const& table,
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
-  return detail::unpack(input.metadata_->data(),
-                        reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
+  return input.metadata_->size() == 0
+           ? table_view{}
+           : detail::unpack(input.metadata_->data(),
+                            reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
 }
 
 /**
- * @copydoc cudf::unpack
+ * @copydoc cudf::unpack(uint8_t const*, uint8_t const* )
  */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {

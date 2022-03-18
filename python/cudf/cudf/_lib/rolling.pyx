@@ -1,26 +1,30 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from __future__ import print_function
-import cudf
+
 import pandas as pd
+
+import cudf
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf._lib.aggregation cimport RollingAggregation, make_rolling_aggregation
 from cudf._lib.column cimport Column
-from cudf._lib.aggregation cimport make_aggregation
-
-from cudf._lib.cpp.types cimport size_type
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.aggregation cimport aggregation
-from cudf._lib.cpp.rolling cimport (
-    rolling_window as cpp_rolling_window
-)
+from cudf._lib.cpp.rolling cimport rolling_window as cpp_rolling_window
+from cudf._lib.cpp.types cimport size_type
 
 
-def rolling(Column source_column, Column pre_column_window,
-            Column fwd_column_window, window, min_periods, center, op):
+def rolling(Column source_column,
+            Column pre_column_window,
+            Column fwd_column_window,
+            window,
+            min_periods,
+            center,
+            op,
+            agg_params):
     """
     Rolling on input executing operation within the given window for each row
 
@@ -35,6 +39,7 @@ def rolling(Column source_column, Column pre_column_window,
     center : Set the labels at the center of the window
     op : operation to be executed, as of now it supports MIN, MAX, COUNT, SUM,
          MEAN and UDF
+    agg_params : dict, parameter for the aggregation (e.g. ddof for VAR/STD)
 
     Returns
     -------
@@ -47,14 +52,13 @@ def rolling(Column source_column, Column pre_column_window,
     cdef column_view source_column_view = source_column.view()
     cdef column_view pre_column_window_view
     cdef column_view fwd_column_window_view
-    cdef unique_ptr[aggregation] agg
+    cdef RollingAggregation cython_agg
 
     if callable(op):
-        agg = move(
-            make_aggregation(op, {'dtype': source_column.dtype})
-        )
+        cython_agg = make_rolling_aggregation(
+            op, {'dtype': source_column.dtype})
     else:
-        agg = move(make_aggregation(op))
+        cython_agg = make_rolling_aggregation(op, agg_params)
 
     if window is None:
         if center:
@@ -71,7 +75,7 @@ def rolling(Column source_column, Column pre_column_window,
                     pre_column_window_view,
                     fwd_column_window_view,
                     c_min_periods,
-                    agg)
+                    cython_agg.c_obj.get()[0])
             )
     else:
         c_min_periods = min_periods
@@ -89,7 +93,7 @@ def rolling(Column source_column, Column pre_column_window,
                     c_window,
                     c_forward_window,
                     c_min_periods,
-                    agg)
+                    cython_agg.c_obj.get()[0])
             )
 
     return Column.from_unique_ptr(move(c_result))

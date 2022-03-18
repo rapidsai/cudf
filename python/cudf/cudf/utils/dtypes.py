@@ -1,9 +1,7 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime as dt
-import numbers
 from collections import namedtuple
-from collections.abc import Sequence
 from decimal import Decimal
 
 import cupy as cp
@@ -11,13 +9,16 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
-from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
+
+"""Map numpy dtype to pyarrow types.
+Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
+handling is required when converting a Boolean column into arrow.
+"""
 _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
@@ -26,7 +27,7 @@ _np_pa_dtypes = {
     np.int32: pa.int32(),
     np.int16: pa.int16(),
     np.int8: pa.int8(),
-    np.bool_: pa.int8(),
+    np.bool_: pa.bool_(),
     np.uint64: pa.uint64(),
     np.uint32: pa.uint32(),
     np.uint16: pa.uint16(),
@@ -36,7 +37,7 @@ _np_pa_dtypes = {
     np.str_: pa.string(),
 }
 
-cudf_dtypes_to_pandas_dtypes = {
+np_dtypes_to_pandas_dtypes = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
     np.dtype("uint32"): pd.UInt32Dtype(),
@@ -62,7 +63,7 @@ pyarrow_dtypes_to_pandas_dtypes = {
     pa.string(): pd.StringDtype(),
 }
 
-pandas_dtypes_to_cudf_dtypes = {
+pandas_dtypes_to_np_dtypes = {
     pd.UInt8Dtype(): np.dtype("uint8"),
     pd.UInt16Dtype(): np.dtype("uint16"),
     pd.UInt32Dtype(): np.dtype("uint32"),
@@ -75,11 +76,25 @@ pandas_dtypes_to_cudf_dtypes = {
     pd.StringDtype(): np.dtype("object"),
 }
 
+pandas_dtypes_alias_to_cudf_alias = {
+    "UInt8": "uint8",
+    "UInt16": "uint16",
+    "UInt32": "uint32",
+    "UInt64": "uint64",
+    "Int8": "int8",
+    "Int16": "int16",
+    "Int32": "int32",
+    "Int64": "int64",
+    "boolean": "bool",
+}
+
 if PANDAS_GE_120:
-    cudf_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-    cudf_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-    pandas_dtypes_to_cudf_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-    pandas_dtypes_to_cudf_dtypes[pd.Float64Dtype()] = np.dtype("float64")
+    np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
+    np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
+    pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
+    pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
+    pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
+    pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
@@ -106,8 +121,7 @@ ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
 def np_to_pa_dtype(dtype):
-    """Util to convert numpy dtype to PyArrow dtype.
-    """
+    """Util to convert numpy dtype to PyArrow dtype."""
     # special case when dtype is np.datetime64
     if dtype.kind == "M":
         time_unit, _ = np.datetime_data(dtype)
@@ -123,7 +137,7 @@ def np_to_pa_dtype(dtype):
             return pa.duration(time_unit)
         # default fallback unit is ns
         return pa.duration("ns")
-    return _np_pa_dtypes[np.dtype(dtype).type]
+    return _np_pa_dtypes[cudf.dtype(dtype).type]
 
 
 def get_numeric_type_info(dtype):
@@ -138,201 +152,81 @@ def get_numeric_type_info(dtype):
 
 
 def numeric_normalize_types(*args):
-    """Cast all args to a common type using numpy promotion logic
-    """
+    """Cast all args to a common type using numpy promotion logic"""
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
 
 
-def is_numerical_dtype(obj):
-    # TODO: we should handle objects with a `.dtype` attribute,
-    # e.g., arrays, here.
-    try:
-        dtype = np.dtype(obj)
-    except TypeError:
-        return False
-    return dtype.kind in "biuf"
+def _find_common_type_decimal(dtypes):
+    # Find the largest scale and the largest difference between
+    # precision and scale of the columns to be concatenated
+    s = max(dtype.scale for dtype in dtypes)
+    lhs = max(dtype.precision - dtype.scale for dtype in dtypes)
+    # Combine to get the necessary precision and clip at the maximum
+    # precision
+    p = s + lhs
 
-
-def is_string_dtype(obj):
-    return (
-        pd.api.types.is_string_dtype(obj)
-        # Reject all cudf extension types.
-        and not is_categorical_dtype(obj)
-        and not is_decimal_dtype(obj)
-        and not is_list_dtype(obj)
-        and not is_struct_dtype(obj)
-        and not is_interval_dtype(obj)
-    )
-
-
-def is_datetime_dtype(obj):
-    if obj is None:
-        return False
-    if not hasattr(obj, "str"):
-        return False
-    return "M8" in obj.str
-
-
-def is_timedelta_dtype(obj):
-    if obj is None:
-        return False
-    if not hasattr(obj, "str"):
-        return False
-    return "m8" in obj.str
-
-
-def is_categorical_dtype(obj):
-    """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
-    is a pandas CategoricalDtype.
-    """
-    if obj is None:
-        return False
-    if isinstance(obj, cudf.CategoricalDtype):
-        return True
-    if obj is cudf.CategoricalDtype:
-        return True
-    if isinstance(obj, np.dtype):
-        return False
-    if isinstance(obj, CategoricalDtype):
-        return True
-    if obj is CategoricalDtype:
-        return True
-    if obj is CategoricalDtypeType:
-        return True
-    if isinstance(obj, str) and obj == "category":
-        return True
-    if isinstance(
-        obj,
-        (
-            CategoricalDtype,
-            cudf.core.index.CategoricalIndex,
-            cudf.core.column.CategoricalColumn,
-            pd.Categorical,
-            pd.CategoricalIndex,
-        ),
-    ):
-        return True
-    if isinstance(obj, np.ndarray):
-        return False
-    if isinstance(
-        obj,
-        (
-            cudf.Index,
-            cudf.Series,
-            cudf.core.column.ColumnBase,
-            pd.Index,
-            pd.Series,
-        ),
-    ):
-        return is_categorical_dtype(obj.dtype)
-    if hasattr(obj, "type"):
-        if obj.type is CategoricalDtypeType:
-            return True
-    return pd.api.types.is_categorical_dtype(obj)
-
-
-def is_list_dtype(obj):
-    return (
-        type(obj) is cudf.core.dtypes.ListDtype
-        or obj is cudf.core.dtypes.ListDtype
-        or type(obj) is cudf.core.column.ListColumn
-        or obj is cudf.core.column.ListColumn
-        or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
-    )
-
-
-def is_struct_dtype(obj):
-    return (
-        isinstance(obj, cudf.core.dtypes.StructDtype)
-        or obj is cudf.core.dtypes.StructDtype
-        or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
-    )
-
-
-def is_interval_dtype(obj):
-    return (
-        isinstance(obj, cudf.core.dtypes.IntervalDtype)
-        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
-        or obj is cudf.core.dtypes.IntervalDtype
-        or (
-            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+    if p > cudf.Decimal64Dtype.MAX_PRECISION:
+        return cudf.Decimal128Dtype(
+            min(cudf.Decimal128Dtype.MAX_PRECISION, p), s
         )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
-    )
-
-
-def is_decimal_dtype(obj):
-    return (
-        type(obj) is cudf.core.dtypes.Decimal64Dtype
-        or obj is cudf.core.dtypes.Decimal64Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal64Dtype.name
+    elif p > cudf.Decimal32Dtype.MAX_PRECISION:
+        return cudf.Decimal64Dtype(
+            min(cudf.Decimal64Dtype.MAX_PRECISION, p), s
         )
-        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
-    )
+    else:
+        return cudf.Decimal32Dtype(
+            min(cudf.Decimal32Dtype.MAX_PRECISION, p), s
+        )
 
 
 def cudf_dtype_from_pydata_dtype(dtype):
-    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
+    """Given a numpy or pandas dtype, converts it into the equivalent cuDF
+    Python dtype.
     """
 
-    if is_categorical_dtype(dtype):
+    if cudf.api.types.is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
-    elif dtype in cudf._lib.types.np_to_cudf_types:
+    elif cudf.api.types.is_decimal32_dtype(dtype):
+        return cudf.core.dtypes.Decimal32Dtype
+    elif cudf.api.types.is_decimal64_dtype(dtype):
+        return cudf.core.dtypes.Decimal64Dtype
+    elif cudf.api.types.is_decimal128_dtype(dtype):
+        return cudf.core.dtypes.Decimal128Dtype
+    elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
         return dtype.type
 
     return infer_dtype_from_object(dtype)
 
 
 def cudf_dtype_to_pa_type(dtype):
-    """ Given a cudf pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
+    """Given a cudf pandas dtype, converts it into the equivalent cuDF
+    Python dtype.
     """
-    if is_categorical_dtype(dtype):
+    if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError()
     elif (
-        is_list_dtype(dtype)
-        or is_struct_dtype(dtype)
-        or is_decimal_dtype(dtype)
+        cudf.api.types.is_list_dtype(dtype)
+        or cudf.api.types.is_struct_dtype(dtype)
+        or cudf.api.types.is_decimal_dtype(dtype)
     ):
         return dtype.to_arrow()
     else:
-        return np_to_pa_dtype(np.dtype(dtype))
+        return np_to_pa_dtype(cudf.dtype(dtype))
 
 
 def cudf_dtype_from_pa_type(typ):
-    """ Given a cuDF pyarrow dtype, converts it into the equivalent
-        cudf pandas dtype.
+    """Given a cuDF pyarrow dtype, converts it into the equivalent
+    cudf pandas dtype.
     """
     if pa.types.is_list(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
+    elif pa.types.is_decimal(typ):
+        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     else:
-        return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
-
-
-def is_scalar(val):
-    return (
-        val is None
-        or isinstance(val, DeviceScalar)
-        or isinstance(val, cudf.Scalar)
-        or isinstance(val, str)
-        or isinstance(val, numbers.Number)
-        or np.isscalar(val)
-        or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or isinstance(val, pd.Timestamp)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or (isinstance(val, pd.Timedelta))
-        or (isinstance(val, pd.Timestamp))
-        or (isinstance(val, dt.datetime))
-        or (isinstance(val, dt.timedelta))
-    )
+        return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
 
 def to_cudf_compatible_scalar(val, dtype=None):
@@ -348,7 +242,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ):
         return val
 
-    if not is_scalar(val):
+    if not cudf.api.types._is_scalar_or_zero_d_array(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
             "to cudf scalar"
@@ -360,7 +254,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
 
-    if ((dtype is None) and isinstance(val, str)) or is_string_dtype(dtype):
+    if (
+        (dtype is None) and isinstance(val, str)
+    ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
     if isinstance(val, dt.datetime):
@@ -372,10 +268,14 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    val = pd.api.types.pandas_dtype(type(val)).type(val)
+    val = cudf.api.types.pandas_dtype(type(val)).type(val)
 
     if dtype is not None:
-        val = val.astype(dtype)
+        if isinstance(val, str) and np.dtype(dtype).kind == "M":
+            # pd.Timestamp can handle str, but not np.str_
+            val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
+        else:
+            val = val.astype(dtype)
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)
@@ -387,27 +287,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
             val = val.astype("timedelta64[ns]")
 
     return val
-
-
-def is_list_like(obj):
-    """
-    This function checks if the given `obj`
-    is a list-like (list, tuple, Series...)
-    type or not.
-
-    Parameters
-    ----------
-    obj : object of any type which needs to be validated.
-
-    Returns
-    -------
-    Boolean: True or False depending on whether the
-    input `obj` is like-like or not.
-    """
-
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
-        obj, (str, bytes)
-    )
 
 
 def is_column_like(obj):
@@ -461,7 +340,7 @@ def can_convert_to_column(obj):
     Boolean: True or False depending on whether the
     input `obj` is column-compatible or not.
     """
-    return is_column_like(obj) or is_list_like(obj)
+    return is_column_like(obj) or cudf.api.types.is_list_like(obj)
 
 
 def min_scalar_type(a, min_size=8):
@@ -474,7 +353,7 @@ def min_signed_type(x, min_size=8):
     that can represent the integer ``x``
     """
     for int_dtype in np.sctypes["int"]:
-        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+        if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
     # resort to using `int64` and let numpy raise appropriate exception:
@@ -487,7 +366,7 @@ def min_unsigned_type(x, min_size=8):
     that can represent the integer ``x``
     """
     for int_dtype in np.sctypes["uint"]:
-        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+        if (cudf.dtype(int_dtype).itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
     # resort to using `uint64` and let numpy raise appropriate exception:
@@ -508,50 +387,25 @@ def min_column_type(x, expected_type):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
+        return get_min_float_dtype(x)
+
+    elif np.issubdtype(expected_type, np.integer):
         max_bound_dtype = np.min_scalar_type(x.max())
         min_bound_dtype = np.min_scalar_type(x.min())
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
-        if result_type == np.dtype("float16"):
-            # cuDF does not support float16 dtype
-            result_type = np.dtype("float32")
-        return result_type
+    else:
+        result_type = x.dtype
 
-    if np.issubdtype(expected_type, np.integer):
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
-        return np.promote_types(max_bound_dtype, min_bound_dtype)
-
-    return x.dtype
+    return cudf.dtype(result_type)
 
 
 def get_min_float_dtype(col):
     max_bound_dtype = np.min_scalar_type(float(col.max()))
     min_bound_dtype = np.min_scalar_type(float(col.min()))
-    result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
-    if result_type == np.dtype("float16"):
-        # cuDF does not support float16 dtype
-        result_type = np.dtype("float32")
-    return result_type
-
-
-def check_cast_unsupported_dtype(dtype):
-    if is_categorical_dtype(dtype):
-        return dtype
-
-    if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
-        dtype = dtype.numpy_dtype
-    else:
-        dtype = np.dtype(dtype)
-
-    if dtype in cudf._lib.types.np_to_cudf_types:
-        return dtype
-
-    if dtype == np.dtype("float16"):
-        return np.dtype("float32")
-
-    raise NotImplementedError(
-        f"Cannot cast {dtype} dtype, as it is not supported by CuDF."
+    result_type = np.promote_types(
+        "float32", np.promote_types(max_bound_dtype, min_bound_dtype)
     )
+    return cudf.dtype(result_type)
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
@@ -575,7 +429,7 @@ def get_time_unit(obj):
 
 
 def _get_nan_for_dtype(dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if pd.api.types.is_datetime64_dtype(
         dtype
     ) or pd.api.types.is_timedelta64_dtype(dtype):
@@ -661,17 +515,58 @@ def find_common_type(dtypes):
     if len(dtypes) == 0:
         return None
 
+    # Early exit for categoricals since they're not hashable and therefore
+    # can't be put in a set.
+    if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+        if all(
+            (
+                cudf.api.types.is_categorical_dtype(dtype)
+                and (not dtype.ordered if hasattr(dtype, "ordered") else True)
+            )
+            for dtype in dtypes
+        ):
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
+                return cudf.CategoricalDtype(
+                    cudf.core.column.concat_columns(
+                        [dtype._categories for dtype in dtypes]
+                    ).unique()
+                )
+            else:
+                raise ValueError(
+                    "Only unordered categories of the same underlying type "
+                    "may be coerced to a common type."
+                )
+        else:
+            # TODO: Should this be an error case (mixing categorical with other
+            # dtypes) or should this return object? Unclear if we have enough
+            # information to decide right now, may have to come back to this as
+            # usage of find_common_type increases.
+            return cudf.dtype("O")
+
     # Aggregate same types
     dtypes = set(dtypes)
 
-    if any(is_decimal_dtype(dtype) for dtype in dtypes):
-        raise NotImplementedError(
-            "DecimalDtype is not yet supported in find_common_type"
-        )
+    if any(cudf.api.types.is_decimal_dtype(dtype) for dtype in dtypes):
+        if all(
+            cudf.api.types.is_decimal_dtype(dtype)
+            or cudf.api.types.is_numeric_dtype(dtype)
+            for dtype in dtypes
+        ):
+            return _find_common_type_decimal(
+                [
+                    dtype
+                    for dtype in dtypes
+                    if cudf.api.types.is_decimal_dtype(dtype)
+                ]
+            )
+        else:
+            return cudf.dtype("O")
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
-    dt_dtypes = set(filter(lambda t: is_datetime_dtype(t), dtypes))
+    dt_dtypes = set(
+        filter(lambda t: cudf.api.types.is_datetime_dtype(t), dtypes)
+    )
     if len(dt_dtypes) > 0:
         dtypes = dtypes - dt_dtypes
         dtypes.add(np.result_type(*dt_dtypes))
@@ -685,10 +580,8 @@ def find_common_type(dtypes):
 
     common_dtype = np.find_common_type(list(dtypes), [])
     if common_dtype == np.dtype("float16"):
-        # cuDF does not support float16 dtype
-        return np.dtype("float32")
-    else:
-        return common_dtype
+        return cudf.dtype("float32")
+    return cudf.dtype(common_dtype)
 
 
 def _can_cast(from_dtype, to_dtype):
@@ -698,15 +591,18 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
+    if from_dtype in {None, cudf.NA}:
+        return True
     if isinstance(from_dtype, type):
-        from_dtype = np.dtype(from_dtype)
+        from_dtype = cudf.dtype(from_dtype)
     if isinstance(to_dtype, type):
-        to_dtype = np.dtype(to_dtype)
+        to_dtype = cudf.dtype(to_dtype)
 
     # TODO : Add precision & scale checking for
     # decimal types in future
-    if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
-        if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+
+    if isinstance(from_dtype, cudf.core.dtypes.DecimalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
             return True
         elif isinstance(to_dtype, np.dtype):
             if to_dtype.kind in {"i", "f", "u", "U", "O"}:
@@ -716,7 +612,7 @@ def _can_cast(from_dtype, to_dtype):
     elif isinstance(from_dtype, np.dtype):
         if isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype, to_dtype)
-        elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+        elif isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
             if from_dtype.kind in {"i", "f", "u", "U", "O"}:
                 return True
             else:

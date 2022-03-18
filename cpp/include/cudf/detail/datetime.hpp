@@ -124,6 +124,34 @@ std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& months,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::add_calendrical_months(cudf::column_view const&, cudf::scalar const&,
+ * rmm::mr::device_memory_resource *)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<cudf::column> add_calendrical_months(
+  cudf::column_view const& timestamps,
+  cudf::scalar const& months,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::is_leap_year(cudf::column_view const&, rmm::mr::device_memory_resource *)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<cudf::column> is_leap_year(
+  cudf::column_view const& column,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<cudf::column> extract_quarter(
+  cudf::column_view const& column,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace datetime
 }  // namespace cudf

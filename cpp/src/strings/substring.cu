@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -25,7 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
@@ -111,9 +109,9 @@ std::unique_ptr<column> slice_strings(
   rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
-  if (step.is_valid()) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
+  if (step.is_valid(stream)) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
 
   auto const d_column = column_device_view::create(strings.parent(), stream);
   auto const d_start  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(start));
@@ -127,9 +125,7 @@ std::unique_ptr<column> slice_strings(
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail
@@ -169,7 +165,7 @@ struct substring_from_fn {
     }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
-    auto const start  = starts[idx];
+    auto const start  = std::max(starts[idx], 0);
     if (start >= length) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
@@ -196,8 +192,8 @@ struct substring_from_fn {
  * @param null_count Number of nulls for the output column.
  * @param starts Start positions index iterator.
  * @param stops Stop positions index iterator.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_column,
                                                    size_type null_count,
@@ -222,9 +218,7 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 /**
@@ -240,7 +234,7 @@ void compute_substring_indices(column_device_view const& d_column,
                                size_type* start_char_pos,
                                size_type* end_char_pos,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::mr::device_memory_resource*)
 {
   auto strings_count = d_column.size();
 
@@ -301,7 +295,7 @@ std::unique_ptr<column> slice_strings(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(starts_column.size() == strings_count,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == strings_count,

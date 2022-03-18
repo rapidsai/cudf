@@ -48,8 +48,8 @@ constexpr uint32_t rowofs_block_bytes = rowofs_block_dim * 32;  // 16KB/threadbl
  * Format: row_count * 4 + id, where `row_count` is the number of rows
  * in a character block, and `id` is the row parser state at the end of the block.
  */
-typedef uint32_t rowctx32_t;
-typedef uint64_t rowctx64_t;
+using rowctx32_t = uint32_t;
+using rowctx64_t = uint64_t;
 
 /**
  * Packed row context format
@@ -61,7 +61,7 @@ typedef uint64_t rowctx64_t;
  * always zero (EOF input state implies a zero row count) and therefore
  * stored as 64-bit.
  */
-typedef uint64_t packed_rowctx_t;
+using packed_rowctx_t = uint64_t;
 
 /**
  * @brief return a row context from a {count, id} pair
@@ -116,7 +116,7 @@ inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx
 inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
                                                          packed_rowctx_t packed_ctx)
 {
-  uint32_t ctxid = static_cast<uint32_t>(sel_ctx & 3);
+  auto ctxid     = static_cast<uint32_t>(sel_ctx & 3);
   rowctx32_t ctx = get_row_context(packed_ctx, ctxid);
   return (sel_ctx & ~3) + ctx;
 }
@@ -149,8 +149,8 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  *
  * @return Number of row contexts
  */
-uint32_t gather_row_offsets(cudf::io::parse_options_view const &options,
-                            uint64_t *row_ctx,
+uint32_t gather_row_offsets(cudf::io::parse_options_view const& options,
+                            uint64_t* row_ctx,
                             device_span<uint64_t> offsets_out,
                             device_span<char const> data,
                             size_t chunk_size,
@@ -170,7 +170,7 @@ uint32_t gather_row_offsets(cudf::io::parse_options_view const &options,
  * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-size_t count_blank_rows(cudf::io::parse_options_view const &options,
+size_t count_blank_rows(cudf::io::parse_options_view const& options,
                         device_span<char const> data,
                         device_span<uint64_t const> row_offsets,
                         rmm::cuda_stream_view stream);
@@ -183,10 +183,10 @@ size_t count_blank_rows(cudf::io::parse_options_view const &options,
  * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void remove_blank_rows(const cudf::io::parse_options_view &options,
-                       device_span<char const> data,
-                       rmm::device_vector<uint64_t> &row_offsets,
-                       rmm::cuda_stream_view stream);
+device_span<uint64_t> remove_blank_rows(const cudf::io::parse_options_view& options,
+                                        device_span<char const> data,
+                                        device_span<uint64_t> row_offsets,
+                                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data
@@ -199,8 +199,8 @@ void remove_blank_rows(const cudf::io::parse_options_view &options,
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  */
-thrust::host_vector<column_type_histogram> detect_column_types(
-  cudf::io::parse_options_view const &options,
+std::vector<column_type_histogram> detect_column_types(
+  cudf::io::parse_options_view const& options,
   device_span<char const> data,
   device_span<column_parse::flags const> column_flags,
   device_span<uint64_t const> row_offsets,
@@ -219,13 +219,13 @@ thrust::host_vector<column_type_histogram> detect_column_types(
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[in] stream CUDA stream to use, default 0
  */
-void decode_row_column_data(cudf::io::parse_options_view const &options,
+void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<char const> data,
                             device_span<column_parse::flags const> column_flags,
                             device_span<uint64_t const> row_offsets,
                             device_span<cudf::data_type const> dtypes,
-                            device_span<void *> columns,
-                            device_span<cudf::bitmask_type *> valids,
+                            device_span<void* const> columns,
+                            device_span<cudf::bitmask_type* const> valids,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

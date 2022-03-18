@@ -1,9 +1,11 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+import pandas as pd
 import pyarrow as pa
+
 import cudf
+from cudf.api.types import is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
-from cudf.utils.dtypes import is_interval_dtype
 
 
 class IntervalColumn(StructColumn):
@@ -70,9 +72,10 @@ class IntervalColumn(StructColumn):
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
     def from_struct_column(self, closed="right"):
+        first_field_name = list(self.dtype.fields.keys())[0]
         return IntervalColumn(
             size=self.size,
-            dtype=IntervalDtype(self.dtype.fields["left"], closed),
+            dtype=IntervalDtype(self.dtype.fields[first_field_name], closed),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
@@ -110,3 +113,13 @@ class IntervalColumn(StructColumn):
             )
         else:
             raise ValueError("dtype must be IntervalDtype")
+
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        # Note: This does not handle null values in the interval column.
+        # However, this exact sequence (calling __from_arrow__ on the output of
+        # self.to_arrow) is currently the best known way to convert interval
+        # types into pandas (trying to convert the underlying numerical columns
+        # directly is problematic), so we're stuck with this for now.
+        return pd.Series(
+            pd.IntervalDtype().__from_arrow__(self.to_arrow()), index=index
+        )

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -31,15 +32,45 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
 
 #include <algorithm>
 
 /**
  * @file column_device_view.cuh
- * @brief Column device view class definitons
+ * @brief Column device view class definitions
  */
 
 namespace cudf {
+
+/**
+ * @brief Indicates the presence of nulls at compile-time or runtime.
+ *
+ * If used at compile-time, this indicator can tell the optimizer
+ * to include or exclude any null-checking clauses.
+ *
+ */
+struct nullate {
+  struct YES : std::bool_constant<true> {
+  };
+  struct NO : std::bool_constant<false> {
+  };
+  struct DYNAMIC {
+    DYNAMIC() = delete;
+    /**
+     * @brief Create a runtime nullate object.
+     *
+     * @see cudf::column_device_view::optional_begin for example usage
+     *
+     * @param b True if nulls are expected in the operation in which this
+     *          object is applied.
+     */
+    constexpr explicit DYNAMIC(bool b) noexcept : value{b} {}
+    constexpr operator bool() const noexcept { return value; }
+    bool value;  ///< True if nulls are expected
+  };
+};
+
 namespace detail {
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
@@ -72,13 +103,13 @@ class alignas(16) column_device_view_base {
    *`data<T>()`.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   __host__ __device__ T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
@@ -108,12 +139,12 @@ class alignas(16) column_device_view_base {
   /**
    * @brief Returns the number of elements in the column.
    */
-  __host__ __device__ size_type size() const noexcept { return _size; }
+  [[nodiscard]] __host__ __device__ size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the element type
    */
-  __host__ __device__ data_type type() const noexcept { return _type; }
+  [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates whether the column can contain null elements, i.e., if it
@@ -124,7 +155,7 @@ class alignas(16) column_device_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
+  [[nodiscard]] __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -133,13 +164,16 @@ class alignas(16) column_device_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  __host__ __device__ bitmask_type const* null_mask() const noexcept { return _null_mask; }
+  [[nodiscard]] __host__ __device__ bitmask_type const* null_mask() const noexcept
+  {
+    return _null_mask;
+  }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
    */
-  __host__ __device__ size_type offset() const noexcept { return _offset; }
+  [[nodiscard]] __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**
    * @brief Returns whether the specified element holds a valid value (i.e., not
@@ -155,7 +189,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid(size_type element_index) const noexcept
   {
     return not nullable() or is_valid_nocheck(element_index);
   }
@@ -172,7 +206,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is valid
    * @return false The element is null
    */
-  __device__ bool is_valid_nocheck(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_type element_index) const noexcept
   {
     return bit_is_set(_null_mask, offset() + element_index);
   }
@@ -190,7 +224,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  __device__ bool is_null(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null(size_type element_index) const noexcept
   {
     return not is_valid(element_index);
   }
@@ -206,7 +240,7 @@ class alignas(16) column_device_view_base {
    * @return true The element is null
    * @return false The element is valid
    */
-  __device__ bool is_null_nocheck(size_type element_index) const noexcept
+  [[nodiscard]] __device__ bool is_null_nocheck(size_type element_index) const noexcept
   {
     return not is_valid_nocheck(element_index);
   }
@@ -217,10 +251,10 @@ class alignas(16) column_device_view_base {
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
-   * @param element_index
+   * @param word_index The index of the word to get
    * @return bitmask word for the given word_index
    */
-  __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
+  [[nodiscard]] __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
   {
     return null_mask()[word_index];
   }
@@ -255,10 +289,11 @@ class alignas(16) column_device_view_base {
     : std::true_type {
   };
 };
-
 // Forward declaration
 template <typename T>
 struct value_accessor;
+template <typename T, typename Nullate>
+struct optional_accessor;
 template <typename T, bool has_nulls>
 struct pair_accessor;
 template <typename T, bool has_nulls>
@@ -326,7 +361,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired string element
    * @return string_view instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, string_view>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index = element_index + offset();  // account for this view's _offset
@@ -345,7 +380,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   struct index_element_fn {
     template <typename IndexType,
-              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned<IndexType>::value)>
+              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>)>
     __device__ size_type operator()(column_device_view const& indices, size_type index)
     {
       return static_cast<size_type>(indices.element<IndexType>(index));
@@ -353,8 +388,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
     template <typename IndexType,
               typename... Args,
-              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and
-                                 std::is_unsigned<IndexType>::value))>
+              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
       cudf_assert(false and "dictionary indices must be an unsigned integral type");
@@ -387,7 +421,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    * @return dictionary32 instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, dictionary32>::value)>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
@@ -396,39 +430,22 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
-   * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point`
+   * @brief Returns a `numeric::fixed_point` element at the specified index for a `fixed_point`
    * column.
    *
    * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
    * then any attempt to use the result will lead to undefined behavior.
    *
    * @param element_index Position of the desired element
-   * @return numeric::decimal32 representing the element at this index
+   * @return numeric::fixed_point representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal32>::value)>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
+    using rep        = typename T::rep;
     auto const scale = scale_type{_type.scale()};
-    return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
-  }
-
-  /**
-   * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point`
-   * column.
-   *
-   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
-   * then any attempt to use the result will lead to undefined behavior.
-   *
-   * @param element_index Position of the desired element
-   * @return numeric::decimal64 representing the element at this index
-   */
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, numeric::decimal64>::value)>
-  __device__ T element(size_type element_index) const noexcept
-  {
-    using namespace numeric;
-    auto const scale = scale_type{_type.scale()};
-    return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
+    return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
   }
 
   /**
@@ -461,7 +478,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_iterator<T> begin() const
+  [[nodiscard]] const_iterator<T> begin() const
   {
     return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
   }
@@ -479,10 +496,17 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_iterator<T> end() const
+  [[nodiscard]] const_iterator<T> end() const
   {
     return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
   }
+
+  /**
+   * @brief Optional iterator for navigating this column
+   */
+  template <typename T, typename Nullate>
+  using const_optional_iterator =
+    thrust::transform_iterator<detail::optional_accessor<T, Nullate>, count_it>;
 
   /**
    * @brief Pair iterator for navigating this column
@@ -499,6 +523,64 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T, bool has_nulls>
   using const_pair_rep_iterator =
     thrust::transform_iterator<detail::pair_rep_accessor<T, has_nulls>, count_it>;
+
+  /**
+   * @brief Return an optional iterator to the first element of the column.
+   *
+   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
+   *
+   * The element of this iterator contextually converts to bool. The conversion returns true
+   * if the object contains a value and false if it does not contain a value.
+   *
+   * Calling this method with `nullate::DYNAMIC` defers the assumption of nullability to
+   * runtime with the caller indicating if the column has nulls. The `nullate::DYNAMIC` is
+   * useful when an algorithm is going to execute on multiple iterators and all the combinations of
+   * iterator types are not required at compile time.
+   *
+   * @code{.cpp}
+   * template<typename T>
+   * void some_function(cudf::column_view<T> const& col_view){
+   *    auto d_col = cudf::column_device_view::create(col_view);
+   *    // Create a `DYNAMIC` optional iterator
+   *    auto optional_iterator =
+   *       d_col->optional_begin<T>(cudf::nullate::DYNAMIC{col_view.has_nulls()});
+   * }
+   * @endcode
+   *
+   * Calling this method with `nullate::YES` means that the column supports nulls and
+   * the optional returned might not contain a value.
+   *
+   * Calling this method with `nullate::NO` means that the column has no null values
+   * and the optional returned will always contain a value.
+   *
+   * @code{.cpp}
+   * template<typename T, bool has_nulls>
+   * void some_function(cudf::column_view<T> const& col_view){
+   *    auto d_col = cudf::column_device_view::create(col_view);
+   *    if constexpr(has_nulls) {
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::nullate::YES{});
+   *      //use optional_iterator
+   *    } else {
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::nullate::NO{});
+   *      //use optional_iterator
+   *    }
+   * }
+   * @endcode
+   *
+   * This function does not participate in overload resolution if
+   * `column_device_view::has_element_accessor<T>()` is false.
+   *
+   * @throws cudf::logic_error if the column is not nullable and `has_nulls` evaluates to true.
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
+   */
+  template <typename T,
+            typename Nullate,
+            CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  auto optional_begin(Nullate has_nulls) const
+  {
+    return const_optional_iterator<T, Nullate>{
+      count_it{0}, detail::optional_accessor<T, Nullate>{*this, has_nulls}};
+  }
 
   /**
    * @brief Return a pair iterator to the first element of the column.
@@ -522,7 +604,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_iterator<T, has_nulls> pair_begin() const
+  [[nodiscard]] const_pair_iterator<T, has_nulls> pair_begin() const
   {
     return const_pair_iterator<T, has_nulls>{count_it{0},
                                              detail::pair_accessor<T, has_nulls>{*this}};
@@ -552,10 +634,31 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
+  [[nodiscard]] const_pair_rep_iterator<T, has_nulls> pair_rep_begin() const
   {
     return const_pair_rep_iterator<T, has_nulls>{count_it{0},
                                                  detail::pair_rep_accessor<T, has_nulls>{*this}};
+  }
+
+  /**
+   * @brief Return an optional iterator to the element following the last element of
+   * the column.
+   *
+   * The returned iterator represents a `thrust::optional<T>` element.
+   *
+   * This function does not participate in overload resolution if
+   * `column_device_view::has_element_accessor<T>()` is false.
+   *
+   * @throws cudf::logic_error if the column is not nullable and `has_nulls` is true
+   * @throws cudf::logic_error if column datatype and Element type mismatch.
+   */
+  template <typename T,
+            typename Nullate,
+            CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  auto optional_end(Nullate has_nulls) const
+  {
+    return const_optional_iterator<T, Nullate>{
+      count_it{size()}, detail::optional_accessor<T, Nullate>{*this, has_nulls}};
   }
 
   /**
@@ -572,7 +675,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_iterator<T, has_nulls> pair_end() const
+  [[nodiscard]] const_pair_iterator<T, has_nulls> pair_end() const
   {
     return const_pair_iterator<T, has_nulls>{count_it{size()},
                                              detail::pair_accessor<T, has_nulls>{*this}};
@@ -592,7 +695,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T,
             bool has_nulls,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
+  [[nodiscard]] const_pair_rep_iterator<T, has_nulls> pair_rep_end() const
   {
     return const_pair_rep_iterator<T, has_nulls>{count_it{size()},
                                                  detail::pair_rep_accessor<T, has_nulls>{*this}};
@@ -642,9 +745,17 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  __device__ column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
+  }
+
+  /**
+   * @brief Returns a span containing the children of this column
+   */
+  [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
+  {
+    return device_span<column_device_view const>(d_children, _num_children);
   }
 
   /**
@@ -652,7 +763,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @return The number of child columns
    */
-  __host__ __device__ size_type num_child_columns() const noexcept { return _num_children; }
+  [[nodiscard]] __host__ __device__ size_type num_child_columns() const noexcept
+  {
+    return _num_children;
+  }
 
  protected:
   column_device_view* d_children{};  ///< Array of `column_device_view`
@@ -725,7 +839,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * the specified type.
    *
    * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
-   * or `std::is_same<T,void>::value` are true.
+   * or `std::is_same_v<T,void>` are true.
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
@@ -737,7 +851,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return T* Typed pointer to underlying data
    */
   template <typename T = void,
-            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
+            CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   __host__ __device__ T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
@@ -798,7 +912,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  __host__ __device__ bitmask_type* null_mask() const noexcept
+  [[nodiscard]] __host__ __device__ bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
@@ -848,7 +962,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    */
-  __device__ mutable_column_device_view child(size_type child_index) const noexcept
+  [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
     return d_children[child_index];
   }
@@ -900,8 +1014,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
-   * @param element_index The index of the element to update
-   * @param new_element The new bitmask element
+   * @param word_index The index of the word to update
+   * @param new_word The new bitmask word
    */
   __device__ void set_mask_word(size_type word_index, bitmask_type new_word) const noexcept
   {
@@ -960,7 +1074,7 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
   size_type source_word_index = destination_word_index + word_index(source_begin_bit);
   bitmask_type curr_word      = source[source_word_index];
   bitmask_type next_word      = 0;
-  if (word_index(source_end_bit) >
+  if (word_index(source_end_bit - 1) >
       word_index(source_begin_bit +
                  destination_word_index * detail::size_in_bits<bitmask_type>())) {
     next_word = source[source_word_index + 1];
@@ -1000,6 +1114,61 @@ struct value_accessor {
 };
 
 /**
+ * @brief optional accessor of a column
+ *
+ *
+ * The optional_accessor always returns a `thrust::optional` of `column[i]`. The validity
+ * of the optional is determined by the `Nullate` parameter which may be one of the following:
+ *
+ * - `nullate::YES` means that the column supports nulls and the optional returned
+ *    might be valid or invalid.
+ *
+ * - `nullate::NO` means the caller attests that the column has no null values,
+ *    no checks will occur and `thrust::optional{column[i]}` will be
+ *    return for each `i`.
+ *
+ * - `nullate::DYNAMIC` defers the assumption of nullability to runtime and the caller
+ *    specifies if the column has nulls at runtime.
+ *    For `DYNAMIC{true}` the return value will be `thrust::optional{column[i]}` if
+ *      element `i` is not null and `thrust::optional{}` if element `i` is null.
+ *    For `DYNAMIC{false}` the return value will always be `thrust::optional{column[i]}`.
+ *
+ * @throws cudf::logic_error if column datatype and template T type mismatch.
+ * @throws cudf::logic_error if the column is not nullable and `with_nulls` evaluates to true
+ *
+ * @tparam T The type of elements in the column
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ */
+template <typename T, typename Nullate>
+struct optional_accessor {
+  column_device_view const col;  ///< column view of column in device
+
+  /**
+   * @brief Constructor
+   *
+   * @param col Column on which to iterator over its elements.
+   * @param with_nulls Indicates if the `col` should be checked for nulls.
+   */
+  optional_accessor(column_device_view const& _col, Nullate with_nulls)
+    : col{_col}, has_nulls{with_nulls}
+  {
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    if (with_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
+  }
+
+  __device__ inline thrust::optional<T> operator()(cudf::size_type i) const
+  {
+    if (has_nulls) {
+      return (col.is_valid_nocheck(i)) ? thrust::optional<T>{col.element<T>(i)}
+                                       : thrust::optional<T>{thrust::nullopt};
+    }
+    return thrust::optional<T>{col.element<T>(i)};
+  }
+
+  Nullate has_nulls{};
+};
+
+/**
  * @brief pair accessor of column with/without null bitmask
  * A unary functor returns pair with scalar value at `id` and boolean validity
  * `operator() (cudf::size_type id)` computes `element`  and
@@ -1031,8 +1200,7 @@ struct pair_accessor {
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<T, bool> operator()(cudf::size_type i) const
+  __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
   {
     return {col.element<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
@@ -1072,21 +1240,20 @@ struct pair_rep_accessor {
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
-  CUDA_DEVICE_CALLABLE
-  thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+  __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
   {
     return {get_rep<T>(i), (has_nulls ? col.is_valid_nocheck(i) : true)};
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same<R, rep_type>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+  __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same<R, rep_type>::value, void>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
+  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+  __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
   }
@@ -1128,7 +1295,7 @@ struct mutable_value_accessor {
  * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
  *
  * @param child_begin Iterator pointing to begin of child columns to make into a device view
- * @param child_begin Iterator pointing to end   of child columns to make into a device view
+ * @param child_end   Iterator pointing to end   of child columns to make into a device view
  * @param h_ptr The host memory where to place any child data
  * @param d_ptr The device pointer for calculating the d_children member of any child data
  * @return The device pointer to be used for the d_children member of the given column
