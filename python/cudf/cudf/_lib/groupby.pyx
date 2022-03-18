@@ -76,9 +76,12 @@ cdef _agg_result_from_columns(
     contains the same number of lists as the number of input columns. Result
     for an input column that has no applicable aggregations is an empty list.
     """
-    cdef int i, j, result_index = 0, n_res_cols = c_result_columns.size()
+    cdef:
+        int i
+        int j
+        int result_index = 0
+        vector[unique_ptr[column]]* c_result
     result_columns = []
-    cdef vector[unique_ptr[column]]* c_result
     for i in range(n_input_columns):
         if i in column_included:
             c_result = &c_result_columns[result_index].results
