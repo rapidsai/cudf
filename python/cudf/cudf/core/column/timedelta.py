@@ -177,7 +177,9 @@ class TimeDeltaColumn(column.ColumnBase):
             else:
                 other = other.astype(common_dtype).astype("float64")
 
-            out_dtype = cudf.dtype("float64" if op == "truediv" else "int64")
+            out_dtype = cudf.dtype(
+                "float64" if op == "__truediv__" else "int64"
+            )
         elif other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -194,18 +196,26 @@ class TimeDeltaColumn(column.ColumnBase):
         other = self._wrap_binop_normalization(other)
 
         this: ColumnBinaryOperand = self
-        if op in {"eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"}:
+        if op in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "NULL_EQUALS",
+        }:
             out_dtype = self._binary_op_lt_gt_le_ge_eq_ne(other)
-        elif op == "mul":
+        elif op == "__mul__":
             out_dtype = self._binary_op_mul(other)
-        elif op == "mod":
+        elif op == "__mod__":
             out_dtype = self._binary_op_mod(other)
-        elif op in {"truediv", "floordiv"}:
+        elif op in {"__truediv__", "__floordiv__"}:
             this, other, out_dtype = self._binary_op_div(other, op)
-            op = "truediv"
-        elif op == "add":
+            op = "__truediv__"
+        elif op == "__add__":
             out_dtype = _timedelta_add_result_dtype(self, other)
-        elif op == "sub":
+        elif op == "__sub__":
             out_dtype = _timedelta_sub_result_dtype(self, other)
         else:
             raise TypeError(

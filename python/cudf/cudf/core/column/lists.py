@@ -135,7 +135,7 @@ class ListColumn(ColumnBase):
         """
         other = self._wrap_binop_normalization(other)
         if isinstance(other.dtype, ListDtype):
-            if op == "add":
+            if op == "__add__":
                 return concatenate_rows(
                     cudf.core.frame.Frame({0: self, 1: other})
                 )

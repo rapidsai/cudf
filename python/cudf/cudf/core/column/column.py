@@ -1030,82 +1030,82 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         )
 
     def __add__(self, other):
-        return self._binaryop("add", other)
+        return self._binaryop("__add__", other)
 
     def __sub__(self, other):
-        return self._binaryop("sub", other)
+        return self._binaryop("__sub__", other)
 
     def __mul__(self, other):
-        return self._binaryop("mul", other)
+        return self._binaryop("__mul__", other)
 
     def __or__(self, other):
-        return self._binaryop("or", other)
+        return self._binaryop("__or__", other)
 
     def __xor__(self, other):
-        return self._binaryop("xor", other)
+        return self._binaryop("__xor__", other)
 
     def __and__(self, other):
-        return self._binaryop("and", other)
+        return self._binaryop("__and__", other)
 
     def __floordiv__(self, other):
-        return self._binaryop("floordiv", other)
+        return self._binaryop("__floordiv__", other)
 
     def __truediv__(self, other):
-        return self._binaryop("truediv", other)
+        return self._binaryop("__truediv__", other)
 
     def __mod__(self, other):
-        return self._binaryop("mod", other)
+        return self._binaryop("__mod__", other)
 
     def __pow__(self, other):
-        return self._binaryop("pow", other)
+        return self._binaryop("__pow__", other)
 
     def __radd__(self, other):
-        return self._binaryop("add", other, reflect=True)
+        return self._binaryop("__add__", other, reflect=True)
 
     def __rsub__(self, other):
-        return self._binaryop("sub", other, reflect=True)
+        return self._binaryop("__sub__", other, reflect=True)
 
     def __rmul__(self, other):
-        return self._binaryop("mul", other, reflect=True)
+        return self._binaryop("__mul__", other, reflect=True)
 
     def __ror__(self, other):
-        return self._binaryop("or", other, reflect=True)
+        return self._binaryop("__or__", other, reflect=True)
 
     def __rxor__(self, other):
-        return self._binaryop("xor", other, reflect=True)
+        return self._binaryop("__xor__", other, reflect=True)
 
     def __rand__(self, other):
-        return self._binaryop("and", other, reflect=True)
+        return self._binaryop("__and__", other, reflect=True)
 
     def __rfloordiv__(self, other):
-        return self._binaryop("floordiv", other, reflect=True)
+        return self._binaryop("__floordiv__", other, reflect=True)
 
     def __rtruediv__(self, other):
-        return self._binaryop("truediv", other, reflect=True)
+        return self._binaryop("__truediv__", other, reflect=True)
 
     def __rmod__(self, other):
-        return self._binaryop("mod", other, reflect=True)
+        return self._binaryop("__mod__", other, reflect=True)
 
     def __rpow__(self, other):
-        return self._binaryop("pow", other, reflect=True)
+        return self._binaryop("__pow__", other, reflect=True)
 
     def __eq__(self, other):
-        return self._binaryop("eq", other)
+        return self._binaryop("__eq__", other)
 
     def __ne__(self, other):
-        return self._binaryop("ne", other)
+        return self._binaryop("__ne__", other)
 
     def __lt__(self, other):
-        return self._binaryop("lt", other)
+        return self._binaryop("__lt__", other)
 
     def __gt__(self, other):
-        return self._binaryop("gt", other)
+        return self._binaryop("__gt__", other)
 
     def __le__(self, other):
-        return self._binaryop("le", other)
+        return self._binaryop("__le__", other)
 
     def __ge__(self, other):
-        return self._binaryop("ge", other)
+        return self._binaryop("__ge__", other)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         return _array_ufunc(self, ufunc, method, inputs, kwargs)

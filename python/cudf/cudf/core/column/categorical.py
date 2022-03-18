@@ -878,7 +878,15 @@ class CategoricalColumn(column.ColumnBase):
     def _binaryop(
         self, op: str, other: ColumnBinaryOperand, reflect: bool = False
     ) -> ColumnBase:
-        if op not in {"eq", "ne", "lt", "le", "gt", "ge", "NULL_EQUALS"}:
+        if op not in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__le__",
+            "__gt__",
+            "__ge__",
+            "NULL_EQUALS",
+        }:
             raise TypeError(
                 "Series of dtype `category` cannot perform the operation: "
                 f"{op}"
@@ -889,7 +897,7 @@ class CategoricalColumn(column.ColumnBase):
         if not isinstance(other, CategoricalColumn):
             raise ValueError
         # Note: at this stage we are guaranteed that the dtypes are equal.
-        if not self.ordered and op not in {"eq", "ne", "NULL_EQUALS"}:
+        if not self.ordered and op not in {"__eq__", "__ne__", "NULL_EQUALS"}:
             raise TypeError(
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."

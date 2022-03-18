@@ -70,7 +70,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         try:
-            if op in {"add", "sub", "mul", "div"}:
+            if op in {"__add__", "__sub__", "__mul__", "__div__"}:
                 output_type = _get_decimal_type(self.dtype, other.dtype, op)
                 result = libcudf.binaryop.binaryop(
                     self, other, op, output_type
@@ -78,7 +78,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 # TODO:  Why is this necessary? Why isn't the result's
                 # precision already set correctly based on output_type?
                 result.dtype.precision = output_type.precision
-            elif op in {"eq", "ne", "lt", "gt", "le", "ge"}:
+            elif op in {
+                "__eq__",
+                "__ne__",
+                "__lt__",
+                "__gt__",
+                "__le__",
+                "__ge__",
+            }:
                 result = libcudf.binaryop.binaryop(self, other, op, bool)
         except RuntimeError as e:
             if "Unsupported operator for these types" in str(e):
@@ -349,13 +356,13 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     p1, p2 = lhs_dtype.precision, rhs_dtype.precision
     s1, s2 = lhs_dtype.scale, rhs_dtype.scale
 
-    if op in ("add", "sub"):
+    if op in ("__add__", "__sub__"):
         scale = max(s1, s2)
         precision = scale + max(p1 - s1, p2 - s2) + 1
-    elif op == "mul":
+    elif op == "__mul__":
         scale = s1 + s2
         precision = p1 + p2 + 1
-    elif op == "div":
+    elif op == "__div__":
         scale = max(6, s1 + p2 + 1)
         precision = p1 - s1 + s2 + scale
     else:

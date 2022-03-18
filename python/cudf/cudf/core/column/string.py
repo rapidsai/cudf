@@ -5458,32 +5458,32 @@ class StringColumn(column.ColumnBase):
         # See https://github.com/pandas-dev/pandas/issues/46332
         if self.null_count == len(self):
             if op in {
-                "add",
-                "sub",
-                "mul",
-                "mod",
-                "pow",
-                "truediv",
-                "floordiv",
-                "radd",
-                "rsub",
-                "rmul",
-                "rmod",
-                "rpow",
-                "rtruediv",
-                "rfloordiv",
+                "__add__",
+                "__sub__",
+                "__mul__",
+                "__mod__",
+                "__pow__",
+                "__truediv__",
+                "__floordiv__",
+                "__radd__",
+                "__rsub__",
+                "__rmul__",
+                "__rmod__",
+                "__rpow__",
+                "__rtruediv__",
+                "__rfloordiv__",
             }:
                 return self
-            elif op in {"eq", "lt", "le", "gt", "ge"}:
+            elif op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:
                 return self.notnull()
-            elif op == "ne":
+            elif op == "__ne__":
                 return self.isnull()
 
         other = self._wrap_binop_normalization(other)
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             lhs, rhs = (other, self) if reflect else (self, other)
-            if op == "add":
+            if op == "__add__":
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
@@ -5492,7 +5492,15 @@ class StringColumn(column.ColumnBase):
                         na_rep=cudf.Scalar(None, "str"),
                     ),
                 )
-            elif op in {"eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"}:
+            elif op in {
+                "__eq__",
+                "__ne__",
+                "__gt__",
+                "__lt__",
+                "__ge__",
+                "__le__",
+                "NULL_EQUALS",
+            }:
                 return libcudf.binaryop.binaryop(
                     lhs=lhs, rhs=rhs, op=op, dtype="bool"
                 )

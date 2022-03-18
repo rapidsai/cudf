@@ -171,7 +171,7 @@ class NumericalColumn(NumericalBaseColumn):
             np.bool_: np.float32,
         }
 
-        if op in {"truediv", "rtruediv"}:
+        if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if (truediv_type := int_float_dtype_mapping.get(self.dtype.type)) :
                 return self.astype(truediv_type)._binaryop(op, other, reflect)
@@ -184,7 +184,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.as_decimal_column(dtyp)._binaryop(op, other)
 
             out_dtype = np.result_type(self.dtype, other.dtype)
-            if op in {"mod", "floordiv"}:
+            if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
                 if (
@@ -200,17 +200,17 @@ class NumericalColumn(NumericalBaseColumn):
                     out_dtype = cudf.dtype("float64")
 
         if op in {
-            "lt",
-            "gt",
-            "le",
-            "ge",
-            "eq",
-            "ne",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "__eq__",
+            "__ne__",
             "NULL_EQUALS",
         }:
             out_dtype = "bool"
 
-        if op in {"and", "or", "xor"}:
+        if op in {"__and__", "__or__", "__xor__"}:
             if is_float_dtype(self.dtype) or is_float_dtype(other):
                 raise TypeError(
                     f"Operation 'bitwise {op}' not supported between "

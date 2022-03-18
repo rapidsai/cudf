@@ -405,17 +405,29 @@ class DatetimeColumn(column.ColumnBase):
         # requires figuring out why _timedelta_add_result_dtype and
         # _timedelta_sub_result_dtype are 1) not symmetric, and 2) different
         # from each other.
-        if op in {"eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"}:
+        if op in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "NULL_EQUALS",
+        }:
             out_dtype: Dtype = cudf.dtype(np.bool_)
-        elif op == "add" and pd.api.types.is_timedelta64_dtype(other.dtype):
+        elif op == "__add__" and pd.api.types.is_timedelta64_dtype(
+            other.dtype
+        ):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 other, self
             )
-        elif op == "sub" and pd.api.types.is_timedelta64_dtype(other.dtype):
+        elif op == "__sub__" and pd.api.types.is_timedelta64_dtype(
+            other.dtype
+        ):
             out_dtype = cudf.core.column.timedelta._timedelta_sub_result_dtype(
                 other if reflect else self, self if reflect else other
             )
-        elif op == "sub" and pd.api.types.is_datetime64_dtype(other.dtype):
+        elif op == "__sub__" and pd.api.types.is_datetime64_dtype(other.dtype):
             units = ["s", "ms", "us", "ns"]
             lhs_time_unit = cudf.utils.dtypes.get_time_unit(self)
             lhs_unit = units.index(lhs_time_unit)
