@@ -125,7 +125,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                    0);
 
   auto comp = experimental::lex::self_comparator(input, column_order, null_precedence, stream);
-  auto comparator = comp.device_comparator();
+  auto comparator = comp.device_comparator(nullate::DYNAMIC{has_nested_nulls(input)});
 
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),

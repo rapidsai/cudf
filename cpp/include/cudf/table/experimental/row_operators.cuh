@@ -81,11 +81,11 @@ class element_comparator {
    * @param null_precedence Indicates how null values are ordered with other values
    * @param depth The depth of the column if part of a nested column @see preprocessed_table::depths
    */
-  CUDF_HOST_DEVICE element_comparator(Nullate has_nulls,
-                                      column_device_view lhs,
-                                      column_device_view rhs,
-                                      null_order null_precedence = null_order::BEFORE,
-                                      int depth                  = 0)
+  __device__ element_comparator(Nullate has_nulls,
+                                column_device_view lhs,
+                                column_device_view rhs,
+                                null_order null_precedence = null_order::BEFORE,
+                                int depth                  = 0)
     : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}, _null_precedence{null_precedence}, _depth{depth}
   {
   }
@@ -120,8 +120,8 @@ class element_comparator {
   template <typename Element,
             CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                            not std::is_same_v<Element, cudf::struct_view>)>
-  __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
-                                                            size_type rhs_element_index)
+  __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
+                                                            size_type const rhs_element_index)
   {
     // TODO: make this CUDF_UNREACHABLE
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
@@ -131,8 +131,8 @@ class element_comparator {
   template <typename Element,
             CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                            std::is_same_v<Element, cudf::struct_view>)>
-  __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
-                                                            size_type rhs_element_index)
+  __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
+                                                            size_type const rhs_element_index)
   {
     column_device_view lcol = _lhs;
     column_device_view rcol = _rhs;
@@ -226,7 +226,7 @@ class device_row_comparator {
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
    */
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
+  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
@@ -399,18 +399,11 @@ class self_comparator {
    *
    * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
    */
-  template <typename Nullate = nullate::DYNAMIC>
-  device_row_comparator<Nullate> device_comparator()
+  template <typename Nullate>
+  device_row_comparator<Nullate> device_comparator(Nullate nullate)
   {
-    Nullate nulls = [&] {
-      if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
-        return Nullate{d_t->has_nulls()};
-      } else {
-        return Nullate{};
-      }
-    }();
     return device_row_comparator<Nullate>(
-      nulls, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
   }
 
  private:
