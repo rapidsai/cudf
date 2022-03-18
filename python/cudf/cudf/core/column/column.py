@@ -349,14 +349,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
-        # libcudf currently doesn't handle case when offset > len(df)
-        # ticket to fix the bug in link below:
-        # https://github.com/rapidsai/cudf/issues/10314
-        if abs(offset) > len(self):
-            if fill_value is None:
-                return column_empty_like(self, masked=True)
-            else:
-                return full(len(self), fill_value, dtype=self.dtype)
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -527,6 +519,11 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
 
         if out:
             self._mimic_inplace(out, inplace=True)
+
+    def _wrap_binop_normalization(self, other):
+        if other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
+        return self.normalize_binop_value(other)
 
     def _scatter_by_slice(
         self, key: Slice, value: Union[cudf.core.scalar.Scalar, ColumnBase]
