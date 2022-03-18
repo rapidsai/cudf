@@ -29,41 +29,53 @@ namespace experimental {
 namespace {
 
 /**
- * @brief Linearizes all struct columns in a table.
+ * @brief Decompose all struct columns in a table
  *
- * If a struct column is a tree with N leaves, then this function "linearizes" the tree into
+ * If a struct column is a tree with N leaves, then this function decomposes the tree into
  * N "linear trees" (branch factor == 1) and prunes common parents. Also returns a vector of
  * per-column `depth`s.
  *
  * A `depth` value is the number of nested levels as parent of the column in the original,
- * non-linearized table, which are pruned during linearizing.
+ * non-decomposed table, which are pruned during decomposition.
  *
  * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
- *      S
+ *      S1
  *     / \
- *    S   d
+ *    S2  d
  *   / \
  *  i   f
- * then after linearizing, we get three columns:
+ * then after decomposition, we get three columns:
  * `Struct<Struct<int>>`, `float`, and `decimal`.
  * 0   2   1  <- depths
- * S
+ * S1
  * |
- * S       d
+ * S2      d
  * |
  * i   f
  * The depth of the first column is 0 because it contains all its parent levels, while the depth
  * of the second column is 2 because two of its parent struct levels were pruned.
  *
- * @param table The table to linearize.
- * @param column_order The per-column order if using linearized output with lexicographic comparison
+ * Similarly, a struct column of type Struct<int<Struct<float, decimal>> is decomposed as follows
+ *     S1
+ *    / \
+ *   i   S2
+ *      / \
+ *     f   d
+ *
+ * 0   1   2  <- depths
+ * S1  S2  d
+ * |   |
+ * i   f
+ *
+ * @param table The table whose struct columns to decompose.
+ * @param column_order The per-column order if using output with lexicographic comparison
  * @param null_precedence The per-column null precedence
- * @return A tuple containing a table with all struct columns linearized, new corresponding column
+ * @return A tuple containing a table with all struct columns decomposed, new corresponding column
  *         orders and null precedences and depths of the linearized branches
  */
-auto struct_linearize(table_view table,
-                      host_span<order const> column_order         = {},
-                      host_span<null_order const> null_precedence = {})
+auto decompose_structs(table_view table,
+                       host_span<order const> column_order         = {},
+                       host_span<null_order const> null_precedence = {})
 {
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
