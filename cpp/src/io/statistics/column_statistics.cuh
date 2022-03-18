@@ -58,7 +58,9 @@ using block_reduce_storage = detail::block_reduce_storage<dimension>;
  * @tparam block_size Dimension of the block
  * @tparam IO File format for which statistics calculation is being done
  */
-template <int block_size, detail::io_file_format IO, bool convert_timestamp_ns = true>
+template <int block_size,
+          detail::io_file_format IO,
+          detail::is_int96_timestamp INT96 = detail::is_int96_timestamp::YES>
 struct calculate_group_statistics_functor {
   block_reduce_storage<block_size>& temp_storage;
 
@@ -93,7 +95,7 @@ struct calculate_group_statistics_functor {
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    using type_convert = detail::type_conversion<detail::conversion_map<IO, convert_timestamp_ns>>;
+    using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
     using CT           = typename type_convert::template type<T>;
     typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
@@ -262,8 +264,17 @@ __global__ void __launch_bounds__(block_size, 1)
   if constexpr (IO == detail::io_file_format::PARQUET) {
     // Do not convert ns to us for int64 timestamps
     if (not int96_timestamps) {
+      type_dispatcher(
+        state.col.leaf_column->type(),
+        calculate_group_statistics_functor<block_size, IO, detail::is_int96_timestamp::NO>(storage),
+        state,
+        threadIdx.x);
+    }
+    // Temporarily disable stats writing if it's int96 timestamps
+    // TODO: https://github.com/rapidsai/cudf/issues/10438
+    else if (not cudf::is_timestamp(state.col.leaf_column->type())) {
       type_dispatcher(state.col.leaf_column->type(),
-                      calculate_group_statistics_functor<block_size, IO, false>(storage),
+                      calculate_group_statistics_functor<block_size, IO>(storage),
                       state,
                       threadIdx.x);
     }
