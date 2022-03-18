@@ -159,12 +159,6 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.unary.unary_operation(self, unaryop)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        if other is not None and isinstance(
-            other, cudf.core.column.DecimalBaseColumn
-        ):
-            dtyp = other.dtype.__class__(other.dtype.MAX_PRECISION, 0)
-            return self.as_decimal_column(dtyp)._binaryop(other, op)
-
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -238,9 +232,7 @@ class NumericalColumn(NumericalBaseColumn):
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:
         if isinstance(other, ColumnBase):
-            if not isinstance(
-                other, (NumericalColumn, cudf.core.column.DecimalBaseColumn,),
-            ):
+            if not isinstance(other, NumericalColumn):
                 return NotImplemented
             return other
         if other is None:
