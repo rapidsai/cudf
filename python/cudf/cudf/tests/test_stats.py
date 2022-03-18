@@ -382,7 +382,6 @@ def test_cov1d(data1, data2):
 )
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
 def test_corr1d(data1, data2, method):
-    
     gs1 = cudf.Series(data1)
     gs2 = cudf.Series(data2)
 
