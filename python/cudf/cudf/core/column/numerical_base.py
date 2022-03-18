@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 
 import cudf
@@ -101,7 +103,15 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         # Beyond this point, q either being scalar or list-like
         # will only have values in range [0, 1]
-        result = self._numeric_quantile(q, interpolation, exact)
+        if len(self) == 0:
+            result = cast(
+                NumericalBaseColumn,
+                cudf.core.column.column_empty(
+                    row_count=len(q), dtype=self.dtype, masked=True
+                ),
+            )
+        else:
+            result = self._numeric_quantile(q, interpolation, exact)
         if return_scalar:
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)

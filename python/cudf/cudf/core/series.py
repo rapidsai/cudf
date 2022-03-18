@@ -2758,6 +2758,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     raise TypeError(
                         f"q must be a scalar or array-like, got {type(q)}"
                     )
+
         result = self._column.quantile(
             np_array_q, interpolation, exact, return_scalar=return_scalar
         )
@@ -2765,16 +2766,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if return_scalar:
             return result
 
-        if quant_index:
-            index = np_array_q
-            if len(self) == 0:
-                result = column_empty_like(
-                    index, dtype=self.dtype, masked=True, newsize=len(index),
-                )
-        else:
-            index = None
-
-        return Series(result, index=index, name=self.name)
+        return Series(
+            result, index=np_array_q if quant_index else None, name=self.name
+        )
 
     @docutils.doc_describe()
     @_cudf_nvtx_annotate
