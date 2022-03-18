@@ -314,7 +314,7 @@ outputs:
       license_family: Apache
       license_file: LICENSE
       summary: libcudf_example library
-  - name: libcudf_tests
+  - name: libcudf-tests
     version: {{ version }}
     script: install_libcudf_tests.sh
     build:

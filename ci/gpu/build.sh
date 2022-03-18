@@ -171,10 +171,10 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf_tests
+    gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
     gpuci_logger "GoogleTests"
-    # Run libcudf and libcudf_kafka gtests from libcudf_tests package
+    # Run libcudf and libcudf_kafka gtests from libcudf-tests package
     for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
