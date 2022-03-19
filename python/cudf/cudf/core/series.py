@@ -2427,20 +2427,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser1.corr(ser2, method="spearman")
         -0.5
         """
-        
+
         if method not in ("pearson", "spearman",):
             raise ValueError(f"Unknown method {method}")
 
         if min_periods not in (None,):
             raise NotImplementedError("Unsupported argument 'min_periods'")
-            
+
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         if method == "pearson":
             lhs = self.nans_to_nulls().dropna()
             rhs = other.nans_to_nulls().dropna()
-            lhs, rhs = _align_indices([lhs, rhs], how="inner")           
+            lhs, rhs = _align_indices([lhs, rhs], how="inner")
         elif method == "spearman":
             lhs = self.nans_to_nulls().dropna()
             rhs = other.nans_to_nulls().dropna()
@@ -2449,7 +2449,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             rhs = rhs.rank()
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
-            
+
         try:
             return lhs._column.corr(rhs._column)
         except AttributeError:
@@ -2482,7 +2482,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         -0.9647548490...
         """
         return self.corr(self.shift(lag))
-
 
     @_cudf_nvtx_annotate
     def isin(self, values):
