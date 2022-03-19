@@ -2355,12 +2355,24 @@ class Frame(BinaryOperand, Scannable):
             scalar_flag = True
 
         if not isinstance(values, Frame):
-            values = as_column(values)
-            if values.dtype != self.dtype:
-                self = self.astype(values.dtype)
-            values = values.as_frame()
+            values = [as_column(values)]
+        else:
+            values = [*values._columns]
+        if len(values) != len(self._data):
+            raise ValueError("Mismatch number of columns to search for.")
+
+        sources = [
+            col
+            if is_dtype_equal(col.dtype, val.dtype)
+            else col.astype(val.dtype)
+            for col, val in zip(self._columns, values)
+        ]
         outcol = libcudf.search.search_sorted(
-            self, values, side, ascending=ascending, na_position=na_position
+            sources,
+            values,
+            side,
+            ascending=ascending,
+            na_position=na_position,
         )
 
         # Retrun result as cupy array if the values is non-scalar
