@@ -5653,7 +5653,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     def corr(self, method="pearson"):
-        """Compute the correlation matrix of a DataFrame."""
+        """Compute the correlation matrix of a DataFrame.
+        
+        Parameters
+        ----------
+        method : {'pearson', 'spearman'}, default 'pearson'
+            The correlation method to use, one of 'pearson' or 'spearman'.
+
+        Returns
+        -------
+        DataFrame
+            The requested correlation matrix.
+        """
         if method == "pearson":
             corr = cupy.corrcoef(self.values, rowvar=False)
             df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
