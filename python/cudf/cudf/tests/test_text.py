@@ -345,7 +345,7 @@ def test_character_tokenize_series():
             "w",
             "o",
             ":",
-            "t",already-in-memory 
+            "t",
             "h",
             "r",
             "e",
