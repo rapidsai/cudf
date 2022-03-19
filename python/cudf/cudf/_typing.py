@@ -1,6 +1,6 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from typing import TYPE_CHECKING, Any, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp
@@ -31,4 +31,10 @@ DataFrameOrSeries = Union["cudf.Series", "cudf.DataFrame"]
 SeriesOrIndex = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 SeriesOrSingleColumnIndex = Union[
     "cudf.Series", "cudf.core.index.GenericIndex"
+]
+
+# Groupby aggregation
+AggType = Union[str, Callable]
+MultiColumnAggType = Union[
+    AggType, Iterable[AggType], Dict[Any, Iterable[AggType]]
 ]

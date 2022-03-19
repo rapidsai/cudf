@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ struct var_hash_functor {
                                                                   size_type source_index,
                                                                   size_type target_index) noexcept
   {
-    cudf_assert(false and "Invalid source type for std, var aggregation combination.");
+    CUDF_UNREACHABLE("Invalid source type for std, var aggregation combination.");
   }
 
   template <typename Source>

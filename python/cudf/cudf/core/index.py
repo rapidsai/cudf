@@ -732,6 +732,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def repeat(self, repeats, axis=None):
+        return self._as_int64().repeat(repeats, axis)
+
     def _split(self, splits):
         return Int64Index._from_columns(
             [self._values.columns_split(splits)], [self.name]
@@ -1251,6 +1254,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             order=order,
             ascending=ascending,
             na_position=na_position,
+        )
+
+    def repeat(self, repeats, axis=None):
+        return self._from_columns_like_self(
+            Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
 
 
