@@ -1,4 +1,5 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+
+from io import StringIO# Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
@@ -776,5 +777,17 @@ def test_read_text(datadir):
     )
 
     actual = cudf.read_text(chess_file, delimiter=delimiter)
+
+    assert_eq(expected, actual)
+
+
+def test_read_text_in_memory(datadir):
+    delimiter = "::"
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(["x::", "y::", "z"])
+
+    actual = cudf.read_text(StringIO("x::y::z"), delimiter=delimiter)
 
     assert_eq(expected, actual)
