@@ -1,5 +1,7 @@
 
-from io import StringIO# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
+from io import StringIO
 
 import numpy as np
 import pytest
@@ -344,7 +346,7 @@ def test_character_tokenize_series():
             "w",
             "o",
             ":",
-            "t",
+            "t",already-in-memory 
             "h",
             "r",
             "e",
