@@ -2767,9 +2767,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return result
 
         return Series._from_data(
-            data={None: result},
+            data={self.name: result},
             index=as_index(np_array_q) if quant_index else None,
-            name=self.name,
         )
 
     @docutils.doc_describe()
