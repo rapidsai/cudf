@@ -73,6 +73,7 @@ constexpr auto NUM_STRING_ROWS_PER_BLOCK = 16;
 constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
 constexpr auto NUM_THREADS = 256;
+constexpr auto NUM_VALIDITY_THREADS_PER_TILE = 32;
 
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
@@ -787,8 +788,10 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     auto const num_tile_cols = tile.num_cols();
     auto const num_tile_rows = tile.num_rows();
 
-    auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, 32);
-    auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, 32);
+    auto const num_sections_x =
+        util::div_rounding_up_unsafe(num_tile_cols, NUM_VALIDITY_THREADS_PER_TILE);
+    auto const num_sections_y =
+        util::div_rounding_up_unsafe(num_tile_rows, NUM_VALIDITY_THREADS_PER_TILE);
     auto const validity_data_row_length = util::round_up_unsafe(
         util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
     auto const total_sections = num_sections_x * num_sections_y;
@@ -803,22 +806,23 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       // convert to rows and cols
       auto const section_x = my_section_idx % num_sections_x;
       auto const section_y = my_section_idx / num_sections_x;
-      auto const relative_col = section_x * 32 + lane_id;
-      auto const relative_row = section_y * 32;
+      auto const relative_col = section_x * NUM_VALIDITY_THREADS_PER_TILE + lane_id;
+      auto const relative_row = section_y * NUM_VALIDITY_THREADS_PER_TILE;
       auto const absolute_col = relative_col + tile.start_col;
       auto const absolute_row = relative_row + tile.start_row;
       auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_col < num_columns);
 
       if (absolute_col < num_columns) {
         auto my_data = input_nm[absolute_col] != nullptr ?
-                           input_nm[absolute_col][absolute_row / 32] :
+                           input_nm[absolute_col][absolute_row / NUM_VALIDITY_THREADS_PER_TILE] :
                            std::numeric_limits<uint32_t>::max();
 
         // every thread that is participating in the warp has 4 bytes, but it's column-based
         // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
         // make the bytes we actually write.
         bitmask_type dw_mask = 1;
-        for (int i = 0; i < 32 && relative_row + i < num_rows; ++i, dw_mask <<= 1) {
+        for (int i = 0; i < NUM_VALIDITY_THREADS_PER_TILE && relative_row + i < num_rows;
+             ++i, dw_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
           // lead thread in each warp writes data
           auto const validity_write_offset =
@@ -1141,7 +1145,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     auto const tile_start_row = tile.start_row;
     auto const num_tile_cols = tile.num_cols();
     auto const num_tile_rows = tile.num_rows();
-    constexpr auto rows_per_read = 32;
+    constexpr auto rows_per_read = NUM_VALIDITY_THREADS_PER_TILE;
     auto const num_sections_x = util::div_rounding_up_safe(num_tile_cols, CHAR_BIT);
     auto const num_sections_y = util::div_rounding_up_safe(num_tile_rows, rows_per_read);
     auto const validity_data_col_length = num_sections_y * 4; // words to bytes
@@ -1778,13 +1782,10 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   auto const fixed_width_only = !variable_width_offsets.has_value();
 
   auto select_columns = [](auto const &tbl, auto column_predicate) {
-    std::vector<size_type> indices;
-    for (int i = 0; i < tbl.num_columns(); ++i) {
-      if (column_predicate(tbl.column(i))) {
-        indices.push_back(i);
-      }
-    }
-    return tbl.select(indices);
+    std::vector<column_view> cols;
+    std::copy_if(tbl.begin(), tbl.end(), std::back_inserter(cols),
+                 [&](auto c) { return column_predicate(c); });
+    return table_view(cols);
   };
 
   // build fixed_width table view with only fixed-width columns
@@ -1861,7 +1862,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
   dim3 validity_blocks(
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
-  dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
+  dim3 validity_threads(
+      std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
 
   auto const validity_offset = column_info.fixed_width_column_starts.back();
 
@@ -2174,8 +2176,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
       });
 
   dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_FROM_ROWS));
-  dim3 threads(
-      std::min(std::min(NUM_THREADS, shmem_limit_per_tile / 8), static_cast<int>(child.size())));
+  dim3 threads(NUM_THREADS);
 
   auto validity_tile_infos =
       detail::build_validity_tile_infos(num_columns, num_rows, shmem_limit_per_tile, row_batches);
@@ -2185,7 +2186,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   dim3 validity_blocks(
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
 
-  dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
+  dim3 validity_threads(
+      std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
 
   detail::fixed_width_row_offset_functor offset_functor(fixed_width_size_per_row);
 
