@@ -5681,7 +5681,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
-
         Parameters
         ----------
         name: optional
