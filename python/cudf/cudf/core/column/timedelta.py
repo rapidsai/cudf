@@ -126,35 +126,6 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return pd_series
 
-    def _binary_op_floordiv(
-        self, rhs: BinaryOperand
-    ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
-        lhs = self  # type: column.ColumnBase
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-            lhs = lhs.astype(common_dtype).astype("float64")
-            if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid():
-                    rhs = cudf.Scalar(
-                        np.timedelta64(rhs.value)
-                        .astype(common_dtype)
-                        .astype("float64")
-                    )
-                else:
-                    rhs = cudf.Scalar(None, "float64")
-            else:
-                rhs = rhs.astype(common_dtype).astype("float64")
-            out_dtype = cudf.dtype("int64")
-        elif rhs.dtype.kind in ("f", "i", "u"):
-            out_dtype = self.dtype
-        else:
-            raise TypeError(
-                f"Floor Division of {self.dtype} with {rhs.dtype} "
-                f"cannot be performed."
-            )
-
-        return lhs, rhs, out_dtype
-
     def _binary_op_mul(self, rhs: BinaryOperand) -> DtypeObj:
         if rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
@@ -177,27 +148,16 @@ class TimeDeltaColumn(column.ColumnBase):
             )
         return out_dtype
 
-    def _binary_op_eq_ne(self, rhs: BinaryOperand) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = np.bool_
-        else:
-            raise TypeError(
-                f"Equality of {self.dtype} with {rhs.dtype} "
-                f"cannot be performed."
-            )
-        return out_dtype
-
-    def _binary_op_lt_gt_le_ge(self, rhs: BinaryOperand) -> DtypeObj:
+    def _binary_op_lt_gt_le_ge_eq_ne(self, rhs: BinaryOperand) -> DtypeObj:
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             return np.bool_
-        else:
-            raise TypeError(
-                f"Invalid comparison between dtype={self.dtype}"
-                f" and {rhs.dtype}"
-            )
+        raise TypeError(
+            f"Invalid comparison between dtype={self.dtype}"
+            f" and {rhs.dtype}"
+        )
 
-    def _binary_op_truediv(
-        self, rhs: BinaryOperand
+    def _binary_op_div(
+        self, rhs: BinaryOperand, op: str
     ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
         lhs = self  # type: column.ColumnBase
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
@@ -211,7 +171,7 @@ class TimeDeltaColumn(column.ColumnBase):
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
 
-            out_dtype = cudf.dtype("float64")
+            out_dtype = cudf.dtype("float64" if op == "truediv" else "int64")
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
@@ -225,20 +185,17 @@ class TimeDeltaColumn(column.ColumnBase):
     def binary_operator(
         self, op: str, rhs: BinaryOperand, reflect: bool = False
     ) -> "column.ColumnBase":
+        rhs = self._wrap_binop_normalization(rhs)
         lhs, rhs = self, rhs
 
-        if op in ("eq", "ne"):
-            out_dtype = self._binary_op_eq_ne(rhs)
-        elif op in ("lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = self._binary_op_lt_gt_le_ge(rhs)
+        if op in {"eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"}:
+            out_dtype = self._binary_op_lt_gt_le_ge_eq_ne(rhs)
         elif op == "mul":
             out_dtype = self._binary_op_mul(rhs)
         elif op == "mod":
             out_dtype = self._binary_op_mod(rhs)
-        elif op == "truediv":
-            lhs, rhs, out_dtype = self._binary_op_truediv(rhs)  # type: ignore
-        elif op == "floordiv":
-            lhs, rhs, out_dtype = self._binary_op_floordiv(rhs)  # type: ignore
+        elif op in {"truediv", "floordiv"}:
+            lhs, rhs, out_dtype = self._binary_op_div(rhs, op)  # type: ignore
             op = "truediv"
         elif op == "add":
             out_dtype = _timedelta_add_result_dtype(lhs, rhs)
@@ -256,12 +213,10 @@ class TimeDeltaColumn(column.ColumnBase):
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def normalize_binop_value(self, other) -> BinaryOperand:
-        if isinstance(other, cudf.Scalar):
+        if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
-
         if isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):

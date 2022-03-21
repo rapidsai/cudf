@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -408,7 +408,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
             gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         }
         break;
-      default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
+      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
   }
   if (num_uncompressed_blocks > 0) {
