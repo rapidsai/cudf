@@ -27,21 +27,19 @@ namespace reduction {
 namespace compound {
 namespace detail {
 /**
- * @brief Multi-step reduction for operations such as mean and variance, and
- * standard deviation.
+ * @brief Multi-step reduction for operations such as mean, variance, and standard deviation.
  *
- * @param[in] col    input column view
- * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
- *                   The divisor used in calculations is N - ddof, where N
- *                   represents the number of elements.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
- * @return    Output scalar in device memory
+ * @tparam ElementType  the input column data-type
+ * @tparam ResultType   the output data-type
+ * @tparam Op           the compound operator derived from `cudf::reduction::op::compound_op`
  *
- * @tparam ElementType  the input column cudf dtype
- * @tparam ResultType   the output cudf dtype
- * @tparam Op           the compound operator derived from
- * `cudf::reduction::op::compound_op`
+ * @param col input column view
+ * @param output_dtype data type of return type and typecast elements of input column.
+ * @param ddof Delta degrees of freedom used for standard deviation and variance. The divisor used
+ * is N - ddof, where N represents the number of elements.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
