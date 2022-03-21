@@ -77,9 +77,54 @@ LinkedColVector input_table_to_linked_columns(table_view const& table)
   return result;
 }
 
-auto struct_lex_verticalize(table_view input,
-                            host_span<order const> column_order         = {},
-                            host_span<null_order const> null_precedence = {})
+/**
+ * @brief Decompose all struct columns in a table
+ *
+ * If a struct column is a tree with N leaves, then this function decomposes the tree into
+ * N "linear trees" (branch factor == 1) and prunes common parents. Also returns a vector of
+ * per-column `depth`s.
+ *
+ * A `depth` value is the number of nested levels as parent of the column in the original,
+ * non-decomposed table, which are pruned during decomposition.
+ *
+ * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
+ *      S1
+ *     / \
+ *    S2  d
+ *   / \
+ *  i   f
+ * then after decomposition, we get three columns:
+ * `Struct<Struct<int>>`, `float`, and `decimal`.
+ * 0   2   1  <- depths
+ * S1
+ * |
+ * S2      d
+ * |
+ * i   f
+ * The depth of the first column is 0 because it contains all its parent levels, while the depth
+ * of the second column is 2 because two of its parent struct levels were pruned.
+ *
+ * Similarly, a struct column of type Struct<int<Struct<float, decimal>> is decomposed as follows
+ *     S1
+ *    / \
+ *   i   S2
+ *      / \
+ *     f   d
+ *
+ * 0   1   2  <- depths
+ * S1  S2  d
+ * |   |
+ * i   f
+ *
+ * @param table The table whose struct columns to decompose.
+ * @param column_order The per-column order if using output with lexicographic comparison
+ * @param null_precedence The per-column null precedence
+ * @return A tuple containing a table with all struct columns decomposed, new corresponding column
+ *         orders and null precedences and depths of the linearized branches
+ */
+auto decompose_structs(table_view table,
+                       host_span<order const> column_order         = {},
+                       host_span<null_order const> null_precedence = {})
 {
   auto linked_columns = input_table_to_linked_columns(input);
 
@@ -181,14 +226,6 @@ auto struct_lex_verticalize(table_view input,
                          std::move(verticalized_col_depths));
 }
 
-struct is_relationally_comparable_functor {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return cudf::is_relationally_comparable<T, T>();
-  }
-};
-
 /**
  * @brief Check a table for compatibility with lexicographic comparison
  *
@@ -201,13 +238,12 @@ void check_lex_compatibility(table_view const& input)
     CUDF_EXPECTS(c.type().id() != type_id::LIST,
                  "Cannot lexicographic compare a table with a LIST column");
     if (not is_nested(c.type())) {
-      CUDF_EXPECTS(
-        type_dispatcher<non_nested_id_to_type>(c.type(), is_relationally_comparable_functor{}),
-        "Cannot lexicographic compare a table with a column of type " +
-          jit::get_type_name(c.type()));
+      CUDF_EXPECTS(is_relationally_comparable(c.type()),
+                   "Cannot lexicographic compare a table with a column of type " +
+                     jit::get_type_name(c.type()));
     }
-    for (int i = 0; i < c.num_children(); ++i) {
-      check_column(c.child(i));
+    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+      check_column(*child);
     }
   };
   for (column_view const& c : input) {
@@ -217,31 +253,33 @@ void check_lex_compatibility(table_view const& input)
 
 }  // namespace
 
-namespace lexicographic_comparison {
+namespace row {
 
-preprocessed_table::preprocessed_table(table_view const& t,
-                                       host_span<order const> column_order,
-                                       host_span<null_order const> null_precedence,
-                                       rmm::cuda_stream_view stream)
-  : d_column_order(0, stream),
-    d_null_precedence(0, stream),
-    d_depths(0, stream),
-    _has_nulls(has_nested_nulls(t))
+namespace lexicographic {
+
+std::shared_ptr<preprocessed_table> preprocessed_table::create(
+  table_view const& t,
+  host_span<order const> column_order,
+  host_span<null_order const> null_precedence,
+  rmm::cuda_stream_view stream)
 {
   check_lex_compatibility(t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    struct_lex_verticalize(t, column_order, null_precedence);
+    decompose_structs(t, column_order, null_precedence);
 
-  d_t =
-    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+  auto d_t               = table_device_view::create(verticalized_lhs, stream);
+  auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
+  auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
+  auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
-  d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
-  d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+  return std::shared_ptr<preprocessed_table>(new preprocessed_table(
+    std::move(d_t), std::move(d_column_order), std::move(d_null_precedence), std::move(d_depths)));
 }
 
-}  // namespace lexicographic_comparison
+}  // namespace lexicographic
+
+}  // namespace row
 
 namespace equality_hashing {
 
@@ -249,13 +287,12 @@ preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_vie
   : _has_nulls(has_nested_nulls(t))
 {
   auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
-  auto [verticalized_lhs, _, __, ___] = struct_lex_verticalize(std::get<0>(null_pushed_table));
+  auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
 
   d_t =
     std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
 }
 
 }  // namespace equality_hashing
-
 }  // namespace experimental
 }  // namespace cudf
