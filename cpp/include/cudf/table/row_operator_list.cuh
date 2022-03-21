@@ -80,10 +80,9 @@ class element_equality_comparator {
    * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are configured
    * to be considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
    */
-  template <typename Element,
-            std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(size_type lhs_element_index,
-                             size_type rhs_element_index) const noexcept
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+  __device__ bool operator()(size_type const lhs_element_index,
+                             size_type const rhs_element_index) const noexcept
   {
     if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
@@ -100,18 +99,18 @@ class element_equality_comparator {
   }
 
   template <typename Element,
-            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>() and
-                             not cudf::is_nested<Element>()>* = nullptr>
-  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
+            CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
+                           not cudf::is_nested<Element>())>
+  __device__ bool operator()(size_type const lhs_element_index, size_type const rhs_element_index)
   {
+    // TODO: make this CUDF_UNREACHABLE
     cudf_assert(false && "Attempted to compare elements of uncomparable types.");
     return false;
   }
 
-  template <typename Element,
-            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>() and
-                             cudf::is_nested<Element>()>* = nullptr>
-  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
+  __device__ bool operator()(size_type const lhs_element_index,
+                             size_type const rhs_element_index) const noexcept
   {
     column_device_view lcol = lhs;
     column_device_view rcol = rhs;
@@ -171,17 +170,16 @@ class element_equality_comparator {
   }
 
  private:
-  column_device_view lhs;
-  column_device_view rhs;
-  Nullate nulls;
-  null_equality nulls_are_equal;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  Nullate const nulls;
+  null_equality const nulls_are_equal;
 };
 
 template <typename Nullate>
-class row_equality_comparator {
+class device_row_comparator {
   friend class self_eq_comparator;
 
- public:
   /**
    * @brief Construct a function object for performing equality comparison between the rows of two
    * tables.
@@ -191,13 +189,12 @@ class row_equality_comparator {
    * @param rhs The second table (may be the same table as `lhs`)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  row_equality_comparator(Nullate has_nulls,
-                          table_device_view lhs,
-                          table_device_view rhs,
-                          null_equality nulls_are_equal = null_equality::EQUAL)
+  device_row_comparator(Nullate has_nulls,
+                        table_device_view lhs,
+                        table_device_view rhs,
+                        null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
-    CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
  public:
@@ -209,23 +206,21 @@ class row_equality_comparator {
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
    */
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher(l.type(),
-                                   element_equality_comparator{nulls, l, r, nulls_are_equal},
-                                   lhs_row_index,
-                                   rhs_row_index);
+      return cudf::type_dispatcher(
+        l.type(), element_equality_comparator{nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
   }
 
  private:
-  table_device_view lhs;
-  table_device_view rhs;
-  Nullate nulls;
-  null_equality nulls_are_equal;
+  table_device_view const lhs;
+  table_device_view const rhs;
+  Nullate const nulls;
+  null_equality const nulls_are_equal;
 };
 
 struct preprocessed_table {
@@ -248,18 +243,11 @@ struct preprocessed_table {
    */
   operator table_device_view() { return **d_t; }
 
-  /**
-   * @brief Whether the table has any nullable column
-   *
-   */
-  [[nodiscard]] bool has_nulls() const { return _has_nulls; }
-
  private:
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
   std::unique_ptr<table_device_view_owner> d_t;
-  bool _has_nulls;
 };
 
 class self_eq_comparator {
@@ -281,6 +269,9 @@ class self_eq_comparator {
    * @brief Construct an owning object for performing equality comparisons between two rows of the
    * same table.
    *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
    * @param t A table preprocessed for equality comparison
    */
   self_eq_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
@@ -288,22 +279,19 @@ class self_eq_comparator {
   /**
    * @brief Get the comparison operator to use on the device
    *
+   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   *
+   * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
+   *
    * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
    */
-  template <typename Nullate = nullate::DYNAMIC>
-  row_equality_comparator<Nullate> device_comparator()
+  template <typename Nullate>
+  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
   {
-    if constexpr (std::is_same_v<Nullate, nullate::DYNAMIC>) {
-      return row_equality_comparator(Nullate{d_t->has_nulls()}, *d_t, *d_t);
-    } else {
-      return row_equality_comparator(Nullate{}, *d_t, *d_t);
-    }
+    return device_row_comparator(nullate, *d_t, *d_t);
   }
 
  private:
-  using table_device_view_owner =
-    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
-
   std::shared_ptr<preprocessed_table> d_t;
 };
 

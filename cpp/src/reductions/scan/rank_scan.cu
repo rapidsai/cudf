@@ -52,17 +52,19 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
 {
   auto comp =
     cudf::experimental::row::equality_hashing::self_eq_comparator(table_view{{order_by}}, stream);
+  auto const device_comparator =
+    comp.device_comparator(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    mutable_ranks.begin<size_type>(),
-    mutable_ranks.end<size_type>(),
-    [comparator = comp.device_comparator(), resolver] __device__(size_type row_index) {
-      return resolver(row_index == 0 || !comparator(row_index, row_index - 1), row_index);
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [comparator = device_comparator, resolver] __device__(size_type row_index) {
+                     return resolver(row_index == 0 || !comparator(row_index, row_index - 1),
+                                     row_index);
+                   });
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),

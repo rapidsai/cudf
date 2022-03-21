@@ -282,7 +282,6 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 namespace equality_hashing {
 
 preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_view stream)
-  : _has_nulls(has_nested_nulls(t))
 {
   auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
   auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
