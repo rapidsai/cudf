@@ -8,7 +8,18 @@ import operator
 import warnings
 from collections import Counter, abc
 from functools import cached_property
-from typing import Any, Callable, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 from uuid import uuid4
 
 import cupy as cp
@@ -26,6 +37,7 @@ from cudf.api.types import (
     is_list_dtype,
     is_list_like,
 )
+from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
@@ -174,6 +186,145 @@ class IndexedFrame(Frame):
             "via `to_dict()` method. Consider using "
             "`.to_pandas().to_dict()` to construct a Python dictionary."
         )
+
+    @property
+    def _num_rows(self) -> int:
+        # Important to use the index because the data may be empty.
+        return len(self._index)
+
+    @classmethod
+    def _from_data(
+        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
+    ):
+        out = super()._from_data(data)
+        out._index = RangeIndex(out._data.nrows) if index is None else index
+        return out
+
+    @classmethod
+    @_cudf_nvtx_annotate
+    def _from_columns(
+        cls,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` object from a list of columns.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        data_columns = columns
+
+        n_index_columns = len(index_names) if index_names else 0
+        index_columns = columns[:n_index_columns]
+        data_columns = columns[n_index_columns:]
+
+        out = super()._from_columns(data_columns, column_names)
+
+        if index_names is not None:
+            out._index = cudf.core.index._index_from_columns(index_columns)
+            if isinstance(out._index, cudf.MultiIndex):
+                out._index.names = index_names
+            else:
+                out._index.name = index_names[0]
+
+        return out
+
+    @_cudf_nvtx_annotate
+    def _from_columns_like_self(
+        self,
+        columns: List[ColumnBase],
+        column_names: Optional[abc.Iterable[str]] = None,
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` from a list of columns with metadata from self.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        frame = self.__class__._from_columns(
+            columns, column_names, index_names
+        )
+        return frame._copy_type_metadata(self, include_index=bool(index_names))
+
+    def _mimic_inplace(
+        self: T, result: T, inplace: bool = False
+    ) -> Optional[Frame]:
+        if inplace:
+            self._index = result._index
+        return super()._mimic_inplace(result, inplace)
+
+    def copy(self: T, deep: bool = True) -> T:
+        """Make a copy of this object's indices and data.
+
+        When ``deep=True`` (default), a new object will be created with a
+        copy of the calling object's data and indices. Modifications to
+        the data or indices of the copy will not be reflected in the
+        original object (see notes below).
+        When ``deep=False``, a new object will be created without copying
+        the calling object's data or index (only references to the data
+        and index are copied). Any changes to the data of the original
+        will be reflected in the shallow copy (and vice versa).
+
+        Parameters
+        ----------
+        deep : bool, default True
+            Make a deep copy, including a copy of the data and the indices.
+            With ``deep=False`` neither the indices nor the data are copied.
+
+        Returns
+        -------
+        copy : Series or DataFrame
+            Object type matches caller.
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> s
+        a    1
+        b    2
+        dtype: int64
+        >>> s_copy = s.copy()
+        >>> s_copy
+        a    1
+        b    2
+        dtype: int64
+
+        **Shallow copy versus default (deep) copy:**
+
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> deep = s.copy()
+        >>> shallow = s.copy(deep=False)
+
+        Updates to the data shared by shallow copy and original is reflected
+        in both; deep copy remains unchanged.
+
+        >>> s['a'] = 3
+        >>> shallow['b'] = 4
+        >>> s
+        a    3
+        b    4
+        dtype: int64
+        >>> shallow
+        a    3
+        b    4
+        dtype: int64
+        >>> deep
+        a    1
+        b    2
+        dtype: int64
+        """
+        return self._from_data(
+            self._data.copy(deep=deep),
+            # Indexes are immutable so copies can always be shallow.
+            self._index.copy(deep=False),
+        )
+
+    @_cudf_nvtx_annotate
+    def equals(self, other):  # noqa: D102
+        if not super().equals(other):
+            return False
+        return self._index.equals(other._index)
 
     @property
     def index(self):
@@ -753,6 +904,18 @@ class IndexedFrame(Frame):
             for i in range(len(splits) + 1)
         ]
 
+    @_cudf_nvtx_annotate
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):  # noqa: D102
+        old_index = self._index
+        ret = super().fillna(value, method, axis, inplace, limit)
+        if inplace:
+            self._index = old_index
+        else:
+            ret._index = old_index
+        return ret
+
     def add_prefix(self, prefix):
         """
         Prefix labels with string `prefix`.
@@ -1062,7 +1225,9 @@ class IndexedFrame(Frame):
             result = result.sort_values(sort_col_id)
             del result[sort_col_id]
 
-        result = self.__class__._from_data(result._data, index=result.index)
+        result = self.__class__._from_data(
+            data=result._data, index=result.index
+        )
         result._data.multiindex = self._data.multiindex
         result._data._level_names = self._data._level_names
         result.index.names = self.index.names
