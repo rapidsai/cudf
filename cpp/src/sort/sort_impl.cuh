@@ -124,7 +124,8 @@ std::unique_ptr<column> sorted_order(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto comp = experimental::lex::self_comparator(input, column_order, null_precedence, stream);
+  auto comp =
+    experimental::row::lexicographic::self_comparator(input, column_order, null_precedence, stream);
   auto comparator = comp.device_comparator(nullate::DYNAMIC{has_nested_nulls(input)});
 
   if (stable) {

@@ -177,7 +177,9 @@ void check_lex_compatibility(table_view const& input)
 
 }  // namespace
 
-namespace lex {
+namespace row {
+
+namespace lexicographic {
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create(
   table_view const& t,
@@ -199,6 +201,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
     std::move(d_t), std::move(d_column_order), std::move(d_null_precedence), std::move(d_depths)));
 }
 
-}  // namespace lex
+}  // namespace lexicographic
+}  // namespace row
 }  // namespace experimental
 }  // namespace cudf
