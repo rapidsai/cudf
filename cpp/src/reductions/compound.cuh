@@ -25,6 +25,7 @@
 namespace cudf {
 namespace reduction {
 namespace compound {
+namespace detail {
 /**
  * @brief Multi-step reduction for operations such as mean and variance, and
  * standard deviation.
@@ -61,19 +62,19 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
       auto it = thrust::make_transform_iterator(
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
-      result = detail::reduce<Op, decltype(it), ResultType>(
+      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     } else {
       auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
-      result = detail::reduce<Op, decltype(it), ResultType>(
+      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce<Op, decltype(it), ResultType>(
+    result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
       it, col.size(), compound_op, valid_count, ddof, stream, mr);
   }
 
@@ -152,6 +153,7 @@ struct element_type_dispatcher {
   }
 };
 
+}  // namespace detail
 }  // namespace compound
 }  // namespace reduction
 }  // namespace cudf
