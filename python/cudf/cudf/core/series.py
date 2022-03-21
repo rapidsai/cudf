@@ -459,12 +459,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
-        """
-        Construct the Series from a ColumnAccessor
-        """
-        out: Series = super()._from_data(data, index, name)
-        if index is None:
-            out._index = RangeIndex(out._data.nrows)
+        out = super()._from_data(data=data, index=index)
+        if name is not None:
+            out.name = name
         return out
 
     @_cudf_nvtx_annotate
