@@ -4,7 +4,6 @@
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
 *** Borrowed from streamz.dataframe.tests | License at thirdparty/LICENSE ***
 """
-from __future__ import division, print_function
 
 import json
 import operator

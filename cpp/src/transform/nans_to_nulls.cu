@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ namespace cudf {
 namespace detail {
 struct dispatch_nan_to_null {
   template <typename T>
-  std::enable_if_t<std::is_floating_point<T>::value,
+  std::enable_if_t<std::is_floating_point_v<T>,
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
   operator()(column_view const& input,
              rmm::cuda_stream_view stream,
@@ -70,7 +70,7 @@ struct dispatch_nan_to_null {
   }
 
   template <typename T>
-  std::enable_if_t<!std::is_floating_point<T>::value,
+  std::enable_if_t<!std::is_floating_point_v<T>,
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
   operator()(column_view const& input,
              rmm::cuda_stream_view stream,

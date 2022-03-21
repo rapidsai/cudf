@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 
-class Fuzzer(object):
+class Fuzzer:
     def __init__(
         self,
         target,

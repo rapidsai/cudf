@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 
-from __future__ import print_function
 import re
 import os
 import subprocess
@@ -67,7 +66,7 @@ def parse_args():
 
 
 def get_all_commands(cdb):
-    with open(cdb, "r") as fp:
+    with open(cdb) as fp:
         return json.load(fp)
 
 
@@ -195,10 +194,10 @@ def collect_result(result):
 
 def print_result(passed, stdout, file):
     status_str = "PASSED" if passed else "FAILED"
-    print("%s File:%s %s %s" % (SEPARATOR, file, status_str, SEPARATOR))
+    print(f"{SEPARATOR} File:{file} {status_str} {SEPARATOR}")
     if stdout:
         print(stdout)
-        print("%s File:%s ENDS %s" % (SEPARATOR, file, SEPARATOR))
+        print(f"{SEPARATOR} File:{file} ENDS {SEPARATOR}")
 
 
 def print_results():

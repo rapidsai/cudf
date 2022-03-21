@@ -23,7 +23,28 @@
 namespace cudf {
 namespace jni {
 
-jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
+/**
+ * @brief Detach all columns from the specified table, and pointers to them as an array.
+ *
+ * This function takes a table (presumably returned by some operation), and turns it into an
+ * array of column* (as jlongs).
+ * The lifetime of the columns is decoupled from that of the table, and is managed by the caller.
+ *
+ * @param env The JNI environment
+ * @param table_result the table to convert for return
+ * @param extra_columns columns not in the table that will be appended to the result.
+ */
+jlongArray
+convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result,
+                         std::vector<std::unique_ptr<cudf::column>> &&extra_columns = {});
+
+/**
+ * @copydoc convert_table_for_return(JNIEnv*, std::unique_ptr<cudf::table>&,
+ *                                   std::vector<std::unique_ptr<cudf::column>>&&)
+ */
+jlongArray
+convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &&table_result,
+                         std::vector<std::unique_ptr<cudf::column>> &&extra_columns = {});
 
 //
 // ContiguousTable APIs

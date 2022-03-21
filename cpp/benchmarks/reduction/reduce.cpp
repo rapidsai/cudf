@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ class Reduction : public cudf::benchmark {
 };
 
 template <typename type>
-void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> const& agg)
+void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
@@ -54,7 +54,7 @@ void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::aggregation> co
 }
 
 #define concat(a, b, c) a##b##c
-#define get_agg(op)     concat(cudf::make_, op, _aggregation())
+#define get_agg(op)     concat(cudf::make_, op, _aggregation<cudf::reduce_aggregation>())
 
 // TYPE, OP
 #define RBM_BENCHMARK_DEFINE(name, type, aggregation)             \

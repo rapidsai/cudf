@@ -72,7 +72,6 @@ class orc_reader_options {
 
   // Columns that should be read as Decimal128
   std::vector<std::string> _decimal128_columns;
-  bool _enable_decimal128 = true;
 
   friend orc_reader_options_builder;
 
@@ -152,11 +151,6 @@ class orc_reader_options {
    */
   std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
 
-  /**
-   * @brief Whether to use row index to speed-up reading.
-   */
-  bool is_enabled_decimal128() const { return _enable_decimal128; }
-
   // Setters
 
   /**
@@ -226,17 +220,12 @@ class orc_reader_options {
    *
    * @param val Vector of fully qualified column names.
    */
-  void set_decimal_cols_as_float(std::vector<std::string> val)
+  [[deprecated(
+    "Decimal to float conversion is deprecated and will be remove in future release")]] void
+  set_decimal_cols_as_float(std::vector<std::string> val)
   {
     _decimal_cols_as_float = std::move(val);
   }
-
-  /**
-   * @brief Enable/Disable the use of decimal128 type
-   *
-   * @param use Boolean value to enable/disable.
-   */
-  void enable_decimal128(bool use) { _enable_decimal128 = use; }
 
   /**
    * @brief Set columns that should be read as 128-bit Decimal
@@ -357,7 +346,10 @@ class orc_reader_options_builder {
    * @param val Vector of column names.
    * @return this for chaining.
    */
-  orc_reader_options_builder& decimal_cols_as_float(std::vector<std::string> val)
+  [[deprecated(
+    "Decimal to float conversion is deprecated and will be remove in future "
+    "release")]] orc_reader_options_builder&
+  decimal_cols_as_float(std::vector<std::string> val)
   {
     options._decimal_cols_as_float = std::move(val);
     return *this;
@@ -372,17 +364,6 @@ class orc_reader_options_builder {
   orc_reader_options_builder& decimal128_columns(std::vector<std::string> val)
   {
     options._decimal128_columns = std::move(val);
-    return *this;
-  }
-
-  /**
-   * @brief Enable/Disable use of decimal128 type
-   *
-   * @param use Boolean value to enable/disable.
-   */
-  orc_reader_options_builder& decimal128(bool use)
-  {
-    options.enable_decimal128(use);
     return *this;
   }
 

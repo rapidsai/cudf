@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include "rolling/rolling_detail.hpp"
 #include "rolling/rolling_jit_detail.hpp"
 #include "rolling_detail.hpp"
+
+#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -52,8 +54,10 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/reduce.h>
 
 #include <cuda/std/limits>
 
@@ -91,14 +95,14 @@ struct DeviceRolling {
 
   // operations we do support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, typename std::enable_if_t<is_supported<T, O>()>* = nullptr)
+  DeviceRolling(size_type _min_periods, std::enable_if_t<is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
   }
 
   // operations we don't support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, typename std::enable_if_t<!is_supported<T, O>()>* = nullptr)
+  DeviceRolling(size_type _min_periods, std::enable_if_t<!is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -140,23 +144,35 @@ struct DeviceRolling {
 };
 
 /**
- * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window.
+ * @brief The base struct used for checking if the combination of input type and aggregation op is
+ * supported.
  */
 template <typename InputType, aggregation::Kind op>
-struct DeviceRollingArgMinMax {
+struct DeviceRollingArgMinMaxBase {
   size_type min_periods;
+  DeviceRollingArgMinMaxBase(size_type _min_periods) : min_periods(_min_periods) {}
 
-  // what operations do we support
-  template <typename T = InputType, aggregation::Kind O = op>
   static constexpr bool is_supported()
   {
-    // strictly speaking, I think it would be ok to make this work
-    // for comparable types as well.  but right now the only use case is
-    // for MIN/MAX on strings.
-    return std::is_same_v<T, cudf::string_view>;
-  }
+    // Right now only support ARGMIN/ARGMAX of strings and structs.
+    auto const type_supported =
+      std::is_same_v<InputType, cudf::string_view> || std::is_same_v<InputType, cudf::struct_view>;
+    auto const op_supported = op == aggregation::Kind::ARGMIN || op == aggregation::Kind::ARGMAX;
 
-  DeviceRollingArgMinMax(size_type _min_periods) : min_periods(_min_periods) {}
+    return type_supported && op_supported;
+  }
+};
+
+/**
+ * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window for string.
+ */
+template <aggregation::Kind op>
+struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_view, op> {
+  DeviceRollingArgMinMaxString(size_type _min_periods)
+    : DeviceRollingArgMinMaxBase<cudf::string_view, op>(_min_periods)
+  {
+  }
+  using DeviceRollingArgMinMaxBase<cudf::string_view, op>::min_periods;
 
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
@@ -166,14 +182,17 @@ struct DeviceRollingArgMinMax {
                              size_type end_index,
                              size_type current_index)
   {
-    using AggOp = typename corresponding_operator<op>::type;
+    auto constexpr default_output = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+
+    using InputType = cudf::string_view;
+    using AggOp     = typename corresponding_operator<op>::type;
     AggOp agg_op;
 
     // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
     // for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
     InputType val                  = AggOp::template identity<InputType>();
-    OutputType val_index = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+    OutputType val_index           = default_output;
 
     for (size_type j = start_index; j < end_index; j++) {
       if (!has_nulls || input.is_valid(j)) {
@@ -185,12 +204,56 @@ struct DeviceRollingArgMinMax {
     }
 
     bool output_is_valid = (count >= min_periods);
-    // -1 will help identify null elements while gathering for Min and Max
-    // In case of count, this would be null, so doesn't matter.
-    output.element<OutputType>(current_index) = (output_is_valid) ? val_index : -1;
+    // Use the sentinel value (i.e., -1) for the output will help identify null elements while
+    // gathering for Min and Max.
+    output.element<OutputType>(current_index) = output_is_valid ? val_index : default_output;
 
     // The gather mask shouldn't contain null values, so
     // always return zero
+    return true;
+  }
+};
+
+/**
+ * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window for struct.
+ */
+template <aggregation::Kind op, typename Comparator>
+struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_view, op> {
+  DeviceRollingArgMinMaxStruct(size_type _min_periods, Comparator const& _comp)
+    : DeviceRollingArgMinMaxBase<cudf::struct_view, op>(_min_periods), comp(_comp)
+  {
+  }
+  using DeviceRollingArgMinMaxBase<cudf::struct_view, op>::min_periods;
+  Comparator comp;
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const&,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index)
+  {
+    auto constexpr default_output = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+
+    auto const valid_count =
+      has_nulls ? thrust::count_if(thrust::seq,
+                                   thrust::make_counting_iterator(start_index),
+                                   thrust::make_counting_iterator(end_index),
+                                   [&input](size_type idx) { return input.is_valid_nocheck(idx); })
+                : end_index - start_index;
+
+    // Use the sentinel value (i.e., -1) for the output will help identify null elements while
+    // gathering for Min and Max.
+    output.element<OutputType>(current_index) =
+      (valid_count >= min_periods) ? thrust::reduce(thrust::seq,
+                                                    thrust::make_counting_iterator(start_index),
+                                                    thrust::make_counting_iterator(end_index),
+                                                    size_type{start_index},
+                                                    comp)
+                                   : default_output;
+
+    // The gather mask shouldn't contain null values, so always return true.
     return true;
   }
 };
@@ -219,8 +282,8 @@ struct DeviceRollingCountValid {
                              size_type end_index,
                              size_type current_index)
   {
-    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-    // for CUDA 10.0 and below (fixed in CUDA 10.1)
+    // declare this as volatile to avoid some compiler optimizations that lead to incorrect
+    // results for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
 
     bool output_is_valid = ((end_index - start_index) >= min_periods);
@@ -441,12 +504,12 @@ struct DeviceRollingLead {
     return cudf::is_fixed_width<T>();
   }
 
-  template <typename T = InputType, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<is_supported<T>()>* = nullptr>
   DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
   {
   }
 
-  template <typename T = InputType, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<!is_supported<T>()>* = nullptr>
   DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -497,12 +560,12 @@ struct DeviceRollingLag {
     return cudf::is_fixed_width<T>();
   }
 
-  template <typename T = InputType, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<is_supported<T>()>* = nullptr>
   DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
   {
   }
 
-  template <typename T = InputType, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
+  template <typename T = InputType, std::enable_if_t<!is_supported<T>()>* = nullptr>
   DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -553,12 +616,12 @@ struct corresponding_rolling_operator {
 
 template <typename InputType>
 struct corresponding_rolling_operator<InputType, aggregation::ARGMIN> {
-  using type = DeviceRollingArgMinMax<InputType, aggregation::ARGMIN>;
+  using type = DeviceRollingArgMinMaxBase<InputType, aggregation::ARGMIN>;
 };
 
 template <typename InputType>
 struct corresponding_rolling_operator<InputType, aggregation::ARGMAX> {
-  using type = DeviceRollingArgMinMax<InputType, aggregation::ARGMAX>;
+  using type = DeviceRollingArgMinMaxBase<InputType, aggregation::ARGMAX>;
 };
 
 template <typename InputType>
@@ -577,13 +640,13 @@ struct corresponding_rolling_operator<InputType, aggregation::ROW_NUMBER> {
 };
 
 template <typename InputType>
-struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
-  using type = DeviceRollingLead<InputType>;
+struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
+  using type = DeviceRollingVariance<InputType>;
 };
 
 template <typename InputType>
-struct corresponding_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
-  using type = DeviceRollingVariance<InputType>;
+struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
+  using type = DeviceRollingLead<InputType>;
 };
 
 template <typename InputType>
@@ -594,53 +657,63 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::LAG> {
 /**
  * @brief Functor for creating a device rolling operator based on input type and aggregation type.
  */
-template <typename InputType, aggregation::Kind op, typename Enable = void>
+template <typename InputType, aggregation::Kind k, typename = void>
 struct create_rolling_operator {
-  auto operator()(size_type min_periods, rolling_aggregation const& agg)
+  auto operator()(size_type min_periods, rolling_aggregation const&)
   {
-    CUDF_FAIL("Invalid aggregation/type pair");
+    return typename corresponding_rolling_operator<InputType, k>::type(min_periods);
   }
 };
 
-template <typename InputType, aggregation::Kind op>
-struct create_rolling_operator<
-  InputType,
-  op,
-  std::enable_if_t<corresponding_rolling_operator<InputType, op>::type::is_supported()>> {
-  template <typename T                                          = InputType,
-            aggregation::Kind O                                 = op,
-            std::enable_if_t<O != aggregation::Kind::LEAD && O != aggregation::Kind::LAG &&
-                             O != aggregation::Kind::VARIANCE>* = nullptr>
-  auto operator()(size_type min_periods, rolling_aggregation const&)
-  {
-    return typename corresponding_rolling_operator<InputType, op>::type(min_periods);
-  }
-
-  template <typename T                                          = InputType,
-            aggregation::Kind O                                 = op,
-            std::enable_if_t<O == aggregation::Kind::VARIANCE>* = nullptr>
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::VARIANCE> {
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
   {
     return DeviceRollingVariance<InputType>{
       min_periods, dynamic_cast<cudf::detail::var_aggregation const&>(agg)._ddof};
   }
+};
 
-  template <typename T                                      = InputType,
-            aggregation::Kind O                             = op,
-            std::enable_if_t<O == aggregation::Kind::LEAD>* = nullptr>
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::LEAD> {
   auto operator()(size_type, rolling_aggregation const& agg)
   {
     return DeviceRollingLead<InputType>{
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
   }
+};
 
-  template <typename T                                     = InputType,
-            aggregation::Kind O                            = op,
-            std::enable_if_t<O == aggregation::Kind::LAG>* = nullptr>
+template <typename InputType>
+struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
   auto operator()(size_type, rolling_aggregation const& agg)
   {
     return DeviceRollingLag<InputType>{
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
+  }
+};
+
+template <typename InputType, aggregation::Kind k>
+struct create_rolling_operator<
+  InputType,
+  k,
+  typename std::enable_if_t<std::is_same_v<InputType, cudf::string_view> &&
+                            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX)>> {
+  auto operator()(size_type min_periods, rolling_aggregation const&)
+  {
+    return DeviceRollingArgMinMaxString<k>{min_periods};
+  }
+};
+
+template <typename InputType, aggregation::Kind k>
+struct create_rolling_operator<
+  InputType,
+  k,
+  typename std::enable_if_t<std::is_same_v<InputType, cudf::struct_view> &&
+                            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX)>> {
+  template <typename Comparator>
+  auto operator()(size_type min_periods, Comparator const& comp)
+  {
+    return DeviceRollingArgMinMaxStruct<k, Comparator>{min_periods, comp};
   }
 };
 
@@ -652,7 +725,7 @@ struct create_rolling_operator<
  * happens, the equivalent aggregation/type implementation of finalize() will perform
  * some postprocessing step.
  *
- * An example of this would be applying a MIN aggregation to strings.  This cannot be done
+ * An example of this would be applying a MIN aggregation to strings. This cannot be done
  * directly in the rolling operation, so instead the following happens:
  *
  * - the rolling_aggregation_preprocessor transforms the incoming MIN/string pair to
@@ -662,8 +735,8 @@ struct create_rolling_operator<
  * - The rolling_aggregation_postprocessor then takes this gather map and performs a final
  *   gather() on the input string data to generate the final output.
  *
- * Another example is COLLECT_LIST.  COLLECT_LIST is odd in that it doesn't go through the
- * normal gpu rolling kernel at all.  It has a completely custom implementation.  So the
+ * Another example is COLLECT_LIST. COLLECT_LIST is odd in that it doesn't go through the
+ * normal gpu rolling kernel at all. It has a completely custom implementation. So the
  * following happens:
  *
  * - the rolling_aggregation_preprocessor transforms the COLLECT_LIST aggregation into nothing,
@@ -687,8 +760,9 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
                                                   cudf::detail::min_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
-                                                    : make_min_aggregation());
+    aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
+                     ? make_argmin_aggregation()
+                     : make_min_aggregation());
     return aggs;
   }
 
@@ -700,8 +774,9 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
                                                   cudf::detail::max_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
-                                                    : make_max_aggregation());
+    aggs.push_back(col_type.id() == type_id::STRING || col_type.id() == type_id::STRUCT
+                     ? make_argmax_aggregation()
+                     : make_max_aggregation());
     return aggs;
   }
 
@@ -787,7 +862,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   // perform a final gather on the generated ARGMIN data
   void visit(cudf::detail::min_aggregation const&) override
   {
-    if (result_type.id() == type_id::STRING) {
+    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
       // The rows that represent null elements will have negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
@@ -805,7 +880,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   // perform a final gather on the generated ARGMAX data
   void visit(cudf::detail::max_aggregation const&) override
   {
-    if (result_type.id() == type_id::STRING) {
+    if (result_type.id() == type_id::STRING || result_type.id() == type_id::STRUCT) {
       // The rows that represent null elements will have negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
@@ -901,29 +976,24 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
 /**
  * @brief Computes the rolling window function
  *
- * @tparam InputType  Datatype of `input`
- * @tparam OutputType  Datatype of `output`
- * @tparam op The aggregation operator (enum value)
+ * @tparam OutputType Datatype of `output`
  * @tparam block_size CUDA block size for the kernel
  * @tparam has_nulls true if the input column has nulls
  * @tparam DeviceRollingOperator An operator that performs a single windowing operation
  * @tparam PrecedingWindowIterator iterator type (inferred)
  * @tparam FollowingWindowIterator iterator type (inferred)
- * @param input Input column device view
- * @param default_outputs A column of per-row default values to be returned instead
- *                        of nulls for certain aggregation types.
- * @param output Output column device view
- * @param output_valid_count Output count of valid values
- * @param device_operator The operator used to perform a single window operation
+ * @param[in] input Input column device view
+ * @param[in] default_outputs A column of per-row default values to be returned instead
+ *            of nulls for certain aggregation types.
+ * @param[out] output Output column device view
+ * @param[out] output_valid_count Output count of valid values
+ * @param[in] device_operator The operator used to perform a single window operation
  * @param[in] preceding_window_begin Rolling window size iterator, accumulates from
- *                in_col[i-preceding_window] to in_col[i] inclusive
+ *            in_col[i-preceding_window] to in_col[i] inclusive
  * @param[in] following_window_begin Rolling window size iterator in the forward
- *                direction, accumulates from in_col[i] to
- *                in_col[i+following_window] inclusive
+ *            direction, accumulates from in_col[i] to in_col[i+following_window] inclusive
  */
-template <typename InputType,
-          typename OutputType,
-          aggregation::Kind op,
+template <typename OutputType,
           int block_size,
           bool has_nulls,
           typename DeviceRollingOperator,
@@ -1003,61 +1073,63 @@ struct rolling_window_launcher {
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              int min_periods,
-             rolling_aggregation const& agg,
+             [[maybe_unused]] rolling_aggregation const& agg,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
-    auto const output_type = target_type(input.type(), op);
-    auto device_operator   = create_rolling_operator<InputType, op>{}(min_periods, agg);
+    auto const do_rolling = [&](auto const& device_op) {
+      auto output = make_fixed_width_column(
+        target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
 
-    auto output =
-      make_fixed_width_column(output_type, input.size(), mask_state::UNINITIALIZED, stream, mr);
+      auto const d_inp_ptr         = column_device_view::create(input, stream);
+      auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
+      auto const d_out_ptr = mutable_column_device_view::create(output->mutable_view(), stream);
+      auto d_valid_count   = rmm::device_scalar<size_type>{0, stream};
 
-    cudf::mutable_column_view output_view = output->mutable_view();
-
-    size_type valid_count{0};
-    {
-      using Type    = device_storage_type_t<InputType>;
-      using OutType = device_storage_type_t<target_type_t<InputType, op>>;
-
-      constexpr cudf::size_type block_size = 256;
-      cudf::detail::grid_1d grid(input.size(), block_size);
-
-      auto input_device_view           = column_device_view::create(input, stream);
-      auto output_device_view          = mutable_column_device_view::create(output_view, stream);
-      auto default_outputs_device_view = column_device_view::create(default_outputs, stream);
-
-      rmm::device_scalar<size_type> device_valid_count{0, stream};
+      auto constexpr block_size = 256;
+      auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
+      using OutType             = device_storage_type_t<target_type_t<InputType, op>>;
 
       if (input.has_nulls()) {
-        gpu_rolling<Type, OutType, op, block_size, true>
-          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
-                                                               *default_outputs_device_view,
-                                                               *output_device_view,
-                                                               device_valid_count.data(),
-                                                               device_operator,
+        gpu_rolling<OutType, block_size, true>
+          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
+                                                               *d_default_out_ptr,
+                                                               *d_out_ptr,
+                                                               d_valid_count.data(),
+                                                               device_op,
                                                                preceding_window_begin,
                                                                following_window_begin);
       } else {
-        gpu_rolling<Type, OutType, op, block_size, false>
-          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
-                                                               *default_outputs_device_view,
-                                                               *output_device_view,
-                                                               device_valid_count.data(),
-                                                               device_operator,
+        gpu_rolling<OutType, block_size, false>
+          <<<grid.num_blocks, block_size, 0, stream.value()>>>(*d_inp_ptr,
+                                                               *d_default_out_ptr,
+                                                               *d_out_ptr,
+                                                               d_valid_count.data(),
+                                                               device_op,
                                                                preceding_window_begin,
                                                                following_window_begin);
       }
 
-      valid_count = device_valid_count.value(stream);
+      auto const valid_count = d_valid_count.value(stream);
+      output->set_null_count(output->size() - valid_count);
 
-      // check the stream for debugging
-      CHECK_CUDA(stream.value());
+      return output;
+    };  // end do_rolling
+
+    auto constexpr is_arg_minmax =
+      op == aggregation::Kind::ARGMIN || op == aggregation::Kind::ARGMAX;
+
+    if constexpr (is_arg_minmax && std::is_same_v<InputType, cudf::struct_view>) {
+      // Using comp_generator to create a LESS operator for finding ARGMIN/ARGMAX of structs.
+      auto const comp_generator =
+        cudf::reduction::detail::comparison_binop_generator::create<op>(input, stream);
+      auto const device_op =
+        create_rolling_operator<InputType, op>{}(min_periods, comp_generator.binop());
+      return do_rolling(device_op);
+    } else {  // all the remaining rolling operations
+      auto const device_op = create_rolling_operator<InputType, op>{}(min_periods, agg);
+      return do_rolling(device_op);
     }
-
-    output->set_null_count(output->size() - valid_count);
-
-    return output;
   }
 
   template <aggregation::Kind op,

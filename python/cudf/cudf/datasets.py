@@ -57,9 +57,7 @@ def timeseries(
         pd.date_range(start, end, freq=freq, name="timestamp")
     )
     state = np.random.RandomState(seed)
-    columns = dict(
-        (k, make[dt](len(index), state)) for k, dt in dtypes.items()
-    )
+    columns = {k: make[dt](len(index), state) for k, dt in dtypes.items()}
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
@@ -110,7 +108,7 @@ def randomdata(nrows=10, dtypes=None, seed=None):
     if dtypes is None:
         dtypes = {"id": int, "x": float, "y": float}
     state = np.random.RandomState(seed)
-    columns = dict((k, make[dt](nrows, state)) for k, dt in dtypes.items())
+    columns = {k: make[dt](nrows, state) for k, dt in dtypes.items()}
     df = pd.DataFrame(columns, columns=sorted(columns))
     return cudf.from_pandas(df)
 

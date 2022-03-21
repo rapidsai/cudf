@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -178,7 +178,7 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T, typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
@@ -197,7 +197,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
-template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   using namespace numeric;

@@ -162,12 +162,24 @@ struct PMod {
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return rem;
   }
+
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<cudf::is_fixed_point<TypeLhs>() and
+                             std::is_same_v<TypeLhs, TypeRhs>>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y)
+  {
+    auto const remainder = x % y;
+    return remainder.value() < 0 ? (remainder + y) % y : remainder;
+  }
 };
 
 struct PyMod {
   template <typename TypeLhs,
             typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
+                              (cudf::is_fixed_point<TypeLhs>() and
+                               std::is_same_v<TypeLhs, TypeRhs>))>* = nullptr>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
   {
     return ((x % y) + y) % y;

@@ -1,4 +1,4 @@
-from __future__ import division
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import itertools
 import operator
@@ -41,7 +41,8 @@ def test_series_not(dtype):
         arr = arr * (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
 
-    result = cudf.logical_not(sr).to_numpy()
+    with pytest.warns(FutureWarning, match="logical_not is deprecated"):
+        result = cudf.logical_not(sr).to_numpy()
     expect = np.logical_not(arr)
     np.testing.assert_equal(result, expect)
     np.testing.assert_equal((~sr).to_numpy(), ~arr)
@@ -56,13 +57,21 @@ def test_series_neg():
 def test_series_ceil():
     arr = np.random.random(100) * 100
     sr = Series(arr)
-    np.testing.assert_equal(sr.ceil().to_numpy(), np.ceil(arr))
+    with pytest.warns(
+        FutureWarning, match="Series.ceil and DataFrame.ceil are deprecated"
+    ):
+        sr = sr.ceil()
+    np.testing.assert_equal(sr.to_numpy(), np.ceil(arr))
 
 
 def test_series_floor():
     arr = np.random.random(100) * 100
     sr = Series(arr)
-    np.testing.assert_equal(sr.floor().to_numpy(), np.floor(arr))
+    with pytest.warns(
+        FutureWarning, match="Series.floor and DataFrame.floor are deprecated"
+    ):
+        sr = sr.floor()
+    np.testing.assert_equal(sr.to_numpy(), np.floor(arr))
 
 
 @pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
@@ -74,7 +83,10 @@ def test_validity_ceil(nelem):
     sr = Series.from_masked_array(data, mask)
 
     # Result
-    res = sr.ceil()
+    with pytest.warns(
+        FutureWarning, match="Series.ceil and DataFrame.ceil are deprecated"
+    ):
+        res = sr.ceil()
 
     na_value = -100000
     got = res.fillna(na_value).to_numpy()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,19 @@ std::unique_ptr<column> stable_sorted_order(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> sort_by_key(
+  table_view const& values,
+  table_view const& keys,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::stable_sort_by_key
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> stable_sort_by_key(
   table_view const& values,
   table_view const& keys,
   std::vector<order> const& column_order         = {},

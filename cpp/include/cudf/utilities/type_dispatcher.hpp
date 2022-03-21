@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,17 +382,17 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  * @code
  * struct integral_or_floating_point {
  *   template <typename ColumnType,
- *             std::enable_if_t<not std::is_integral<ColumnType>::value and
- *                              not std::is_floating_point<ColumnType>::value>* = nullptr>
+ *             std::enable_if_t<not std::is_integral_v<ColumnType>  and
+ *                              not std::is_floating_point_v<ColumnType> >* = nullptr>
  *   void operator()() {
  *     std::cout << "neither integral nor floating point\n "; }
  *
  *   template <typename ColumnType,
- *             std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
+ *             std::enable_if_t<std::is_integral_v<ColumnType> >* = nullptr>
  *   void operator()() { std::cout << "integral\n"; }
  *
  *   template <typename ColumnType,
- *             std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
+ *             std::enable_if_t<std::is_floating_point_v<ColumnType> >* = nullptr>
  *   void operator()() { std::cout << "floating point\n"; }
  * };
  * @endcode
@@ -511,18 +511,9 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
         std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
-      CUDF_FAIL("Unsupported type_id.");
+      CUDF_FAIL("Invalid type_id.");
 #else
-      cudf_assert(false && "Unsupported type_id.");
-
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
-      return return_type();
+      CUDF_UNREACHABLE("Invalid type_id.");
 #endif
     }
   }

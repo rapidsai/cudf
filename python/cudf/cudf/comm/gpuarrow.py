@@ -58,7 +58,7 @@ class GpuArrowReader(Sequence):
         return dc
 
 
-class GpuArrowNodeReader(object):
+class GpuArrowNodeReader:
     def __init__(self, table, index):
         self._table = table
         self._field = table.schema[index]

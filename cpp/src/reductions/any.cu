@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ struct any_fn {
     bool* d_result;
   };
 
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -63,7 +63,7 @@ struct any_fn {
                        any_true_fn<decltype(iter)>{iter, result->data()});
     return result;
   }
-  template <typename T, std::enable_if_t<!std::is_arithmetic<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)

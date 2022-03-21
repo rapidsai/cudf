@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ void reduce_by_key_fn(column_device_view const& values,
 
 struct var_functor {
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(
     column_view const& values,
     column_view const& group_means,
     column_view const& group_sizes,
@@ -144,7 +144,7 @@ struct var_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(Args&&...)
+  std::enable_if_t<!std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Only numeric types are supported in std/variance");
   }

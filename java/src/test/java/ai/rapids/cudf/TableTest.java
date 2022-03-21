@@ -80,6 +80,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
+  private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
 
@@ -639,6 +640,65 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testReadAvro() {
+    AvroOptions opts = AvroOptions.builder()
+        .includeColumn("bool_col")
+        .includeColumn("int_col")
+        .includeColumn("timestamp_col")
+        .build();
+
+    try (Table expected = new Table.TestBuilder()
+        .column(true, false, true, false, true, false, true, false)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(opts, TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroBuffer() throws IOException{
+    AvroOptions opts = AvroOptions.builder()
+        .includeColumn("bool_col")
+        .includeColumn("timestamp_col")
+        .build();
+
+    byte[] buffer = Files.readAllBytes(TEST_ALL_TYPES_PLAIN_AVRO_FILE.toPath());
+    int bufferLen = buffer.length;
+    try (Table expected = new Table.TestBuilder()
+        .column(true, false, true, false, true, false, true, false)
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(opts, buffer, 0, bufferLen)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroFull() {
+    try (Table expected = new Table.TestBuilder()
+        .column(4, 5, 6, 7, 2, 3, 0, 1)
+        .column(true, false, true, false, true, false, true, false)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0L, 10L, 0L, 10L, 0L, 10L, 0L, 10L)
+        .column(0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f)
+        .column(0.0d, 10.1d, 0.0d, 10.1d, 0.0d, 10.1d, 0.0d, 10.1d)
+        .column("03/01/09", "03/01/09", "04/01/09", "04/01/09", "02/01/09", "02/01/09", "01/01/09", "01/01/09")
+        .column("0", "1", "0", "1", "0", "1", "0", "1")
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
     }
   }
 
@@ -3930,8 +3990,8 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByScan() {
     try (Table t1 = new Table.TestBuilder()
-        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
-        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2") // GBY Key#0
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)  // GBY Key#1
         .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
         .column(  -9, null,   -5,   0,     4,    4,    8,    2,    2,    2, null)
         .build()) {
@@ -3945,16 +4005,18 @@ public class TableTest extends CudfTestBase {
               GroupByScanAggregation.min().onColumn(2),
               GroupByScanAggregation.max().onColumn(2),
               GroupByScanAggregation.rank().onColumn(3),
-              GroupByScanAggregation.denseRank().onColumn(3));
+              GroupByScanAggregation.denseRank().onColumn(3),
+              GroupByScanAggregation.percentRank().onColumn(3));
            Table expected = new Table.TestBuilder()
-               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
                .column(12.0, 14.0, 13.0, 30.0, 17.0, 34.0, null, null, 11.0, null, 21.0)
                .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
                .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
                .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
-               .column(1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 4)
-               .column(1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2)
+               .column(   1,    1,    1,    2,    1,    1,    3,    1,    1,    1,    4)
+               .column(   1,    1,    1,    2,    1,    1,    2,    1,    1,    1,    2)
+               .column( 0.0,  0.0,  0.0,  1.0,  0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  1.0)
                .build()) {
         assertTablesAreEqual(expected, result);
       }

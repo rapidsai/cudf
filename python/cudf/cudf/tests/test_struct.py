@@ -205,6 +205,14 @@ def test_dataframe_to_struct():
     df["a"][0] = 5
     assert_eq(got, expect)
 
+    # check that a non-string (but convertible to string) named column can be
+    # converted to struct
+    df = cudf.DataFrame([[1, 2], [3, 4]], columns=[(1, "b"), 0])
+    expect = cudf.Series([{"(1, 'b')": 1, "0": 2}, {"(1, 'b')": 3, "0": 4}])
+    with pytest.warns(UserWarning, match="will be casted"):
+        got = df.to_struct()
+    assert_eq(got, expect)
+
 
 @pytest.mark.parametrize(
     "series, slce",

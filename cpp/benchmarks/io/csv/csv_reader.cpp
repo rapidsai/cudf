@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,14 +38,13 @@ void BM_csv_read_varying_input(benchmark::State& state)
   auto const data_types  = get_type_or_group(state.range(0));
   auto const source_type = static_cast<io_type>(state.range(1));
 
-  auto const tbl  = create_random_table(data_types, num_cols, table_size_bytes{data_size});
+  auto const tbl =
+    create_random_table(cycle_dtypes(data_types, num_cols), table_size_bytes{data_size});
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
   cudf_io::csv_writer_options options =
-    cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-      .include_header(true)
-      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
+    cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view).include_header(true);
   cudf_io::write_csv(options);
 
   cudf_io::csv_reader_options const read_options =
@@ -59,6 +58,7 @@ void BM_csv_read_varying_input(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 void BM_csv_read_varying_options(benchmark::State& state)
@@ -76,26 +76,25 @@ void BM_csv_read_varying_options(benchmark::State& state)
                                 col_sel);
   auto const cols_to_read = select_column_indexes(data_types.size(), col_sel);
 
-  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  std::vector<char> csv_data;
+  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   cudf_io::csv_writer_options options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info{&csv_data}, view)
+    cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
       .include_header(true)
-      .line_terminator("\r\n")
-      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
+      .line_terminator("\r\n");
   cudf_io::write_csv(options);
 
   cudf_io::csv_reader_options read_options =
-    cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_data.data(), csv_data.size()})
+    cudf_io::csv_reader_options::builder(source_sink.make_source_info())
       .use_cols_indexes(cols_to_read)
       .thousands('\'')
       .windowslinetermination(true)
       .comment('#')
       .prefix("BM_");
 
-  size_t const chunk_size             = csv_data.size() / num_chunks;
+  size_t const chunk_size             = source_sink.size() / num_chunks;
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
@@ -132,6 +131,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 #define CSV_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)       \

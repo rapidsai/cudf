@@ -1,8 +1,7 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import builtins
 import datetime as dt
 import locale
 import re
@@ -199,7 +198,7 @@ class DatetimeColumn(column.ColumnBase):
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
         return pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"),
+            self.astype("datetime64[ns]").fillna("NaT").values_host,
             copy=False,
             index=index,
         )
@@ -226,12 +225,11 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.datetime.round_datetime(self, freq)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
-        if isinstance(other, cudf.Scalar):
+        if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
-
         if isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
@@ -240,8 +238,7 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
-        elif isinstance(other, cudf.DateOffset):
-            return other
+
         if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=self.dtype)
@@ -251,7 +248,7 @@ class DatetimeColumn(column.ColumnBase):
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
-            if other_time_unit not in ("s", "ms", "ns", "us"):
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
                 other = other.astype("timedelta64[s]")
 
             if np.isnat(other):
@@ -260,8 +257,8 @@ class DatetimeColumn(column.ColumnBase):
             return cudf.Scalar(other)
         elif other is None:
             return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            raise TypeError(f"cannot normalize {type(other)}")
+
+        raise TypeError(f"cannot normalize {type(other)}")
 
     @property
     def as_numerical(self) -> "cudf.core.column.NumericalColumn":
@@ -277,7 +274,7 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     @property
-    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
@@ -346,21 +343,27 @@ class DatetimeColumn(column.ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def _default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column"""
-        return np.datetime64("nat", self.time_unit)
-
-    def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
+    def mean(
+        self, skipna=None, min_count: int = 0, dtype=np.float64
+    ) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            self.as_numerical.mean(
+                skipna=skipna, min_count=min_count, dtype=dtype
+            ),
             unit=self.time_unit,
         )
 
     def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+        self,
+        skipna: bool = None,
+        min_count: int = 0,
+        dtype: Dtype = np.float64,
+        ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
+            self.as_numerical.std(
+                skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
+            )
             * _numpy_to_pandas_conversion[self.time_unit],
         )
 
@@ -385,11 +388,13 @@ class DatetimeColumn(column.ColumnBase):
         rhs: Union[ColumnBase, "cudf.Scalar"],
         reflect: bool = False,
     ) -> ColumnBase:
+        rhs = self._wrap_binop_normalization(rhs)
         if isinstance(rhs, cudf.DateOffset):
             return rhs._datetime_binop(self, op, reflect=reflect)
+
         lhs: Union[ScalarLike, ColumnBase] = self
-        if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = cudf.dtype(np.bool_)  # type: Dtype
+        if op in {"eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"}:
+            out_dtype: Dtype = cudf.dtype(np.bool_)
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs
@@ -413,8 +418,7 @@ class DatetimeColumn(column.ColumnBase):
                 f" the operation {op}"
             )
 
-        if reflect:
-            lhs, rhs = rhs, lhs
+        lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(
@@ -486,15 +490,6 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
-
-
-def binop_offset(lhs, rhs, op):
-    if rhs._is_no_op:
-        return lhs
-    else:
-        rhs = rhs._generate_column(len(lhs), op)
-        out = libcudf.datetime.add_months(lhs, rhs)
-        return out
 
 
 def infer_format(element: str, **kwargs) -> str:

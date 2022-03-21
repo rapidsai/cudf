@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
-from __future__ import division
 
 import numpy as np
 import pytest

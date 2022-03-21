@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,12 @@ namespace cudf {
 namespace detail {
 struct calendrical_month_sequence_functor {
   template <typename T>
-  typename std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
-  operator()(size_type n,
-             scalar const& input,
-             size_type months,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  std::enable_if_t<cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>> operator()(
+    size_type n,
+    scalar const& input,
+    size_type months,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     // Return empty column if n = 0
     if (n == 0) return cudf::make_empty_column(input.type());
@@ -59,8 +59,8 @@ struct calendrical_month_sequence_functor {
   }
 
   template <typename T, typename... Args>
-  typename std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>>
-  operator()(Args&&...)
+  std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::unique_ptr<cudf::column>> operator()(
+    Args&&...)
   {
     CUDF_FAIL("Cannot make a date_range of a non-datetime type");
   }

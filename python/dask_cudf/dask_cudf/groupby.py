@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import math
 from operator import getitem
 from typing import Set
@@ -18,6 +19,7 @@ from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
 import cudf
+from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
 SUPPORTED_AGGS = (
     "count",
@@ -34,37 +36,32 @@ SUPPORTED_AGGS = (
 
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
+    @_dask_cudf_nvtx_annotate
     def __init__(self, *args, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def __getitem__(self, key):
         if isinstance(key, list):
             g = CudfDataFrameGroupBy(
-                self.obj,
-                by=self.index,
-                slice=key,
-                sort=self.sort,
-                **self.dropna,
+                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna,
             )
         else:
             g = CudfSeriesGroupBy(
-                self.obj,
-                by=self.index,
-                slice=key,
-                sort=self.sort,
-                **self.dropna,
+                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna,
             )
 
         g._meta = g._meta[key]
         return g
 
+    @_dask_cudf_nvtx_annotate
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
-            self.index,
-            {c: "mean" for c in self.obj.columns if c not in self.index},
+            self.by,
+            {c: "mean" for c in self.obj.columns if c not in self.by},
             split_every=split_every,
             split_out=split_out,
             dropna=self.dropna,
@@ -73,11 +70,12 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             as_index=self.as_index,
         )
 
+    @_dask_cudf_nvtx_annotate
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
-            self.index,
-            {c: "collect" for c in self.obj.columns if c not in self.index},
+            self.by,
+            {c: "collect" for c in self.obj.columns if c not in self.by},
             split_every=split_every,
             split_out=split_out,
             dropna=self.dropna,
@@ -86,6 +84,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             as_index=self.as_index,
         )
 
+    @_dask_cudf_nvtx_annotate
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
@@ -94,10 +93,10 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         if (
             isinstance(self.obj, DaskDataFrame)
             and (
-                isinstance(self.index, str)
+                isinstance(self.by, str)
                 or (
-                    isinstance(self.index, list)
-                    and all(isinstance(x, str) for x in self.index)
+                    isinstance(self.by, list)
+                    and all(isinstance(x, str) for x in self.by)
                 )
             )
             and _is_supported(arg, SUPPORTED_AGGS)
@@ -125,15 +124,17 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
 
 class CudfSeriesGroupBy(SeriesGroupBy):
+    @_dask_cudf_nvtx_annotate
     def __init__(self, *args, **kwargs):
         self.sep = kwargs.pop("sep", "___")
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
+    @_dask_cudf_nvtx_annotate
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
-            self.index,
+            self.by,
             {self._slice: "mean"},
             split_every=split_every,
             split_out=split_out,
@@ -143,10 +144,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
+    @_dask_cudf_nvtx_annotate
     def std(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
-            self.index,
+            self.by,
             {self._slice: "std"},
             split_every=split_every,
             split_out=split_out,
@@ -156,10 +158,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
+    @_dask_cudf_nvtx_annotate
     def var(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
-            self.index,
+            self.by,
             {self._slice: "var"},
             split_every=split_every,
             split_out=split_out,
@@ -169,10 +172,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
+    @_dask_cudf_nvtx_annotate
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
-            self.index,
+            self.by,
             {self._slice: "collect"},
             split_every=split_every,
             split_out=split_out,
@@ -182,6 +186,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             as_index=self.as_index,
         )[self._slice]
 
+    @_dask_cudf_nvtx_annotate
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
@@ -192,12 +197,12 @@ class CudfSeriesGroupBy(SeriesGroupBy):
 
         if (
             isinstance(self.obj, DaskDataFrame)
-            and isinstance(self.index, (str, list))
+            and isinstance(self.by, (str, list))
             and _is_supported(arg, SUPPORTED_AGGS)
         ):
             return groupby_agg(
                 self.obj,
-                self.index,
+                self.by,
                 arg,
                 split_every=split_every,
                 split_out=split_out,
@@ -212,6 +217,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         )
 
 
+@_dask_cudf_nvtx_annotate
 def groupby_agg(
     ddf,
     gb_cols,
@@ -378,6 +384,7 @@ def groupby_agg(
     return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
+@_dask_cudf_nvtx_annotate
 def _redirect_aggs(arg):
     """Redirect aggregations to their corresponding name in cuDF"""
     redirects = {
@@ -404,6 +411,7 @@ def _redirect_aggs(arg):
     return redirects.get(arg, arg)
 
 
+@_dask_cudf_nvtx_annotate
 def _is_supported(arg, supported: set):
     """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
@@ -429,6 +437,7 @@ def _make_name(*args, sep="_"):
     return sep.join(_args)
 
 
+@_dask_cudf_nvtx_annotate
 def _groupby_partition_agg(
     df, gb_cols, aggs, columns, split_out, dropna, sort, sep
 ):
@@ -486,6 +495,7 @@ def _groupby_partition_agg(
     return output
 
 
+@_dask_cudf_nvtx_annotate
 def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     """Node in groupby-aggregation reduction tree.
 
@@ -520,6 +530,7 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
     return gb
 
 
+@_dask_cudf_nvtx_annotate
 def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     """Calculate variance (given count, sum, and sum-squared columns)."""
 
@@ -541,6 +552,7 @@ def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     return var
 
 
+@_dask_cudf_nvtx_annotate
 def _finalize_gb_agg(
     gb,
     gb_cols,

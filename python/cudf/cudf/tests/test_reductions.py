@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from __future__ import division, print_function
 
 import re
 from decimal import Decimal

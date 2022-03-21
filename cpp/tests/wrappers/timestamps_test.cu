@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ struct compare_chrono_elements_to_primitive_representation {
   {
   }
 
-  template <typename T = ChronoT, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T = ChronoT, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   __host__ __device__ bool operator()(const int32_t element_index)
   {
     using Primitive = typename ChronoT::rep;
@@ -59,7 +59,7 @@ struct compare_chrono_elements_to_primitive_representation {
     return primitive == timestamp.time_since_epoch().count();
   }
 
-  template <typename T = ChronoT, typename std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+  template <typename T = ChronoT, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
   __host__ __device__ bool operator()(const int32_t element_index)
   {
     using Primitive = typename ChronoT::rep;

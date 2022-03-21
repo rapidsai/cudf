@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -40,6 +40,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
             CORRELATION 'cudf::aggregation::CORRELATION'
+            COVARIANCE 'cudf::aggregation::COVARIANCE'
 
         Kind kind
 
@@ -50,6 +51,12 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         aggregation.Kind kind
 
     cdef cppclass groupby_scan_aggregation:
+        aggregation.Kind kind
+
+    cdef cppclass reduce_aggregation:
+        aggregation.Kind kind
+
+    cdef cppclass scan_aggregation:
         aggregation.Kind kind
 
     ctypedef enum udf_type:
@@ -117,3 +124,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_correlation_aggregation[T](
         correlation_type type, size_type min_periods) except +
+
+    cdef unique_ptr[T] make_covariance_aggregation[T](
+        size_type min_periods, size_type ddof) except +

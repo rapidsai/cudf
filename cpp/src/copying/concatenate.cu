@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,7 +166,7 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   auto const output_size = output_view.size();
   auto* output_data      = output_view.data<T>();
 
-  size_type output_index     = threadIdx.x + blockIdx.x * blockDim.x;
+  int64_t output_index       = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count = 0;
 
   unsigned active_mask;
@@ -222,7 +222,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto const& d_offsets   = std::get<2>(device_views);
   auto const output_size  = std::get<3>(device_views);
 
-  CUDF_EXPECTS(output_size < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(output_size <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds size_type range");
 
   // Allocate output

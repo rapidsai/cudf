@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,9 +223,8 @@ using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
-// TODO: debug truncation errors for `timestamp_ns` and overflow errors for `timestamp_s` , see
-// issue #9393.
-using SupportedTimestampTypes = cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us>;
+using SupportedTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
@@ -252,7 +251,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 
@@ -386,7 +385,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
     sequence, sequence + num_rows, validity);
   table_view expected({col});
 
-  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
   cudf_io::write_parquet(out_opts);

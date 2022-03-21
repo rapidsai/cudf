@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ void nvbench_inner_join(nvbench::state& state,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
     cudf::hash_join hj_obj(left_input.select(left_on), compare_nulls, stream);
-    return hj_obj.inner_join(right_input.select(right_on), compare_nulls, std::nullopt, stream);
+    return hj_obj.inner_join(right_input.select(right_on), std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
@@ -71,7 +71,7 @@ void nvbench_left_join(nvbench::state& state,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
     cudf::hash_join hj_obj(left_input.select(left_on), compare_nulls, stream);
-    return hj_obj.left_join(right_input.select(right_on), compare_nulls, std::nullopt, stream);
+    return hj_obj.left_join(right_input.select(right_on), std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
@@ -93,7 +93,7 @@ void nvbench_full_join(nvbench::state& state,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
     cudf::hash_join hj_obj(left_input.select(left_on), compare_nulls, stream);
-    return hj_obj.full_join(right_input.select(right_on), compare_nulls, std::nullopt, stream);
+    return hj_obj.full_join(right_input.select(right_on), std::nullopt, stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);

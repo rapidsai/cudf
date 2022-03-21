@@ -65,7 +65,7 @@ std::unique_ptr<table> build_table(
                    stream,
                    mr);
 
-  std::vector<std::unique_ptr<column>> columns = gathered_table.release()->release();
+  std::vector<std::unique_ptr<column>> columns = gathered_table->release();
 
   columns.insert(columns.begin() + explode_column_idx,
                  explode_col_gather_map

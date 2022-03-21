@@ -49,7 +49,7 @@ struct make_pair_function {
   {
     // The value is irrelevant since we only ever use the hash map to check for
     // membership of a particular row index.
-    return cuco::make_pair<hash_value_type, size_type>(i, 0);
+    return cuco::make_pair(static_cast<hash_value_type>(i), 0);
   }
 };
 
