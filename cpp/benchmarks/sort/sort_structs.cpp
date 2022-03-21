@@ -34,16 +34,16 @@ void nvbench_sort_struct(nvbench::state& state)
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution(0, 100);
 
-  const cudf::size_type n_rows{(cudf::size_type)state.get_int64("NumRows")};
+  const cudf::size_type n_rows{static_cast<cudf::size_type>(state.get_int64("NumRows"))};
   const cudf::size_type n_cols{1};
-  const cudf::size_type depth{(cudf::size_type)state.get_int64("Depth")};
+  const cudf::size_type depth{static_cast<cudf::size_type>(state.get_int64("Depth"))};
   const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   // Create columns with values in the range [0,100)
   std::vector<column_wrapper> columns;
   columns.reserve(n_cols);
-  std::generate_n(std::back_inserter(columns), n_cols, [&, n_rows]() {
-    auto elements = cudf::detail::make_counting_transform_iterator(
+  std::generate_n(std::back_inserter(columns), n_cols, [&]() {
+    auto const elements = cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return distribution(generator); });
     if (!nulls) return column_wrapper(elements, elements + n_rows);
     auto valids =
@@ -69,7 +69,7 @@ void nvbench_sort_struct(nvbench::state& state)
   }
 
   // Create table view
-  auto input = cudf::table(std::move(child_cols));
+  auto const input = cudf::table(std::move(child_cols));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
