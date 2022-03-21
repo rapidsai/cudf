@@ -1051,6 +1051,8 @@ void decompress_check(device_span<gpu_inflate_status_s> stats,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
+  if (stats.empty()) { retrun; }  // early exit for empty stats
+  
   dim3 block(128);
   dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
   decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
