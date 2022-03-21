@@ -2766,8 +2766,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if return_scalar:
             return result
 
-        return Series(
-            result, index=np_array_q if quant_index else None, name=self.name
+        return Series._from_data(
+            data={None: result},
+            index=as_index(np_array_q) if quant_index else None,
+            name=self.name,
         )
 
     @docutils.doc_describe()
