@@ -281,13 +281,14 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 
 namespace equality_hashing {
 
-preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_view stream)
+std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const& t,
+                                                               rmm::cuda_stream_view stream)
 {
   auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
   auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
 
-  d_t =
-    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+  auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
+  return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t)));
 }
 
 }  // namespace equality_hashing

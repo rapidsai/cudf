@@ -234,20 +234,26 @@ struct preprocessed_table {
    * @param table The table to preprocess
    * @param stream The cuda stream to use while preprocessing.
    */
-  preprocessed_table(table_view const& table, rmm::cuda_stream_view stream);
+  static std::shared_ptr<preprocessed_table> create(table_view const& table,
+                                                    rmm::cuda_stream_view stream);
+
+ private:
+  friend class self_eq_comparator;
+
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  preprocessed_table(table_device_view_owner&& table) : d_t(std::move(table)) {}
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
    *
    * @return table_device_view
    */
-  operator table_device_view() { return **d_t; }
+  operator table_device_view() { return *d_t; }
 
  private:
-  using table_device_view_owner =
-    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
-
-  std::unique_ptr<table_device_view_owner> d_t;
+  table_device_view_owner d_t;
 };
 
 class self_eq_comparator {
@@ -261,7 +267,7 @@ class self_eq_comparator {
    * comparisons using this object.
    */
   self_eq_comparator(table_view const& t, rmm::cuda_stream_view stream)
-    : d_t(std::make_shared<preprocessed_table>(t, stream))
+    : d_t(preprocessed_table::create(t, stream))
   {
   }
 
