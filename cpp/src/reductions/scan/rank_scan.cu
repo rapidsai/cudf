@@ -51,7 +51,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto comp =
-    cudf::experimental::equality_hashing::self_eq_comparator(table_view{{order_by}}, stream);
+    cudf::experimental::row::equality_hashing::self_eq_comparator(table_view{{order_by}}, stream);
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();

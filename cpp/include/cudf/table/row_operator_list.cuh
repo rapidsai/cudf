@@ -40,6 +40,8 @@ struct non_nested_id_to_type {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
+namespace row {
+
 namespace equality_hashing {
 
 /**
@@ -306,5 +308,6 @@ class self_eq_comparator {
 };
 
 }  // namespace equality_hashing
+}  // namespace row
 }  // namespace experimental
 }  // namespace cudf

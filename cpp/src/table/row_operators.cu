@@ -126,7 +126,7 @@ auto decompose_structs(table_view table,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {})
 {
-  auto linked_columns = input_table_to_linked_columns(input);
+  auto linked_columns = input_table_to_linked_columns(table);
 
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
@@ -279,8 +279,6 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 
 }  // namespace lexicographic
 
-}  // namespace row
-
 namespace equality_hashing {
 
 preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_view stream)
@@ -294,5 +292,7 @@ preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_vie
 }
 
 }  // namespace equality_hashing
+
+}  // namespace row
 }  // namespace experimental
 }  // namespace cudf
