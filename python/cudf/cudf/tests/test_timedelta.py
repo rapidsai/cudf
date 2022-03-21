@@ -1252,7 +1252,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
         expected_error_message=re.escape(
-            f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
+            f"Division of {sr.dtype} with {dt_sr.dtype} "
             f"cannot be performed."
         ),
     )

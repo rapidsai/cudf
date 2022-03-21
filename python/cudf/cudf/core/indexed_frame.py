@@ -234,7 +234,7 @@ class IndexedFrame(Frame):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: List[str],
+        column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
     ):
         """Construct a `Frame` from a list of columns with metadata from self.
@@ -2191,6 +2191,79 @@ class IndexedFrame(Frame):
             return out[0] if ufunc.nout == 1 else out
 
         return NotImplemented
+
+    @_cudf_nvtx_annotate
+    def repeat(self, repeats, axis=None):
+        """Repeats elements consecutively.
+
+        Returns a new object of caller type(DataFrame/Series) where each
+        element of the current object is repeated consecutively a given
+        number of times.
+
+        Parameters
+        ----------
+        repeats : int, or array of ints
+            The number of repetitions for each element. This should
+            be a non-negative integer. Repeating 0 times will return
+            an empty object.
+
+        Returns
+        -------
+        Series/DataFrame
+            A newly created object of same type as caller
+            with repeated elements.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': [10, 20, 30]})
+        >>> df
+           a   b
+        0  1  10
+        1  2  20
+        2  3  30
+        >>> df.repeat(3)
+           a   b
+        0  1  10
+        0  1  10
+        0  1  10
+        1  2  20
+        1  2  20
+        1  2  20
+        2  3  30
+        2  3  30
+        2  3  30
+
+        Repeat on Series
+
+        >>> s = cudf.Series([0, 2])
+        >>> s
+        0    0
+        1    2
+        dtype: int64
+        >>> s.repeat([3, 4])
+        0    0
+        0    0
+        0    0
+        1    2
+        1    2
+        1    2
+        1    2
+        dtype: int64
+        >>> s.repeat(2)
+        0    0
+        0    0
+        1    2
+        1    2
+        dtype: int64
+        """
+        return self._from_columns_like_self(
+            Frame._repeat(
+                [*self._index._data.columns, *self._columns], repeats, axis
+            ),
+            self._column_names,
+            self._index_names,
+        )
 
     def _append(
         self, other, ignore_index=False, verify_integrity=False, sort=None
