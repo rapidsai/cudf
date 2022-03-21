@@ -1854,47 +1854,42 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ],
         Optional[BaseIndex],
     ]:
-        lhs, rhs = self, other
-
-        if _is_scalar_or_zero_d_array(rhs):
-            rhs = [rhs] * lhs._num_columns
-
-        # For columns that exist in rhs but not lhs, we swap the order so that
-        # we can always assume that left has a binary operator. This
-        # implementation assumes that binary operations between a column and
-        # NULL are always commutative, even for binops (like subtraction) that
-        # are normally anticommutative.
-        # TODO: The above should no longer be necessary once we switch to
-        # properly invoking the operator since we can then rely on reflection.
-        if isinstance(rhs, Sequence):
+        # The default index to return.
+        index = self._index
+        if _is_scalar_or_zero_d_array(other):
+            operands = {
+                name: (left, other, reflect, fill_value)
+                for name, left in self._data.items()
+            }
+        elif isinstance(other, Sequence):
             # TODO: Consider validating sequence length (pandas does).
             operands = {
                 name: (left, right, reflect, fill_value)
-                for right, (name, left) in zip(rhs, lhs._data.items())
+                for right, (name, left) in zip(other, self._data.items())
             }
-        elif isinstance(rhs, DataFrame):
+        elif isinstance(other, DataFrame):
             if (
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
                 and (
-                    not lhs._data.to_pandas_index().equals(
-                        rhs._data.to_pandas_index()
+                    not self.index.equals(other.index)
+                    or not self._data.to_pandas_index().equals(
+                        other._data.to_pandas_index()
                     )
-                    or not lhs.index.equals(rhs.index)
                 )
             ):
                 raise ValueError(
                     "Can only compare identically-labeled DataFrame objects"
                 )
 
-            lhs, rhs = _align_indices(lhs, rhs)
+            lhs, rhs = _align_indices(self, other)
+            # Return the aligned index.
+            index = lhs._index
 
             operands = {
                 name: (
                     lcol,
-                    rhs._data[name]
-                    if name in rhs._data
-                    else (fill_value or None),
+                    rhs._data.get(name, fill_value),
                     reflect,
                     fill_value if name in rhs._data else None,
                 )
@@ -1902,38 +1897,28 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
             for name, col in rhs._data.items():
                 if name not in lhs._data:
-                    operands[name] = (
-                        col,
-                        (fill_value or None),
-                        not reflect,
-                        None,
-                    )
-        elif isinstance(rhs, Series):
+                    operands[name] = (fill_value, col, reflect, None)
+        elif isinstance(other, Series):
             # Note: This logic will need updating if any of the user-facing
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
-            right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
-            left_cols = lhs._column_names
-            # mypy thinks lhs._column_names is a List rather than a Tuple, so
-            # we have to ignore the type check.
-            result_cols = left_cols + tuple(  # type: ignore
-                col for col in right_dict if col not in left_cols
-            )
-            operands = {}
-            for col in result_cols:
-                if col in left_cols:
-                    left = lhs._data[col]
-                    right = right_dict[col] if col in right_dict else None
-                else:
+            right = dict(zip(other.index.values_host, other.values_host))
+
+            operands = {
+                col: (self._data[col], right.get(col), reflect, fill_value)
+                for col in self._column_names
+            }
+
+            for col in right:
+                if col not in self._column_names:
                     # We match pandas semantics here by performing binops
                     # between a NaN (not NULL!) column and the actual values,
                     # which results in nans, the pandas output.
-                    left = as_column(np.nan, length=lhs._num_rows)
-                    right = right_dict[col]
-                operands[col] = (left, right, reflect, fill_value)
+                    left = as_column(np.nan, length=self._num_rows)
+                    operands[col] = (left, right[col], reflect, fill_value)
         else:
             return NotImplemented, None
 
-        return operands, lhs._index
+        return operands, index
 
     @_cudf_nvtx_annotate
     def update(
