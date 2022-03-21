@@ -5666,11 +5666,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         if method == "pearson":
             corr = cupy.corrcoef(self.values, rowvar=False)
-            df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
+            df = DataFrame(cupy.asfortranarray(corr)).set_index(self._columns_names)
             df.columns = self.columns
         elif method == "spearman":
             corr = cupy.corrcoef(self.rank().values, rowvar=False)
-            df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
+            df = DataFrame(cupy.asfortranarray(corr)).set_index(self._column_names)
             df.columns = self.columns
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
