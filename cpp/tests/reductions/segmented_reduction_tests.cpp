@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "cudf_test/column_utilities.hpp"
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -470,7 +470,6 @@ TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
                               output_dtype,
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
-}
 }
 
 #undef XXX
