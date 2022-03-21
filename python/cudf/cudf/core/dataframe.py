@@ -5654,7 +5654,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def corr(self, method="pearson"):
         """Compute the correlation matrix of a DataFrame.
-        
         Parameters
         ----------
         method : {'pearson', 'spearman'}, default 'pearson'
