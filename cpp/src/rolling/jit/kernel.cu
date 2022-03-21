@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,8 +51,8 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
                                 FollowingWindowType following_window_begin,
                                 cudf::size_type min_periods)
 {
-  std::size_t i          = blockIdx.x * blockDim.x + threadIdx.x;
-  cudf::size_type stride = blockDim.x * gridDim.x;
+  thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
 
   cudf::size_type warp_valid_count{0};
 

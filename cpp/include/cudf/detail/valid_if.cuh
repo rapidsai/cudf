@@ -48,7 +48,8 @@ __global__ void valid_if_kernel(
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  std::size_t i = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type i            = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
@@ -58,7 +59,7 @@ __global__ void valid_if_kernel(
       output[cudf::word_index(i)] = ballot;
       warp_valid_count += __popc(ballot);
     }
-    i += blockDim.x * gridDim.x;
+    i += stride;
     active_mask = __ballot_sync(active_mask, i < size);
   }
 

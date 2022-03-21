@@ -1008,8 +1008,8 @@ __launch_bounds__(block_size) __global__
                    PrecedingWindowIterator preceding_window_begin,
                    FollowingWindowIterator following_window_begin)
 {
-  std::size_t i    = blockIdx.x * block_size + threadIdx.x;
-  size_type stride = block_size * gridDim.x;
+  thread_index_type i            = blockIdx.x * block_size + threadIdx.x;
+  thread_index_type const stride = block_size * gridDim.x;
 
   size_type warp_valid_count{0};
 

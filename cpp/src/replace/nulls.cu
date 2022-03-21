@@ -62,8 +62,9 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
                                       char* chars,
                                       cudf::size_type* valid_counter)
 {
-  cudf::size_type nrows = input.size();
-  std::size_t i         = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type nrows                = input.size();
+  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -98,7 +99,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
       if (nonzero_output) std::memcpy(chars + offsets[i], out.data(), out.size_bytes());
     }
 
-    i += blockDim.x * gridDim.x;
+    i += stride;
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
 
@@ -114,8 +115,9 @@ __global__ void replace_nulls(cudf::column_device_view input,
                               cudf::mutable_column_device_view output,
                               cudf::size_type* output_valid_count)
 {
-  cudf::size_type nrows = input.size();
-  std::size_t i         = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type nrows                = input.size();
+  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -141,7 +143,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
       }
     }
 
-    i += blockDim.x * gridDim.x;
+    i += stride;
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
   if (replacement_has_nulls) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,12 +67,13 @@ __launch_bounds__(max_block_size) __global__
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-  auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
+  auto const start_idx =
+    static_cast<cudf::thread_index_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  auto const stride = static_cast<cudf::thread_index_type>(blockDim.x * gridDim.x);
   auto evaluator =
     cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 
-  for (std::size_t row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
+  for (thread_index_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
     evaluator.evaluate(output_dest, row_index, thread_intermediate_storage);
   }
