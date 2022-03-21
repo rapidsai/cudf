@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,9 @@ using block_reduce_storage = detail::block_reduce_storage<dimension>;
  * @tparam block_size Dimension of the block
  * @tparam IO File format for which statistics calculation is being done
  */
-template <int block_size, detail::io_file_format IO>
+template <int block_size,
+          detail::io_file_format IO,
+          detail::is_int96_timestamp INT96 = detail::is_int96_timestamp::YES>
 struct calculate_group_statistics_functor {
   block_reduce_storage<block_size>& temp_storage;
 
@@ -74,7 +76,7 @@ struct calculate_group_statistics_functor {
 
   template <typename T,
             std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
-  __device__ void operator()(stats_state_s& s, uint32_t t)
+  __device__ void operator()(stats_state_s&, uint32_t)
   {
     // No-op for unsupported aggregation types
   }
@@ -93,7 +95,7 @@ struct calculate_group_statistics_functor {
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
+    using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
     using CT           = typename type_convert::template type<T>;
     typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
@@ -244,7 +246,9 @@ __device__ void cooperative_load(T& destination, const T* source = nullptr)
  */
 template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
-  gpu_calculate_group_statistics(statistics_chunk* chunks, const statistics_group* groups)
+  gpu_calculate_group_statistics(statistics_chunk* chunks,
+                                 const statistics_group* groups,
+                                 const bool int96_timestamps)
 {
   __shared__ __align__(8) stats_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -257,10 +261,29 @@ __global__ void __launch_bounds__(block_size, 1)
   __syncthreads();
 
   // Calculate statistics
-  type_dispatcher(state.col.leaf_column->type(),
-                  calculate_group_statistics_functor<block_size, IO>(storage),
-                  state,
-                  threadIdx.x);
+  if constexpr (IO == detail::io_file_format::PARQUET) {
+    // Do not convert ns to us for int64 timestamps
+    if (not int96_timestamps) {
+      type_dispatcher(
+        state.col.leaf_column->type(),
+        calculate_group_statistics_functor<block_size, IO, detail::is_int96_timestamp::NO>(storage),
+        state,
+        threadIdx.x);
+    }
+    // Temporarily disable stats writing for int96 timestamps
+    // TODO: https://github.com/rapidsai/cudf/issues/10438
+    else if (not cudf::is_timestamp(state.col.leaf_column->type())) {
+      type_dispatcher(state.col.leaf_column->type(),
+                      calculate_group_statistics_functor<block_size, IO>(storage),
+                      state,
+                      threadIdx.x);
+    }
+  } else {
+    type_dispatcher(state.col.leaf_column->type(),
+                    calculate_group_statistics_functor<block_size, IO>(storage),
+                    state,
+                    threadIdx.x);
+  }
   __syncthreads();
 
   cooperative_load(chunks[blockIdx.x], &state.ck);
@@ -281,11 +304,12 @@ template <detail::io_file_format IO>
 void calculate_group_statistics(statistics_chunk* chunks,
                                 const statistics_group* groups,
                                 uint32_t num_chunks,
-                                rmm::cuda_stream_view stream)
+                                rmm::cuda_stream_view stream,
+                                const bool int96_timestamps = false)
 {
   constexpr int block_size = 256;
   gpu_calculate_group_statistics<block_size, IO>
-    <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups);
+    <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups, int96_timestamps);
 }
 
 /**
