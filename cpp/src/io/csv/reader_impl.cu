@@ -459,7 +459,6 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
 
 void select_data_types(host_span<data_type const> user_dtypes,
                        host_span<column_parse::flags> column_flags,
-
                        host_span<data_type> column_types)
 {
   if (user_dtypes.empty()) { return; }
@@ -488,7 +487,9 @@ void get_data_types_from_column_names(std::map<std::string, data_type> const& co
     if (column_flags[col_idx] & column_parse::enabled) {
       auto const col_type_it = column_type_map.find(column_names[col_idx]);
       if (col_type_it != column_type_map.end()) {
+        // Assign the type from the map
         column_types[col_idx] = col_type_it->second;
+        // Reset the inferred flag, no need to infer the types from the data
         column_flags[col_idx] &= ~column_parse::inferred;
       }
     }
@@ -519,17 +520,15 @@ void infer_column_types(parse_options const& parse_opts,
     });
   if (num_inferred_columns == 0) { return; }
 
-  auto column_stats =
+  auto const column_stats =
     cudf::io::csv::gpu::detect_column_types(parse_opts.view(),
                                             data,
                                             make_device_uvector_async(column_flags, stream),
                                             row_offsets,
                                             num_inferred_columns,
                                             stream);
-
   stream.synchronize();
 
-  // for all cols; if inferred update type (no emplace_back)
   auto inf_col_idx = 0;
   for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
     if (not(column_flags[col_idx] & column_parse::inferred)) { continue; }
@@ -638,6 +637,7 @@ std::vector<data_type> determine_column_types(csv_reader_options const& reader_o
                    user_dtypes, column_names, column_flags, column_types);
                }},
              reader_opts.get_dtypes());
+
   infer_column_types(parse_opts,
                      column_flags,
                      data,
