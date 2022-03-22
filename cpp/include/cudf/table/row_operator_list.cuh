@@ -118,13 +118,11 @@ class element_equality_comparator {
     int r_start_off         = rhs_element_index;
     int l_end_off           = lhs_element_index + 1;
     int r_end_off           = rhs_element_index + 1;
-    auto l_size             = 1;
-    auto r_size             = 1;
     while (is_nested(lcol.type())) {
       if (nulls) {
-        for (int i = 0; i < l_size; ++i) {
-          bool const lhs_is_null{lcol.is_null(l_start_off + i)};
-          bool const rhs_is_null{rcol.is_null(r_start_off + i)};
+        for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
+          bool const lhs_is_null{lcol.is_null(i)};
+          bool const rhs_is_null{rcol.is_null(j)};
 
           if (lhs_is_null and rhs_is_null) {
             if (nulls_are_equal == null_equality::UNEQUAL) { return false; }
@@ -139,11 +137,9 @@ class element_equality_comparator {
       } else if (lcol.type().id() == type_id::LIST) {
         auto l_off = lcol.child(lists_column_view::offsets_column_index);
         auto r_off = rcol.child(lists_column_view::offsets_column_index);
-        for (int i = 0; i < l_size; ++i) {
-          if (l_off.element<size_type>(l_start_off + i + 1) -
-                l_off.element<size_type>(l_start_off + i) !=
-              r_off.element<size_type>(r_start_off + i + 1) -
-                r_off.element<size_type>(r_start_off + i))
+        for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
+          if (l_off.element<size_type>(i + 1) - l_off.element<size_type>(i) !=
+              r_off.element<size_type>(j + 1) - r_off.element<size_type>(j))
             return false;
         }
         lcol        = lcol.child(lists_column_view::child_column_index);
@@ -152,18 +148,13 @@ class element_equality_comparator {
         r_start_off = r_off.element<size_type>(r_start_off);
         l_end_off   = l_off.element<size_type>(l_end_off);
         r_end_off   = r_off.element<size_type>(r_end_off);
-        l_size      = l_end_off - l_start_off;
-        r_size      = r_end_off - r_start_off;
-        if (l_size != r_size) { return false; }
+        if (l_end_off - l_start_off != r_end_off - r_start_off) { return false; }
       }
     }
 
-    for (int i = 0; i < l_size; ++i) {
+    for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
       bool equal = type_dispatcher<non_nested_id_to_type>(
-        lcol.type(),
-        element_equality_comparator{nulls, lcol, rcol, nulls_are_equal},
-        l_start_off + i,
-        r_start_off + i);
+        lcol.type(), element_equality_comparator{nulls, lcol, rcol, nulls_are_equal}, i, j);
       if (not equal) { return false; }
     }
     return true;
