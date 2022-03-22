@@ -1039,7 +1039,7 @@ class correlation_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying TDIGEST aggregation
  */
-class tdigest_aggregation final : public groupby_aggregation {
+class tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit tdigest_aggregation(int max_centroids_)
     : aggregation{TDIGEST}, max_centroids{max_centroids_}
@@ -1063,7 +1063,7 @@ class tdigest_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
  */
-class merge_tdigest_aggregation final : public groupby_aggregation {
+class merge_tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_tdigest_aggregation(int max_centroids_)
     : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
@@ -1466,17 +1466,7 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      cudf_assert(false && "Unsupported aggregation.");
-
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type =
-        decltype(f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...));
-      return return_type();
+      CUDF_UNREACHABLE("Unsupported aggregation.");
 #endif
     }
   }
