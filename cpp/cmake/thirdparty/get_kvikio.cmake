@@ -21,7 +21,7 @@ function(find_and_configure_kvikio)
     # CPM_ARGS GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
     CPM_ARGS
     GIT_REPOSITORY https://github.com/madsbk/kvikio.git SOURCE_SUBDIR cpp
-    GIT_TAG file_size # TODO: use version tags when they become available
+    GIT_TAG no_cufile # TODO: use version tags when they become available
     OPTIONS "KvikIO_BUILD_EXAMPLES FALSE" # No need to build the KvikIO example
   )
   set(KvikIO_INCLUDE_DIR
