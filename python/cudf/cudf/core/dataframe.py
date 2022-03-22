@@ -5665,16 +5665,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             The requested correlation matrix.
         """
         if method == "pearson":
-            corr = cupy.corrcoef(self.values, rowvar=False)
-            cols = self._data.to_pandas_index()
-            df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
-            df._set_column_names_like(self)
+            values = self.values
         elif method == "spearman":
-            corr = cupy.corrcoef(self.rank().values, rowvar=False)
-            df = DataFrame(cupy.asfortranarray(corr)).set_index(self._column_names)
-            df.columns = self.columns
+            values = self.rank().values
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
+        corr = cupy.corrcoef(values, rowvar=False)
+        cols = self._data.to_pandas_index()
+        df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
+        df._set_column_names_like(self)
         return df
 
     @_cudf_nvtx_annotate
