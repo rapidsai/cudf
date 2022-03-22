@@ -2437,18 +2437,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if self.empty or other.empty:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        if method == "pearson":
-            lhs = self.nans_to_nulls().dropna()
-            rhs = other.nans_to_nulls().dropna()
-            lhs, rhs = _align_indices([lhs, rhs], how="inner")
-        elif method == "spearman":
-            lhs = self.nans_to_nulls().dropna()
-            rhs = other.nans_to_nulls().dropna()
-            lhs, rhs = _align_indices([lhs, rhs], how="inner")
+        lhs = self.nans_to_nulls().dropna()
+        rhs = other.nans_to_nulls().dropna()
+        lhs, rhs = _align_indices([lhs, rhs], how="inner")
+        if method == "spearman":
             lhs = lhs.rank()
             rhs = rhs.rank()
-        else:
-            raise ValueError("method must be either 'pearson', 'spearman'")
 
         try:
             return lhs._column.corr(rhs._column)
