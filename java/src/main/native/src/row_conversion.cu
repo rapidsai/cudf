@@ -201,7 +201,7 @@ struct row_batch {
  *
  */
 struct batch_data {
-  device_uvector<size_type> batch_row_offsets;      // offset column of returned cudf column
+  device_uvector<size_type> batch_row_offsets;      // offsets to each row in incoming data
   device_uvector<size_type> d_batch_row_boundaries; // row numbers for the start of each batch
   std::vector<size_type>
       batch_row_boundaries;           // row numbers for the start of each batch: 0, 1500, 2700
@@ -788,10 +788,10 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     auto const num_tile_cols = tile.num_cols();
     auto const num_tile_rows = tile.num_rows();
 
-    auto const num_sections_x =
-        util::div_rounding_up_unsafe(num_tile_cols, NUM_VALIDITY_THREADS_PER_TILE);
-    auto const num_sections_y =
-        util::div_rounding_up_unsafe(num_tile_rows, NUM_VALIDITY_THREADS_PER_TILE);
+    auto const num_sections_per_block = NUM_VALIDITY_THREADS_PER_TILE;
+
+    auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, num_sections_per_block);
+    auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, num_sections_per_block);
     auto const validity_data_row_length = util::round_up_unsafe(
         util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
     auto const total_sections = num_sections_x * num_sections_y;
@@ -810,9 +810,10 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       auto const relative_row = section_y * NUM_VALIDITY_THREADS_PER_TILE;
       auto const absolute_col = relative_col + tile.start_col;
       auto const absolute_row = relative_row + tile.start_row;
-      auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_col < num_columns);
+      auto const participating = absolute_col < num_columns && absolute_row < num_rows;
+      auto const participation_mask = __ballot_sync(0xFFFFFFFF, participating);
 
-      if (absolute_col < num_columns) {
+      if (participating) {
         auto my_data = input_nm[absolute_col] != nullptr ?
                            input_nm[absolute_col][absolute_row / NUM_VALIDITY_THREADS_PER_TILE] :
                            std::numeric_limits<uint32_t>::max();
@@ -1478,8 +1479,9 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
       }
       int const tile_height = std::min(row_stride, rows_left_in_batch);
 
-      validity_tile_infos.emplace_back(detail::tile_info{
-          col, row, std::min(col + column_stride - 1, num_columns - 1), row + tile_height - 1});
+      validity_tile_infos.emplace_back(
+          detail::tile_info{col, row, std::min(col + column_stride - 1, num_columns - 1),
+                            row + tile_height - 1, current_tile_row_batch});
       row += tile_height;
       rows_left_in_batch -= tile_height;
     }
