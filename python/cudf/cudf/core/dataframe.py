@@ -1854,27 +1854,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ],
         Optional[BaseIndex],
     ]:
-        def make_operands(left, right, add_operands, fill_if_no_key, right_default):
-            operands = {
-                k: (
-                    v,
-                    right.get(k, right_default),
-                    reflect,
-                    fill_value if (not fill_if_no_key or k in right) else None,
-                )
-                for k, v in left.items()
-            }
-
-            if add_operands is not None:
-                add_operands(operands, left, right)
-            return operands
-
         # Check built-in types first for speed.
         if isinstance(other, (list, dict, Sequence, MutableMapping)):
             if len(other) != self._num_columns:
                 raise ValueError(
-                    f"Other is the wrong length. Expected {self._num_columns} "
-                    f", got {len(other)}"
+                    "Other is the wrong length. Expected "
+                    f"{self._num_columns}, got {len(other)}"
                 )
 
         lhs, rhs = self._data, other
@@ -1923,7 +1908,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if not isinstance(rhs, MutableMapping):
             return NotImplemented, None
-        return make_operands(lhs, rhs, add_operands, fill_if_no_key, right_default), index
+
+        operands = {
+            k: (
+                v,
+                rhs.get(k, right_default),
+                reflect,
+                fill_value if (not fill_if_no_key or k in rhs) else None,
+            )
+            for k, v in lhs.items()
+        }
+
+        if add_operands is not None:
+            add_operands(operands, lhs, rhs)
+        return operands, index
 
     @_cudf_nvtx_annotate
     def update(
