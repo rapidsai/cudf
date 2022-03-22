@@ -30,6 +30,43 @@ namespace experimental {
 
 namespace {
 
+table_view pushdown_struct_offsets(table_view table)
+{
+  std::function<std::vector<column_view>(column_view const&)> slice_children =
+    [&](column_view const& c) -> std::vector<column_view> {
+    if (c.type().id() == type_id::STRUCT) {
+      std::vector<column_view> sliced_children;
+      auto struct_col = structs_column_view(c);
+      for (size_type i = 0; i < struct_col.num_children(); ++i) {
+        auto sliced = struct_col.get_sliced_child(i);
+        // The reson we don't just copy the logic of structs_column_view::get_sliced_child() is
+        // because its logic might change in the future. The following logic is merely to replace
+        // the children of an existing column_view without changing anything else.
+        sliced_children.emplace_back(sliced.type(),
+                                     sliced.size(),
+                                     sliced.head<uint8_t>(),
+                                     sliced.null_mask(),
+                                     sliced.null_count(),
+                                     sliced.offset(),
+                                     slice_children(sliced));
+      }
+      return sliced_children;
+    }
+    return {c.child_begin(), c.child_end()};
+  };
+  std::vector<column_view> cols;
+  for (auto const& col : table) {
+    cols.emplace_back(col.type(),
+                      col.size(),
+                      col.head<uint8_t>(),
+                      col.null_mask(),
+                      col.null_count(),
+                      col.offset(),
+                      slice_children(col));
+  }
+  return table_view(cols);
+}
+
 struct linked_column_view;
 
 using LinkedColPtr    = std::shared_ptr<linked_column_view>;
@@ -126,7 +163,8 @@ auto decompose_structs(table_view table,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {})
 {
-  auto linked_columns = input_table_to_linked_columns(table);
+  auto sliced         = pushdown_struct_offsets(table);
+  auto linked_columns = input_table_to_linked_columns(sliced);
 
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
@@ -151,9 +189,6 @@ auto decompose_structs(table_view table,
           recursive_child(c->children[lists_column_view::child_column_index], depth + 1);
         } else if (c->type().id() == type_id::STRUCT) {
           for (auto& child : c->children) {
-            // for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
-            // auto scol = structs_column_view(c);
-            // recursive_child(scol.get_sliced_child(child_idx), depth + 1);
             recursive_child(child, depth + 1);
           }
         }
@@ -174,7 +209,7 @@ auto decompose_structs(table_view table,
                 parent->type(),
                 parent->size(),
                 nullptr,  // list has no data of its own
-                nullptr,  // If we're going through this then nullmaks already in another branch
+                nullptr,  // If we're going through this then nullmask is already in another branch
                 UNKNOWN_NULL_COUNT,
                 parent->offset(),
                 {parent->child(lists_column_view::offsets_column_index), curr_col});
