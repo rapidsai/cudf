@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from io import StringIO
+from io import TextIOBase
 
 import cudf
 
@@ -39,7 +39,7 @@ def read_text(object filepaths_or_buffers,
     cdef size_t c_byte_range_size
     cdef byte_range_info c_byte_range
 
-    if isinstance(filepaths_or_buffers, (StringIO)):
+    if isinstance(filepaths_or_buffers, TextIOBase):
         datasource = move(make_source(filepaths_or_buffers.read().encode()))
     else:
         datasource = move(make_source_from_file(filepaths_or_buffers.encode()))
