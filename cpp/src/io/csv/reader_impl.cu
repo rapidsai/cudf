@@ -516,6 +516,7 @@ void infer_column_types(parse_options const& parse_opts,
         column_types[col_idx] = data_type(cudf::type_id::STRING);
       }
     }
+    return;
   }
 
   auto const num_inferred_columns =
