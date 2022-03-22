@@ -8,6 +8,7 @@ import random
 import re
 import string
 import textwrap
+import warnings
 from copy import copy
 
 import cupy
@@ -2034,12 +2035,59 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
         operator.ne,
     ],
 )
-def test_binops_df(pdf, gdf, binop):
-    pdf = pdf + 1.0
-    gdf = gdf + 1.0
-    d = binop(pdf, pdf)
-    g = binop(gdf, gdf)
-    assert_eq(d, g)
+@pytest.mark.parametrize(
+    "other",
+    [
+        1.0,
+        [1.0],
+        [1.0, 2.0],
+        [1.0, 2.0, 3.0],
+        {"x": 1.0},
+        {"x": 1.0, "y": 2.0},
+        {"x": 1.0, "y": 2.0, "z": 3.0},
+        pd.Series([1.0]),
+        # pd.Series([1.0, 2.0]),
+        # pd.Series([1.0, 2.0, 3.0]),
+        # pd.Series([1.0], index=["x"]),
+        # pd.Series([1.0, 2.0], index=["x", "y"]),
+        # pd.Series([1.0, 2.0, 3.0], index=["x", "y", "z"]),
+        pd.DataFrame({"x": [1.0]}),
+        pd.DataFrame({"x": [1.0], "y": [2.0]}),
+        pd.DataFrame({"x": [1.0], "y": [2.0], "z": [3.0]}),
+    ],
+)
+def test_binops_df(pdf, gdf, binop, other):
+    # Avoid 1**NA cases: https://github.com/pandas-dev/pandas/issues/29997
+    pdf[pdf == 1.0] = 2
+    gdf[gdf == 1.0] = 2
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            d = binop(pdf, other)
+    except Exception:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            other = cudf.from_pandas(other)
+
+        assert_exceptions_equal(
+            lfunc=binop,
+            rfunc=binop,
+            lfunc_args_and_kwargs=([pdf, other], {}),
+            rfunc_args_and_kwargs=([gdf, other], {}),
+            compare_error_message=False,
+        )
+    else:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            other = cudf.from_pandas(other)
+        g = binop(gdf, other)
+        try:
+            assert_eq(d, g)
+        except AssertionError:
+            # Currently we will not match pandas for equality/inequality
+            # operators when there are columns that exist in a Series but not
+            # the DataFrame because pandas returns True/False values whereas we
+            # return NA. However, this reindexing is deprecated in pandas so we
+            # opt not to add support.
+            if w and "DataFrame vs Series comparisons is deprecated" in str(w):
+                pass
 
 
 @pytest.mark.parametrize("binop", [operator.and_, operator.or_, operator.xor])

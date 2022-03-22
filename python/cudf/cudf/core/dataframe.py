@@ -1856,17 +1856,45 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ]:
         # The default index to return.
         index = self._index
+        other_is_series = False
+
         if _is_scalar_or_zero_d_array(other):
+            other = {name: other for name in self._data}
+        elif isinstance(other, Sequence):
+            if len(other) != self._num_columns:
+                raise ValueError(
+                    f"Other is the wrong length. Expected {self._num_columns} "
+                    f", got {len(other)}"
+                )
+            other = {name: o for (name, o) in zip(self._data, other)}
+        elif isinstance(other, Series):
+            # Note: This logic will need updating if any of the user-facing
+            # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
+            other = dict(zip(other.index.values_host, other.values_host))
+            other_is_series = True
+
+        # Check dict first for speed.
+        if isinstance(other, (dict, MutableMapping)):
+            # Series can have extra index elements, other objects cannot.
+            if not other_is_series and len(other) != self._num_columns:
+                raise ValueError(
+                    f"Other is the wrong length. Expected {self._num_columns} "
+                    f", got {len(other)}"
+                )
+            # pandas checks the length of other, but not the actual elements,
+            # so we can end up with a mismatch (which produces nulls).
             operands = {
-                name: (left, other, reflect, fill_value)
+                name: (left, other.get(name), reflect, fill_value)
                 for name, left in self._data.items()
             }
-        elif isinstance(other, Sequence):
-            # TODO: Consider validating sequence length (pandas does).
-            operands = {
-                name: (left, right, reflect, fill_value)
-                for right, (name, left) in zip(other, self._data.items())
-            }
+            if other_is_series:
+                for col in other:
+                    if col not in self._column_names:
+                        # We match pandas semantics here by performing binops
+                        # between a NaN (not NULL!) column and the actual
+                        # values, which results in nans, the pandas output.
+                        left = as_column(np.nan, length=self._num_rows)
+                        operands[col] = (left, other[col], reflect, fill_value)
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -1898,23 +1926,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             for name, col in rhs._data.items():
                 if name not in lhs._data:
                     operands[name] = (fill_value, col, reflect, None)
-        elif isinstance(other, Series):
-            # Note: This logic will need updating if any of the user-facing
-            # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
-            right = dict(zip(other.index.values_host, other.values_host))
-
-            operands = {
-                col: (self._data[col], right.get(col), reflect, fill_value)
-                for col in self._column_names
-            }
-
-            for col in right:
-                if col not in self._column_names:
-                    # We match pandas semantics here by performing binops
-                    # between a NaN (not NULL!) column and the actual values,
-                    # which results in nans, the pandas output.
-                    left = as_column(np.nan, length=self._num_rows)
-                    operands[col] = (left, right[col], reflect, fill_value)
         else:
             return NotImplemented, None
 
