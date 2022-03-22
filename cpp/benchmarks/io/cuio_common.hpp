@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,3 +132,5 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
  * The segments could be Parquet row groups or ORC stripes.
  */
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
+
+void drop_cache();

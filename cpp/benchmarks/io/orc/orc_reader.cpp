@@ -60,6 +60,7 @@ void BM_orc_read_varying_input(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    drop_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_orc(read_opts);
   }
@@ -161,45 +162,8 @@ void BM_orc_read_varying_options(benchmark::State& state)
     ->UseManualTime();
 
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL_SIGNED);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
-
-BENCHMARK_DEFINE_F(OrcRead, column_selection)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, column_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL),
-                  int32_t(column_selection::ALTERNATE),
-                  int32_t(column_selection::FIRST_HALF),
-                  int32_t(column_selection::SECOND_HALF)},
-                 {int32_t(row_selection::ALL)},
-                 {1},
-                 {0b11},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-// Need an API to get the number of stripes to enable row_selection::STRIPES here
-BENCHMARK_DEFINE_F(OrcRead, row_selection)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, row_selection)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1, 8},
-                 {0b11},  // defaults
-                 {int32_t(cudf::type_id::EMPTY)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_DEFINE_F(OrcRead, misc_options)
-(::benchmark::State& state) { BM_orc_read_varying_options(state); }
-BENCHMARK_REGISTER_F(OrcRead, misc_options)
-  ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::NROWS)},
-                 {1},
-                 {0b11, 0b10, 0b01},  // `true` is default for each boolean parameter here
-                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
