@@ -15,7 +15,7 @@
  */
 
 #include "generate_input.hpp"
-#include "random_distribution_factory.hpp"
+#include "random_distribution_factory.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -424,7 +424,7 @@ struct string_generator {
   string_generator(char* c, thrust::minstd_rand& engine)
     : chars(c), engine(engine), char_dist(32, 137)
   // ~90% ASCII, ~10% UTF-8.
-  // ~80% space, ~20% space.
+  // ~80% not-space, ~20% space.
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
