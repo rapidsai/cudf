@@ -410,7 +410,7 @@ class self_comparator {
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
   {
-    return device_row_comparator<Nullate>(
+    return device_row_comparator(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
   }
 
