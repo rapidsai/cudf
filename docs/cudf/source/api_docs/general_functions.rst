@@ -10,6 +10,7 @@ Data manipulations
    :toctree: api/
 
    cudf.concat
+   cudf.cut
    cudf.melt
    cudf.get_dummies
    cudf.merge_sorted
