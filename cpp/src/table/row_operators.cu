@@ -288,7 +288,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
   auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
-  return std::shared_ptr<preprocessed_table>(new preprocessed_table(std::move(d_t)));
+  return std::shared_ptr<preprocessed_table>(
+    new preprocessed_table(std::move(d_t), std::move(std::get<1>(null_pushed_table))));
 }
 
 }  // namespace equality_hashing

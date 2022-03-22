@@ -234,17 +234,22 @@ struct preprocessed_table {
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
-  preprocessed_table(table_device_view_owner&& table) : d_t(std::move(table)) {}
+  preprocessed_table(table_device_view_owner&& table,
+                     std::vector<rmm::device_buffer>&& null_buffers)
+    : _t(std::move(table)), _null_buffers(std::move(null_buffers))
+  {
+  }
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
    *
    * @return table_device_view
    */
-  operator table_device_view() { return *d_t; }
+  operator table_device_view() { return *_t; }
 
  private:
-  table_device_view_owner d_t;
+  table_device_view_owner _t;
+  std::vector<rmm::device_buffer> _null_buffers;
 };
 
 class self_eq_comparator {
