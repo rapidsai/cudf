@@ -1854,25 +1854,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ],
         Optional[BaseIndex],
     ]:
-        index = self._index
-
-        def make_operands(left_data, right_data, right_default=None, fill_requires_key=False):
-            return {
-                name: (
-                    left,
-                    right_data.get(name, right_default),
+        def make_operands(left, right, add_operands, fill_if_no_key, right_default):
+            operands = {
+                k: (
+                    v,
+                    right.get(k, right_default),
                     reflect,
-                    fill_value
-                    if (not fill_requires_key or name in right_data)
-                    else None,
+                    fill_value if (not fill_if_no_key or k in right) else None,
                 )
-                for name, left in left_data.items()
+                for k, v in left.items()
             }
 
-        def add_right_operands(operands, left_data, right_data, left_default):
-            for name, col in right_data.items():
-                if name not in left_data:
-                    operands[name] = (left_default(), col, reflect, fill_value)
+            if add_operands is not None:
+                add_operands(operands, left, right)
+            return operands
 
         # Check built-in types first for speed.
         if isinstance(other, (list, dict, Sequence, MutableMapping)):
@@ -1882,25 +1877,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     f", got {len(other)}"
                 )
 
+        lhs, rhs = self._data, other
+        index = self._index
+        add_operands = None
+        fill_if_no_key = False
+        right_default = None
+
         if _is_scalar_or_zero_d_array(other):
-            other = {name: other for name in self._data}
+            rhs = {name: other for name in self._data}
         elif isinstance(other, Sequence):
-            other = {name: o for (name, o) in zip(self._data, other)}
-
-        if isinstance(other, (dict, MutableMapping)):
-            # pandas checks the length of other, but not the actual elements,
-            # so we can end up with a mismatch (which produces nulls).
-            operands = make_operands(self._data, other)
+            rhs = {name: o for (name, o) in zip(self._data, other)}
         elif isinstance(other, Series):
-            other = dict(zip(other.index.values_host, other.values_host))
-            operands = make_operands(self._data, other)
-
+            rhs = dict(zip(other.index.values_host, other.values_host))
             # For keys in right but not left, we match pandas semantics here by
             # performing binops between a NaN (not NULL!) column and the actual
             # values, which results in nans, the pandas output.
-            for name, col in other.items():
-                if name not in self._data:
-                    operands[name] = (as_column(np.nan, length=self._num_rows), col, reflect, fill_value)
+            def add_operands(operands, left, right):
+                for k, v in right.items():
+                    if k not in left:
+                        operands[k] = (as_column(np.nan, length=self._num_rows), v, reflect, fill_value)
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -1915,18 +1910,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Can only compare identically-labeled DataFrame objects"
                 )
-
             lhs, rhs = _align_indices(self, other)
             index = lhs._index
-            operands = make_operands(lhs._data, rhs._data, fill_value, True)
-            add_right_operands(operands, lhs._data, rhs._data, lambda: None)
-            for name, col in rhs._data.items():
-                if name not in lhs._data:
-                    operands[name] = (fill_value, col, reflect, None)
-        else:
-            return NotImplemented, None
+            lhs, rhs = lhs._data, rhs._data
+            fill_if_no_key = True
+            right_default = fill_value
 
-        return operands, index
+            def add_operands(operands, left, right):
+                for k, v in right.items():
+                    if k not in left:
+                        operands[k] = (fill_value, v, reflect, None)
+
+        if not isinstance(rhs, MutableMapping):
+            return NotImplemented, None
+        return make_operands(lhs, rhs, add_operands, fill_if_no_key, right_default), index
 
     @_cudf_nvtx_annotate
     def update(
