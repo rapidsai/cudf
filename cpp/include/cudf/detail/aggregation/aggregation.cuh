@@ -122,7 +122,7 @@ struct update_target_element {
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    cudf_assert(false and "Invalid source type and aggregation combination.");
+    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
 };
 
