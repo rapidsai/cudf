@@ -11,8 +11,8 @@ Data manipulations
 
    cudf.concat
    cudf.cut
-   cudf.melt
    cudf.get_dummies
+   cudf.melt
    cudf.merge_sorted
    cudf.pivot
    cudf.unstack
