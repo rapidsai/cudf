@@ -1864,23 +1864,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         lhs, rhs = self._data, other
         index = self._index
-        add_operands = None
-        fill_if_no_key = False
-        right_default = None
+        fill_requires_key = False
+        left_default: Any = False
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
-        elif isinstance(other, Sequence):
+        elif isinstance(other, (list, Sequence)):
             rhs = {name: o for (name, o) in zip(self._data, other)}
         elif isinstance(other, Series):
             rhs = dict(zip(other.index.values_host, other.values_host))
-            # For keys in right but not left, we match pandas semantics here by
-            # performing binops between a NaN (not NULL!) column and the actual
-            # values, which results in nans, the pandas output.
-            def add_operands(operands, left, right):
-                for k, v in right.items():
-                    if k not in left:
-                        operands[k] = (as_column(np.nan, length=self._num_rows), v, reflect, fill_value)
+            # For keys in right but not left, perform binops between NaN (not
+            # NULL!) and the right value (result is NaN).
+            left_default = as_column(np.nan, length=len(self))
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -1895,32 +1890,31 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Can only compare identically-labeled DataFrame objects"
                 )
-            lhs, rhs = _align_indices(self, other)
-            index = lhs._index
-            lhs, rhs = lhs._data, rhs._data
-            fill_if_no_key = True
-            right_default = fill_value
+            new_lhs, new_rhs = _align_indices(self, other)
+            index = new_lhs._index
+            lhs, rhs = new_lhs._data, new_rhs._data
+            fill_requires_key = True
+            # For DataFrame-DataFrame ops, always default to operating against
+            # the fill value.
+            left_default = fill_value
 
-            def add_operands(operands, left, right):
-                for k, v in right.items():
-                    if k not in left:
-                        operands[k] = (fill_value, v, reflect, None)
-
-        if not isinstance(rhs, MutableMapping):
+        if not isinstance(rhs, (dict, MutableMapping)):
             return NotImplemented, None
 
         operands = {
             k: (
                 v,
-                rhs.get(k, right_default),
+                rhs.get(k, fill_value),
                 reflect,
-                fill_value if (not fill_if_no_key or k in rhs) else None,
+                fill_value if (not fill_requires_key or k in rhs) else None,
             )
             for k, v in lhs.items()
         }
 
-        if add_operands is not None:
-            add_operands(operands, lhs, rhs)
+        if left_default is not False:
+            for k, v in rhs.items():
+                if k not in lhs:
+                    operands[k] = (left_default, v, reflect, None)
         return operands, index
 
     @_cudf_nvtx_annotate
