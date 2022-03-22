@@ -25,6 +25,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/json.hpp>
@@ -1492,6 +1493,44 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
             .build();
     return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(JNIEnv *env, jclass,
+                                                                jobjectArray filter_col_names,
+                                                                jstring inputfilepath, jlong buffer,
+                                                                jlong buffer_length, jint unit) {
+
+  const bool read_buffer = (buffer != 0);
+  if (!read_buffer) {
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+  } else if (inputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an inputfilepath", NULL);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
+                  NULL);
+  }
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstring filename(env, inputfilepath);
+    if (!read_buffer && filename.is_empty()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
+                    NULL);
+    }
+
+    cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+
+    auto source = read_buffer ? cudf::io::source_info(reinterpret_cast<char *>(buffer),
+                                                      static_cast<std::size_t>(buffer_length)) :
+                                cudf::io::source_info(filename.get());
+
+    cudf::io::avro_reader_options opts = cudf::io::avro_reader_options::builder(source)
+                                             .columns(n_filter_col_names.as_cpp_vector())
+                                             .build();
+    return convert_table_for_return(env, cudf::io::read_avro(opts).tbl);
   }
   CATCH_STD(env, NULL);
 }
@@ -3005,13 +3044,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     auto const keys_indices =
         std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
 
-    auto result = cudf::drop_duplicates(
-        *input, keys_indices,
-        keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
-                     cudf::duplicate_keep_option::KEEP_LAST,
-        nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
-        nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER,
-        rmm::mr::get_current_device_resource());
+    // cudf::unique keeps unique rows in each consecutive group of equivalent rows. To match the
+    // behavior of pandas.DataFrame.drop_duplicates, users need to stable sort the input first and
+    // then invoke cudf::unique.
+    std::vector<cudf::order> order(keys_indices.size(), cudf::order::ASCENDING);
+    std::vector<cudf::null_order> null_precedence(
+        keys_indices.size(), nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER);
+    auto const sorted_input =
+        cudf::stable_sort_by_key(*input, input->select(keys_indices), order, null_precedence);
+
+    auto result =
+        cudf::unique(sorted_input->view(), keys_indices,
+                     keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
+                                  cudf::duplicate_keep_option::KEEP_LAST,
+                     nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
+                     rmm::mr::get_current_device_resource());
     return convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);

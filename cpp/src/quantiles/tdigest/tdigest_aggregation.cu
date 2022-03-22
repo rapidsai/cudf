@@ -37,8 +37,8 @@
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
-namespace groupby {
 namespace detail {
+namespace tdigest {
 
 using namespace cudf::tdigest;
 
@@ -55,12 +55,24 @@ template <typename T>
 struct make_centroid {
   column_device_view const col;
 
-  centroid operator() __device__(size_type index)
+  centroid operator() __device__(size_type index) const
   {
     auto const is_valid = col.is_valid(index);
     auto const mean     = is_valid ? static_cast<double>(col.element<T>(index)) : 0.0;
     auto const weight   = is_valid ? 1.0 : 0.0;
     return {mean, weight, is_valid};
+  }
+};
+
+// make a centroid from a scalar with a weight of 1. this functor
+// assumes any value index it is passed is not null
+template <typename T>
+struct make_centroid_no_nulls {
+  column_device_view const col;
+
+  centroid operator() __device__(size_type index) const
+  {
+    return {static_cast<double>(col.element<T>(index)), 1.0, true};
   }
 };
 
@@ -74,7 +86,7 @@ struct make_weighted_centroid {
 
 // merge two centroids
 struct merge_centroids {
-  centroid operator() __device__(centroid const& lhs, centroid const& rhs)
+  centroid operator() __device__(centroid const& lhs, centroid const& rhs) const
   {
     bool const lhs_valid = thrust::get<2>(lhs);
     bool const rhs_valid = thrust::get<2>(rhs);
@@ -92,18 +104,18 @@ struct merge_centroids {
 };
 
 /**
- * @brief A functor which returns the nearest cumulative weight in the input stream prior to the
- * specified next weight limit.
+ * @brief A functor which returns the nearest cumulative weight in the grouped input stream prior to
+ * the specified next weight limit.
  *
  * This functor assumes the weight for all scalars is simply 1. Under this assumption,
  * the nearest weight that will be <= the next limit is simply the nearest integer < the limit,
  * which we can get by just taking floor(next_limit).  For example if our next limit is 3.56, the
  * nearest whole number <= it is floor(3.56) == 3.
  */
-struct nearest_value_scalar_weights {
+struct nearest_value_scalar_weights_grouped {
   offset_type const* group_offsets;
 
-  thrust::pair<double, int> operator() __device__(double next_limit, size_type group_index)
+  thrust::pair<double, int> operator() __device__(double next_limit, size_type group_index) const
   {
     double const f                   = floor(next_limit);
     auto const relative_weight_index = max(0, static_cast<int>(next_limit) - 1);
@@ -116,14 +128,35 @@ struct nearest_value_scalar_weights {
  * @brief A functor which returns the nearest cumulative weight in the input stream prior to the
  * specified next weight limit.
  *
+ * This functor assumes the weight for all scalars is simply 1. Under this assumption,
+ * the nearest weight that will be <= the next limit is simply the nearest integer < the limit,
+ * which we can get by just taking floor(next_limit).  For example if our next limit is 3.56, the
+ * nearest whole number <= it is floor(3.56) == 3.
+ */
+struct nearest_value_scalar_weights {
+  size_type const input_size;
+
+  thrust::pair<double, int> operator() __device__(double next_limit, size_type) const
+  {
+    double const f                   = floor(next_limit);
+    auto const relative_weight_index = max(0, static_cast<int>(next_limit) - 1);
+    return {f, relative_weight_index < input_size ? relative_weight_index : input_size - 1};
+  }
+};
+
+/**
+ * @brief A functor which returns the nearest cumulative weight in the input stream prior to the
+ * specified next weight limit.
+ *
  * This functor assumes we are dealing with grouped, sorted, weighted centroids.
  */
+template <typename GroupOffsetsIter>
 struct nearest_value_centroid_weights {
   double const* cumulative_weights;
-  offset_type const* outer_offsets;  // groups
+  GroupOffsetsIter outer_offsets;    // groups
   offset_type const* inner_offsets;  // tdigests within a group
 
-  thrust::pair<double, int> operator() __device__(double next_limit, size_type group_index)
+  thrust::pair<double, int> operator() __device__(double next_limit, size_type group_index) const
   {
     auto const tdigest_begin = outer_offsets[group_index];
     auto const tdigest_end   = outer_offsets[group_index + 1];
@@ -152,7 +185,7 @@ struct nearest_value_centroid_weights {
  * This functor assumes the weight for all scalars is simply 1. Under this assumption,
  * the cumulative weight for a given value index I is simply I+1.
  */
-struct cumulative_scalar_weight {
+struct cumulative_scalar_weight_grouped {
   cudf::device_span<size_type const> group_offsets;
   cudf::device_span<size_type const> group_labels;
   std::tuple<size_type, size_type, double> operator() __device__(size_type value_index) const
@@ -165,14 +198,29 @@ struct cumulative_scalar_weight {
 
 /**
  * @brief A functor which returns the cumulative input weight for a given index in a
+ * set of input values.
+ *
+ * This functor assumes the weight for all scalars is simply 1. Under this assumption,
+ * the cumulative weight for a given value index I is simply I+1.
+ */
+struct cumulative_scalar_weight {
+  std::tuple<size_type, size_type, double> operator() __device__(size_type value_index) const
+  {
+    return {0, value_index, value_index + 1};
+  }
+};
+
+/**
+ * @brief A functor which returns the cumulative input weight for a given index in a
  * set of grouped input centroids.
  *
  * This functor assumes we are dealing with grouped, weighted centroids.
  */
+template <typename GroupLabelsIter, typename GroupOffsetsIter>
 struct cumulative_centroid_weight {
   double const* cumulative_weights;
-  cudf::device_span<size_type const> group_labels;
-  offset_type const* outer_offsets;                    // groups
+  GroupLabelsIter group_labels;
+  GroupOffsetsIter outer_offsets;                      // groups
   cudf::device_span<offset_type const> inner_offsets;  // tdigests with a group
 
   std::tuple<size_type, size_type, double> operator() __device__(size_type value_index) const
@@ -192,12 +240,12 @@ struct cumulative_centroid_weight {
   }
 };
 
-// retrieve group info of scalar inputs by group index
-struct scalar_group_info {
+// retrieve group info (total weight, size, start offset) of scalar inputs by group index.
+struct scalar_group_info_grouped {
   size_type const* group_valid_counts;
   offset_type const* group_offsets;
 
-  __device__ thrust::tuple<double, size_type, size_type> operator()(size_type group_index)
+  __device__ thrust::tuple<double, size_type, size_type> operator()(size_type group_index) const
   {
     return {static_cast<double>(group_valid_counts[group_index]),
             group_offsets[group_index + 1] - group_offsets[group_index],
@@ -205,13 +253,25 @@ struct scalar_group_info {
   }
 };
 
+// retrieve group info (total weight, size, start offset) of scalar inputs
+struct scalar_group_info {
+  double const total_weight;
+  size_type const size;
+
+  __device__ thrust::tuple<double, size_type, size_type> operator()(size_type) const
+  {
+    return {total_weight, size, 0};
+  }
+};
+
 // retrieve group info of centroid inputs by group index
+template <typename GroupOffsetsIter>
 struct centroid_group_info {
   double const* cumulative_weights;
-  offset_type const* outer_offsets;
+  GroupOffsetsIter outer_offsets;
   offset_type const* inner_offsets;
 
-  __device__ thrust::tuple<double, size_type, size_type> operator()(size_type group_index)
+  __device__ thrust::tuple<double, size_type, size_type> operator()(size_type group_index) const
   {
     // if there's no weights in this group of digests at all, return 0.
     auto const group_start       = inner_offsets[outer_offsets[group_index]];
@@ -226,7 +286,7 @@ struct centroid_group_info {
 };
 
 struct tdigest_min {
-  __device__ double operator()(thrust::tuple<double, size_type> const& t)
+  __device__ double operator()(thrust::tuple<double, size_type> const& t) const
   {
     auto const min  = thrust::get<0>(t);
     auto const size = thrust::get<1>(t);
@@ -235,7 +295,7 @@ struct tdigest_min {
 };
 
 struct tdigest_max {
-  __device__ double operator()(thrust::tuple<double, size_type> const& t)
+  __device__ double operator()(thrust::tuple<double, size_type> const& t) const
   {
     auto const max  = thrust::get<0>(t);
     auto const size = thrust::get<1>(t);
@@ -250,8 +310,19 @@ __device__ double scale_func_k1(double quantile, double delta_norm)
 {
   double k = delta_norm * asin(2.0 * quantile - 1.0);
   k += 1.0;
-  double q = (sin(k / delta_norm) + 1.0) / 2.0;
+  double const q = (sin(k / delta_norm) + 1.0) / 2.0;
   return q;
+}
+
+// convert a single-row tdigest column to a scalar.
+std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(tdigest->size() == 1,
+               "Encountered invalid tdigest column when converting to scalar");
+  auto contents = tdigest->release();
+  return std::make_unique<struct_scalar>(table(std::move(contents.children)), true, stream, mr);
 }
 
 /**
@@ -690,7 +761,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
 
 // return the min/max value of scalar inputs by group index
 template <typename T>
-struct get_scalar_minmax {
+struct get_scalar_minmax_grouped {
   column_device_view const col;
   device_span<size_type const> group_offsets;
   size_type const* group_valid_counts;
@@ -702,6 +773,21 @@ struct get_scalar_minmax {
              ? thrust::make_tuple(
                  static_cast<double>(col.element<T>(group_offsets[group_index])),
                  static_cast<double>(col.element<T>(group_offsets[group_index] + valid_count - 1)))
+             : thrust::make_tuple(0.0, 0.0);
+  }
+};
+
+// return the min/max value of scalar inputs
+template <typename T>
+struct get_scalar_minmax {
+  column_device_view const col;
+  size_type const valid_count;
+
+  __device__ thrust::tuple<double, double> operator()(size_type)
+  {
+    return valid_count > 0
+             ? thrust::make_tuple(static_cast<double>(col.element<T>(0)),
+                                  static_cast<double>(col.element<T>(valid_count - 1)))
              : thrust::make_tuple(0.0, 0.0);
   }
 };
@@ -722,9 +808,9 @@ struct typed_group_tdigest {
     auto [group_cluster_wl, group_cluster_offsets, total_clusters] = generate_group_cluster_info(
       delta,
       num_groups,
-      nearest_value_scalar_weights{group_offsets.begin()},
-      scalar_group_info{group_valid_counts.begin(), group_offsets.begin()},
-      cumulative_scalar_weight{group_offsets, group_labels},
+      nearest_value_scalar_weights_grouped{group_offsets.begin()},
+      scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
+      cumulative_scalar_weight_grouped{group_offsets, group_labels},
       col.null_count() > 0,
       stream,
       mr);
@@ -744,7 +830,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
                                                    max_col->mutable_view().begin<double>())),
-      get_scalar_minmax<T>{*d_col, group_offsets, group_valid_counts.begin()});
+      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
@@ -754,7 +840,7 @@ struct typed_group_tdigest {
     return compute_tdigests(delta,
                             scalar_to_centroid,
                             scalar_to_centroid + col.size(),
-                            cumulative_scalar_weight{group_offsets, group_labels},
+                            cumulative_scalar_weight_grouped{group_offsets, group_labels},
                             std::move(min_col),
                             std::move(max_col),
                             group_cluster_wl,
@@ -774,7 +860,355 @@ struct typed_group_tdigest {
   }
 };
 
+struct typed_reduce_tdigest {
+  // this function assumes col is sorted in ascending order with nulls at the end
+  template <
+    typename T,
+    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     int delta,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    // treat this the same as the groupby path with a single group.  Note:  even though
+    // there is only 1 group there are still multiple keys within the group that represent
+    // the clustering of (N input values) -> (1 output centroid), so the final computation
+    // remains a reduce_by_key() and not a reduce().
+    //
+    // additionally we get a few optimizations.
+    // - since we only ever have 1 "group" that is sorted with nulls at the end,
+    //   we can simply process just the non-null values and act as if the column
+    //   is non-nullable, allowing us to process fewer values than if we were doing a groupby.
+    //
+    // - several of the functors used during the reduction are cheaper than during a groupby.
+
+    auto const valid_count = col.size() - col.null_count();
+
+    // first, generate cluster weight information for each input group
+    auto [cluster_wl, cluster_offsets, total_clusters] =
+      generate_group_cluster_info(delta,
+                                  1,
+                                  nearest_value_scalar_weights{valid_count},
+                                  scalar_group_info{static_cast<double>(valid_count), valid_count},
+                                  cumulative_scalar_weight{},
+                                  false,
+                                  stream,
+                                  mr);
+
+    // device column view. handy because the .element() function
+    // automatically handles fixed-point conversions for us
+    auto d_col = cudf::column_device_view::create(col, stream);
+
+    // compute min and max columns
+    auto min_col = cudf::make_numeric_column(
+      data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED, stream, mr);
+    auto max_col = cudf::make_numeric_column(
+      data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED, stream, mr);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(0) + 1,
+      thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
+                                                   max_col->mutable_view().begin<double>())),
+      get_scalar_minmax<T>{*d_col, valid_count});
+
+    // for simple input values, the "centroids" all have a weight of 1.
+    auto scalar_to_centroid =
+      cudf::detail::make_counting_transform_iterator(0, make_centroid_no_nulls<T>{*d_col});
+
+    // generate the final tdigest and wrap it in a struct_scalar
+    return to_tdigest_scalar(compute_tdigests(delta,
+                                              scalar_to_centroid,
+                                              scalar_to_centroid + valid_count,
+                                              cumulative_scalar_weight{},
+                                              std::move(min_col),
+                                              std::move(max_col),
+                                              cluster_wl,
+                                              std::move(cluster_offsets),
+                                              total_clusters,
+                                              false,
+                                              stream,
+                                              mr),
+                             stream,
+                             mr);
+  }
+
+  template <
+    typename T,
+    typename... Args,
+    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(Args&&...)
+  {
+    CUDF_FAIL("Non-numeric type in group_tdigest");
+  }
+};
+
+// utility for merge_tdigests.
+template <typename GroupOffsetsIter>
+struct group_num_weights_func {
+  GroupOffsetsIter outer_offsets;
+  size_type const* inner_offsets;
+
+  __device__ size_type operator()(size_type group_index)
+  {
+    auto const tdigest_begin = outer_offsets[group_index];
+    auto const tdigest_end   = outer_offsets[group_index + 1];
+    return inner_offsets[tdigest_end] - inner_offsets[tdigest_begin];
+  }
+};
+
+// utility for merge_tdigests.
+struct group_is_empty {
+  __device__ bool operator()(size_type group_size) { return group_size == 0; }
+};
+
+// utility for merge_tdigests.
+template <typename GroupLabelsIter>
+struct group_key_func {
+  GroupLabelsIter group_labels;
+  size_type const* inner_offsets;
+  size_type num_inner_offsets;
+
+  __device__ size_type operator()(size_type index)
+  {
+    // what -original- tdigest index this absolute index corresponds to
+    auto const iter = thrust::prev(
+      thrust::upper_bound(thrust::seq, inner_offsets, inner_offsets + num_inner_offsets, index));
+    auto const tdigest_index = thrust::distance(inner_offsets, iter);
+
+    // what group index the original tdigest belongs to
+    return group_labels[tdigest_index];
+  }
+};
+
+template <typename HGroupOffsetIter, typename GroupOffsetIter, typename GroupLabelIter>
+std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
+                                       HGroupOffsetIter h_outer_offsets,
+                                       GroupOffsetIter group_offsets,
+                                       GroupLabelIter group_labels,
+                                       size_t num_group_labels,
+                                       size_type num_groups,
+                                       int max_centroids,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  // thrust::merge and thrust::merge_by_key don't provide what we need.  What we would need is an
+  // algorithm like a super-merge that takes two layers of keys: one which identifies the outer
+  // grouping of tdigests, and one which identifies the inner groupings of the tdigests within the
+  // outer groups.
+  // TODO: investigate replacing the iterative merge with a single stable_sort_by_key.
+
+  // bring tdigest offsets back to the host
+  auto tdigest_offsets = tdv.centroids().offsets();
+  std::vector<offset_type> h_inner_offsets(tdigest_offsets.size());
+  cudaMemcpyAsync(h_inner_offsets.data(),
+                  tdigest_offsets.begin<offset_type>(),
+                  sizeof(offset_type) * tdigest_offsets.size(),
+                  cudaMemcpyDeviceToHost,
+                  stream);
+
+  stream.synchronize();
+
+  // extract all means and weights into a table
+  cudf::table_view tdigests_unsliced({tdv.means(), tdv.weights()});
+
+  // generate the merged (but not yet compressed) tdigests for each group.
+  std::vector<std::unique_ptr<table>> tdigests;
+  tdigests.reserve(num_groups);
+  std::transform(h_outer_offsets,
+                 h_outer_offsets + num_groups,
+                 std::next(h_outer_offsets),
+                 std::back_inserter(tdigests),
+                 [&](auto tdigest_start, auto tdigest_end) {
+                   // the range of tdigests in this group
+                   auto const num_tdigests = tdigest_end - tdigest_start;
+
+                   // slice each tdigest from the input
+                   std::vector<table_view> unmerged_tdigests;
+                   unmerged_tdigests.reserve(num_tdigests);
+                   auto offset_iter = std::next(h_inner_offsets.begin(), tdigest_start);
+                   std::transform(
+                     offset_iter,
+                     offset_iter + num_tdigests,
+                     std::next(offset_iter),
+                     std::back_inserter(unmerged_tdigests),
+                     [&](size_type start, size_type end) {
+                       return cudf::detail::slice(tdigests_unsliced, {start, end}, stream);
+                     });
+
+                   // merge
+                   return cudf::detail::merge(unmerged_tdigests,
+                                              {0},
+                                              {order::ASCENDING},
+                                              {},
+                                              stream,
+                                              rmm::mr::get_current_device_resource());
+                 });
+
+  // generate min and max values
+  auto merged_min_col = cudf::make_numeric_column(
+    data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
+  auto min_iter = thrust::make_transform_iterator(
+    thrust::make_zip_iterator(thrust::make_tuple(tdv.min_begin(), tdv.size_begin())),
+    tdigest_min{});
+  thrust::reduce_by_key(rmm::exec_policy(stream),
+                        group_labels,
+                        group_labels + num_group_labels,
+                        min_iter,
+                        thrust::make_discard_iterator(),
+                        merged_min_col->mutable_view().begin<double>(),
+                        thrust::equal_to{},  // key equality check
+                        thrust::minimum{});
+
+  auto merged_max_col = cudf::make_numeric_column(
+    data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
+  auto max_iter = thrust::make_transform_iterator(
+    thrust::make_zip_iterator(thrust::make_tuple(tdv.max_begin(), tdv.size_begin())),
+    tdigest_max{});
+  thrust::reduce_by_key(rmm::exec_policy(stream),
+                        group_labels,
+                        group_labels + num_group_labels,
+                        max_iter,
+                        thrust::make_discard_iterator(),
+                        merged_max_col->mutable_view().begin<double>(),
+                        thrust::equal_to{},  // key equality check
+                        thrust::maximum{});
+
+  // for any empty groups, set the min and max to be 0. not technically necessary but it makes
+  // testing simpler.
+  auto group_num_weights = cudf::detail::make_counting_transform_iterator(
+    0,
+    group_num_weights_func<decltype(group_offsets)>{group_offsets,
+                                                    tdigest_offsets.begin<size_type>()});
+  thrust::replace_if(rmm::exec_policy(stream),
+                     merged_min_col->mutable_view().begin<double>(),
+                     merged_min_col->mutable_view().end<double>(),
+                     group_num_weights,
+                     group_is_empty{},
+                     0);
+  thrust::replace_if(rmm::exec_policy(stream),
+                     merged_max_col->mutable_view().begin<double>(),
+                     merged_max_col->mutable_view().end<double>(),
+                     group_num_weights,
+                     group_is_empty{},
+                     0);
+
+  // concatenate all the merged tdigests back into one table.
+  std::vector<table_view> tdigest_views;
+  tdigest_views.reserve(num_groups);
+  std::transform(tdigests.begin(),
+                 tdigests.end(),
+                 std::back_inserter(tdigest_views),
+                 [](std::unique_ptr<table> const& t) { return t->view(); });
+  auto merged = cudf::detail::concatenate(tdigest_views, stream);
+
+  // generate cumulative weights
+  auto merged_weights     = merged->get_column(1).view();
+  auto cumulative_weights = cudf::make_numeric_column(
+    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED);
+  auto keys = cudf::detail::make_counting_transform_iterator(
+    0,
+    group_key_func<decltype(group_labels)>{
+      group_labels, tdigest_offsets.begin<size_type>(), tdigest_offsets.size()});
+  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                keys,
+                                keys + cumulative_weights->size(),
+                                merged_weights.begin<double>(),
+                                cumulative_weights->mutable_view().begin<double>());
+
+  auto const delta = max_centroids;
+
+  // generate cluster info
+  auto [group_cluster_wl, group_cluster_offsets, total_clusters] = generate_group_cluster_info(
+    delta,
+    num_groups,
+    nearest_value_centroid_weights<decltype(group_offsets)>{
+      cumulative_weights->view().begin<double>(),
+      group_offsets,
+      tdigest_offsets.begin<size_type>()},
+    centroid_group_info<decltype(group_offsets)>{cumulative_weights->view().begin<double>(),
+                                                 group_offsets,
+                                                 tdigest_offsets.begin<size_type>()},
+    cumulative_centroid_weight<decltype(group_labels), decltype(group_offsets)>{
+      cumulative_weights->view().begin<double>(),
+      group_labels,
+      group_offsets,
+      {tdigest_offsets.begin<offset_type>(), static_cast<size_t>(tdigest_offsets.size())}},
+    false,
+    stream,
+    mr);
+
+  // input centroid values
+  auto centroids = cudf::detail::make_counting_transform_iterator(
+    0,
+    make_weighted_centroid{merged->get_column(0).view().begin<double>(),
+                           merged_weights.begin<double>()});
+
+  // compute the tdigest
+  return compute_tdigests(
+    delta,
+    centroids,
+    centroids + merged->num_rows(),
+    cumulative_centroid_weight<decltype(group_labels), decltype(group_offsets)>{
+      cumulative_weights->view().begin<double>(),
+      group_labels,
+      group_offsets,
+      {tdigest_offsets.begin<offset_type>(), static_cast<size_t>(tdigest_offsets.size())}},
+    std::move(merged_min_col),
+    std::move(merged_max_col),
+    group_cluster_wl,
+    std::move(group_cluster_offsets),
+    total_clusters,
+    false,
+    stream,
+    mr);
+}
+
 }  // anonymous namespace
+
+std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
+                                       int max_centroids,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  if (col.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_scalar(stream, mr); }
+
+  // since this isn't coming out of a groupby, we need to sort the inputs in ascending
+  // order with nulls at the end.
+  table_view t({col});
+  auto sorted = cudf::detail::sort(t, {order::ASCENDING}, {null_order::AFTER}, stream);
+
+  auto const delta = max_centroids;
+  return cudf::type_dispatcher(
+    col.type(), typed_reduce_tdigest{}, sorted->get_column(0), delta, stream, mr);
+}
+
+std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
+                                             int max_centroids,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  tdigest_column_view tdv(input);
+
+  if (input.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_scalar(stream, mr); }
+
+  auto h_group_offsets = cudf::detail::make_counting_transform_iterator(
+    0, [size = input.size()](size_type i) { return i == 0 ? 0 : size; });
+  auto group_offsets = cudf::detail::make_counting_transform_iterator(
+    0, [size = input.size()] __device__(size_type i) { return i == 0 ? 0 : size; });
+  auto group_labels = thrust::make_constant_iterator(0);
+  return to_tdigest_scalar(merge_tdigests(tdv,
+                                          h_group_offsets,
+                                          group_offsets,
+                                          group_labels,
+                                          input.size(),
+                                          1,
+                                          max_centroids,
+                                          stream,
+                                          mr),
+                           stream,
+                           mr);
+}
 
 std::unique_ptr<column> group_tdigest(column_view const& col,
                                       cudf::device_span<size_type const> group_offsets,
@@ -814,200 +1248,25 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr);
   }
 
-  // first step is to merge all the tdigests in each group. at the moment the only way to
-  // make this work is to retrieve the group sizes (via group_offsets) and the individual digest
-  // sizes (via input.offsets()) to the gpu and do the merges.  The scale problem is that while the
-  // size of each group will likely be small (size of each group will typically map to # of batches
-  // the input data was chopped into for tdigest generation), the -number- of groups can be
-  // arbitrarily large.
-  //
-  // thrust::merge and thrust::merge_by_key don't provide what we need.  What we would need is an
-  // algorithm like a super-merge that takes two layers of keys: one which identifies the outer
-  // grouping of tdigests, and one which identifies the inner groupings of the tdigests within the
-  // outer groups.
-
   // bring group offsets back to the host
-  std::vector<size_type> h_outer_offsets(group_offsets.size());
-  cudaMemcpyAsync(h_outer_offsets.data(),
-                  group_offsets.data(),
+  std::vector<size_type> h_group_offsets(group_offsets.size());
+  cudaMemcpyAsync(h_group_offsets.data(),
+                  group_offsets.begin(),
                   sizeof(size_type) * group_offsets.size(),
                   cudaMemcpyDeviceToHost,
                   stream);
 
-  // bring tdigest offsets back to the host
-  auto tdigest_offsets = tdv.centroids().offsets();
-  std::vector<size_type> h_inner_offsets(tdigest_offsets.size());
-  cudaMemcpyAsync(h_inner_offsets.data(),
-                  tdigest_offsets.begin<size_type>(),
-                  sizeof(size_type) * tdigest_offsets.size(),
-                  cudaMemcpyDeviceToHost,
-                  stream);
-
-  stream.synchronize();
-
-  // extract all means and weights into a table
-  cudf::table_view tdigests_unsliced({tdv.means(), tdv.weights()});
-
-  // generate the merged (but not yet compressed) tdigests for each group.
-  std::vector<std::unique_ptr<table>> tdigests;
-  tdigests.reserve(num_groups);
-  std::transform(
-    h_outer_offsets.begin(),
-    h_outer_offsets.end() - 1,
-    std::next(h_outer_offsets.begin()),
-    std::back_inserter(tdigests),
-    [&](auto tdigest_start, auto tdigest_end) {
-      // the range of tdigests in this group
-      auto const num_tdigests = tdigest_end - tdigest_start;
-
-      // slice each tdigest from the input
-      std::vector<table_view> unmerged_tdigests;
-      unmerged_tdigests.reserve(num_tdigests);
-      auto offset_iter = std::next(h_inner_offsets.begin(), tdigest_start);
-      std::transform(offset_iter,
-                     offset_iter + num_tdigests,
-                     std::next(offset_iter),
-                     std::back_inserter(unmerged_tdigests),
-                     [&](auto start, auto end) {
-                       return cudf::detail::slice(tdigests_unsliced, {start, end}, stream);
-                     });
-
-      // merge
-      return cudf::detail::merge(unmerged_tdigests, {0}, {order::ASCENDING}, {}, stream, mr);
-    });
-
-  // generate min and max values
-  auto merged_min_col = cudf::make_numeric_column(
-    data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
-  auto min_iter = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(tdv.min_begin(), tdv.size_begin())),
-    tdigest_min{});
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        group_labels.begin(),
-                        group_labels.end(),
-                        min_iter,
-                        thrust::make_discard_iterator(),
-                        merged_min_col->mutable_view().begin<double>(),
-                        thrust::equal_to{},  // key equality check
-                        thrust::minimum{});
-
-  auto merged_max_col = cudf::make_numeric_column(
-    data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
-  auto max_iter = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(tdv.max_begin(), tdv.size_begin())),
-    tdigest_max{});
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        group_labels.begin(),
-                        group_labels.end(),
-                        max_iter,
-                        thrust::make_discard_iterator(),
-                        merged_max_col->mutable_view().begin<double>(),
-                        thrust::equal_to{},  // key equality check
-                        thrust::maximum{});
-
-  // for any empty groups, set the min and max to be 0. not technically necessary but it makes
-  // testing simpler.
-  auto group_num_weights = cudf::detail::make_counting_transform_iterator(
-    0,
-    [outer_offsets = group_offsets.data(),
-     inner_offsets =
-       tdigest_offsets.begin<size_type>()] __device__(size_type group_index) -> size_type {
-      auto const tdigest_begin = outer_offsets[group_index];
-      auto const tdigest_end   = outer_offsets[group_index + 1];
-      return inner_offsets[tdigest_end] - inner_offsets[tdigest_begin];
-    });
-  auto group_is_empty = [] __device__(size_type group_size) { return group_size == 0; };
-  thrust::replace_if(rmm::exec_policy(stream),
-                     merged_min_col->mutable_view().begin<double>(),
-                     merged_min_col->mutable_view().end<double>(),
-                     group_num_weights,
-                     group_is_empty,
-                     0);
-  thrust::replace_if(rmm::exec_policy(stream),
-                     merged_max_col->mutable_view().begin<double>(),
-                     merged_max_col->mutable_view().end<double>(),
-                     group_num_weights,
-                     group_is_empty,
-                     0);
-
-  // concatenate all the merged tdigests back into one table.
-  std::vector<table_view> tdigest_views;
-  tdigest_views.reserve(num_groups);
-  std::transform(tdigests.begin(),
-                 tdigests.end(),
-                 std::back_inserter(tdigest_views),
-                 [](std::unique_ptr<table> const& t) { return t->view(); });
-  auto merged = cudf::detail::concatenate(tdigest_views, stream, mr);
-
-  // generate cumulative weights
-  auto merged_weights     = merged->get_column(1).view();
-  auto cumulative_weights = cudf::make_numeric_column(
-    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED);
-  auto keys = cudf::detail::make_counting_transform_iterator(
-    0,
-    [group_labels      = group_labels.begin(),
-     inner_offsets     = tdigest_offsets.begin<size_type>(),
-     num_inner_offsets = tdigest_offsets.size()] __device__(int index) {
-      // what -original- tdigest index this absolute index corresponds to
-      auto const iter = thrust::prev(
-        thrust::upper_bound(thrust::seq, inner_offsets, inner_offsets + num_inner_offsets, index));
-      auto const tdigest_index = thrust::distance(inner_offsets, iter);
-
-      // what group index the original tdigest belongs to
-      return group_labels[tdigest_index];
-    });
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                keys,
-                                keys + cumulative_weights->size(),
-                                merged_weights.begin<double>(),
-                                cumulative_weights->mutable_view().begin<double>());
-
-  auto const delta = max_centroids;
-
-  // generate cluster info
-  auto [group_cluster_wl, group_cluster_offsets, total_clusters] = generate_group_cluster_info(
-    delta,
-    num_groups,
-    nearest_value_centroid_weights{cumulative_weights->view().begin<double>(),
-                                   group_offsets.data(),
-                                   tdigest_offsets.begin<size_type>()},
-    centroid_group_info{cumulative_weights->view().begin<double>(),
+  return merge_tdigests(tdv,
+                        h_group_offsets.begin(),
                         group_offsets.data(),
-                        tdigest_offsets.begin<size_type>()},
-    cumulative_centroid_weight{
-      cumulative_weights->view().begin<double>(),
-      group_labels,
-      group_offsets.data(),
-      {tdigest_offsets.begin<offset_type>(), static_cast<size_t>(tdigest_offsets.size())}},
-    false,
-    stream,
-    mr);
-
-  // input centroid values
-  auto centroids = cudf::detail::make_counting_transform_iterator(
-    0,
-    make_weighted_centroid{merged->get_column(0).view().begin<double>(),
-                           merged_weights.begin<double>()});
-
-  // compute the tdigest
-  return compute_tdigests(delta,
-                          centroids,
-                          centroids + merged->num_rows(),
-                          cumulative_centroid_weight{cumulative_weights->view().begin<double>(),
-                                                     group_labels,
-                                                     group_offsets.data(),
-                                                     {tdigest_offsets.begin<offset_type>(),
-                                                      static_cast<size_t>(tdigest_offsets.size())}},
-                          std::move(merged_min_col),
-                          std::move(merged_max_col),
-                          group_cluster_wl,
-                          std::move(group_cluster_offsets),
-                          total_clusters,
-                          false,
-                          stream,
-                          mr);
+                        group_labels.data(),
+                        group_labels.size(),
+                        num_groups,
+                        max_centroids,
+                        stream,
+                        mr);
 }
 
+}  // namespace tdigest
 }  // namespace detail
-}  // namespace groupby
 }  // namespace cudf

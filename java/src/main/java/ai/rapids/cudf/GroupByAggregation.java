@@ -243,7 +243,7 @@ public final class GroupByAggregation {
   }
 
   /**
-   * Collect the values into a set. All null values will be excluded, and all nan values are regarded as
+   * Collect the values into a set. All null values will be excluded, and all NaN values are regarded as
    * unique instances.
    */
   public static GroupByAggregation collectSet() {
@@ -270,7 +270,7 @@ public final class GroupByAggregation {
   }
 
   /**
-   * Merge the partial sets produced by multiple CollectSetAggregations. Each null/nan value will be regarded as
+   * Merge the partial sets produced by multiple CollectSetAggregations. Each null/NaN value will be regarded as
    * a unique instance.
    */
   public static GroupByAggregation mergeSets() {

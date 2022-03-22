@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,9 +69,8 @@ struct map_insert_fn {
       auto equality_fn = equality_functor<T>{col};
       return map.insert(std::make_pair(i, i), hash_fn, equality_fn);
     } else {
-      cudf_assert(false && "Unsupported type to insert in map");
+      CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
-    return false;
   }
 };
 
@@ -79,16 +78,15 @@ struct map_find_fn {
   map_type::device_view& map;
 
   template <typename T>
-  __device__ auto operator()(column_device_view const& col, size_type i)
+  __device__ map_type::device_view::iterator operator()(column_device_view const& col, size_type i)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto hash_fn     = hash_functor<T>{col};
       auto equality_fn = equality_functor<T>{col};
       return map.find(i, hash_fn, equality_fn);
     } else {
-      cudf_assert(false && "Unsupported type to insert in map");
+      CUDF_UNREACHABLE("Unsupported type to find in map");
     }
-    return map.end();
   }
 };
 
@@ -161,7 +159,7 @@ __global__ void __launch_bounds__(block_size, 1)
               }
             case Type::FIXED_LEN_BYTE_ARRAY:
               if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
-            default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
+            default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
           }
         }();
       }
