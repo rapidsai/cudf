@@ -42,7 +42,7 @@ struct Functor {
 };
 
 template <class Float, FunctorType ft>
-struct Functor<Float, ft, typename std::enable_if_t<std::is_floating_point_v<Float>>> {
+struct Functor<Float, ft, std::enable_if_t<std::is_floating_point_v<Float>>> {
   static __device__ Float f(Float x)
   {
     if (ft == BANDWIDTH_BOUND) {
@@ -120,7 +120,7 @@ struct RowHandle {
   template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
   __device__ void operator()(cudf::mutable_column_device_view source, cudf::size_type index)
   {
-    cudf_assert(false && "Unsupported type.");
+    CUDF_UNREACHABLE("Unsupported type.");
   }
 };
 

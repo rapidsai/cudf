@@ -70,7 +70,6 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
 
   auto const values_table = create_random_table(  //
     {cudf::type_id::STRING},
-    1,
     row_count{num_rows},
     table_profile);
 

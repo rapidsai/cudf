@@ -159,9 +159,9 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   // Copy construction to support const conversion
   template <typename OtherT,
             std::size_t OtherExtent,
-            typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                                      std::is_convertible_v<OtherT (*)[], T (*)[]>,
-                                    void>::type* = nullptr>
+            std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
+                               std::is_convertible_v<OtherT (*)[], T (*)[]>,
+                             void>* = nullptr>
   constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
     : base(other.data(), other.size())
   {
@@ -220,9 +220,9 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
 
   template <typename OtherT,
             std::size_t OtherExtent,
-            typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                                      std::is_convertible_v<OtherT (*)[], T (*)[]>,
-                                    void>::type* = nullptr>
+            std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
+                               std::is_convertible_v<OtherT (*)[], T (*)[]>,
+                             void>* = nullptr>
   constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
     : base(other.data(), other.size())
   {
@@ -283,9 +283,9 @@ class base_2dspan {
   template <typename OtherT,
             template <typename, size_t>
             typename OtherRowType,
-            typename std::enable_if<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
-                                                          RowType<T, dynamic_extent>>,
-                                    void>::type* = nullptr>
+            std::enable_if_t<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
+                                                   RowType<T, dynamic_extent>>,
+                             void>* = nullptr>
   constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
     : _data{other.data()}, _size{other.size()}
   {

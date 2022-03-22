@@ -40,9 +40,9 @@ static void BM_copy(benchmark::State& state, copy_type ct)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
 
   auto const source =
-    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+    create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   auto const target =
-    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+    create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
 
   // scatter indices
   auto index_map_col = make_numeric_column(

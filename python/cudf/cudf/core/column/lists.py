@@ -1,6 +1,7 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pickle
+from functools import cached_property
 from typing import List, Sequence
 
 import numpy as np
@@ -42,6 +43,7 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
+    @cached_property
     def memory_usage(self):
         n = 0
         if self.nullable:
@@ -131,7 +133,7 @@ class ListColumn(ColumnBase):
         Name: val, dtype: list
 
         """
-
+        other = self._wrap_binop_normalization(other)
         if isinstance(other.dtype, ListDtype):
             if binop == "add":
                 return concatenate_rows(
@@ -251,6 +253,9 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
+
+    def normalize_binop_value(self, other):
+        return other
 
     def _with_type_metadata(
         self: "cudf.core.column.ListColumn", dtype: Dtype

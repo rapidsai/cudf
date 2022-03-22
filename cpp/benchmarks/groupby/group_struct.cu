@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,10 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
 
 static constexpr cudf::size_type num_struct_members = 8;
 static constexpr cudf::size_type max_int            = 100;
@@ -41,18 +36,11 @@ static auto create_data_table(cudf::size_type n_rows)
 
   // The first two struct members are int32 and string.
   // The first column is also used as keys in groupby.
-  auto col_ids = std::vector<cudf::type_id>{cudf::type_id::INT32, cudf::type_id::STRING};
-
   // The subsequent struct members are int32 and string again.
-  for (cudf::size_type i = 3; i <= num_struct_members; ++i) {
-    if (i % 2) {
-      col_ids.push_back(cudf::type_id::INT32);
-    } else {
-      col_ids.push_back(cudf::type_id::STRING);
-    }
-  }
-
-  return create_random_table(col_ids, num_struct_members, row_count{n_rows}, table_profile);
+  return create_random_table(
+    cycle_dtypes({cudf::type_id::INT32, cudf::type_id::STRING}, num_struct_members),
+    row_count{n_rows},
+    table_profile);
 }
 
 // Max aggregation/scan technically has the same performance as min.

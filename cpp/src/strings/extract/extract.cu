@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <strings/regex/dispatcher.hpp>
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
@@ -77,53 +78,44 @@ struct extract_fn {
     thrust::fill(thrust::seq, d_output.begin(), d_output.end(), string_index_pair{nullptr, 0});
   }
 };
+
+struct extract_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  void operator()(column_device_view const& d_strings,
+                  cudf::detail::device_2dspan<string_index_pair>& d_indices,
+                  rmm::cuda_stream_view stream)
+  {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       d_strings.size(),
+                       extract_fn<stack_size>{d_prog, d_strings, d_indices});
+  }
+};
 }  // namespace
 
 //
 std::unique_ptr<table> extract(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   std::string const& pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const strings_count  = strings.size();
-  auto const strings_column = column_device_view::create(strings.parent(), stream);
-  auto const d_strings      = *strings_column;
-
   // compile regex into device object
-  auto prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
-  auto d_prog = *prog;
-  // extract should include groups
-  auto const groups = d_prog.group_counts();
+  auto d_prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), input.size(), stream);
+
+  auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
 
-  rmm::device_uvector<string_index_pair> indices(strings_count * groups, stream);
-  cudf::detail::device_2dspan<string_index_pair> d_indices(indices.data(), strings_count, groups);
+  auto indices = rmm::device_uvector<string_index_pair>(input.size() * groups, stream);
+  auto d_indices =
+    cudf::detail::device_2dspan<string_index_pair>(indices.data(), input.size(), groups);
 
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_SMALL>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_LARGE>{d_prog, d_strings, d_indices});
-  } else {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_ANY>{d_prog, d_strings, d_indices});
-  }
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+  regex_dispatcher(*d_prog, extract_dispatch_fn{*d_prog}, *d_strings, d_indices, stream);
 
   // build a result column for each group
   std::vector<std::unique_ptr<column>> results(groups);
@@ -135,7 +127,7 @@ std::unique_ptr<table> extract(
                                           0, [column_index, groups] __device__(size_type idx) {
                                             return (idx * groups) + column_index;
                                           }));
-    return make_strings_column(indices_itr, indices_itr + strings_count, stream, mr);
+    return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
   };
 
   std::transform(thrust::make_counting_iterator<size_type>(0),

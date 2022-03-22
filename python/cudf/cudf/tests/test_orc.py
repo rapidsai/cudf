@@ -552,7 +552,7 @@ def test_orc_writer_sliced(tmpdir):
     df_select = df.iloc[1:3]
 
     df_select.to_orc(cudf_path)
-    assert_eq(cudf.read_orc(cudf_path), df_select.reset_index(drop=True))
+    assert_eq(cudf.read_orc(cudf_path), df_select)
 
 
 @pytest.mark.parametrize(
@@ -794,7 +794,8 @@ def test_orc_bool_encode_fail():
 
     # Also validate data
     pdf = pa.orc.ORCFile(buffer).read().to_pandas()
-    assert_eq(okay_df, pdf)
+
+    assert_eq(okay_df.to_pandas(nullable=True), pdf)
 
 
 def test_nanoseconds_overflow():
@@ -840,7 +841,12 @@ def test_empty_string_columns(data):
     got_df = cudf.read_orc(buffer)
 
     assert_eq(expected, got_df)
-    assert_eq(expected_pdf, got_df)
+    assert_eq(
+        expected_pdf,
+        got_df.to_pandas(nullable=True)
+        if expected_pdf["string"].dtype == pd.StringDtype()
+        else got_df,
+    )
 
 
 @pytest.mark.parametrize("scale", [-3, 0, 3])

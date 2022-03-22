@@ -168,6 +168,10 @@ if hasArg clean; then
         rmdir ${bd} || true
     fi
     done
+
+    # Cleaning up python artifacts
+    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so$)"  | xargs rm -rf
+
 fi
 
 

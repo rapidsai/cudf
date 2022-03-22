@@ -1,8 +1,8 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
-import re
 from concurrent.futures import ThreadPoolExecutor
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -202,13 +202,25 @@ def test_approx_quantiles_int():
 
 
 @pytest.mark.parametrize("data", [[], [1, 2, 3, 10, 326497]])
-@pytest.mark.parametrize("q", [[], 0.5, 1, 0.234, [0.345], [0.243, 0.5, 1]])
+@pytest.mark.parametrize(
+    "q",
+    [
+        [],
+        0.5,
+        1,
+        0.234,
+        [0.345],
+        [0.243, 0.5, 1],
+        np.array([0.5, 1]),
+        cp.array([0.5, 1]),
+    ],
+)
 def test_misc_quantiles(data, q):
 
     pdf_series = cudf.utils.utils._create_pandas_series(data=data)
     gdf_series = cudf.Series(data)
 
-    expected = pdf_series.quantile(q)
+    expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
     assert_eq(expected, actual)
 
@@ -513,9 +525,7 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.corr,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -523,7 +533,5 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc=gsr.cov,
         lfunc_args_and_kwargs=([psr],),
         rfunc_args_and_kwargs=([gsr],),
-        expected_error_message=re.escape(
-            f"cannot perform covarience with types {gsr.dtype}, {gsr.dtype}"
-        ),
+        compare_error_message=False,
     )

@@ -147,8 +147,8 @@ static void BM_join(state_type& state, Join JoinFunc)
   // Benchmark conditional join
   if constexpr (std::is_same_v<state_type, benchmark::State> and is_conditional) {
     // Common column references.
-    const auto col_ref_left_0  = cudf::ast::column_reference(0);
-    const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+    auto const col_ref_left_0  = cudf::ast::column_reference(0);
+    auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto left_zero_eq_right_zero =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 

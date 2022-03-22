@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,8 +297,7 @@ struct replace_nulls_functor {
  *        `replace_nulls` with the appropriate data types.
  */
 struct replace_nulls_scalar_kernel_forwarder {
-  template <typename col_type,
-            typename std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::scalar const& replacement,
                                            rmm::cuda_stream_view stream,

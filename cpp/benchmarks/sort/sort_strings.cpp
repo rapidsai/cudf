@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ static void BM_sort(benchmark::State& state)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
 
-  auto const table = create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows});
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);

@@ -15,6 +15,9 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/dispatcher.hpp>
+#include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -25,9 +28,6 @@
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -72,6 +72,27 @@ struct findall_fn {
       begin = end + (begin == end);
       end   = d_str.length();
     }
+  }
+};
+
+struct findall_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  std::unique_ptr<column> operator()(column_device_view const& d_strings,
+                                     size_type total_matches,
+                                     offset_type const* d_offsets,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    rmm::device_uvector<string_index_pair> indices(total_matches, stream);
+
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       d_strings.size(),
+                       findall_fn<stack_size>{d_strings, d_prog, d_offsets, indices.data()});
+
+    return make_strings_column(indices.begin(), indices.end(), stream, mr);
   }
 };
 
@@ -121,30 +142,11 @@ std::unique_ptr<column> findall_record(
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Create indices vector with the total number of groups that will be extracted
-  auto total_matches = cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
+  auto const total_matches =
+    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
 
-  rmm::device_uvector<string_index_pair> indices(total_matches, stream);
-  auto d_indices = indices.data();
-  auto begin     = thrust::make_counting_iterator<size_type>(0);
-
-  // Build the string indices
-  auto const regex_insts = d_prog->insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    findall_fn<RX_STACK_SMALL> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    findall_fn<RX_STACK_MEDIUM> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    findall_fn<RX_STACK_LARGE> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else {
-    findall_fn<RX_STACK_ANY> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  }
-
-  // Build the child strings column from the resulting indices
-  auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto strings_output = regex_dispatcher(
+    *d_prog, findall_dispatch_fn{*d_prog}, *d_strings, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings
   return make_lists_column(strings_count,

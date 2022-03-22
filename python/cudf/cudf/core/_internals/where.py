@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import warnings
 from typing import Any, Optional, Tuple, Union, cast
@@ -264,7 +264,7 @@ def where(
                 )
             # Setting `frame` column names to `cond`
             # as `cond` has no column names.
-            cond.columns = frame.columns
+            cond._set_column_names_like(frame)
 
         (source_df, others,) = _normalize_columns_and_scalars_type(
             frame, other

@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+import warnings
 from numbers import Number
 
 import numpy as np
@@ -10,6 +11,10 @@ from cudf.core.frame import Frame
 
 
 def sin(arbitrary):
+    warnings.warn(
+        "sin is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.sin(arbitrary)
     else:
@@ -17,6 +22,10 @@ def sin(arbitrary):
 
 
 def cos(arbitrary):
+    warnings.warn(
+        "cos is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.cos(arbitrary)
     else:
@@ -24,6 +33,10 @@ def cos(arbitrary):
 
 
 def tan(arbitrary):
+    warnings.warn(
+        "tan is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.tan(arbitrary)
     else:
@@ -31,6 +44,11 @@ def tan(arbitrary):
 
 
 def arcsin(arbitrary):
+    warnings.warn(
+        "arcsin is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.arcsin(arbitrary)
     else:
@@ -38,6 +56,11 @@ def arcsin(arbitrary):
 
 
 def arccos(arbitrary):
+    warnings.warn(
+        "arcsin is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.arccos(arbitrary)
     else:
@@ -45,6 +68,11 @@ def arccos(arbitrary):
 
 
 def arctan(arbitrary):
+    warnings.warn(
+        "arctan is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.arctan(arbitrary)
     else:
@@ -52,6 +80,10 @@ def arctan(arbitrary):
 
 
 def exp(arbitrary):
+    warnings.warn(
+        "exp is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.exp(arbitrary)
     else:
@@ -59,6 +91,10 @@ def exp(arbitrary):
 
 
 def log(arbitrary):
+    warnings.warn(
+        "log is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.log(arbitrary)
     else:
@@ -66,6 +102,10 @@ def log(arbitrary):
 
 
 def sqrt(arbitrary):
+    warnings.warn(
+        "sqrt is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.sqrt(arbitrary)
     else:
@@ -73,6 +113,11 @@ def sqrt(arbitrary):
 
 
 def logical_not(arbitrary):
+    warnings.warn(
+        "logical_not is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(arbitrary, Number):
         return np.logical_not(arbitrary)
     else:
@@ -80,6 +125,11 @@ def logical_not(arbitrary):
 
 
 def logical_and(lhs, rhs):
+    warnings.warn(
+        "logical_and is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.logical_and(lhs, rhs)
     else:
@@ -87,6 +137,11 @@ def logical_and(lhs, rhs):
 
 
 def logical_or(lhs, rhs):
+    warnings.warn(
+        "logical_or is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.logical_or(lhs, rhs)
     else:
@@ -94,6 +149,11 @@ def logical_or(lhs, rhs):
 
 
 def remainder(lhs, rhs):
+    warnings.warn(
+        "remainder is deprecated and will be removed in the future",
+        FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.mod(lhs, rhs)
     elif isinstance(lhs, Frame):
@@ -103,6 +163,10 @@ def remainder(lhs, rhs):
 
 
 def floor_divide(lhs, rhs):
+    warnings.warn(
+        "sin is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.floor_divide(lhs, rhs)
     elif isinstance(lhs, Frame):
@@ -112,6 +176,10 @@ def floor_divide(lhs, rhs):
 
 
 def subtract(lhs, rhs):
+    warnings.warn(
+        "sin is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.subtract(lhs, rhs)
     elif isinstance(lhs, Frame):
@@ -121,6 +189,10 @@ def subtract(lhs, rhs):
 
 
 def add(lhs, rhs):
+    warnings.warn(
+        "sin is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.add(lhs, rhs)
     elif isinstance(rhs, Frame):
@@ -130,6 +202,10 @@ def add(lhs, rhs):
 
 
 def true_divide(lhs, rhs):
+    warnings.warn(
+        "sin is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.true_divide(lhs, rhs)
     elif isinstance(rhs, Frame):
@@ -139,6 +215,10 @@ def true_divide(lhs, rhs):
 
 
 def multiply(lhs, rhs):
+    warnings.warn(
+        "sin is deprecated and will be removed in the future", FutureWarning,
+    )
+
     if isinstance(lhs, Number) and isinstance(rhs, Number):
         return np.multiply(lhs, rhs)
     elif isinstance(rhs, Frame):

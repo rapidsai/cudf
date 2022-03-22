@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -10,8 +10,8 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask>=2021.11.1,<=2022.01.0",
-    "distributed>=2021.11.1,<=2022.01.0",
+    "dask>=2022.02.1",
+    "distributed>=2022.02.1",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.4.0dev0",

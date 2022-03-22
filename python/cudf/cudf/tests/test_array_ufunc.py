@@ -51,6 +51,83 @@ def _hide_ufunc_warnings(ufunc):
 
 
 @pytest.mark.parametrize("ufunc", _UFUNCS)
+def test_ufunc_index(ufunc):
+    # Note: This test assumes that all ufuncs are unary or binary.
+    fname = ufunc.__name__
+
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    pandas_args = args = [
+        cudf.Index(cp.random.randint(low=1, high=10, size=N),)
+        for _ in range(ufunc.nin)
+    ]
+
+    try:
+        got = ufunc(*args)
+    except AttributeError as e:
+        # We xfail if we don't have an explicit dispatch and cupy doesn't have
+        # the method so that we can easily identify these methods. As of this
+        # writing, the only missing methods are isnat and heaviside.
+        if "module 'cupy' has no attribute" in str(e):
+            pytest.xfail(reason="Operation not supported by cupy")
+        raise
+
+    expect = ufunc(*(arg.to_pandas() for arg in pandas_args))
+
+    try:
+        if ufunc.nout > 1:
+            for g, e in zip(got, expect):
+                assert_eq(g, e, check_exact=False)
+        else:
+            assert_eq(got, expect, check_exact=False)
+    except AssertionError:
+        # TODO: This branch can be removed when
+        # https://github.com/rapidsai/cudf/issues/10178 is resolved
+        if fname in ("power", "float_power"):
+            if (got - expect).abs().max() == 1:
+                pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        raise
+
+
+@pytest.mark.parametrize(
+    "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
+)
+@pytest.mark.parametrize("type_", ["cupy", "numpy", "list"])
+@pytest.mark.parametrize("reflect", [True, False])
+def test_binary_ufunc_index_array(ufunc, type_, reflect):
+    N = 100
+    # Avoid zeros in either array to skip division by 0 errors. Also limit the
+    # scale to avoid issues with overflow, etc. We use ints because some
+    # operations (like bitwise ops) are not defined for floats.
+    args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
+
+    arg1 = args[1].to_cupy() if type_ == "cupy" else args[1].to_numpy()
+    if type_ == "list":
+        arg1 = arg1.tolist()
+
+    if reflect:
+        got = ufunc(arg1, args[0])
+        expect = ufunc(args[1].to_numpy(), args[0].to_pandas())
+    else:
+        got = ufunc(args[0], arg1)
+        expect = ufunc(args[0].to_pandas(), args[1].to_numpy())
+
+    if ufunc.nout > 1:
+        for g, e in zip(got, expect):
+            if type_ == "cupy" and reflect:
+                assert (cp.asnumpy(g) == e).all()
+            else:
+                assert_eq(g, e, check_exact=False)
+    else:
+        if type_ == "cupy" and reflect:
+            assert (cp.asnumpy(got) == expect).all()
+        else:
+            assert_eq(got, expect, check_exact=False)
+
+
+@pytest.mark.parametrize("ufunc", _UFUNCS)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_series(ufunc, has_nulls, indexed):
@@ -117,11 +194,11 @@ def test_ufunc_series(ufunc, has_nulls, indexed):
             for g, e in zip(got, expect):
                 if has_nulls:
                     e[mask] = np.nan
-                assert_eq(g, e)
+                assert_eq(g, e, check_exact=False)
         else:
             if has_nulls:
                 expect[mask] = np.nan
-            assert_eq(got, expect)
+            assert_eq(got, expect, check_exact=False)
     except AssertionError:
         # TODO: This branch can be removed when
         # https://github.com/rapidsai/cudf/issues/10178 is resolved
@@ -195,14 +272,14 @@ def test_binary_ufunc_series_array(ufunc, has_nulls, indexed, type_, reflect):
             if type_ == "cupy" and reflect:
                 assert (cp.asnumpy(g) == e).all()
             else:
-                assert_eq(g, e)
+                assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
             expect[mask] = np.nan
         if type_ == "cupy" and reflect:
             assert (cp.asnumpy(got) == expect).all()
         else:
-            assert_eq(got, expect)
+            assert_eq(got, expect, check_exact=False)
 
 
 @pytest.mark.parametrize(
@@ -298,11 +375,11 @@ def test_ufunc_dataframe(ufunc, has_nulls, indexed):
             for g, e in zip(got, expect):
                 if has_nulls:
                     e[mask] = np.nan
-                assert_eq(g, e)
+                assert_eq(g, e, check_exact=False)
         else:
             if has_nulls:
                 expect[mask] = np.nan
-            assert_eq(got, expect)
+            assert_eq(got, expect, check_exact=False)
     except AssertionError:
         # TODO: This branch can be removed when
         # https://github.com/rapidsai/cudf/issues/10178 is resolved

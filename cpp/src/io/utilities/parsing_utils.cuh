@@ -98,7 +98,7 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, typename std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -119,7 +119,7 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, typename std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
