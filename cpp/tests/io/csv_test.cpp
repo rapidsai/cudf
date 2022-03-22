@@ -2197,7 +2197,7 @@ TEST_F(CsvReaderTest, DtypesMapInvalid)
       .names({"A", "B"})
       .dtypes({{"A", dtype<int16_t>()}});
 
-  EXPECT_THROW(cudf_io::read_csv(in_opts), cudf::logic_error);
+  EXPECT_NO_THROW(cudf_io::read_csv(in_opts));
 }
 
 TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
