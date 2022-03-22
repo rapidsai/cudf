@@ -477,16 +477,16 @@ void select_data_types(host_span<data_type const> user_dtypes,
   }
 }
 
-void get_data_types_from_column_names(std::map<std::string, data_type> const& column_type_map,
+void get_data_types_from_column_names(std::map<std::string, data_type> const& user_dtypes,
                                       host_span<std::string const> column_names,
                                       host_span<column_parse::flags> column_flags,
                                       host_span<data_type> column_types)
 {
-  if (column_type_map.empty()) { return; }
+  if (user_dtypes.empty()) { return; }
   for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
     if (column_flags[col_idx] & column_parse::enabled) {
-      auto const col_type_it = column_type_map.find(column_names[col_idx]);
-      if (col_type_it != column_type_map.end()) {
+      auto const col_type_it = user_dtypes.find(column_names[col_idx]);
+      if (col_type_it != user_dtypes.end()) {
         // Assign the type from the map
         column_types[col_idx] = col_type_it->second;
         // Reset the inferred flag, no need to infer the types from the data
