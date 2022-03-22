@@ -30,8 +30,8 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
-# Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2022.01.0'
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
+export INSTALL_DASK_MAIN=1
 
 # ucx-py version
 export UCX_PY_VERSION='0.25.*'
@@ -108,11 +108,19 @@ conda config --show-sources
 conda list --show-channel-urls
 
 function install_dask {
-    # Install the main version of dask, distributed, and streamz
-    gpuci_logger "Install the main version of dask, distributed, and streamz"
+    # Install the conda-forge or nightly version of dask and distributed
+    gpuci_logger "Install the conda-forge or nightly version of dask and distributed"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
+    if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
+        gpuci_logger "gpuci_mamba_retry update dask"
+        gpuci_mamba_retry update dask
+        conda list
+    else
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.02.1 conda-forge::distributed>=2022.02.1 conda-forge::dask-core>=2022.02.1 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask>=2022.02.1 conda-forge::distributed>=2022.02.1 conda-forge::dask-core>=2022.02.1 --force-reinstall
+    fi
+    # Install the main version of streamz
+    gpuci_logger "Install the main version of streamz"
     # Need to uninstall streamz that is already in the env.
     pip uninstall -y streamz
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps

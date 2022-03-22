@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import itertools
 import operator
 import re
@@ -39,7 +41,8 @@ def test_series_not(dtype):
         arr = arr * (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
 
-    result = cudf.logical_not(sr).to_numpy()
+    with pytest.warns(FutureWarning, match="logical_not is deprecated"):
+        result = cudf.logical_not(sr).to_numpy()
     expect = np.logical_not(arr)
     np.testing.assert_equal(result, expect)
     np.testing.assert_equal((~sr).to_numpy(), ~arr)

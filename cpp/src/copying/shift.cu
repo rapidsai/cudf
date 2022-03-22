@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ struct shift_functor {
                    std::unique_ptr<column>>
   operator()(Args&&...)
   {
-    CUDF_FAIL("shift does not support non-fixed-width types.");
+    CUDF_FAIL("shift only supports fixed-width or string types.");
   }
 
   template <typename T, typename... Args>
@@ -125,6 +125,7 @@ struct shift_functor {
 
     // avoid assigning elements we know to be invalid.
     if (not scalar_is_valid) {
+      if (std::abs(offset) > size) { return output; }
       if (offset > 0) {
         index_begin = thrust::make_counting_iterator<size_type>(offset);
         data        = data + offset;

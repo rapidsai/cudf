@@ -17,6 +17,7 @@
 #pragma once
 
 #include "io/comp/gpuinflate.h"
+#include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
@@ -158,24 +159,25 @@ struct PageInfo {
  */
 struct ColumnChunkDesc {
   ColumnChunkDesc() = default;
-  explicit constexpr ColumnChunkDesc(size_t compressed_size_,
-                                     uint8_t* compressed_data_,
-                                     size_t num_values_,
-                                     uint16_t datatype_,
-                                     uint16_t datatype_length_,
-                                     size_t start_row_,
-                                     uint32_t num_rows_,
-                                     int16_t max_definition_level_,
-                                     int16_t max_repetition_level_,
-                                     int16_t max_nesting_depth_,
-                                     uint8_t def_level_bits_,
-                                     uint8_t rep_level_bits_,
-                                     int8_t codec_,
-                                     int8_t converted_type_,
-                                     int8_t decimal_scale_,
-                                     int32_t ts_clock_rate_,
-                                     int32_t src_col_index_,
-                                     int32_t src_col_schema_)
+  explicit ColumnChunkDesc(size_t compressed_size_,
+                           uint8_t* compressed_data_,
+                           size_t num_values_,
+                           uint16_t datatype_,
+                           uint16_t datatype_length_,
+                           size_t start_row_,
+                           uint32_t num_rows_,
+                           int16_t max_definition_level_,
+                           int16_t max_repetition_level_,
+                           int16_t max_nesting_depth_,
+                           uint8_t def_level_bits_,
+                           uint8_t rep_level_bits_,
+                           int8_t codec_,
+                           int8_t converted_type_,
+                           LogicalType logical_type_,
+                           int8_t decimal_scale_,
+                           int32_t ts_clock_rate_,
+                           int32_t src_col_index_,
+                           int32_t src_col_schema_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -194,6 +196,7 @@ struct ColumnChunkDesc {
       column_data_base{nullptr},
       codec(codec_),
       converted_type(converted_type_),
+      logical_type(logical_type_),
       decimal_scale(decimal_scale_),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
@@ -222,6 +225,7 @@ struct ColumnChunkDesc {
   void** column_data_base;                    // base pointers of column data
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
+  LogicalType logical_type;                   // logical type
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 

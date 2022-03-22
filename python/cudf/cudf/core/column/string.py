@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import re
 import warnings
@@ -5398,10 +5397,7 @@ class StringColumn(column.ColumnBase):
         return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
-        self,
-        fill_value: Any = None,
-        method: builtins.str = None,
-        dtype: Dtype = None,
+        self, fill_value: Any = None, method: str = None, dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):
@@ -5430,32 +5426,57 @@ class StringColumn(column.ColumnBase):
     def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         return self._find_first_and_last(value)[1]
 
-    def normalize_binop_value(self, other) -> "column.ColumnBase":
-        # fastpath: gpu scalar
-        if isinstance(other, cudf.Scalar) and other.dtype == "object":
-            return column.as_column(other, length=len(self))
-        if isinstance(other, column.ColumnBase):
-            return other.astype(self.dtype)
-        elif isinstance(other, str) or other is None:
-            col = utils.scalar_broadcast_to(
+    def normalize_binop_value(
+        self, other
+    ) -> Union[column.ColumnBase, cudf.Scalar]:
+        if (
+            isinstance(other, (column.ColumnBase, cudf.Scalar))
+            and other.dtype == "object"
+        ):
+            return other
+        if isinstance(other, str) or other is None:
+            return utils.scalar_broadcast_to(
                 other, size=len(self), dtype="object"
             )
-            return col
-        elif isinstance(other, np.ndarray) and other.ndim == 0:
-            col = utils.scalar_broadcast_to(
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            return utils.scalar_broadcast_to(
                 other.item(), size=len(self), dtype="object"
             )
-            return col
-        else:
-            raise TypeError(f"cannot broadcast {type(other)}")
+        raise TypeError(f"cannot broadcast {type(other)}")
 
     def binary_operator(
-        self, op: builtins.str, rhs, reflect: bool = False
+        self, op: str, rhs, reflect: bool = False
     ) -> "column.ColumnBase":
-        lhs = self
-        if reflect:
-            lhs, rhs = rhs, lhs
+        # Handle object columns that are empty or all nulls when performing
+        # binary operations
+        # See https://github.com/pandas-dev/pandas/issues/46332
+        if self.null_count == len(self):
+            if op in {
+                "add",
+                "sub",
+                "mul",
+                "mod",
+                "pow",
+                "truediv",
+                "floordiv",
+                "radd",
+                "rsub",
+                "rmul",
+                "rmod",
+                "rpow",
+                "rtruediv",
+                "rfloordiv",
+            }:
+                return self
+            elif op in {"eq", "lt", "le", "gt", "ge"}:
+                return self.notnull()
+            elif op == "ne":
+                return self.isnull()
+
+        rhs = self._wrap_binop_normalization(rhs)
+
         if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
+            lhs, rhs = (rhs, self) if reflect else (self, rhs)
             if op == "add":
                 return cast(
                     "column.ColumnBase",
@@ -5465,13 +5486,12 @@ class StringColumn(column.ColumnBase):
                         na_rep=cudf.Scalar(None, "str"),
                     ),
                 )
-            elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
+            elif op in {"eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"}:
                 return libcudf.binaryop.binaryop(
                     lhs=lhs, rhs=rhs, op=op, dtype="bool"
                 )
-
         raise TypeError(
-            f"{op} operator not supported between {type(self)} and {type(rhs)}"
+            f"{op} not supported between {type(self)} and {type(rhs)}"
         )
 
     @copy_docstring(column.ColumnBase.view)
