@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
  */
 
 #include "writer_impl.hpp"
-#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+
+#include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
 
@@ -71,9 +73,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
-    default:
-      CUDF_EXPECTS(false, "Unsupported compression type");
-      return parquet::Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
@@ -392,11 +392,17 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
-    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
+    col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type = ConvertedType::UNKNOWN;
+    col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+    if (timestamp_is_int96) {
+      col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
+    }
+    // set logical type if it's not int96
+    else {
+      col_schema.logical_type.isset.TIMESTAMP            = true;
+      col_schema.logical_type.TIMESTAMP.unit.isset.NANOS = true;
+    }
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -870,8 +876,11 @@ void writer::impl::gather_fragment_statistics(
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
   gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
-  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
-    frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(frag_stats_chunk.data(),
+                                                                      frag_stats_group.data(),
+                                                                      num_fragments * num_columns,
+                                                                      stream,
+                                                                      int96_timestamps);
   stream.synchronize();
 }
 

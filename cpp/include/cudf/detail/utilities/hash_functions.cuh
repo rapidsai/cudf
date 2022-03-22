@@ -139,7 +139,7 @@ auto __device__ inline get_element_pointer_and_size(Element const& element)
   if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
     return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
   } else {
-    cudf_assert(false && "Unsupported type.");
+    CUDF_UNREACHABLE("Unsupported type.");
   }
 }
 
@@ -334,16 +334,14 @@ template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::list_view>::operator()(
   cudf::list_view const& key) const
 {
-  cudf_assert(false && "List column hashing is not supported");
-  return 0;
+  CUDF_UNREACHABLE("List column hashing is not supported");
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_32<cudf::struct_view>::operator()(
   cudf::struct_view const& key) const
 {
-  cudf_assert(false && "Direct hashing of struct_view is not supported");
-  return 0;
+  CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }
 
 template <typename Key>
@@ -551,16 +549,14 @@ template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<cudf::list_view>::operator()(
   cudf::list_view const& key) const
 {
-  cudf_assert(false && "List column hashing is not supported");
-  return 0;
+  CUDF_UNREACHABLE("List column hashing is not supported");
 }
 
 template <>
 hash_value_type __device__ inline SparkMurmurHash3_32<cudf::struct_view>::operator()(
   cudf::struct_view const& key) const
 {
-  cudf_assert(false && "Direct hashing of struct_view is not supported");
-  return 0;
+  CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }
 
 /**
@@ -577,8 +573,7 @@ struct IdentityHash {
   constexpr std::enable_if_t<!std::is_arithmetic_v<Key>, return_type> operator()(
     Key const& key) const
   {
-    cudf_assert(false && "IdentityHash does not support this data type");
-    return 0;
+    CUDF_UNREACHABLE("IdentityHash does not support this data type");
   }
 
   template <typename return_type = result_type>
