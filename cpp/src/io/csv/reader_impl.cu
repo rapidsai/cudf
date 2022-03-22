@@ -457,36 +457,30 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
   return {rmm::device_uvector<char>{0, stream}, selected_rows_offsets{stream}};
 }
 
-void select_data_types(host_span<column_parse::flags> column_flags,
-                       std::vector<data_type> const& dtypes,
+void select_data_types(host_span<data_type const> user_dtypes,
+                       host_span<column_parse::flags> column_flags,
+
                        host_span<data_type> column_types)
 {
-  if (dtypes.empty()) { return; }
-  if (dtypes.size() == 1) {
-    // If it's a single dtype, assign that dtype to all active columns
-    for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
-      if (column_flags[col_idx] & column_parse::enabled) {
-        column_types[col_idx] = dtypes[0];
-        column_flags[col_idx] &= ~column_parse::inferred;
-      }
-    }
-  } else {
-    // If it's a list, assign dtypes to active columns in the given order
-    CUDF_EXPECTS(dtypes.size() >= column_flags.size(),
-                 "Specify data types for all columns in file, or use a dictionary/map");
+  if (user_dtypes.empty()) { return; }
 
-    for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
-      if (column_flags[col_idx] & column_parse::enabled) {
-        column_types[col_idx] = dtypes[col_idx];
-        column_flags[col_idx] &= ~column_parse::inferred;
-      }
+  CUDF_EXPECTS(user_dtypes.size() == 1 || user_dtypes.size() == column_flags.size(),
+               "Specify data types for all columns in file, or use a dictionary/map");
+
+  for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
+    if (column_flags[col_idx] & column_parse::enabled) {
+      // If it's a single dtype, assign that dtype to all active columns
+      auto const& dtype     = user_dtypes.size() == 1 ? user_dtypes[0] : user_dtypes[col_idx];
+      column_types[col_idx] = dtype;
+      // Reset the inferred flag, no need to infer the types from the data
+      column_flags[col_idx] &= ~column_parse::inferred;
     }
   }
 }
 
-void get_data_types_from_column_names(host_span<column_parse::flags> column_flags,
-                                      std::map<std::string, data_type> const& column_type_map,
-                                      std::vector<std::string> const& column_names,
+void get_data_types_from_column_names(std::map<std::string, data_type> const& column_type_map,
+                                      host_span<std::string const> column_names,
+                                      host_span<column_parse::flags> column_flags,
                                       host_span<data_type> column_types)
 {
   if (column_type_map.empty()) { return; }
@@ -626,22 +620,22 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
 
 std::vector<data_type> determine_column_types(csv_reader_options const& reader_opts,
                                               parse_options const& parse_opts,
-                                              host_span<column_parse::flags> column_flags,
-                                              std::vector<std::string> const& column_names,
+                                              host_span<std::string const> column_names,
                                               device_span<char const> data,
                                               device_span<uint64_t const> row_offsets,
                                               int32_t num_records,
+                                              host_span<column_parse::flags> column_flags,
                                               rmm::cuda_stream_view stream)
 {
   std::vector<data_type> column_types(column_flags.size());
 
   std::visit(cudf::detail::visitor_overload{
                [&](const std::vector<data_type>& user_dtypes) {
-                 return select_data_types(column_flags, user_dtypes, column_types);
+                 return select_data_types(user_dtypes, column_flags, column_types);
                },
                [&](const std::map<std::string, data_type>& user_dtypes) {
                  return get_data_types_from_column_names(
-                   column_flags, user_dtypes, column_names, column_types);
+                   user_dtypes, column_names, column_flags, column_types);
                }},
              reader_opts.get_dtypes());
   infer_column_types(parse_opts,
@@ -790,7 +784,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
   auto const column_types = determine_column_types(
-    reader_opts, parse_opts, column_flags, column_names, data, row_offsets, num_records, stream);
+    reader_opts, parse_opts, column_names, data, row_offsets, num_records, column_flags, stream);
 
   auto metadata    = table_metadata{};
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
