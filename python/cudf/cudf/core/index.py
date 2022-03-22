@@ -113,7 +113,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
             index_class_type = IntervalIndex
     else:
         index_class_type = cudf.MultiIndex
-    return index_class_type._from_data(data, None, name)
+    return index_class_type._from_data(data, name)
 
 
 def _index_from_columns(
@@ -375,7 +375,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 other._step,
             ):
                 return True
-        return Int64Index._from_data(self._data).equals(other)
+        return self._as_int64().equals(other)
 
     @_cudf_nvtx_annotate
     def serialize(self):
@@ -743,6 +743,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
             [self._values.apply_boolean_mask(boolean_mask)], [self.name]
         )
 
+    def repeat(self, repeats, axis=None):
+        return self._as_int64().repeat(repeats, axis)
+
     def _split(self, splits):
         return Int64Index._from_columns(
             [self._values.columns_split(splits)], [self.name]
@@ -838,7 +841,16 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         return NotImplemented
 
+    @classmethod
     @_cudf_nvtx_annotate
+    def _from_data(
+        cls, data: MutableMapping, name: Any = None
+    ) -> GenericIndex:
+        out = super()._from_data(data=data)
+        if name is not None:
+            out.name = name
+        return out
+
     def _binaryop(
         self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
     ) -> SingleColumnFrame:
@@ -912,22 +924,28 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if not isinstance(other, BaseIndex):
+        if (
+            other is None
+            or not isinstance(other, BaseIndex)
+            or len(self) != len(other)
+        ):
             return False
 
-        check_types = False
+        check_dtypes = False
 
         self_is_categorical = isinstance(self, CategoricalIndex)
         other_is_categorical = isinstance(other, CategoricalIndex)
         if self_is_categorical and not other_is_categorical:
             other = other.astype(self.dtype)
-            check_types = True
+            check_dtypes = True
         elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
-            check_types = True
+            check_dtypes = True
 
         try:
-            return super().equals(other, check_types=check_types)
+            return self._column.equals(
+                other._column, check_dtypes=check_dtypes
+            )
         except TypeError:
             return False
 
@@ -1262,6 +1280,11 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             order=order,
             ascending=ascending,
             na_position=na_position,
+        )
+
+    def repeat(self, repeats, axis=None):
+        return self._from_columns_like_self(
+            Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
 
 
