@@ -51,4 +51,6 @@ void struct_compare(mutable_column_view& out,
     mutable_column_view&, __VA_ARGS__, bool, bool, bool, rmm::cuda_stream_view);
 INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<nullate::DYNAMIC>);
 INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<nullate::DYNAMIC, true>);
+INSTANTIATE_STRUCT_COMPARE(row_lexicographic_or_equal_comparator<nullate::DYNAMIC, true>);
+
 }  //  namespace cudf

@@ -20,6 +20,7 @@
 #include <binaryop/compiled/operation.cuh>
 #include <binaryop/compiled/struct_binary_ops.cuh>
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/structs/utilities.hpp>
@@ -289,10 +290,9 @@ void apply_binary_op(mutable_column_view& out,
                      rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    auto op_order        = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
-                             ? order::DESCENDING
-                             : order::ASCENDING;
-    auto accept_equality = detail::is_any_v<BinaryOperator, ops::GreaterEqual, ops::LessEqual>;
+    auto op_order = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
+                      ? order::DESCENDING
+                      : order::ASCENDING;
     auto const nullability =
       structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
         ? structs::detail::column_nullability::FORCE
@@ -306,20 +306,31 @@ void apply_binary_op(mutable_column_view& out,
     auto d_rhs = table_device_view::create(rhs_flattened);
     auto compare_orders =
       cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
-
-    detail::struct_compare(
-      out,
-      row_lexicographic_comparator<nullate::DYNAMIC, true>{
-        nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
-        *d_lhs,
-        *d_rhs,
-        compare_orders.data(),
-        nullptr,
-        accept_equality},
-      is_lhs_scalar,
-      is_rhs_scalar,
-      false,
-      stream);
+    detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
+      ? detail::struct_compare(
+          out,
+          row_lexicographic_or_equal_comparator<nullate::DYNAMIC, true>{
+            nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
+            *d_lhs,
+            *d_rhs,
+            compare_orders.data(),
+            nullptr},
+          is_lhs_scalar,
+          is_rhs_scalar,
+          false,
+          stream)
+      : detail::struct_compare(
+          out,
+          row_lexicographic_comparator<nullate::DYNAMIC, true>{
+            nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
+            *d_lhs,
+            *d_rhs,
+            compare_orders.data(),
+            nullptr},
+          is_lhs_scalar,
+          is_rhs_scalar,
+          false,
+          stream);
   } else {
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
 
