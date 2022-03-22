@@ -1856,6 +1856,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ]:
         index = self._index
 
+        def make_operands(left_data, right_data, right_default=None, fill_requires_key=False):
+            return {
+                name: (
+                    left,
+                    right_data.get(name, right_default),
+                    reflect,
+                    fill_value
+                    if (not fill_requires_key or name in right_data)
+                    else None,
+                )
+                for name, left in left_data.items()
+            }
+
+        def add_right_operands(operands, left_data, right_data, left_default):
+            for name, col in right_data.items():
+                if name not in left_data:
+                    operands[name] = (left_default(), col, reflect, fill_value)
+
         # Check built-in types first for speed.
         if isinstance(other, (list, dict, Sequence, MutableMapping)):
             if len(other) != self._num_columns:
@@ -1872,23 +1890,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(other, (dict, MutableMapping)):
             # pandas checks the length of other, but not the actual elements,
             # so we can end up with a mismatch (which produces nulls).
-            operands = {
-                name: (left, other.get(name), reflect, fill_value)
-                for name, left in self._data.items()
-            }
+            operands = make_operands(self._data, other)
         elif isinstance(other, Series):
             other = dict(zip(other.index.values_host, other.values_host))
-            operands = {
-                name: (left, other.get(name), reflect, fill_value)
-                for name, left in self._data.items()
-            }
-            for col in other:
-                if col not in self._column_names:
-                    # We match pandas semantics here by performing binops
-                    # between a NaN (not NULL!) column and the actual
-                    # values, which results in nans, the pandas output.
-                    left = as_column(np.nan, length=self._num_rows)
-                    operands[col] = (left, other[col], reflect, fill_value)
+            operands = make_operands(self._data, other)
+
+            # For keys in right but not left, we match pandas semantics here by
+            # performing binops between a NaN (not NULL!) column and the actual
+            # values, which results in nans, the pandas output.
+            for name, col in other.items():
+                if name not in self._data:
+                    operands[name] = (as_column(np.nan, length=self._num_rows), col, reflect, fill_value)
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
@@ -1905,18 +1917,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
 
             lhs, rhs = _align_indices(self, other)
-            # Return the aligned index.
             index = lhs._index
-
-            operands = {
-                name: (
-                    lcol,
-                    rhs._data.get(name, fill_value),
-                    reflect,
-                    fill_value if name in rhs._data else None,
-                )
-                for name, lcol in lhs._data.items()
-            }
+            operands = make_operands(lhs._data, rhs._data, fill_value, True)
+            add_right_operands(operands, lhs._data, rhs._data, lambda: None)
             for name, col in rhs._data.items():
                 if name not in lhs._data:
                     operands[name] = (fill_value, col, reflect, None)
