@@ -25,13 +25,13 @@ namespace rolling {
 namespace jit {
 
 template <typename WindowType>
-cudf::size_type __device__ get_window(WindowType window, cudf::size_type index)
+cudf::size_type __device__ get_window(WindowType window, cudf::thread_index_type index)
 {
   return window[index];
 }
 
 template <>
-cudf::size_type __device__ get_window(cudf::size_type window, cudf::size_type index)
+cudf::size_type __device__ get_window(cudf::size_type window, cudf::thread_index_type index)
 {
   return window;
 }
@@ -51,8 +51,8 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
                                 FollowingWindowType following_window_begin,
                                 cudf::size_type min_periods)
 {
-  thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
 
   cudf::size_type warp_valid_count{0};
 
@@ -62,14 +62,16 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
     // for CUDA 10.0 and below (fixed in CUDA 10.1)
     volatile cudf::size_type count = 0;
 
-    cudf::size_type preceding_window = get_window(preceding_window_begin, i);
-    cudf::size_type following_window = get_window(following_window_begin, i);
+    int64_t const preceding_window = get_window(preceding_window_begin, i);
+    int64_t const following_window = get_window(following_window_begin, i);
 
     // compute bounds
-    cudf::size_type start = min(nrows, max(0, static_cast<size_type>(i) - preceding_window + 1));
-    cudf::size_type end   = min(nrows, max(0, static_cast<size_type>(i) + following_window + 1));
-    cudf::size_type start_index = min(start, end);
-    cudf::size_type end_index   = max(start, end);
+    auto const start = static_cast<cudf::size_type>(
+      min(static_cast<int64_t>(nrows), max(int64_t{0}, i - preceding_window + 1)));
+    auto const end = static_cast<cudf::size_type>(
+      min(static_cast<int64_t>(nrows), max(int64_t{0}, i + following_window + 1)));
+    auto const start_index = min(start, end);
+    auto const end_index   = max(start, end);
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -79,7 +81,7 @@ __global__ void gpu_rolling_new(cudf::size_type nrows,
     OutType val = agg_op::template operate<OutType, InType>(in_col, start_index, count);
 
     // check if we have enough input samples
-    bool output_is_valid = (count >= min_periods);
+    bool const output_is_valid = (count >= min_periods);
 
     // set the mask
     const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
