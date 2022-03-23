@@ -240,12 +240,11 @@ class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
   thrust::optional<bool> _nullable;
+  bool _list_column_is_map  = false;
+  bool _use_int96_timestamp = false;
   // bool _output_as_binary = false;
-  bool _list_column_is_map   = false;
-  bool _use_int96_timestamp  = false;
-  bool _has_parquet_field_id = false;
-  int32_t _parquet_field_id;
   thrust::optional<uint8_t> _decimal_precision;
+  thrust::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
 
  public:
@@ -334,8 +333,7 @@ class column_in_metadata {
    */
   column_in_metadata& set_parquet_field_id(int32_t field_id)
   {
-    _has_parquet_field_id = true;
-    _parquet_field_id     = field_id;
+    _parquet_field_id = field_id;
     return *this;
   }
 
@@ -393,6 +391,18 @@ class column_in_metadata {
    *         Check using `is_decimal_precision_set()` first.
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+
+  /**
+   * @brief Get whether parquet field id has been set for this decimal column
+   */
+  [[nodiscard]] bool is_parquet_field_id_set() const { return _parquet_field_id.has_value(); }
+
+  /**
+   * @brief Get the parquet field id that was set for this column.
+   * @throws If parquet field id was not set for this column.
+   *         Check using `is_parquet_field_set()` first.
+   */
+  [[nodiscard]] uint8_t get_parquet_field_id() const { return _parquet_field_id.value(); }
 
   /**
    * @brief Get the number of children of this column
