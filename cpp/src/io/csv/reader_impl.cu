@@ -550,7 +550,7 @@ void infer_column_types(parse_options const& parse_opts,
     } else if (stats.float_count > 0L ||
                (stats.float_count == 0L && int_count_total > 0L && stats.null_count > 0L)) {
       // The second condition has been added to conform to
-      // PANDAS which states that a column of integers with
+      // pandas which states that a column of integers with
       // a single NULL record need to be treated as floats.
       column_types[col_idx] = data_type(cudf::type_id::FLOAT64);
     } else if (stats.big_int_count == 0) {
@@ -653,7 +653,7 @@ std::vector<data_type> determine_column_types(csv_reader_options const& reader_o
                column_types.cend(),
                std::back_inserter(active_col_types),
                [&column_flags, &column_types](auto const& dtype) {
-                 auto const idx = &dtype - column_types.data();
+                 auto const idx = std::distance(column_types.data(), &dtype);
                  return column_flags[idx] & column_parse::enabled;
                });
 
