@@ -38,6 +38,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 
 #include <limits>
 #include <memory>

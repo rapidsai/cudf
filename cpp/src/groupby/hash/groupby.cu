@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,8 @@
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/copy.h>
 
 #include <memory>
 #include <unordered_set>

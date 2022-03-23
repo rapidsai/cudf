@@ -26,9 +26,13 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/tabulate.h>
+
 #include <type_traits>
 
 namespace cudf {

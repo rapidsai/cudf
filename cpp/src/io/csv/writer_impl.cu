@@ -46,6 +46,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
+#include <thrust/tabulate.h>
 
 #include <algorithm>
 #include <memory>

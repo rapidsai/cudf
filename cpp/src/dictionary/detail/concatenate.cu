@@ -32,6 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>

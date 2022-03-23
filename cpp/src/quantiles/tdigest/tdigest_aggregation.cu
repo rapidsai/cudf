@@ -25,16 +25,16 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/utilities/span.hpp>
-
-#include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/remove.h>
 
 namespace cudf {
 namespace detail {

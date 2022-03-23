@@ -26,6 +26,7 @@
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/reverse.h>
 
 using hash_value_type = uint32_t;
 

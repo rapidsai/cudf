@@ -36,6 +36,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/tabulate.h>
+
 #include <nvcomp/snappy.h>
 
 #include <algorithm>

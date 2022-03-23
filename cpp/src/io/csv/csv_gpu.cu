@@ -39,6 +39,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
+#include <thrust/remove.h>
 #include <thrust/transform.h>
 
 #include <type_traits>
