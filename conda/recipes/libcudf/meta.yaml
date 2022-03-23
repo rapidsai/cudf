@@ -150,7 +150,9 @@ test:
     - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/contains.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
     - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp

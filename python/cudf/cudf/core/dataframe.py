@@ -372,9 +372,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = self._frame._get_columns_by_index(arg[1])
-
-        columns_df._index = self._frame._index
+        columns_df = self._frame._from_data(
+            self._frame._data.select_by_index(arg[1]), self._frame._index
+        )
 
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
@@ -422,9 +422,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
-        columns = self._frame._get_columns_by_index(key[1])
-
-        for col in columns:
+        # TODO: Determine if this usage is prevalent enough to expose this
+        # selection logic at a higher level than ColumnAccessor.
+        for col in self._frame._data.get_labels_by_index(key[1]):
             self._frame[col].iloc[key[0]] = value
 
     def _getitem_scalar(self, arg):
@@ -612,7 +612,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 new_df = self._from_arrays(data, index=index, columns=columns)
 
             self._data = new_df._data
-            self.index = new_df._index
+            self._index = new_df._index
+            self._check_data_index_length_match()
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
             if len(arr_interface["descr"]) == 1:
@@ -621,7 +622,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
-            self.index = new_df._index
+            self._index = new_df._index
+            self._check_data_index_length_match()
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
@@ -632,7 +634,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     new_df = DataFrame(data=data, index=index)
 
                     self._data = new_df._data
-                    self.index = new_df._index
+                    self._index = new_df._index
+                    self._check_data_index_length_match()
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -652,6 +655,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if dtype:
             self._data = self.astype(dtype)._data
+
+    def _check_data_index_length_match(df: DataFrame) -> None:
+        # Validate that the number of rows in the data matches the index if the
+        # data is not empty. This is a helper for the constructor.
+        if df._data.nrows > 0 and df._data.nrows != len(df._index):
+            raise ValueError(
+                f"Shape of passed values is {df.shape}, indices imply "
+                f"({len(df._index)}, {df._num_columns})"
+            )
 
     @_cudf_nvtx_annotate
     def _init_from_series_list(self, data, columns, index):
@@ -856,9 +868,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index: Optional[BaseIndex] = None,
         columns: Any = None,
     ) -> DataFrame:
-        out = super()._from_data(data, index)
-        if index is None:
-            out.index = RangeIndex(out._data.nrows)
+        out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
         return out
@@ -1843,7 +1853,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # implementation assumes that binary operations between a column and
         # NULL are always commutative, even for binops (like subtraction) that
         # are normally anticommutative.
-        # TODO: We probably should support pandas DataFrame/Series objects.
+        # TODO: The above should no longer be necessary once we switch to
+        # properly invoking the operator since we can then rely on reflection.
         if isinstance(rhs, Sequence):
             # TODO: Consider validating sequence length (pandas does).
             operands = {
@@ -5600,7 +5611,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
-        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        name_index = cudf.DataFrame._from_data({0: self._column_names}).tile(
+            self.shape[0]
+        )
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
         if isinstance(self._index, MultiIndex):
             index_names = self._index.names + [None]

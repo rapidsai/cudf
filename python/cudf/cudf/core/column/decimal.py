@@ -63,46 +63,23 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def binary_operator(self, op, other, reflect=False):
         if reflect:
             self, other = other, self
-
-        if not isinstance(
-            other,
-            (
-                DecimalBaseColumn,
-                cudf.core.column.NumericalColumn,
-                cudf.Scalar,
-            ),
-        ):
-            raise TypeError(
-                f"Operator {op} not supported between"
-                f"{str(type(self))} and {str(type(other))}"
-            )
-        elif isinstance(
-            other, cudf.core.column.NumericalColumn
-        ) and not is_integer_dtype(other.dtype):
-            raise TypeError(
-                f"Only decimal and integer column is supported for {op}."
-            )
-        if isinstance(other, cudf.core.column.NumericalColumn):
-            other = other.as_decimal_column(
-                self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
-            )
-        if not isinstance(self.dtype, other.dtype.__class__):
-            if (
-                self.dtype.precision == other.dtype.precision
-                and self.dtype.scale == other.dtype.scale
-            ):
-                other = other.astype(self.dtype)
+        # Decimals in libcudf don't support truediv, see
+        # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+        op = op.replace("true", "")
+        other = self._wrap_binop_normalization(other)
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         try:
-            if op in ("add", "sub", "mul", "div"):
+            if op in {"add", "sub", "mul", "div"}:
                 output_type = _get_decimal_type(self.dtype, other.dtype, op)
                 result = libcudf.binaryop.binaryop(
                     self, other, op, output_type
                 )
+                # TODO:  Why is this necessary? Why isn't the result's
+                # precision already set correctly based on output_type?
                 result.dtype.precision = output_type.precision
-            elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            elif op in {"eq", "ne", "lt", "gt", "le", "ge"}:
                 result = libcudf.binaryop.binaryop(self, other, op, bool)
         except RuntimeError as e:
             if "Unsupported operator for these types" in str(e):
@@ -140,14 +117,41 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result._with_type_metadata(self.dtype)
 
     def normalize_binop_value(self, other):
-        if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
-            return cudf.Scalar(Decimal(other))
-        elif isinstance(other, cudf.Scalar) and isinstance(
-            other.dtype, cudf.core.dtypes.DecimalDtype
+        if isinstance(other, ColumnBase):
+            if isinstance(other, cudf.core.column.NumericalColumn):
+                if not is_integer_dtype(other.dtype):
+                    raise TypeError(
+                        "Decimal columns only support binary operations with "
+                        "integer numerical columns."
+                    )
+                other = other.as_decimal_column(
+                    self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
+                )
+            elif not isinstance(other, DecimalBaseColumn):
+                raise TypeError(
+                    f"Binary operations are not supported between"
+                    f"{str(type(self))} and {str(type(other))}"
+                )
+            elif not isinstance(self.dtype, other.dtype.__class__):
+                # This branch occurs if we have a DecimalBaseColumn of a
+                # different size (e.g. 64 instead of 32).
+                if (
+                    self.dtype.precision == other.dtype.precision
+                    and self.dtype.scale == other.dtype.scale
+                ):
+                    other = other.astype(self.dtype)
+
+            return other
+        if isinstance(other, cudf.Scalar) and isinstance(
+            # TODO: Should it be possible to cast scalars of other numerical
+            # types to decimal?
+            other.dtype,
+            cudf.core.dtypes.DecimalDtype,
         ):
             return other
-        else:
-            raise TypeError(f"cannot normalize {type(other)}")
+        elif is_scalar(other) and isinstance(other, (int, Decimal)):
+            return cudf.Scalar(Decimal(other))
+        raise TypeError(f"cannot normalize {type(other)}")
 
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
@@ -255,12 +259,6 @@ class Decimal128Column(DecimalBaseColumn):
 
 class Decimal64Column(DecimalBaseColumn):
     dtype: Decimal64Dtype
-
-    def __truediv__(self, other):
-        # TODO: This override is not sufficient. While it will change the
-        # behavior of x / y for two decimal columns, it will not affect
-        # col1.binary_operator(col2), which is how Series/Index will call this.
-        return self.binary_operator("div", other)
 
     def __setitem__(self, key, value):
         if isinstance(value, np.integer):
