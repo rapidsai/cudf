@@ -1013,7 +1013,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             # TODO: switch to `apply`
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+                warnings.simplefilter("ignore::FutureWarning")
                 result = self.applymap(arg)
         return result
 
@@ -2246,7 +2246,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         warnings.warn(
             "Series.applymap is deprecated and will be removed "
-            "in a future cuDF release. Use Series.apply instead",
+            "in a future cuDF release. Use Series.apply instead.",
             FutureWarning,
         )
         if not callable(udf):
