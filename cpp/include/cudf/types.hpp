@@ -83,10 +83,11 @@ class mutable_table_view;
  * @file
  */
 
-using size_type    = int32_t;
-using bitmask_type = uint32_t;
-using valid_type   = uint8_t;
-using offset_type  = int32_t;
+using size_type         = int32_t;
+using bitmask_type      = uint32_t;
+using valid_type        = uint8_t;
+using offset_type       = int32_t;
+using thread_index_type = int64_t;
 
 /**
  * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
