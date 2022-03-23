@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,9 +240,11 @@ class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
   thrust::optional<bool> _nullable;
-  bool _list_column_is_map  = false;
-  bool _use_int96_timestamp = false;
   // bool _output_as_binary = false;
+  bool _list_column_is_map   = false;
+  bool _use_int96_timestamp  = false;
+  bool _has_parquet_field_id = false;
+  int32_t _parquet_field_id;
   thrust::optional<uint8_t> _decimal_precision;
   std::vector<column_in_metadata> children;
 
@@ -321,6 +323,19 @@ class column_in_metadata {
   column_in_metadata& set_decimal_precision(uint8_t precision)
   {
     _decimal_precision = precision;
+    return *this;
+  }
+
+  /**
+   * @brief Set the parquet field id of this column.
+   *
+   * @param field_id The parquet field id to set
+   * @return this for chaining
+   */
+  column_in_metadata& set_parquet_field_id(int32_t field_id)
+  {
+    _has_parquet_field_id = true;
+    _parquet_field_id     = field_id;
     return *this;
   }
 
