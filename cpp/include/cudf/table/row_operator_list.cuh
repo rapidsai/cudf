@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -135,19 +136,19 @@ class element_equality_comparator {
         lcol = lcol.child(0);
         rcol = rcol.child(0);
       } else if (lcol.type().id() == type_id::LIST) {
-        auto l_off = lcol.child(lists_column_view::offsets_column_index);
-        auto r_off = rcol.child(lists_column_view::offsets_column_index);
+        auto l_list_col = detail::lists_column_device_view(lcol);
+        auto r_list_col = detail::lists_column_device_view(rcol);
         for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
-          if (l_off.element<size_type>(i + 1) - l_off.element<size_type>(i) !=
-              r_off.element<size_type>(j + 1) - r_off.element<size_type>(j))
+          if (l_list_col.offset_at(i + 1) - l_list_col.offset_at(i) !=
+              r_list_col.offset_at(j + 1) - r_list_col.offset_at(j))
             return false;
         }
-        lcol        = lcol.child(lists_column_view::child_column_index);
-        rcol        = rcol.child(lists_column_view::child_column_index);
-        l_start_off = l_off.element<size_type>(l_start_off);
-        r_start_off = r_off.element<size_type>(r_start_off);
-        l_end_off   = l_off.element<size_type>(l_end_off);
-        r_end_off   = r_off.element<size_type>(r_end_off);
+        lcol        = l_list_col.child();
+        rcol        = r_list_col.child();
+        l_start_off = l_list_col.offset_at(l_start_off);
+        r_start_off = r_list_col.offset_at(r_start_off);
+        l_end_off   = l_list_col.offset_at(l_end_off);
+        r_end_off   = r_list_col.offset_at(r_end_off);
         if (l_end_off - l_start_off != r_end_off - r_start_off) { return false; }
       }
     }
