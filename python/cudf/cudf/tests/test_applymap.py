@@ -29,9 +29,10 @@ def test_applymap_round(nelem, masked):
     sr = Series(data)
 
     # Call applymap
-    out = sr.applymap(
-        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
-    )
+    with pytest.warns(FutureWarning):
+        out = sr.applymap(
+            lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
+        )
 
     if masked:
         # Fill masked values
@@ -50,7 +51,8 @@ def test_applymap_change_out_dtype():
 
     sr = Series(data)
 
-    out = sr.applymap(lambda x: float(x), out_dtype=float)
+    with pytest.warns(FutureWarning):
+        out = sr.applymap(lambda x: float(x), out_dtype=float)
 
     # Check
     expect = np.array(data, dtype=float)

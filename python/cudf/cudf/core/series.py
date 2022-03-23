@@ -1011,7 +1011,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result.name = self.name
             result.index = self.index
         else:
-            result = self.applymap(arg)
+            # TODO: switch to `apply`
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                result = self.applymap(arg)
         return result
 
     @_cudf_nvtx_annotate
