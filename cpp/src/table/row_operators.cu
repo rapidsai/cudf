@@ -20,7 +20,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operator_list.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <jit/type.hpp>

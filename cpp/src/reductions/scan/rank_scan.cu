@@ -19,7 +19,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/table/row_operator_list.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
