@@ -5664,12 +5664,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df._set_column_names_like(self)
         return df
 
-    def corr(self, method="pearson"):
+    def corr(self, method="pearson", min_periods=None):
         """Compute the correlation matrix of a DataFrame.
+
         Parameters
         ----------
         method : {'pearson', 'spearman'}, default 'pearson'
-            The correlation method to use, one of 'pearson' or 'spearman'.
+            Method used to compute correlation:
+
+            - pearson : Standard correlation coefficient
+            - spearman : Spearman rank correlation
+
+        min_periods : int, optional
+            Minimum number of observations required per pair of columns to
+            have a valid result.
 
         Returns
         -------
@@ -5682,6 +5690,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             values = self.rank().values
         else:
             raise ValueError("method must be either 'pearson', 'spearman'")
+
+        if min_periods is not None:
+            raise NotImplementedError("Unsupported argument 'min_periods'")
+
         corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
@@ -5692,6 +5704,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
+
         Parameters
         ----------
         name: optional
