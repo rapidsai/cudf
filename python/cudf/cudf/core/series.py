@@ -2413,6 +2413,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """Calculates the sample correlation between two Series,
         excluding missing values.
 
+        Parameters
+        ----------
+        other : Series
+            Series with which to compute the correlation.
+        method : {'pearson', 'spearman'}, default 'pearson'
+            Method used to compute correlation:
+
+            - pearson : Standard correlation coefficient
+            - spearman : Spearman rank correlation
+
+        min_periods : int, optional
+            Minimum number of observations needed to have a valid result.
+
         Examples
         --------
         >>> import cudf
@@ -2427,7 +2440,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if method not in {"pearson", "spearman"}:
             raise ValueError(f"Unknown method {method}")
 
-        if min_periods not in (None,):
+        if min_periods is not None:
             raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
