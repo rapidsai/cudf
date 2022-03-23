@@ -72,11 +72,10 @@ std::unique_ptr<table> findall(
  *  [ ["b"]
  *    ["a","b","b"]
  *    ["a"]
- *    null ]
+ *    [] ]
  * @endcode
  *
- * A null output row results if the pattern is not found in the corresponding row
- * input string.
+ * A null output row occurs if the corresponding input row is null.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
