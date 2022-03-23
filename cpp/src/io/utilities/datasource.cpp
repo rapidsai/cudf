@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
+#include <io/utilities/config_utils.hpp>
+
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
 #include <rmm/device_buffer.hpp>
@@ -36,9 +37,12 @@ class file_source : public datasource {
  public:
   explicit file_source(const char* filepath) : _file(filepath) {}
 
-  ~file_source() override = default;
+  virtual ~file_source() = default;
 
-  [[nodiscard]] bool supports_device_read() const override { return true; }
+  [[nodiscard]] bool supports_device_read() const override
+  {
+    return detail::cufile_integration::is_gds_enabled();
+  }
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
@@ -234,11 +238,13 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
                                                size_t offset,
                                                size_t size)
 {
-  // TODO: make configurable
-  // avoid mmap as GDS is expected to be used for most reads
-  return std::make_unique<direct_read_source>(filepath.c_str());
+  if (detail::cufile_integration::is_gds_enabled()) {
+    // avoid mmap as GDS is expected to be used for most reads
+    return std::make_unique<direct_read_source>(filepath.c_str());
+  }
+
   // Use our own memory mapping implementation for direct file reads
-  // return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
+  return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)

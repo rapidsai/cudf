@@ -16,6 +16,8 @@
 
 #include <fstream>
 
+#include <io/utilities/config_utils.hpp>
+
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -48,7 +50,10 @@ class file_sink : public data_sink {
 
   size_t bytes_written() override { return _bytes_written; }
 
-  [[nodiscard]] bool supports_device_write() const override { return true; }
+  [[nodiscard]] bool supports_device_write() const override
+  {
+    return detail::cufile_integration::is_gds_enabled();
+  }
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
