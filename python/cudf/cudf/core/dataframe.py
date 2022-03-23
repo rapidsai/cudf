@@ -5664,10 +5664,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df._set_column_names_like(self)
         return df
 
-    @_cudf_nvtx_annotate
-    def corr(self):
-        """Compute the correlation matrix of a DataFrame."""
-        corr = cupy.corrcoef(self.values, rowvar=False)
+    def corr(self, method="pearson"):
+        """Compute the correlation matrix of a DataFrame.
+        Parameters
+        ----------
+        method : {'pearson', 'spearman'}, default 'pearson'
+            The correlation method to use, one of 'pearson' or 'spearman'.
+
+        Returns
+        -------
+        DataFrame
+            The requested correlation matrix.
+        """
+        if method == "pearson":
+            values = self.values
+        elif method == "spearman":
+            values = self.rank().values
+        else:
+            raise ValueError("method must be either 'pearson', 'spearman'")
+        corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
         df._set_column_names_like(self)
@@ -5677,7 +5692,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
-
         Parameters
         ----------
         name: optional
