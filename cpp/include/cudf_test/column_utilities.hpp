@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {

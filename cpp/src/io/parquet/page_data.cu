@@ -24,11 +24,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/functional.h>
+#include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 #include <thrust/tuple.h>
 
 constexpr int block_size           = 128;

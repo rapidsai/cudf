@@ -26,7 +26,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/functional.h>
+#include <thrust/scan.h>
 #include <thrust/tabulate.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace groupby {

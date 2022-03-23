@@ -22,6 +22,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace reduction {
 namespace compound {

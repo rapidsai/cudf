@@ -36,6 +36,7 @@
 
 #include <thrust/copy.h>
 #include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 #include <cub/device/device_segmented_radix_sort.cuh>
 

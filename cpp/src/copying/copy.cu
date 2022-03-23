@@ -30,6 +30,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {

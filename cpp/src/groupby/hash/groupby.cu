@@ -49,6 +49,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 #include <unordered_set>

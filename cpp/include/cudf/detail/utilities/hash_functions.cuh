@@ -25,7 +25,10 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/reverse.h>
 
 using hash_value_type = uint32_t;

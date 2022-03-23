@@ -33,6 +33,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <src/rolling/rolling_detail.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 

@@ -33,8 +33,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
+#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
