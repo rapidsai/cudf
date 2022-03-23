@@ -300,12 +300,12 @@ add_library(
   src/io/orc/stripe_init.cu
   src/io/orc/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/parquet.cpp
   src/io/parquet/reader_impl.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
@@ -470,6 +470,7 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
@@ -480,8 +481,10 @@ add_library(
   src/text/normalize.cu
   src/text/replace.cu
   src/text/stemmer.cu
+  src/text/subword/bpe_tokenizer.cu
   src/text/subword/data_normalizer.cu
   src/text/subword/load_hash_file.cu
+  src/text/subword/load_merges_file.cu
   src/text/subword/subword_tokenize.cu
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu

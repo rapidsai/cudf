@@ -322,8 +322,7 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
   CUDF_EXPECTS(tdigest->size() == 1,
                "Encountered invalid tdigest column when converting to scalar");
   auto contents = tdigest->release();
-  return std::make_unique<struct_scalar>(
-    std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
+  return std::make_unique<struct_scalar>(table(std::move(contents.children)), true, stream, mr);
 }
 
 /**

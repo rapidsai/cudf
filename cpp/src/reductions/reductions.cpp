@@ -120,10 +120,14 @@ struct reduce_dispatch_functor {
         return reduction::merge_sets(col, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
       } break;
       case aggregation::TDIGEST: {
+        CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
+                     "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = dynamic_cast<tdigest_aggregation const*>(agg.get());
         return detail::tdigest::reduce_tdigest(col, td_agg->max_centroids, stream, mr);
       } break;
       case aggregation::MERGE_TDIGEST: {
+        CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
+                     "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = dynamic_cast<merge_tdigest_aggregation const*>(agg.get());
         return detail::tdigest::reduce_merge_tdigest(col, td_agg->max_centroids, stream, mr);
       } break;
@@ -146,8 +150,17 @@ std::unique_ptr<scalar> reduce(
       return detail::tdigest::make_empty_tdigest_scalar();
     }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+      // Under some circumstance, the output type will become the List of input type,
+      // such as: collect_list or collect_set. So, we have to handcraft the default scalar.
+      if (output_dtype.id() == type_id::LIST) {
+        auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
+        scalar->set_valid_async(false, stream);
+        return scalar;
+      }
+
       return make_default_constructed_scalar(output_dtype, stream, mr);
     }
+
     return make_empty_scalar_like(col, stream, mr);
   }
 
