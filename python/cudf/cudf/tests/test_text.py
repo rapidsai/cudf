@@ -834,12 +834,10 @@ def test_read_text_byte_range_large(datadir):
 
 
 def test_read_text_in_memory(datadir):
-    delimiter = "::"
-
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
     expected = cudf.Series(["x::", "y::", "z"])
 
-    actual = cudf.read_text(StringIO("x::y::z"), delimiter=delimiter)
+    actual = cudf.read_text(StringIO("x::y::z"), delimiter="::")
 
     assert_eq(expected, actual)
