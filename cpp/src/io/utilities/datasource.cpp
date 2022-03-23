@@ -156,6 +156,7 @@ class direct_read_source : public file_source {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
+    CUDF_EXPECTS(offset < _file.nbytes(), "Offset is past end of file");
     lseek(_file.fd(), offset, SEEK_SET);
 
     // Clamp length to available data
@@ -168,6 +169,7 @@ class direct_read_source : public file_source {
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
+    CUDF_EXPECTS(offset < _file.nbytes(), "Offset is past end of file");
     lseek(_file.fd(), offset, SEEK_SET);
 
     // Clamp length to available data
