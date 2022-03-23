@@ -2418,11 +2418,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import cudf
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
-        >>> ser1.corr(ser2)
+        >>> ser1.corr(ser2, method="pearson")
         -0.20454263717316112
+        >>> ser1.corr(ser2, method="spearman")
+        -0.5
         """
 
-        if method not in ("pearson",):
+        if method not in {"pearson", "spearman"}:
             raise ValueError(f"Unknown method {method}")
 
         if min_periods not in (None,):
@@ -2434,6 +2436,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
+        if method == "spearman":
+            lhs = lhs.rank()
+            rhs = rhs.rank()
 
         try:
             return lhs._column.corr(rhs._column)
