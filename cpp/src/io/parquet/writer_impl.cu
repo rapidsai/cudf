@@ -534,6 +534,13 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
     [&](LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
+      auto set_field_id = [&](schema_tree_node& s, column_in_metadata const& col_meta) {
+        if (schema[parent_idx].name != "list" and col_meta.is_parquet_field_id_set()) {
+          s.has_field_id = true;
+          s.field_id     = col_meta.get_parquet_field_id();
+        }
+      };
+
       if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
@@ -543,6 +550,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         struct_schema.num_children = col->num_children();
         struct_schema.parent_idx   = parent_idx;
+        set_field_id(struct_schema, col_meta);
         schema.push_back(std::move(struct_schema));
 
         auto struct_node_index = schema.size() - 1;
@@ -567,6 +575,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
+        set_field_id(list_schema_1, col_meta);
         schema.push_back(std::move(list_schema_1));
 
         schema_tree_node list_schema_2{};
@@ -599,6 +608,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         map_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
         map_schema.name         = col_meta.get_name();
+        map_schema.field_id     = col_meta.get_parquet_field_id();
         map_schema.num_children = 1;
         map_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(map_schema));
@@ -655,6 +665,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
