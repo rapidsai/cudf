@@ -2378,7 +2378,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import cudf
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
-        >>> ser1.cov(ser2, method="pearson")
+        >>> ser1.cov(ser2)
         -0.015750000000000004
         """
 
