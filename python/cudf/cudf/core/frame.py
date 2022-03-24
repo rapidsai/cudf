@@ -2372,7 +2372,25 @@ class Frame(BinaryOperand, Scannable):
         sort=False,
         indicator=False,
         suffixes=("_x", "_y"),
+        lsuffix=None,
+        rsuffix=None,
     ):
+        if indicator:
+            raise NotImplementedError(
+                "Only indicator=False is currently supported"
+            )
+
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')"
+                % (lsuffix or "_x", rsuffix or "_y")
+            )
+        else:
+            lsuffix, rsuffix = suffixes
+
         lhs, rhs = self, right
         merge_cls = Merge
         if how == "right":
