@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -94,6 +94,9 @@ conda activate rapids
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
+gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc" 'arrow-cpp-proc=*=cuda'
+gpuci_mamba_retry install -y "arrow-cpp=7.0.0" "pyarrow=7.0.0" "orc" 'arrow-cpp-proc=*=cuda'
+
 
 
 gpuci_logger "Check compiler versions"
