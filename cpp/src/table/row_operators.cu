@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -71,55 +72,6 @@ table_view pushdown_struct_offsets(table_view table)
                        slice_children(c));
   });
   return table_view(cols);
-}
-
-struct linked_column_view;
-
-using LinkedColPtr    = std::shared_ptr<linked_column_view>;
-using LinkedColVector = std::vector<LinkedColPtr>;
-
-/**
- * @brief column_view with the added member pointer to the parent of this column.
- *
- */
-struct linked_column_view : public cudf::column_view {
-  // TODO: since it brings its own children, find a way to inherit from column_view_base which has
-  //       everything except the children.
-  linked_column_view(column_view const& col) : cudf::column_view(col), parent(nullptr)
-  {
-    std::transform(
-      col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
-        return std::make_shared<linked_column_view>(this, c);
-      });
-  }
-
-  linked_column_view(linked_column_view* parent, column_view const& col)
-    : cudf::column_view(col), parent(parent)
-  {
-    std::transform(
-      col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
-        return std::make_shared<linked_column_view>(this, c);
-      });
-  }
-
-  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
-  LinkedColVector children;
-};
-
-/**
- * @brief Converts all column_views of a table into linked_column_views
- *
- * @param table table of columns to convert
- * @return Vector of converted linked_column_views
- */
-LinkedColVector input_table_to_linked_columns(table_view const& table)
-{
-  LinkedColVector result;
-  std::transform(table.begin(), table.end(), std::back_inserter(result), [&](column_view const& c) {
-    return std::make_shared<linked_column_view>(c);
-  });
-
-  return result;
 }
 
 /**
@@ -196,7 +148,7 @@ auto decompose_structs(table_view table,
                        host_span<null_order const> null_precedence = {})
 {
   auto sliced         = pushdown_struct_offsets(table);
-  auto linked_columns = input_table_to_linked_columns(sliced);
+  auto linked_columns = detail::input_table_to_linked_columns(sliced);
 
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
@@ -208,13 +160,14 @@ auto decompose_structs(table_view table,
       // convert and insert
       std::vector<column_view> r_verticalized_columns;
       std::vector<int> r_verticalized_col_depths;
-      std::vector<LinkedColPtr> flattened;
+      std::vector<detail::LinkedColPtr> flattened;
       std::vector<int> depths;
       // TODO: Here I added a bogus leaf column at the beginning to help in the while loop below.
       //       Refactor the while loop so that it can handle the last case.
       flattened.push_back(
-        std::make_shared<linked_column_view>(make_empty_column(type_id::INT32)->view()));
-      std::function<void(LinkedColPtr, int)> recursive_child = [&](LinkedColPtr c, int depth) {
+        std::make_shared<detail::linked_column_view>(make_empty_column(type_id::INT32)->view()));
+      std::function<void(detail::LinkedColPtr, int)> recursive_child = [&](detail::LinkedColPtr c,
+                                                                           int depth) {
         flattened.push_back(c);
         depths.push_back(depth);
         if (c->type().id() == type_id::LIST) {
@@ -233,8 +186,8 @@ auto decompose_structs(table_view table,
         if (not is_nested(prev_col->type())) {
           // We hit a column that's a leaf so seal this hierarchy
           // But first, traverse upward and include any list columns in the ancestors
-          for (linked_column_view* parent = flattened[curr_col_idx]->parent; parent;
-               parent                     = parent->parent) {
+          for (detail::linked_column_view* parent = flattened[curr_col_idx]->parent; parent;
+               parent                             = parent->parent) {
             if (parent->type().id() == type_id::LIST) {
               // Include this parent
               curr_col = column_view(
