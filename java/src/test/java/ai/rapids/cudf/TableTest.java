@@ -34,6 +34,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.filter2.predicate.Operators;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
@@ -4168,6 +4169,69 @@ public class TableTest extends CudfTestBase {
         assertEquals(1, max.getRowCount());
         assertEquals(70, min.getDouble(0));
         assertEquals(160, max.getDouble(0));
+      }
+    }
+  }
+
+  @Test
+  void testMergeTDigestReduction() {
+    StructType centroidStruct = new StructType(false,
+            new BasicType(false, DType.FLOAT64), // mean
+            new BasicType(false, DType.FLOAT64)); // weight
+
+    ListType centroidList = new ListType(false, centroidStruct);
+
+    StructType tdigestType = new StructType(false,
+            centroidList,
+            new BasicType(false, DType.FLOAT64), // min
+            new BasicType(false, DType.FLOAT64)); // max
+
+    try (ColumnVector tdigests = ColumnVector.fromStructs(tdigestType,
+            new StructData(Arrays.asList(
+                    new StructData(1.0, 100.0),
+                    new StructData(2.0, 50.0)),
+                    1.0, // min
+                    2.0), // max
+            new StructData(Arrays.asList(
+                    new StructData(3.0, 200.0),
+                    new StructData(4.0, 99.0)),
+                    3.0, // min
+                    4.0)); // max
+        Scalar merged = tdigests.reduce(ReductionAggregation.mergeTDigest(1000), DType.STRUCT)) {
+
+      assertEquals(DType.STRUCT, merged.getType());
+      ColumnView[] columns = merged.getChildrenFromStructScalar();
+      assertEquals(3, columns.length);
+      try (HostColumnVector centroids = columns[0].copyToHost();
+           HostColumnVector min = columns[1].copyToHost();
+           HostColumnVector max = columns[2].copyToHost()) {
+        assertEquals(DType.LIST, centroids.getType());
+        assertEquals(DType.FLOAT64, min.getType());
+        assertEquals(DType.FLOAT64, max.getType());
+        assertEquals(1, min.getRowCount());
+        assertEquals(1, max.getRowCount());
+        assertEquals(1.0, min.getDouble(0));
+        assertEquals(4.0, max.getDouble(0));
+        assertEquals(1, centroids.rows);
+
+        List list = centroids.getList(0);
+        assertEquals(4, list.size());
+
+        StructData data = (StructData) list.get(0);
+        assertEquals(1.0, data.dataRecord.get(0));
+        assertEquals(100.0, data.dataRecord.get(1));
+
+        data = (StructData) list.get(1);
+        assertEquals(2.0, data.dataRecord.get(0));
+        assertEquals(50.0, data.dataRecord.get(1));
+
+        data = (StructData) list.get(2);
+        assertEquals(3.0, data.dataRecord.get(0));
+        assertEquals(200.0, data.dataRecord.get(1));
+
+        data = (StructData) list.get(3);
+        assertEquals(4.0, data.dataRecord.get(0));
+        assertEquals(99.0, data.dataRecord.get(1));
       }
     }
   }
