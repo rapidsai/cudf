@@ -5041,7 +5041,8 @@ class StringColumn(column.ColumnBase):
         "__add__",
         "__radd__",
         # These operators aren't actually supported, they only exist to allow
-        # empty column binops with scalars of arbitrary other dtypes.
+        # empty column binops with scalars of arbitrary other dtypes. See
+        # the _binaryop method for more information.
         "__sub__",
         "__mul__",
         "__mod__",
@@ -5467,11 +5468,13 @@ class StringColumn(column.ColumnBase):
         self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
         reflect, op = self._check_reflected_op(op)
-        # TODO: Try to find a way to disable these ops while still exposing
-        # this behavior. It may not be possible for now though.
-        # Handle object columns that are empty or all nulls when performing
-        # binary operations
-        # See https://github.com/pandas-dev/pandas/issues/46332
+        # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
+        # support binary operations between empty or all null string columns
+        # and columns of other dtypes, even if those operations would otherwise
+        # be invalid. For example, you cannot divide strings, but pandas allows
+        # division between an empty string column and a (nonempty) integer
+        # column. Ideally we would disable these operators entirely, but until
+        # the above issue is resolved we cannot avoid this problem.
         if self.null_count == len(self):
             if op in {
                 "__add__",
