@@ -233,12 +233,12 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
                                                size_t offset,
                                                size_t size)
 {
-  if (detail::cufile_integration::is_gds_enabled()) {
-    // avoid mmap as GDS is expected to be used for most reads
-    return std::make_unique<direct_read_source>(filepath.c_str());
-  }
+  // TODO: do we want an option to enable the use of `direct_read_source` instead
+  //       of `memory_mapped_source`?
+  // return std::make_unique<direct_read_source>(filepath.c_str());
 
-  // Use our own memory mapping implementation for direct file reads
+  // Notice, some readers, such as avro, will call `host_read()` on more data
+  // than what is actually accessed thus the lazy nature of mmap is essential.
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }
 
