@@ -37,16 +37,22 @@ namespace {
  */
 enum class usage_policy : uint8_t { OFF, GDS, ALWAYS };
 
-/**
- * @brief Get the current usage policy.
- */
-usage_policy get_env_policy()
+usage_policy _get_env_policy()
 {
   static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "GDS");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "GDS") return usage_policy::GDS;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;
   CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
+}
+
+/**
+ * @brief Get the current usage policy.
+ */
+usage_policy get_env_policy()
+{
+  static auto const ret = _get_env_policy();
+  return ret;
 }
 }  // namespace
 

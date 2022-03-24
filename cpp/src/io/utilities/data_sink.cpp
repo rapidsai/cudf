@@ -55,11 +55,6 @@ class file_sink : public data_sink {
     return detail::cufile_integration::is_gds_enabled();
   }
 
-  [[nodiscard]] bool is_device_write_preferred(size_t size) const override
-  {
-    return size > (128 << 10);
-  }
-
   std::future<void> device_write_async(void const* gpu_data,
                                        size_t size,
                                        rmm::cuda_stream_view stream) override

@@ -44,11 +44,6 @@ class file_source : public datasource {
     return detail::cufile_integration::is_gds_enabled();
   }
 
-  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
-  {
-    return size > (128 << 10);
-  }
-
   std::future<size_t> device_read_async(size_t offset,
                                         size_t size,
                                         uint8_t* dst,
