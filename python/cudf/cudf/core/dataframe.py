@@ -2024,16 +2024,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return iter(self._column_names)
 
     @_cudf_nvtx_annotate
-    def iteritems(self):
-        """Iterate over column names and series pairs"""
-        warnings.warn(
-            "iteritems is deprecated and will be removed in a future version. "
-            "Use .items instead.",
-            FutureWarning,
-        )
-        return self.items()
-
-    @_cudf_nvtx_annotate
     def items(self):
         """Iterate over column names and series pairs"""
         for k in self:
@@ -3361,22 +3351,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - For outer joins, the result will be the union of categories
         from both sides.
         """
-        if indicator:
-            raise NotImplementedError(
-                "Only indicator=False is currently supported"
-            )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
-
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -3389,6 +3363,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
         )
         return gdf_result
 
@@ -6341,7 +6317,7 @@ def from_pandas(obj, nan_as_null=None):
 
 @_cudf_nvtx_annotate
 def merge(left, right, *args, **kwargs):
-    return left.merge(right, *args, **kwargs)
+    return super(type(left), left)._merge(right, *args, **kwargs)
 
 
 # a bit of fanciness to inject docstring with left parameter
