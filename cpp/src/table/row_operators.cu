@@ -133,33 +133,57 @@ LinkedColVector input_table_to_linked_columns(table_view const& table)
  * non-decomposed table, which are pruned during decomposition.
  *
  * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
+ *
  *      S1
  *     / \
  *    S2  d
  *   / \
  *  i   f
+ *
  * then after decomposition, we get three columns:
  * `Struct<Struct<int>>`, `float`, and `decimal`.
- * 0   2   1  <- depths
- * S1
- * |
- * S2      d
- * |
- * i   f
+ *
+ *  0   2   1  <- depths
+ *  S1
+ *  |
+ *  S2      d
+ *  |
+ *  i   f
+ *
  * The depth of the first column is 0 because it contains all its parent levels, while the depth
  * of the second column is 2 because two of its parent struct levels were pruned.
  *
- * Similarly, a struct column of type Struct<int<Struct<float, decimal>> is decomposed as follows
+ * Similarly, a struct column of type Struct<int, Struct<float, decimal>> is decomposed as follows
+ *
  *     S1
  *    / \
  *   i   S2
  *      / \
  *     f   d
  *
- * 0   1   2  <- depths
- * S1  S2  d
- * |   |
- * i   f
+ *  0   1   2  <- depths
+ *  S1  S2  d
+ *  |   |
+ *  i   f
+ *
+ * When list columns are present, The decomposition is performed similarly to pure structs but list
+ * parent columns are NOT pruned
+ *
+ * For example, if the original table has a column `List<Struct<int, float>>`,
+ *
+ *    L
+ *    |
+ *    S
+ *   / \
+ *  i   f
+ *
+ * after decomposition, we get two columns
+ *
+ *  L   L
+ *  |   |
+ *  S   f
+ *  |
+ *  i
  *
  * @param table The table whose struct columns to decompose.
  * @param column_order The per-column order if using output with lexicographic comparison
@@ -293,6 +317,28 @@ void check_lex_compatibility(table_view const& input)
   }
 }
 
+/**
+ * @brief Check a table for compatibility with equality comparison
+ *
+ * Checks whether a given table contains columns of non-equality comparable types.
+ */
+void check_eq_compatibility(table_view const& input)
+{
+  std::function<void(column_view const&)> check_column = [&](column_view const& c) {
+    if (not is_nested(c.type())) {
+      CUDF_EXPECTS(is_equality_comparable(c.type()),
+                   "Cannot compare equality for a table with a column of type " +
+                     jit::get_type_name(c.type()));
+    }
+    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+      check_column(*child);
+    }
+  };
+  for (column_view const& c : input) {
+    check_column(c);
+  }
+}
+
 }  // namespace
 
 namespace row {
@@ -326,6 +372,8 @@ namespace equality {
 std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const& t,
                                                                rmm::cuda_stream_view stream)
 {
+  check_eq_compatibility(t);
+
   auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
   auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
 

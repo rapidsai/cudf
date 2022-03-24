@@ -93,23 +93,23 @@ TEST_F(ListRankScanTest, DeepList)
 TEST_F(ListRankScanTest, ListOfStruct)
 {
   // Constructing a list of struct of two elements
-  // []                  ==
-  // []                  !=
-  // Null                ==
-  // Null                !=
-  // [Null, Null]        !=
-  // [Null]              ==
-  // [Null]              ==
-  // [Null]              !=
-  // [{Null, Null}]      !=
-  // [{1,'a'}, {2,'b'}]  !=
-  // [{0,'a'}, {2,'b'}]  !=
-  // [{0,'a'}, {2,'c'}]  ==
-  // [{0,'a'}, {2,'c'}]  !=
-  // [{0,Null}]          ==
-  // [{0,Null}]          !=
-  // [{Null, 0}]         ==
-  // [{Null, 0}]
+  // 0.   []                  ==
+  // 1.   []                  !=
+  // 2.   Null                ==
+  // 3.   Null                !=
+  // 4.   [Null, Null]        !=
+  // 5.   [Null]              ==
+  // 6.   [Null]              ==
+  // 7.   [Null]              !=
+  // 8.   [{Null, Null}]      !=
+  // 9.   [{1,'a'}, {2,'b'}]  !=
+  // 10.  [{0,'a'}, {2,'b'}]  !=
+  // 11.  [{0,'a'}, {2,'c'}]  ==
+  // 12.  [{0,'a'}, {2,'c'}]  !=
+  // 13.  [{0,Null}]          ==
+  // 14.  [{0,Null}]          !=
+  // 15.  [{Null, 0}]         ==
+  // 16.  [{Null, 0}]
 
   auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
     {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
