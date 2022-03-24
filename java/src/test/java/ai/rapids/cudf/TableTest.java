@@ -4156,18 +4156,20 @@ public class TableTest extends CudfTestBase {
          Scalar tdigest = t1.getColumn(0)
             .reduce(ReductionAggregation.createTDigest(1000), DType.STRUCT)) {
       assertEquals(DType.STRUCT, tdigest.getType());
-      ColumnView[] columns = tdigest.getChildrenFromStructScalar();
-      assertEquals(3, columns.length);
-      try (HostColumnVector centroids = columns[0].copyToHost();
-          HostColumnVector min = columns[1].copyToHost();
-          HostColumnVector max = columns[2].copyToHost()) {
-        assertEquals(DType.LIST, centroids.getType());
-        assertEquals(DType.FLOAT64, min.getType());
-        assertEquals(DType.FLOAT64, max.getType());
-        assertEquals(1, min.getRowCount());
-        assertEquals(1, max.getRowCount());
-        assertEquals(70, min.getDouble(0));
-        assertEquals(160, max.getDouble(0));
+
+      try (CloseableArray columns = CloseableArray.wrap(tdigest.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+           HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+           HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(70, min.getDouble(0));
+          assertEquals(160, max.getDouble(0));
+        }
       }
     }
   }
@@ -4196,41 +4198,43 @@ public class TableTest extends CudfTestBase {
                     new StructData(4.0, 99.0)),
                     3.0, // min
                     4.0)); // max
-        Scalar merged = tdigests.reduce(ReductionAggregation.mergeTDigest(1000), DType.STRUCT)) {
+      Scalar merged = tdigests.reduce(ReductionAggregation.mergeTDigest(1000), DType.STRUCT)) {
 
       assertEquals(DType.STRUCT, merged.getType());
-      ColumnView[] columns = merged.getChildrenFromStructScalar();
-      assertEquals(3, columns.length);
-      try (HostColumnVector centroids = columns[0].copyToHost();
-           HostColumnVector min = columns[1].copyToHost();
-           HostColumnVector max = columns[2].copyToHost()) {
-        assertEquals(DType.LIST, centroids.getType());
-        assertEquals(DType.FLOAT64, min.getType());
-        assertEquals(DType.FLOAT64, max.getType());
-        assertEquals(1, min.getRowCount());
-        assertEquals(1, max.getRowCount());
-        assertEquals(1.0, min.getDouble(0));
-        assertEquals(4.0, max.getDouble(0));
-        assertEquals(1, centroids.rows);
+      try (CloseableArray columns = CloseableArray.wrap(merged.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+             HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+             HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(3, columns.size());
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(1.0, min.getDouble(0));
+          assertEquals(4.0, max.getDouble(0));
+          assertEquals(1, centroids.rows);
 
-        List list = centroids.getList(0);
-        assertEquals(4, list.size());
+          List list = centroids.getList(0);
+          assertEquals(4, list.size());
 
-        StructData data = (StructData) list.get(0);
-        assertEquals(1.0, data.dataRecord.get(0));
-        assertEquals(100.0, data.dataRecord.get(1));
+          StructData data = (StructData) list.get(0);
+          assertEquals(1.0, data.dataRecord.get(0));
+          assertEquals(100.0, data.dataRecord.get(1));
 
-        data = (StructData) list.get(1);
-        assertEquals(2.0, data.dataRecord.get(0));
-        assertEquals(50.0, data.dataRecord.get(1));
+          data = (StructData) list.get(1);
+          assertEquals(2.0, data.dataRecord.get(0));
+          assertEquals(50.0, data.dataRecord.get(1));
 
-        data = (StructData) list.get(2);
-        assertEquals(3.0, data.dataRecord.get(0));
-        assertEquals(200.0, data.dataRecord.get(1));
+          data = (StructData) list.get(2);
+          assertEquals(3.0, data.dataRecord.get(0));
+          assertEquals(200.0, data.dataRecord.get(1));
 
-        data = (StructData) list.get(3);
-        assertEquals(4.0, data.dataRecord.get(0));
-        assertEquals(99.0, data.dataRecord.get(1));
+          data = (StructData) list.get(3);
+          assertEquals(4.0, data.dataRecord.get(0));
+          assertEquals(99.0, data.dataRecord.get(1));
+        }
       }
     }
   }
