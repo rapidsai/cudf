@@ -1013,7 +1013,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             # TODO: switch to `apply`
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore::FutureWarning")
+                warnings.simplefilter("ignore", category=FutureWarning)
                 result = self.applymap(arg)
         return result
 
