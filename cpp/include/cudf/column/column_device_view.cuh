@@ -391,8 +391,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
               CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
-      cudf_assert(false and "dictionary indices must be an unsigned integral type");
-      return 0;
+      CUDF_UNREACHABLE("dictionary indices must be an unsigned integral type");
     }
   };
 

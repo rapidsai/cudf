@@ -354,7 +354,6 @@ struct get_indices_of_unique_entries_dispatch {
                         size_type*,
                         null_equality,
                         nan_equality,
-                        bool,
                         duplicate_keep_option,
                         rmm::cuda_stream_view) const
   {
@@ -370,7 +369,6 @@ struct get_indices_of_unique_entries_dispatch {
                         size_type* output_begin,
                         null_equality nulls_equal,
                         nan_equality nans_equal,
-                        bool has_nulls,
                         duplicate_keep_option keep_option,
                         rmm::cuda_stream_view stream) const noexcept
   {
@@ -379,7 +377,7 @@ struct get_indices_of_unique_entries_dispatch {
                                                      *d_view,
                                                      *d_view,
                                                      nulls_equal,
-                                                     has_nulls,
+                                                     all_lists_entries.has_nulls(),
                                                      nans_equal == nan_equality::ALL_EQUAL};
     return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(num_entries),
@@ -396,19 +394,20 @@ struct get_indices_of_unique_entries_dispatch {
                         size_type* output_begin,
                         null_equality nulls_equal,
                         nan_equality nans_equal,
-                        bool has_nulls,
                         duplicate_keep_option keep_option,
                         rmm::cuda_stream_view stream) const noexcept
   {
     auto const flattened_entries = cudf::structs::detail::flatten_nested_columns(
       table_view{{all_lists_entries}}, {order::ASCENDING}, {null_order::AFTER}, {});
     auto const dview_ptr = table_device_view::create(flattened_entries, stream);
+    // Search through children of all levels for nulls.
+    auto const nested_has_nulls = has_nulls(flattened_entries.flattened_columns());
 
     auto const comp = table_row_comparator_fn{list_indices,
                                               *dview_ptr,
                                               *dview_ptr,
                                               nulls_equal,
-                                              has_nulls,
+                                              nested_has_nulls,
                                               nans_equal == nan_equality::ALL_EQUAL};
     return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(num_entries),
@@ -447,7 +446,6 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
                                           output_begin,
                                           nulls_equal,
                                           nans_equal,
-                                          keys_entries.has_nulls(),
                                           keep_option,
                                           stream);
 

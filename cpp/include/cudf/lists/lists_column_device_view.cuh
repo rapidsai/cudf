@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,10 +37,16 @@ class lists_column_device_view {
   lists_column_device_view& operator=(lists_column_device_view const&) = default;
   lists_column_device_view& operator=(lists_column_device_view&&) = default;
 
-  lists_column_device_view(column_device_view const& underlying_) : underlying(underlying_)
+  CUDF_HOST_DEVICE lists_column_device_view(column_device_view const& underlying_)
+    : underlying(underlying_)
   {
+#ifdef __CUDA_ARCH__
+    cudf_assert(underlying.type().id() == type_id::LIST and
+                "lists_column_device_view only supports lists");
+#else
     CUDF_EXPECTS(underlying_.type().id() == type_id::LIST,
                  "lists_column_device_view only supports lists");
+#endif
   }
 
   /**
@@ -54,6 +60,16 @@ class lists_column_device_view {
   [[nodiscard]] __device__ inline column_device_view offsets() const
   {
     return underlying.child(lists_column_view::offsets_column_index);
+  }
+
+  /**
+   * @brief Fetches the list offset value at a given row index while taking column offset into
+   * account.
+   */
+  [[nodiscard]] __device__ inline size_type offset_at(size_type idx) const
+  {
+    return underlying.child(lists_column_view::offsets_column_index)
+      .element<size_type>(offset() + idx);
   }
 
   /**

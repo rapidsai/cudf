@@ -17,10 +17,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operator_list.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <jit/type.hpp>
@@ -30,85 +30,150 @@ namespace experimental {
 
 namespace {
 
-struct linked_column_view;
-
-using LinkedColPtr    = std::shared_ptr<linked_column_view>;
-using LinkedColVector = std::vector<LinkedColPtr>;
-
 /**
- * @brief column_view with the added member pointer to the parent of this column.
+ * @brief Applies the offsets of struct columns onto their children.
+ *
+ * Given a table, this replaces any struct columns with similar struct columns that have their
+ * offsets applied to their children. Structs that are children of list columns are not affected.
  *
  */
-struct linked_column_view : public cudf::column_view {
-  // TODO: since it brings its own children, find a way to inherit from column_view_base which has
-  //       everything except the children.
-  linked_column_view(column_view const& col) : cudf::column_view(col), parent(nullptr)
-  {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
-  }
-
-  linked_column_view(linked_column_view* parent, column_view const& col)
-    : cudf::column_view(col), parent(parent)
-  {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
-  }
-
-  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
-  LinkedColVector children;
-};
-
-/**
- * @brief Converts all column_views of a table into linked_column_views
- *
- * @param table table of columns to convert
- * @return Vector of converted linked_column_views
- */
-LinkedColVector input_table_to_linked_columns(table_view const& table)
+table_view pushdown_struct_offsets(table_view table)
 {
-  LinkedColVector result;
-  for (column_view const& col : table) {
-    result.emplace_back(std::make_shared<linked_column_view>(col));
-  }
-
-  return result;
+  std::function<std::vector<column_view>(column_view const&)> slice_children =
+    [&](column_view const& c) -> std::vector<column_view> {
+    if (c.type().id() == type_id::STRUCT) {
+      std::vector<column_view> sliced_children;
+      auto struct_col = structs_column_view(c);
+      for (size_type i = 0; i < struct_col.num_children(); ++i) {
+        auto sliced = struct_col.get_sliced_child(i);
+        // The reason we don't just copy the logic of structs_column_view::get_sliced_child() is
+        // because its logic might change in the future. The following logic is merely to replace
+        // the children of an existing column_view without changing anything else.
+        sliced_children.emplace_back(sliced.type(),
+                                     sliced.size(),
+                                     sliced.head<uint8_t>(),
+                                     sliced.null_mask(),
+                                     sliced.null_count(),
+                                     sliced.offset(),
+                                     slice_children(sliced));
+      }
+      return sliced_children;
+    }
+    return {c.child_begin(), c.child_end()};
+  };
+  std::vector<column_view> cols;
+  std::transform(table.begin(), table.end(), std::back_inserter(cols), [&](column_view const& c) {
+    return column_view(c.type(),
+                       c.size(),
+                       c.head<uint8_t>(),
+                       c.null_mask(),
+                       c.null_count(),
+                       c.offset(),
+                       slice_children(c));
+  });
+  return table_view(cols);
 }
 
-auto struct_lex_verticalize(table_view input,
-                            host_span<order const> column_order         = {},
-                            host_span<null_order const> null_precedence = {})
+/**
+ * @brief Decompose all struct columns in a table
+ *
+ * If a struct column is a tree with N leaves, then this function decomposes the tree into
+ * N "linear trees" (branch factor == 1) and prunes common parents. Also returns a vector of
+ * per-column `depth`s.
+ *
+ * A `depth` value is the number of nested levels as parent of the column in the original,
+ * non-decomposed table, which are pruned during decomposition.
+ *
+ * For example, if the original table has a column `Struct<Struct<int, float>, decimal>`,
+ *
+ *      S1
+ *     / \
+ *    S2  d
+ *   / \
+ *  i   f
+ *
+ * then after decomposition, we get three columns:
+ * `Struct<Struct<int>>`, `float`, and `decimal`.
+ *
+ *  0   2   1  <- depths
+ *  S1
+ *  |
+ *  S2      d
+ *  |
+ *  i   f
+ *
+ * The depth of the first column is 0 because it contains all its parent levels, while the depth
+ * of the second column is 2 because two of its parent struct levels were pruned.
+ *
+ * Similarly, a struct column of type Struct<int, Struct<float, decimal>> is decomposed as follows
+ *
+ *     S1
+ *    / \
+ *   i   S2
+ *      / \
+ *     f   d
+ *
+ *  0   1   2  <- depths
+ *  S1  S2  d
+ *  |   |
+ *  i   f
+ *
+ * When list columns are present, The decomposition is performed similarly to pure structs but list
+ * parent columns are NOT pruned
+ *
+ * For example, if the original table has a column `List<Struct<int, float>>`,
+ *
+ *    L
+ *    |
+ *    S
+ *   / \
+ *  i   f
+ *
+ * after decomposition, we get two columns
+ *
+ *  L   L
+ *  |   |
+ *  S   f
+ *  |
+ *  i
+ *
+ * @param table The table whose struct columns to decompose.
+ * @param column_order The per-column order if using output with lexicographic comparison
+ * @param null_precedence The per-column null precedence
+ * @return A tuple containing a table with all struct columns decomposed, new corresponding column
+ *         orders and null precedences and depths of the linearized branches
+ */
+auto decompose_structs(table_view table,
+                       host_span<order const> column_order         = {},
+                       host_span<null_order const> null_precedence = {})
 {
-  auto linked_columns = input_table_to_linked_columns(input);
+  auto sliced         = pushdown_struct_offsets(table);
+  auto linked_columns = detail::input_table_to_linked_columns(sliced);
 
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
   std::vector<null_order> new_null_precedence;
   std::vector<int> verticalized_col_depths;
   for (size_t col_idx = 0; col_idx < linked_columns.size(); ++col_idx) {
-    auto const& col = linked_columns[col_idx];
+    auto const col = linked_columns[col_idx];
     if (is_nested(col->type())) {
       // convert and insert
       std::vector<column_view> r_verticalized_columns;
       std::vector<int> r_verticalized_col_depths;
-      std::vector<LinkedColPtr> flattened;
+      std::vector<detail::LinkedColPtr> flattened;
       std::vector<int> depths;
       // TODO: Here I added a bogus leaf column at the beginning to help in the while loop below.
       //       Refactor the while loop so that it can handle the last case.
       flattened.push_back(
-        std::make_shared<linked_column_view>(make_empty_column(type_id::INT32)->view()));
-      std::function<void(LinkedColPtr, int)> recursive_child = [&](LinkedColPtr c, int depth) {
+        std::make_shared<detail::linked_column_view>(make_empty_column(type_id::INT32)->view()));
+      std::function<void(detail::LinkedColPtr, int)> recursive_child = [&](detail::LinkedColPtr c,
+                                                                           int depth) {
         flattened.push_back(c);
         depths.push_back(depth);
         if (c->type().id() == type_id::LIST) {
           recursive_child(c->children[lists_column_view::child_column_index], depth + 1);
         } else if (c->type().id() == type_id::STRUCT) {
           for (auto& child : c->children) {
-            // for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
-            // auto scol = structs_column_view(c);
-            // recursive_child(scol.get_sliced_child(child_idx), depth + 1);
             recursive_child(child, depth + 1);
           }
         }
@@ -117,24 +182,23 @@ auto struct_lex_verticalize(table_view input,
       int curr_col_idx     = flattened.size() - 1;
       column_view curr_col = *flattened[curr_col_idx];
       while (curr_col_idx > 0) {
-        auto const& prev_col = flattened[curr_col_idx - 1];
+        auto const prev_col = flattened[curr_col_idx - 1];
         if (not is_nested(prev_col->type())) {
           // We hit a column that's a leaf so seal this hierarchy
           // But first, traverse upward and include any list columns in the ancestors
-          linked_column_view* parent = flattened[curr_col_idx]->parent;
-          while (parent) {
+          for (detail::linked_column_view* parent = flattened[curr_col_idx]->parent; parent;
+               parent                             = parent->parent) {
             if (parent->type().id() == type_id::LIST) {
               // Include this parent
               curr_col = column_view(
                 parent->type(),
                 parent->size(),
                 nullptr,  // list has no data of its own
-                nullptr,  // If we're going through this then nullmaks already in another branch
+                nullptr,  // If we're going through this then nullmask is already in another branch
                 UNKNOWN_NULL_COUNT,
                 parent->offset(),
                 {parent->child(lists_column_view::offsets_column_index), curr_col});
             }
-            parent = parent->parent;
           }
           r_verticalized_columns.push_back(curr_col);
           r_verticalized_col_depths.push_back(depths[curr_col_idx - 1]);
@@ -181,14 +245,6 @@ auto struct_lex_verticalize(table_view input,
                          std::move(verticalized_col_depths));
 }
 
-struct is_relationally_comparable_functor {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return cudf::is_relationally_comparable<T, T>();
-  }
-};
-
 /**
  * @brief Check a table for compatibility with lexicographic comparison
  *
@@ -201,13 +257,34 @@ void check_lex_compatibility(table_view const& input)
     CUDF_EXPECTS(c.type().id() != type_id::LIST,
                  "Cannot lexicographic compare a table with a LIST column");
     if (not is_nested(c.type())) {
-      CUDF_EXPECTS(
-        type_dispatcher<non_nested_id_to_type>(c.type(), is_relationally_comparable_functor{}),
-        "Cannot lexicographic compare a table with a column of type " +
-          jit::get_type_name(c.type()));
+      CUDF_EXPECTS(is_relationally_comparable(c.type()),
+                   "Cannot lexicographic compare a table with a column of type " +
+                     jit::get_type_name(c.type()));
     }
-    for (int i = 0; i < c.num_children(); ++i) {
-      check_column(c.child(i));
+    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+      check_column(*child);
+    }
+  };
+  for (column_view const& c : input) {
+    check_column(c);
+  }
+}
+
+/**
+ * @brief Check a table for compatibility with equality comparison
+ *
+ * Checks whether a given table contains columns of non-equality comparable types.
+ */
+void check_eq_compatibility(table_view const& input)
+{
+  std::function<void(column_view const&)> check_column = [&](column_view const& c) {
+    if (not is_nested(c.type())) {
+      CUDF_EXPECTS(is_equality_comparable(c.type()),
+                   "Cannot compare equality for a table with a column of type " +
+                     jit::get_type_name(c.type()));
+    }
+    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+      check_column(*child);
     }
   };
   for (column_view const& c : input) {
@@ -217,45 +294,49 @@ void check_lex_compatibility(table_view const& input)
 
 }  // namespace
 
-namespace lexicographic_comparison {
+namespace row {
 
-preprocessed_table::preprocessed_table(table_view const& t,
-                                       host_span<order const> column_order,
-                                       host_span<null_order const> null_precedence,
-                                       rmm::cuda_stream_view stream)
-  : d_column_order(0, stream),
-    d_null_precedence(0, stream),
-    d_depths(0, stream),
-    _has_nulls(has_nested_nulls(t))
+namespace lexicographic {
+
+std::shared_ptr<preprocessed_table> preprocessed_table::create(
+  table_view const& t,
+  host_span<order const> column_order,
+  host_span<null_order const> null_precedence,
+  rmm::cuda_stream_view stream)
 {
   check_lex_compatibility(t);
 
   auto [verticalized_lhs, new_column_order, new_null_precedence, verticalized_col_depths] =
-    struct_lex_verticalize(t, column_order, null_precedence);
+    decompose_structs(t, column_order, null_precedence);
 
-  d_t =
-    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+  auto d_t               = table_device_view::create(verticalized_lhs, stream);
+  auto d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
+  auto d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
+  auto d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
 
-  d_column_order    = detail::make_device_uvector_async(new_column_order, stream);
-  d_null_precedence = detail::make_device_uvector_async(new_null_precedence, stream);
-  d_depths          = detail::make_device_uvector_async(verticalized_col_depths, stream);
+  return std::shared_ptr<preprocessed_table>(new preprocessed_table(
+    std::move(d_t), std::move(d_column_order), std::move(d_null_precedence), std::move(d_depths)));
 }
 
-}  // namespace lexicographic_comparison
+}  // namespace lexicographic
 
-namespace equality_hashing {
+namespace equality {
 
-preprocessed_table::preprocessed_table(table_view const& t, rmm::cuda_stream_view stream)
-  : _has_nulls(has_nested_nulls(t))
+std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const& t,
+                                                               rmm::cuda_stream_view stream)
 {
-  auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
-  auto [verticalized_lhs, _, __, ___] = struct_lex_verticalize(std::get<0>(null_pushed_table));
+  check_eq_compatibility(t);
 
-  d_t =
-    std::make_unique<table_device_view_owner>(table_device_view::create(verticalized_lhs, stream));
+  auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
+  auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
+
+  auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
+  return std::shared_ptr<preprocessed_table>(
+    new preprocessed_table(std::move(d_t), std::move(std::get<1>(null_pushed_table))));
 }
 
-}  // namespace equality_hashing
+}  // namespace equality
 
+}  // namespace row
 }  // namespace experimental
 }  // namespace cudf

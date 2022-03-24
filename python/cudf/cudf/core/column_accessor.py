@@ -342,6 +342,26 @@ class ColumnAccessor(MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
+    def get_labels_by_index(self, index: Any) -> tuple:
+        """Get the labels corresponding to the provided column indices.
+
+        Parameters
+        ----------
+        index : integer, integer slice, or list-like of integers
+            The column indexes.
+
+        Returns
+        -------
+        tuple
+        """
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self._data))
+            return self.names[start:stop:step]
+        elif pd.api.types.is_integer(index):
+            return (self.names[index],)
+        else:
+            return tuple(self.names[i] for i in index)
+
     def select_by_index(self, index: Any) -> ColumnAccessor:
         """
         Return a ColumnAccessor composed of the columns
@@ -355,13 +375,7 @@ class ColumnAccessor(MutableMapping):
         -------
         ColumnAccessor
         """
-        if isinstance(index, slice):
-            start, stop, step = index.indices(len(self._data))
-            keys = self.names[start:stop:step]
-        elif pd.api.types.is_integer(index):
-            keys = (self.names[index],)
-        else:
-            keys = tuple(self.names[i] for i in index)
+        keys = self.get_labels_by_index(index)
         data = {k: self._data[k] for k in keys}
         return self.__class__(
             data, multiindex=self.multiindex, level_names=self.level_names,
