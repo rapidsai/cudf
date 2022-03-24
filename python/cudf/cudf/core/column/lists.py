@@ -94,39 +94,7 @@ class ListColumn(ColumnBase):
         return max(0, len(self.base_children[0]) - 1)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
-        """
-        Calls a binary operator *binop* on operands *self*
-        and *other*.
-
-        Parameters
-        ----------
-        self, other : list columns
-
-        binop :  binary operator
-            Only "add" operator is currently being supported
-            for lists concatenation functions
-
-        Returns
-        -------
-        Series : the output dtype is determined by the
-            input operands.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
-        >>> gdf
-            val
-        0  [a, a]
-        1     [b]
-        2     [c]
-        >>> gdf['val'] + gdf['val']
-        0    [a, a, a, a]
-        1          [b, b]
-        2          [c, c]
-        Name: val, dtype: list
-
-        """
+        # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
         if (other := self._wrap_binop_normalization(other)) is NotImplemented:
             return NotImplemented
