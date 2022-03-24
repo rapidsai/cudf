@@ -78,6 +78,7 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
+from cudf.core.udf.scalar_function import _get_scalar_kernel
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -93,6 +94,8 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
+
+import numba
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -3711,6 +3714,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("The `result_type` kwarg is not yet supported.")
 
         return self._apply(func, _get_row_kernel, *args, **kwargs)
+
+    def applymap(self, func, na_action=None, **kwargs) -> DataFrame:
+        """
+        Apply a function to a Dataframe elementwise.
+        This method applies a function that accepts and returns a scalar
+        to every element of a DataFrame.
+        Parameters
+        ----------
+        func : callable
+            Python function, returns a single value from a single value.
+        na_action : {None, 'ignore'}, default None
+            If ``ignore``, propagate NaN values, without passing them to func.
+
+        Returns
+        -------
+        DataFrame
+            Transformed DataFrame.
+        """
+
+        # TODO: naive implementation
+        # this could be written as a single kernel
+
+        if na_action == 'ignore':
+            devfunc = numba.cuda.jit(device=True)(func)
+            func = lambda x: cudf.NA if x is cudf.NA else devfunc(x)
+
+        result = DataFrame()
+        for col in self._data.keys():
+            result[col] = self[col].apply(func)
+        return result
+
 
     @_cudf_nvtx_annotate
     @applyutils.doc_apply()

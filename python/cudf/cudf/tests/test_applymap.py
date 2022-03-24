@@ -6,7 +6,7 @@ from math import floor
 import numpy as np
 import pytest
 
-from cudf import Series
+from cudf import Series, DataFrame, NA
 from cudf.testing import _utils as utils
 
 
@@ -56,3 +56,38 @@ def test_applymap_change_out_dtype():
     expect = np.array(data, dtype=float)
     got = out.to_numpy()
     np.testing.assert_array_equal(expect, got)
+
+
+@pytest.mark.parametrize('data', [
+    {
+        'a': [1,2,3],
+        'b': [4,5,6]
+    },
+    {
+        'a': [1,2,3],
+        'b': [1.0, 2.0, 3.0]
+    },
+    {
+        'a': [1,2,3],
+        'b': [True, False, True]
+    },
+    {
+        'a': [1, NA, 2],
+        'b': [NA, 4, NA]
+    }
+])
+@pytest.mark.parametrize('func', [
+    lambda x: x + 1,
+    lambda x: x - 1,
+    lambda x: x + 0.5,
+    lambda x: 2 if x is NA else 2 + (x + 1) / 4.1,
+    lambda x: 42
+])
+def test_applymap_dataframe(data, func):
+    gdf = DataFrame(data)
+    pdf = gdf.to_pandas(nullable=True)
+
+    expect = pdf.applymap(func)
+    got = gdf.applymap(func)
+
+    utils.assert_eq(expect, got, check_dtype=False)
