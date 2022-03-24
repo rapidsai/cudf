@@ -2457,8 +2457,8 @@ def interval_range(
                 init=start.device_value,
                 step=freq_step.device_value,
             )
-            left_col = bin_edges[:-1]
-            right_col = bin_edges[1:]
+            left_col = bin_edges.slice(0, len(bin_edges) - 1)
+            right_col = bin_edges.slice(1, len(bin_edges))
     elif freq and periods:
         if end:
             start = end - (freq * periods)

@@ -473,7 +473,9 @@ class DatetimeColumn(column.ColumnBase):
         Returns offset of first value that matches
         """
         value = pd.to_datetime(value)
-        value = column.as_column(value, dtype=self.dtype).as_numerical[0]
+        value = column.as_column(
+            value, dtype=self.dtype
+        ).as_numerical.element_indexing(0)
         return self.as_numerical.find_first_value(value, closest=closest)
 
     def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
@@ -481,7 +483,9 @@ class DatetimeColumn(column.ColumnBase):
         Returns offset of last value that matches
         """
         value = pd.to_datetime(value)
-        value = column.as_column(value, dtype=self.dtype).as_numerical[0]
+        value = column.as_column(
+            value, dtype=self.dtype
+        ).as_numerical.element_indexing(0)
         return self.as_numerical.find_last_value(value, closest=closest)
 
     @property

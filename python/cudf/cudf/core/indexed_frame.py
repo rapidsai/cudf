@@ -1808,7 +1808,9 @@ class IndexedFrame(Frame):
             return self.copy()
 
         pd_offset = pd.tseries.frequencies.to_offset(offset)
-        to_search = op(pd.Timestamp(self._index._column[idx]), pd_offset)
+        to_search = op(
+            pd.Timestamp(self._index._column.element_indexing(idx)), pd_offset
+        )
         if (
             idx == 0
             and not isinstance(pd_offset, pd.tseries.offsets.Tick)

@@ -5205,7 +5205,7 @@ class StringColumn(column.ColumnBase):
                 result_col,
                 sep=cudf.Scalar(""),
                 na_rep=cudf.Scalar(None, "str"),
-            )[0]
+            ).element_indexing(0)
         else:
             return result_col
 
