@@ -29,6 +29,13 @@ namespace experimental {
 
 namespace {
 
+/**
+ * @brief Applies the offsets of struct columns onto their children.
+ *
+ * Given a table, this replaces any struct columns with similar struct columns that have their
+ * offsets applied to their children. Structs that are children of list columns are not affected.
+ *
+ */
 table_view pushdown_struct_offsets(table_view table)
 {
   std::function<std::vector<column_view>(column_view const&)> slice_children =
@@ -38,7 +45,7 @@ table_view pushdown_struct_offsets(table_view table)
       auto struct_col = structs_column_view(c);
       for (size_type i = 0; i < struct_col.num_children(); ++i) {
         auto sliced = struct_col.get_sliced_child(i);
-        // The reson we don't just copy the logic of structs_column_view::get_sliced_child() is
+        // The reason we don't just copy the logic of structs_column_view::get_sliced_child() is
         // because its logic might change in the future. The following logic is merely to replace
         // the children of an existing column_view without changing anything else.
         sliced_children.emplace_back(sliced.type(),
@@ -54,15 +61,15 @@ table_view pushdown_struct_offsets(table_view table)
     return {c.child_begin(), c.child_end()};
   };
   std::vector<column_view> cols;
-  for (auto const& col : table) {
-    cols.emplace_back(col.type(),
-                      col.size(),
-                      col.head<uint8_t>(),
-                      col.null_mask(),
-                      col.null_count(),
-                      col.offset(),
-                      slice_children(col));
-  }
+  std::transform(table.begin(), table.end(), std::back_inserter(cols), [&](column_view const& c) {
+    return column_view(c.type(),
+                       c.size(),
+                       c.head<uint8_t>(),
+                       c.null_mask(),
+                       c.null_count(),
+                       c.offset(),
+                       slice_children(c));
+  });
   return table_view(cols);
 }
 
@@ -80,17 +87,19 @@ struct linked_column_view : public cudf::column_view {
   //       everything except the children.
   linked_column_view(column_view const& col) : cudf::column_view(col), parent(nullptr)
   {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
+    std::transform(
+      col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
+        return std::make_shared<linked_column_view>(this, c);
+      });
   }
 
   linked_column_view(linked_column_view* parent, column_view const& col)
     : cudf::column_view(col), parent(parent)
   {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
+    std::transform(
+      col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
+        return std::make_shared<linked_column_view>(this, c);
+      });
   }
 
   linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
@@ -106,9 +115,9 @@ struct linked_column_view : public cudf::column_view {
 LinkedColVector input_table_to_linked_columns(table_view const& table)
 {
   LinkedColVector result;
-  for (column_view const& col : table) {
-    result.emplace_back(std::make_shared<linked_column_view>(col));
-  }
+  std::transform(table.begin(), table.end(), std::back_inserter(result), [&](column_view const& c) {
+    return std::make_shared<linked_column_view>(c);
+  });
 
   return result;
 }
@@ -170,7 +179,7 @@ auto decompose_structs(table_view table,
   std::vector<null_order> new_null_precedence;
   std::vector<int> verticalized_col_depths;
   for (size_t col_idx = 0; col_idx < linked_columns.size(); ++col_idx) {
-    auto const& col = linked_columns[col_idx];
+    auto const col = linked_columns[col_idx];
     if (is_nested(col->type())) {
       // convert and insert
       std::vector<column_view> r_verticalized_columns;
@@ -196,12 +205,12 @@ auto decompose_structs(table_view table,
       int curr_col_idx     = flattened.size() - 1;
       column_view curr_col = *flattened[curr_col_idx];
       while (curr_col_idx > 0) {
-        auto const& prev_col = flattened[curr_col_idx - 1];
+        auto const prev_col = flattened[curr_col_idx - 1];
         if (not is_nested(prev_col->type())) {
           // We hit a column that's a leaf so seal this hierarchy
           // But first, traverse upward and include any list columns in the ancestors
-          linked_column_view* parent = flattened[curr_col_idx]->parent;
-          while (parent) {
+          for (linked_column_view* parent = flattened[curr_col_idx]->parent; parent;
+               parent                     = parent->parent) {
             if (parent->type().id() == type_id::LIST) {
               // Include this parent
               curr_col = column_view(
@@ -213,7 +222,6 @@ auto decompose_structs(table_view table,
                 parent->offset(),
                 {parent->child(lists_column_view::offsets_column_index), curr_col});
             }
-            parent = parent->parent;
           }
           r_verticalized_columns.push_back(curr_col);
           r_verticalized_col_depths.push_back(depths[curr_col_idx - 1]);
