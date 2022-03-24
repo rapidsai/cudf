@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.04.00
+  VERSION 22.06.00
   LANGUAGES C CXX CUDA
 )
 
@@ -472,6 +472,7 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp

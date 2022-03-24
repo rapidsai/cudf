@@ -421,24 +421,30 @@ def test_cov1d(data1, data2):
         cudf.Series([5]),
     ],
 )
-def test_corr1d(data1, data2):
+@pytest.mark.parametrize("method", ["spearman", "pearson"])
+def test_corr1d(data1, data2, method):
+    if method == "spearman":
+        # Pandas uses scipy.stats.spearmanr code-path
+        pytest.importorskip("scipy")
+
     gs1 = cudf.Series(data1)
     gs2 = cudf.Series(data2)
 
     ps1 = gs1.to_pandas()
     ps2 = gs2.to_pandas()
 
-    got = gs1.corr(gs2)
-    expected = ps1.corr(ps2)
+    got = gs1.corr(gs2, method)
+    expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
-def test_df_corr():
+@pytest.mark.parametrize("method", ["spearman", "pearson"])
+def test_df_corr(method):
 
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
-    got = gdf.corr()
-    expected = pdf.corr()
+    got = gdf.corr(method)
+    expected = pdf.corr(method)
     assert_eq(got, expected)
 
 
