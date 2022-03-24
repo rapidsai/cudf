@@ -7,7 +7,7 @@ import locale
 import re
 from locale import nl_langinfo
 from types import SimpleNamespace
-from typing import Any, Mapping, Sequence, Union, cast
+from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
 import pandas as pd
