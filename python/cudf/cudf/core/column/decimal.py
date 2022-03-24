@@ -62,14 +62,20 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
+    # Decimals in libcudf don't support truediv, see
+    # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+    def __truediv__(self, other):
+        return self._binaryop(other, "__div__")
+
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "__rdiv__")
+
     def _binaryop(self, other: ColumnBinaryOperand, op: str):
         reflect, op = self._check_reflected_op(op)
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
             return NotImplemented
         lhs, rhs = (other, self) if reflect else (self, other)
-        # Decimals in libcudf don't support truediv, see
-        # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-        op = op.replace("true", "")
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
@@ -357,7 +363,7 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     p1, p2 = lhs_dtype.precision, rhs_dtype.precision
     s1, s2 = lhs_dtype.scale, rhs_dtype.scale
 
-    if op in ("__add__", "__sub__"):
+    if op in {"__add__", "__sub__"}:
         scale = max(s1, s2)
         precision = scale + max(p1 - s1, p2 - s2) + 1
     elif op == "__mul__":

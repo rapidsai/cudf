@@ -115,8 +115,6 @@ class DatetimeColumn(column.ColumnBase):
         The validity mask
     """
 
-    # TODO: Timedelta columns support more operations than this, figure out why
-    # and whether we should be exploiting reflection more.
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -407,7 +405,8 @@ class DatetimeColumn(column.ColumnBase):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
             return NotImplemented
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
@@ -450,7 +449,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return NotImplemented
 
-        lhs, rhs = (self, other) if not reflect else (other, self)
+        lhs, rhs = (other, self) if reflect else (self, other)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(

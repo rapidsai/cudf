@@ -58,7 +58,7 @@ def extract_datetime_component(Column col, object field):
 
     if field == "weekday":
         # Pandas counts Monday-Sunday as 0-6
-        # while we count Monday-Sunday as 1-7
+        # while libcudf counts Monday-Sunday as 1-7
         result = result - result.dtype.type(1)
 
     return result

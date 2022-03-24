@@ -1175,8 +1175,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
         expected_error_message=re.escape(
-            f"Modulus of {sr.dtype} with {dt_sr.dtype} "
-            f"cannot be performed."
+            f"Modulo of {sr.dtype} with {dt_sr.dtype} " f"cannot be performed."
         ),
     )
 
@@ -1186,7 +1185,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
         expected_error_message=re.escape(
-            f"Modulus of {sr.dtype} with {np.dtype('object')} "
+            f"Modulo of {sr.dtype} with {np.dtype('object')} "
             f"cannot be performed."
         ),
     )

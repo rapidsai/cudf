@@ -211,14 +211,14 @@ class NumericalColumn(NumericalBaseColumn):
         if op in {"__and__", "__or__", "__xor__"}:
             if is_float_dtype(self.dtype) or is_float_dtype(other):
                 raise TypeError(
-                    f"Operation 'bitwise {op}' not supported between "
+                    f"Operation 'bitwise {op[2:-2]}' not supported between "
                     f"{self.dtype.type.__name__} and "
                     f"{other.dtype.type.__name__}"
                 )
             if is_bool_dtype(self.dtype) or is_bool_dtype(other):
                 out_dtype = "bool"
 
-        lhs, rhs = (self, other) if not reflect else (other, self)
+        lhs, rhs = (other, self) if reflect else (self, other)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:

@@ -96,7 +96,8 @@ class ListColumn(ColumnBase):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         # Lists only support __add__, which concatenates lists.
         reflect, op = self._check_reflected_op(op)
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":

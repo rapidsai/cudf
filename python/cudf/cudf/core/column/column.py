@@ -187,7 +187,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
             return False
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
-            raise TypeError
+            raise TypeError(f"Cannot compare equality with {type(other)}")
         return ret.all()
 
     def all(self, skipna: bool = True) -> bool:

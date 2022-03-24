@@ -5488,7 +5488,8 @@ class StringColumn(column.ColumnBase):
             elif op == "__ne__":
                 return self.isnull()
 
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
             return NotImplemented
 
         if isinstance(other, (StringColumn, str, cudf.Scalar)):

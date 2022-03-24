@@ -54,8 +54,11 @@ BinaryOperand = _create_delegating_mixin(
 
 
 def _binaryop(self, other, op: str):
-    "The core binary_operation function. Must be overridden by subclasses, "
-    "the default implementation raises a NotImplementedError."
+    """The core binary_operation function.
+
+    Must be overridden by subclasses, the default implementation raises a
+    NotImplementedError.
+    """
     raise NotImplementedError
 
 

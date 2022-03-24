@@ -168,7 +168,7 @@ class TimeDeltaColumn(column.ColumnBase):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Modulus of {self.dtype} with {other.dtype} "
+                f"Modulo of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
         return out_dtype
@@ -215,7 +215,8 @@ class TimeDeltaColumn(column.ColumnBase):
         self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
         reflect, op = self._check_reflected_op(op)
-        if (other := self._wrap_binop_normalization(other)) is NotImplemented:
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
             return NotImplemented
 
         this: ColumnBinaryOperand = self
@@ -243,7 +244,7 @@ class TimeDeltaColumn(column.ColumnBase):
         else:
             return NotImplemented
 
-        lhs, rhs = (this, other) if not reflect else (other, this)
+        lhs, rhs = (other, this) if reflect else (this, other)
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
