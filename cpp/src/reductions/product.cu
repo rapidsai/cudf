@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ std::unique_ptr<cudf::scalar> product(column_view const& col,
 {
   return cudf::type_dispatcher(
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),
-    simple::element_type_dispatcher<cudf::reduction::op::product>{},
+    simple::detail::element_type_dispatcher<cudf::reduction::op::product>{},
     col,
     output_dtype,
     stream,
