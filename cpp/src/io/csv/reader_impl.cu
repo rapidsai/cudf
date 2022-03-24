@@ -652,8 +652,8 @@ std::vector<data_type> determine_column_types(csv_reader_options const& reader_o
   std::copy_if(column_types.cbegin(),
                column_types.cend(),
                std::back_inserter(active_col_types),
-               [&column_flags, &column_types](auto const& dtype) {
-                 auto const idx = std::distance(column_types.data(), &dtype);
+               [&column_flags, &types = std::as_const(column_types)](auto& dtype) {
+                 auto const idx = std::distance(types.data(), &dtype);
                  return column_flags[idx] & column_parse::enabled;
                });
 
