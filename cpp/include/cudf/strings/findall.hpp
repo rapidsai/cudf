@@ -64,10 +64,13 @@ std::unique_ptr<table> findall(
  * @brief Returns a lists column of strings for each matching occurrence of the
  * regex pattern within each string.
  *
+ * Each output row includes all the substrings within the corresponding input row
+ * that match the given pattern. If no matches are found, the output row is empty.
+ *
  * @code{.pseudo}
  * Example:
  * s = ["bunny", "rabbit", "hare", "dog"]
- * r = findall_record(s, "[ab]"")
+ * r = findall_record(s, "[ab]")
  * r is now a lists column like:
  *  [ ["b"]
  *    ["a","b","b"]
