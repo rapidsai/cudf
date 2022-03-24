@@ -6,7 +6,6 @@ import functools
 import inspect
 import pickle
 from collections import abc as abc
-from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
@@ -458,12 +457,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
-        """
-        Construct the Series from a ColumnAccessor
-        """
-        out: Series = super()._from_data(data, index, name)
-        if index is None:
-            out._index = RangeIndex(out._data.nrows)
+        out = super()._from_data(data=data, index=index)
+        if name is not None:
+            out.name = name
         return out
 
     @_cudf_nvtx_annotate
@@ -2384,19 +2380,34 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """Calculates the sample correlation between two Series,
         excluding missing values.
 
+        Parameters
+        ----------
+        other : Series
+            Series with which to compute the correlation.
+        method : {'pearson', 'spearman'}, default 'pearson'
+            Method used to compute correlation:
+
+            - pearson : Standard correlation coefficient
+            - spearman : Spearman rank correlation
+
+        min_periods : int, optional
+            Minimum number of observations needed to have a valid result.
+
         Examples
         --------
         >>> import cudf
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
-        >>> ser1.corr(ser2)
+        >>> ser1.corr(ser2, method="pearson")
         -0.20454263717316112
+        >>> ser1.corr(ser2, method="spearman")
+        -0.5
         """
 
-        if method not in ("pearson",):
+        if method not in {"pearson", "spearman"}:
             raise ValueError(f"Unknown method {method}")
 
-        if min_periods not in (None,):
+        if min_periods is not None:
             raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
@@ -2405,6 +2416,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
+        if method == "spearman":
+            lhs = lhs.rank()
+            rhs = rhs.rank()
 
         try:
             return lhs._column.corr(rhs._column)
@@ -2713,21 +2727,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: float64
         """
 
-        result = self._column.quantile(q, interpolation, exact)
+        return_scalar = is_scalar(q)
+        if return_scalar:
+            np_array_q = np.asarray([float(q)])
+        else:
+            try:
+                np_array_q = np.asarray(q)
+            except TypeError:
+                try:
+                    np_array_q = cudf.core.column.as_column(q).values_host
+                except TypeError:
+                    raise TypeError(
+                        f"q must be a scalar or array-like, got {type(q)}"
+                    )
 
-        if isinstance(q, Number):
+        result = self._column.quantile(
+            np_array_q, interpolation, exact, return_scalar=return_scalar
+        )
+
+        if return_scalar:
             return result
 
-        if quant_index:
-            index = np.asarray(q)
-            if len(self) == 0:
-                result = column_empty_like(
-                    index, dtype=self.dtype, masked=True, newsize=len(index),
-                )
-        else:
-            index = None
-
-        return Series(result, index=index, name=self.name)
+        return Series._from_data(
+            data={self.name: result},
+            index=as_index(np_array_q) if quant_index else None,
+        )
 
     @docutils.doc_describe()
     @_cudf_nvtx_annotate

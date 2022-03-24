@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,32 +16,25 @@
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf/transpose.hpp>
-#include <cudf/types.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <memory>
-#include <thrust/transform.h>
 
-using cudf::test::fixed_width_column_wrapper;
+#include <cudf/column/column_factories.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/transpose.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 static void BM_transpose(benchmark::State& state)
 {
   auto count = state.range(0);
-
-  auto data     = std::vector<int>(count, 0);
-  auto validity = std::vector<bool>(count, 1);
-
-  auto fwcw_iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [&data, &validity](auto idx) {
-      return fixed_width_column_wrapper<int>(data.begin(), data.end(), validity.begin());
+  auto int_column_generator =
+    thrust::make_transform_iterator(thrust::counting_iterator(0), [count](int i) {
+      return cudf::make_numeric_column(
+        cudf::data_type{cudf::type_id::INT32}, count, cudf::mask_state::ALL_VALID);
     });
 
-  auto input_columns = std::vector<fixed_width_column_wrapper<int>>(fwcw_iter, fwcw_iter + count);
-
-  auto input_column_views =
-    std::vector<cudf::column_view>(input_columns.begin(), input_columns.end());
-
-  auto input = cudf::table_view(input_column_views);
+  auto input_table = cudf::table(std::vector(int_column_generator, int_column_generator + count));
+  auto input       = input_table.view();
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);

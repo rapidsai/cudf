@@ -175,7 +175,7 @@ struct HasherDispatcher {
       hasher->process(input_col.element<Element>(row_index));
     } else {
       (void)row_index;
-      cudf_assert(false && "Unsupported type for hash function.");
+      CUDF_UNREACHABLE("Unsupported type for hash function.");
     }
   }
 };
@@ -201,7 +201,7 @@ struct ListHasherDispatcher {
     } else {
       (void)offset_begin;
       (void)offset_end;
-      cudf_assert(false && "Unsupported type for hash function.");
+      CUDF_UNREACHABLE("Unsupported type for hash function.");
     }
   }
 };
@@ -262,7 +262,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
             auto const data_col = col.child(lists_column_view::child_column_index);
             auto const offsets  = col.child(lists_column_view::offsets_column_index);
             if (data_col.type().id() == type_id::LIST) {
-              cudf_assert(false && "Nested list unsupported");
+              CUDF_UNREACHABLE("Nested list unsupported");
             }
             auto const offset_begin = offsets.element<size_type>(row_index);
             auto const offset_end   = offsets.element<size_type>(row_index + 1);

@@ -349,14 +349,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
-        # libcudf currently doesn't handle case when offset > len(df)
-        # ticket to fix the bug in link below:
-        # https://github.com/rapidsai/cudf/issues/10314
-        if abs(offset) > len(self):
-            if fill_value is None:
-                return column_empty_like(self, masked=True)
-            else:
-                return full(len(self), fill_value, dtype=self.dtype)
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -683,7 +675,11 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return concat_columns([self, as_column(other)])
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 

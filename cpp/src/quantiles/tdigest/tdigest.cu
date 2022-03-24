@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,6 +307,24 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                              std::move(max_col),
                              stream,
                              mr);
+}
+
+/**
+ * @brief Create an empty tdigest scalar.
+ *
+ * An empty tdigest scalar is a struct_scalar that contains a single row of length 0
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @returns An empty tdigest scalar.
+ */
+std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
+{
+  auto contents = make_empty_tdigest_column(stream, mr)->release();
+  return std::make_unique<struct_scalar>(
+    std::move(*std::make_unique<table>(std::move(contents.children))), true, stream, mr);
 }
 
 }  // namespace tdigest.

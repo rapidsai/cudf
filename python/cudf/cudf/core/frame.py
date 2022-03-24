@@ -143,11 +143,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     def _num_rows(self) -> int:
-        if self._index is not None:
-            return len(self._index)
-        if len(self._data) == 0:
-            return 0
-        return len(self._data.columns[0])
+        return 0 if self._num_columns == 0 else len(self._data.columns[0])
 
     @property
     def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
@@ -184,66 +180,38 @@ class Frame(BinaryOperand, Scannable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
-    ):
+    def _from_data(cls, data: MutableMapping):
         obj = cls.__new__(cls)
-        Frame.__init__(obj, data, index)
+        Frame.__init__(obj, data)
         return obj
 
     @classmethod
     @_cudf_nvtx_annotate
     def _from_columns(
-        cls,
-        columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
-        index_names: Optional[List[str]] = None,
+        cls, columns: List[ColumnBase], column_names: abc.Iterable[str],
     ):
-        """Construct a `Frame` object from a list of columns.
+        """Construct a `Frame` object from a list of columns."""
+        data = {name: columns[i] for i, name in enumerate(column_names)}
 
-        If `index_names` is set, the first `len(index_names)` columns are
-        used to construct the index of the frame.
-        """
-        index = None
-        n_index_columns = 0
-        if index_names is not None:
-            n_index_columns = len(index_names)
-            index = cudf.core.index._index_from_columns(
-                columns[:n_index_columns]
-            )
-            if isinstance(index, cudf.MultiIndex):
-                index.names = index_names
-            else:
-                index.name = index_names[0]
-
-        data = {
-            name: columns[i + n_index_columns]
-            for i, name in enumerate(column_names)
-        }
-
-        return cls._from_data(data, index)
+        return cls._from_data(data)
 
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
-        index_names: Optional[List[str]] = None,
+        column_names: Optional[abc.Iterable[str]] = None,
     ):
-        """Construct a `Frame` from a list of columns with metadata from self.
+        """Construct a Frame from a list of columns with metadata from self.
 
-        If `index_names` is set, the first `len(index_names)` columns are
-        used to construct the index of the frame.
+        If `column_names` is None, use column names from self.
         """
-        frame = self.__class__._from_columns(
-            columns, column_names, index_names
-        )
-        return frame._copy_type_metadata(self, include_index=bool(index_names))
+        if column_names is None:
+            column_names = self._column_names
+        frame = self.__class__._from_columns(columns, column_names)
+        return frame._copy_type_metadata(self)
 
     def _mimic_inplace(
-        self: T, result: Frame, inplace: bool = False
+        self: T, result: T, inplace: bool = False
     ) -> Optional[Frame]:
         if inplace:
             for col in self._data:
@@ -252,7 +220,6 @@ class Frame(BinaryOperand, Scannable):
                         result._data[col], inplace=True
                     )
             self._data = result._data
-            self._index = result._index
             return None
         else:
             return result
@@ -424,92 +391,6 @@ class Frame(BinaryOperand, Scannable):
         return self._num_rows
 
     @_cudf_nvtx_annotate
-    def copy(self: T, deep: bool = True) -> T:
-        """
-        Make a copy of this object's indices and data.
-
-        When ``deep=True`` (default), a new object will be created with a
-        copy of the calling object's data and indices. Modifications to
-        the data or indices of the copy will not be reflected in the
-        original object (see notes below).
-        When ``deep=False``, a new object will be created without copying
-        the calling object's data or index (only references to the data
-        and index are copied). Any changes to the data of the original
-        will be reflected in the shallow copy (and vice versa).
-
-        Parameters
-        ----------
-        deep : bool, default True
-            Make a deep copy, including a copy of the data and the indices.
-            With ``deep=False`` neither the indices nor the data are copied.
-
-        Returns
-        -------
-        copy : Series or DataFrame
-            Object type matches caller.
-
-        Examples
-        --------
-        >>> s = cudf.Series([1, 2], index=["a", "b"])
-        >>> s
-        a    1
-        b    2
-        dtype: int64
-        >>> s_copy = s.copy()
-        >>> s_copy
-        a    1
-        b    2
-        dtype: int64
-
-        **Shallow copy versus default (deep) copy:**
-
-        >>> s = cudf.Series([1, 2], index=["a", "b"])
-        >>> deep = s.copy()
-        >>> shallow = s.copy(deep=False)
-
-        Shallow copy shares data and index with original.
-
-        >>> s is shallow
-        False
-        >>> s._column is shallow._column and s.index is shallow.index
-        True
-
-        Deep copy has own copy of data and index.
-
-        >>> s is deep
-        False
-        >>> s.values is deep.values or s.index is deep.index
-        False
-
-        Updates to the data shared by shallow copy and original is reflected
-        in both; deep copy remains unchanged.
-
-        >>> s['a'] = 3
-        >>> shallow['b'] = 4
-        >>> s
-        a    3
-        b    4
-        dtype: int64
-        >>> shallow
-        a    3
-        b    4
-        dtype: int64
-        >>> deep
-        a    1
-        b    2
-        dtype: int64
-        """
-        new_frame = self.__class__.__new__(self.__class__)
-        new_frame._data = self._data.copy(deep=deep)
-
-        if self._index is not None:
-            new_frame._index = self._index.copy(deep=deep)
-        else:
-            new_frame._index = None
-
-        return new_frame
-
-    @_cudf_nvtx_annotate
     def astype(self, dtype, copy=False, **kwargs):
         result = {}
         for col_name, col in self._data.items():
@@ -522,7 +403,7 @@ class Frame(BinaryOperand, Scannable):
         return result
 
     @_cudf_nvtx_annotate
-    def equals(self, other, **kwargs):
+    def equals(self, other):
         """
         Test whether two objects contain the same elements.
         This function allows two Series or DataFrames to be compared against
@@ -581,28 +462,19 @@ class Frame(BinaryOperand, Scannable):
         """
         if self is other:
             return True
-
-        check_types = kwargs.get("check_types", True)
-
-        if check_types:
-            if type(self) is not type(other):
-                return False
-
-        if other is None or len(self) != len(other):
+        if (
+            other is None
+            or not isinstance(other, type(self))
+            or len(self) != len(other)
+        ):
             return False
 
-        # check data:
-        for self_col, other_col in zip(
-            self._data.values(), other._data.values()
-        ):
-            if not self_col.equals(other_col, check_dtypes=check_types):
-                return False
-
-        # check index:
-        if self._index is None:
-            return other._index is None
-        else:
-            return self._index.equals(other._index)
+        return all(
+            self_col.equals(other_col, check_dtypes=True)
+            for self_col, other_col in zip(
+                self._data.values(), other._data.values()
+            )
+        )
 
     @_cudf_nvtx_annotate
     def _get_columns_by_label(self, labels, downcast=False):
@@ -611,30 +483,6 @@ class Frame(BinaryOperand, Scannable):
 
         """
         return self._data.select_by_label(labels)
-
-    @_cudf_nvtx_annotate
-    def _get_columns_by_index(self, indices):
-        """
-        Returns columns of the Frame specified by `labels`
-
-        """
-        data = self._data.select_by_index(indices)
-        return self.__class__._from_data(
-            data, columns=data.to_pandas_index(), index=self.index
-        )
-
-    def _as_column(self):
-        """
-        _as_column : Converts a single columned Frame to Column
-        """
-        assert (
-            self._num_columns == 1
-            and self._index is None
-            and self._column_names[0] is None
-        ), """There should be only one data column,
-            no index and None as the name to use this method"""
-
-        return self._data[None].copy(deep=False)
 
     @property
     def values(self):
@@ -881,6 +729,10 @@ class Frame(BinaryOperand, Scannable):
         3    4
         dtype: int64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.clip is deprecated and will be removed.", FutureWarning,
+            )
 
         if axis != 1:
             raise NotImplementedError("`axis is not yet supported in clip`")
@@ -898,13 +750,10 @@ class Frame(BinaryOperand, Scannable):
 
         if len(lower) != self._num_columns:
             raise ValueError(
-                """Length of lower/upper should be
-                equal to number of columns in
-                DataFrame/Series/Index/MultiIndex"""
+                "Length of lower/upper should be equal to number of columns"
             )
 
-        output = self.copy(deep=False)
-        if output.ndim == 1:
+        if self.ndim == 1:
             # In case of series and Index,
             # swap lower and upper if lower > upper
             if (
@@ -914,11 +763,12 @@ class Frame(BinaryOperand, Scannable):
             ):
                 lower[0], upper[0] = upper[0], lower[0]
 
-        for i, name in enumerate(self._data):
-            output._data[name] = self._data[name].clip(lower[i], upper[i])
-
+        data = {
+            name: col.clip(lower[i], upper[i])
+            for i, (name, col) in enumerate(self._data.items())
+        }
+        output = self._from_data(data, self._index)
         output._copy_type_metadata(self, include_index=False)
-
         return self._mimic_inplace(output, inplace=inplace)
 
     @_cudf_nvtx_annotate
@@ -1195,7 +1045,7 @@ class Frame(BinaryOperand, Scannable):
 
         Returns
         -------
-        result : DataFrame
+        result : DataFrame, Series, or Index
             Copy with nulls filled.
 
         Examples
@@ -1324,8 +1174,7 @@ class Frame(BinaryOperand, Scannable):
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(data=filled_data, index=self._index),
-            inplace=inplace,
+            self._from_data(data=filled_data), inplace=inplace,
         )
 
     @_cudf_nvtx_annotate
@@ -1546,96 +1395,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
         return self._from_data(data, index).astype(np.float64)
-
-    @_cudf_nvtx_annotate
-    def repeat(self, repeats, axis=None):
-        """Repeats elements consecutively.
-
-        Returns a new object of caller type(DataFrame/Series/Index) where each
-        element of the current object is repeated consecutively a given
-        number of times.
-
-        Parameters
-        ----------
-        repeats : int, or array of ints
-            The number of repetitions for each element. This should
-            be a non-negative integer. Repeating 0 times will return
-            an empty object.
-
-        Returns
-        -------
-        Series/DataFrame/Index
-            A newly created object of same type as caller
-            with repeated elements.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3], 'b': [10, 20, 30]})
-        >>> df
-           a   b
-        0  1  10
-        1  2  20
-        2  3  30
-        >>> df.repeat(3)
-           a   b
-        0  1  10
-        0  1  10
-        0  1  10
-        1  2  20
-        1  2  20
-        1  2  20
-        2  3  30
-        2  3  30
-        2  3  30
-
-        Repeat on Series
-
-        >>> s = cudf.Series([0, 2])
-        >>> s
-        0    0
-        1    2
-        dtype: int64
-        >>> s.repeat([3, 4])
-        0    0
-        0    0
-        0    0
-        1    2
-        1    2
-        1    2
-        1    2
-        dtype: int64
-        >>> s.repeat(2)
-        0    0
-        0    0
-        1    2
-        1    2
-        dtype: int64
-
-        Repeat on Index
-
-        >>> index = cudf.Index([10, 22, 33, 55])
-        >>> index
-        Int64Index([10, 22, 33, 55], dtype='int64')
-        >>> index.repeat(5)
-        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
-                    33, 33, 33, 33, 55, 55, 55, 55, 55],
-                dtype='int64')
-        """
-        if axis is not None:
-            raise NotImplementedError(
-                "Only axis=`None` supported at this time."
-            )
-
-        if not is_scalar(repeats):
-            repeats = as_column(repeats)
-
-        result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, repeats)
-        )
-
-        result._copy_type_metadata(self)
-        return result
 
     @_cudf_nvtx_annotate
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
@@ -5598,6 +5357,20 @@ class Frame(BinaryOperand, Scannable):
             name: col.distinct_count(dropna=dropna)
             for name, col in self._data.items()
         }
+
+    @staticmethod
+    def _repeat(
+        columns: List[ColumnBase], repeats, axis=None
+    ) -> List[ColumnBase]:
+        if axis is not None:
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
+
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
+
+        return libcudf.filling.repeat(columns, repeats)
 
 
 @_cudf_nvtx_annotate
