@@ -420,12 +420,32 @@ class self_comparator {
 
 }  // namespace lexicographic
 
-namespace equality_hashing {
+namespace equality {
 
 template <typename Nullate>
 class device_row_comparator {
-  friend class self_eq_comparator;
+  friend class self_comparator;
 
+ public:
+  /**
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
+   * `rhs_index` in the `rhs` table.
+   *
+   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
+   */
+  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
+  {
+    auto equal_elements = [=](column_device_view l, column_device_view r) {
+      return cudf::type_dispatcher(
+        l.type(), element_comparator{nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
+    };
+
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
+  }
+
+ private:
   /**
    * @brief Construct a function object for performing equality comparison between the rows of two
    * tables.
@@ -438,7 +458,7 @@ class device_row_comparator {
   device_row_comparator(Nullate has_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
-                        null_equality nulls_are_equal = null_equality::EQUAL)
+                        null_equality nulls_are_equal = null_equality::EQUAL) noexcept
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
   }
@@ -464,7 +484,7 @@ class device_row_comparator {
     __device__ element_comparator(Nullate has_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_equality nulls_are_equal = null_equality::EQUAL)
+                                  null_equality nulls_are_equal = null_equality::EQUAL) noexcept
       : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
     {
     }
@@ -562,26 +582,6 @@ class device_row_comparator {
     null_equality const nulls_are_equal;
   };
 
- public:
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
-   * `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of row in the `lhs` table to examine
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
-   */
-  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
-  {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher(
-        l.type(), element_comparator{nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
-    };
-
-    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
-  }
-
- private:
   table_device_view const lhs;
   table_device_view const rhs;
   Nullate const nulls;
@@ -593,7 +593,7 @@ struct preprocessed_table {
    * @brief Preprocess table for use with row equality comparison or row hashing
    *
    * Sets up the table for use with row equality comparison or row hashing. The resulting
-   * preprocessed table can be passed to the constructor of `equality_hashing::self_comparator` to
+   * preprocessed table can be passed to the constructor of `equality::self_comparator` to
    * avoid preprocessing again.
    *
    * @param table The table to preprocess
@@ -603,7 +603,7 @@ struct preprocessed_table {
                                                     rmm::cuda_stream_view stream);
 
  private:
-  friend class self_eq_comparator;
+  friend class self_comparator;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -621,12 +621,11 @@ struct preprocessed_table {
    */
   operator table_device_view() { return *_t; }
 
- private:
   table_device_view_owner _t;
   std::vector<rmm::device_buffer> _null_buffers;
 };
 
-class self_eq_comparator {
+class self_comparator {
  public:
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows of the
@@ -636,7 +635,7 @@ class self_eq_comparator {
    * @param stream The stream to construct this object on. Not the stream that will be used for
    * comparisons using this object.
    */
-  self_eq_comparator(table_view const& t, rmm::cuda_stream_view stream)
+  self_comparator(table_view const& t, rmm::cuda_stream_view stream)
     : d_t(preprocessed_table::create(t, stream))
   {
   }
@@ -650,7 +649,7 @@ class self_eq_comparator {
    *
    * @param t A table preprocessed for equality comparison
    */
-  self_eq_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
+  self_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
   /**
    * @brief Get the comparison operator to use on the device
@@ -671,7 +670,7 @@ class self_eq_comparator {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
-}  // namespace equality_hashing
+}  // namespace equality
 
 }  // namespace row
 }  // namespace experimental

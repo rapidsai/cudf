@@ -50,8 +50,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto comp =
-    cudf::experimental::row::equality_hashing::self_eq_comparator(table_view{{order_by}}, stream);
+  auto comp = cudf::experimental::row::equality::self_comparator(table_view{{order_by}}, stream);
   auto const device_comparator =
     comp.device_comparator(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
   auto ranks = make_fixed_width_column(

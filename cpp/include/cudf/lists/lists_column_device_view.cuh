@@ -40,7 +40,7 @@ class lists_column_device_view {
   CUDF_HOST_DEVICE lists_column_device_view(column_device_view const& underlying_)
     : underlying(underlying_)
   {
-#ifdef __CUDACC__
+#ifdef __CUDA_ARCH__
     cudf_assert(underlying.type().id() == type_id::LIST and
                 "lists_column_device_view only supports lists");
 #else

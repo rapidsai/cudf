@@ -313,7 +313,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 
 }  // namespace lexicographic
 
-namespace equality_hashing {
+namespace equality {
 
 std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const& t,
                                                                rmm::cuda_stream_view stream)
@@ -326,7 +326,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
     new preprocessed_table(std::move(d_t), std::move(std::get<1>(null_pushed_table))));
 }
 
-}  // namespace equality_hashing
+}  // namespace equality
 
 }  // namespace row
 }  // namespace experimental
