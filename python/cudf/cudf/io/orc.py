@@ -285,18 +285,10 @@ def read_orc(
     skiprows=None,
     num_rows=None,
     use_index=True,
-    decimal_cols_as_float=None,
     timestamp_type=None,
     use_python_file_object=True,
     **kwargs,
 ):
-    """{docstring}"""
-    if decimal_cols_as_float is not None:
-        warnings.warn(
-            "`decimal_cols_as_float` is deprecated and will be removed in "
-            "the future",
-            FutureWarning,
-        )
     from cudf import DataFrame
 
     # Multiple sources are passed as a list. If a single source is passed,
@@ -361,7 +353,6 @@ def read_orc(
                 skiprows,
                 num_rows,
                 use_index,
-                decimal_cols_as_float,
                 timestamp_type,
             )
         )
