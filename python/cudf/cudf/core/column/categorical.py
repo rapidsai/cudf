@@ -1083,9 +1083,9 @@ class CategoricalColumn(column.ColumnBase):
         if df._data["new"].null_count > 0:
             drop_values = df._data["old"][df._data["new"].isnull()]
             cur_categories = replaced.categories
-            new_categories = cur_categories[
+            new_categories = cur_categories.apply_boolean_mask(
                 ~cudf.Series(cur_categories.isin(drop_values))
-            ]
+            )
             replaced = replaced._set_categories(new_categories)
             df = df.dropna(subset=["new"])
             to_replace_col = df._data["old"]

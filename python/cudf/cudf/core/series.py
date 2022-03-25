@@ -96,13 +96,9 @@ class _SeriesIlocIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             arg = list(arg)
-        data = self._frame._column[arg]
+        data = self._frame._get_from_column(arg)
 
-        if (
-            isinstance(data, (dict, list))
-            or _is_scalar_or_zero_d_array(data)
-            or _is_null_host_scalar(data)
-        ):
+        if _is_scalar_or_zero_d_array(data) or _is_null_host_scalar(data):
             return data
         return self._frame._from_data(
             {self._frame.name: data},
