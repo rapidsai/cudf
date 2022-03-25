@@ -41,7 +41,7 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -68,7 +68,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.mixins import Reducible
+from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -78,7 +78,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import NotIterable, mask_dtype
+from cudf.utils.utils import NotIterable, _array_ufunc, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 # TODO: This workaround allows type hints for `slice`, since `slice` is a
@@ -86,7 +86,7 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-class ColumnBase(Column, Serializable, Reducible, NotIterable):
+class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
     _VALID_REDUCTIONS = {
         "any",
         "all",
@@ -185,7 +185,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             return False
         if check_dtypes and (self.dtype != other.dtype):
             return False
-        return self.binary_operator("NULL_EQUALS", other).all()
+        ret = self._binaryop(other, "NULL_EQUALS")
+        if ret is NotImplemented:
+            raise TypeError(f"Cannot compare equality with {type(other)}")
+        return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.
@@ -521,8 +524,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is cudf.NA:
+        if other is cudf.NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(
@@ -1029,50 +1034,8 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             "`__cuda_array_interface__`"
         )
 
-    def __add__(self, other):
-        return self.binary_operator("add", other)
-
-    def __sub__(self, other):
-        return self.binary_operator("sub", other)
-
-    def __mul__(self, other):
-        return self.binary_operator("mul", other)
-
-    def __eq__(self, other):
-        return self.binary_operator("eq", other)
-
-    def __ne__(self, other):
-        return self.binary_operator("ne", other)
-
-    def __or__(self, other):
-        return self.binary_operator("or", other)
-
-    def __and__(self, other):
-        return self.binary_operator("and", other)
-
-    def __floordiv__(self, other):
-        return self.binary_operator("floordiv", other)
-
-    def __truediv__(self, other):
-        return self.binary_operator("truediv", other)
-
-    def __mod__(self, other):
-        return self.binary_operator("mod", other)
-
-    def __pow__(self, other):
-        return self.binary_operator("pow", other)
-
-    def __lt__(self, other):
-        return self.binary_operator("lt", other)
-
-    def __gt__(self, other):
-        return self.binary_operator("gt", other)
-
-    def __le__(self, other):
-        return self.binary_operator("le", other)
-
-    def __ge__(self, other):
-        return self.binary_operator("ge", other)
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     def searchsorted(
         self,
@@ -1131,14 +1094,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
     def unary_operator(self, unaryop: str):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
-        )
-
-    def binary_operator(
-        self, op: str, other: BinaryOperand, reflect: bool = False
-    ) -> ColumnBase:
-        raise TypeError(
-            f"Operation {op} not supported between dtypes {self.dtype} and "
-            f"{other.dtype}."
         )
 
     def normalize_binop_value(
