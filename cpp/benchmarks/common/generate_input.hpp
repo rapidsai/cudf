@@ -171,6 +171,16 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::list_view
   cudf::size_type max_depth;
 };
 
+/**
+ * @brief Lists are parameterized by the distribution of their length, maximal nesting level, and
+ * the element type.
+ */
+template <typename T>
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>> {
+  std::vector<cudf::type_id> leaf_types;
+  cudf::size_type max_depth;
+};
+
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
 struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
@@ -214,6 +224,8 @@ class data_profile {
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
   distribution_params<cudf::list_view> list_dist_desc{
     cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
+  distribution_params<cudf::struct_view> struct_dist_desc{
+    {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
 
   double bool_probability              = 0.5;
@@ -279,6 +291,12 @@ class data_profile {
   distribution_params<T> get_distribution_params() const
   {
     return list_dist_desc;
+  }
+
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  distribution_params<T> get_distribution_params() const
+  {
+    return struct_dist_desc;
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
@@ -359,6 +377,11 @@ class data_profile {
 
   void set_list_depth(cudf::size_type max_depth) { list_dist_desc.max_depth = max_depth; }
   void set_list_type(cudf::type_id type) { list_dist_desc.element_type = type; }
+  void set_struct_depth(cudf::size_type max_depth) { struct_dist_desc.max_depth = max_depth; }
+  void set_struct_types(std::vector<cudf::type_id> const& types)
+  {
+    struct_dist_desc.leaf_types = types;
+  }
 };
 
 /**

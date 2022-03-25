@@ -83,6 +83,8 @@ T get_distribution_mean(distribution_params<T> const& dist)
   }
 }
 
+size_t avg_element_size(data_profile const& profile, cudf::data_type dtype);
+
 // Utilities to determine the mean size of an element, given the data profile
 template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
 size_t non_fixed_width_size(data_profile const& profile)
@@ -110,6 +112,18 @@ size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
   auto const element_size      = cudf::size_of(cudf::data_type{dist_params.element_type});
   return element_size * pow(single_level_mean, dist_params.max_depth);
+}
+
+template <>
+size_t non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
+{
+  auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
+  return std::accumulate(dist_params.leaf_types.cbegin(),
+                         dist_params.leaf_types.cend(),
+                         0ul,
+                         [&](auto& sum, auto type_id) {
+                           return sum + avg_element_size(profile, cudf::data_type{type_id});
+                         });
 }
 
 struct non_fixed_width_size_fn {
@@ -523,14 +537,6 @@ std::unique_ptr<cudf::column> create_random_column<cudf::dictionary32>(data_prof
   CUDF_FAIL("not implemented yet");
 }
 
-template <>
-std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profile const& profile,
-                                                                      thrust::minstd_rand& engine,
-                                                                      cudf::size_type num_rows)
-{
-  CUDF_FAIL("not implemented yet");
-}
-
 /**
  * @brief Functor to dispatch create_random_column calls.
  */
@@ -544,6 +550,64 @@ struct create_rand_col_fn {
     return create_random_column<T>(profile, engine, num_rows);
   }
 };
+
+int num_parents(int lvls, int num_children)
+{
+  auto const nest           = std::pow(num_children, 1. / lvls);
+  int const nest_lower      = std::floor(nest);
+  int const nest_upper      = std::ceil(nest);
+  int const min_for_nesting = std::ceil((double)num_children / nest_upper);
+  int const min_for_nested  = std::pow(nest_lower, lvls - 1);
+  return std::max(min_for_nesting, min_for_nested);
+}
+
+template <>
+std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profile const& profile,
+                                                                      thrust::minstd_rand& engine,
+                                                                      cudf::size_type num_rows)
+{
+  auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
+
+  std::vector<std::unique_ptr<cudf::column>> leaf_columns;
+  for (auto& type_id : dist_params.leaf_types)
+    leaf_columns.emplace_back(cudf::type_dispatcher(
+      cudf::data_type(type_id), create_rand_col_fn{}, profile, engine, num_rows));
+  auto valid_dist =
+    random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency().value_or(0)});
+
+  // Generate the list column bottom-up
+  auto parent_columns = std::move(leaf_columns);
+  for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
+    // Generating the next level
+    auto current_children = std::move(parent_columns);
+    parent_columns.clear();
+
+    auto remaining_parents  = num_parents(lvl, current_children.size());
+    auto remaining_children = current_children.size();
+    while (remaining_parents != 0) {
+      auto valids = valid_dist(engine, num_rows);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
+
+      auto const num_to_assign = std::ceil((double)remaining_children / remaining_parents);
+      auto assign_child_begin =
+        current_children.begin() + (current_children.size() - remaining_children);
+      auto assign_child_end = assign_child_begin + num_to_assign;
+      std::vector<std::unique_ptr<cudf::column>> children_to_assign;
+      for (auto it = assign_child_begin; it < assign_child_end; ++it)
+        children_to_assign.emplace_back(std::move(*it));
+
+      parent_columns.emplace_back(cudf::make_structs_column(
+        num_rows,
+        std::move(children_to_assign),
+        profile.get_null_frequency().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
+        profile.get_null_frequency().has_value() ? std::move(null_mask) : rmm::device_buffer{}));
+      --remaining_parents;
+      remaining_children -= num_to_assign;
+    }
+  }
+  return std::move(parent_columns.front());  // return the top-level column
+}
 
 template <typename T>
 struct clamp_down : public thrust::unary_function<T, T> {
