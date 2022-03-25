@@ -21,7 +21,7 @@ function(find_and_configure_nvcomp VERSION_MIN VERSION_MAX)
     nvcomp ${VERSION_MIN}
     GLOBAL_TARGETS nvcomp::nvcomp
     CPM_ARGS GITHUB_REPOSITORY NVIDIA/nvcomp
-    GIT_TAG a6e4e64a177e07cd2e5c8c5e07bb66ffefceae84
+    GIT_TAG v${VERSION_MIN}
     OPTIONS "BUILD_STATIC ON" "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
 
@@ -35,6 +35,6 @@ function(find_and_configure_nvcomp VERSION_MIN VERSION_MAX)
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_nvCOMP 2.2)
-set(CUDF_MAX_VERSION_nvCOMP 2.3)
+set(CUDF_MIN_VERSION_nvCOMP 2.2.0)
+set(CUDF_MAX_VERSION_nvCOMP 2.3.0)
 find_and_configure_nvcomp(${CUDF_MIN_VERSION_nvCOMP} ${CUDF_MAX_VERSION_nvCOMP})
