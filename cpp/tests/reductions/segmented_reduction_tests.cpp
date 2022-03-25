@@ -471,7 +471,6 @@ TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
-}
 
 #undef XXX
 
