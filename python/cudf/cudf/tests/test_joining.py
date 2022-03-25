@@ -1813,8 +1813,8 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
     if isinstance(rhs, cudf.Series):
         check_rhs = rhs.to_frame()
 
-    expect = check_lhs.merge(check_rhs, how=how, **kwargs)
-    got = lhs.merge(rhs, how=how, **kwargs)
+    expect = cudf.merge(check_lhs, check_rhs, how=how, **kwargs)
+    got = cudf.merge(lhs, rhs, how=how, **kwargs)
 
     assert_join_results_equal(expect, got, how=how)
 

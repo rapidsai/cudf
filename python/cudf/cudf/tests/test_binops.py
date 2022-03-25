@@ -4,7 +4,6 @@
 import decimal
 import operator
 import random
-from contextlib import contextmanager
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -26,23 +25,6 @@ from cudf.utils.dtypes import (
 )
 
 STRING_TYPES = {"str"}
-
-
-@contextmanager
-def _hide_deprecated_ops_warnings(func, lhs, rhs):
-    if func in {
-        cudf.logical_and,
-        cudf.logical_or,
-        cudf.remainder,
-    } and isinstance(lhs, cudf.Series):
-        name = func.__name__
-        with pytest.warns(
-            FutureWarning,
-            match=f"Series.{name} is deprecated and will be removed.",
-        ):
-            yield
-    else:
-        yield
 
 
 _binops = [
@@ -165,35 +147,6 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
         result = Series(result)
 
     np.testing.assert_almost_equal(result.to_numpy(), binop(arr1, arr2))
-
-
-_logical_binops = [
-    (operator.and_, operator.and_),
-    (operator.or_, operator.or_),
-    (np.logical_and, cudf.logical_and),
-    (np.logical_or, cudf.logical_or),
-]
-
-
-@pytest.mark.parametrize("lhstype", _int_types + [np.bool_])
-@pytest.mark.parametrize("rhstype", _int_types + [np.bool_])
-@pytest.mark.parametrize("binop,cubinop", _logical_binops)
-def test_series_logical_binop(lhstype, rhstype, binop, cubinop):
-    arr1 = pd.Series(np.random.choice([True, False], 10))
-    if lhstype is not np.bool_:
-        arr1 = arr1 * (np.random.random(10) * 100).astype(lhstype)
-    sr1 = Series(arr1)
-
-    arr2 = pd.Series(np.random.choice([True, False], 10))
-    if rhstype is not np.bool_:
-        arr2 = arr2 * (np.random.random(10) * 100).astype(rhstype)
-    sr2 = Series(arr2)
-
-    with _hide_deprecated_ops_warnings(cubinop, sr1, sr2):
-        result = cubinop(sr1, sr2)
-    expect = binop(arr1, arr2)
-
-    utils.assert_eq(result, expect)
 
 
 _cmpops = [
@@ -936,54 +889,6 @@ def test_vector_to_none_binops(dtype):
     got = data + None
 
     utils.assert_eq(expect, got)
-
-
-@pytest.mark.parametrize(
-    "lhs",
-    [
-        1,
-        3,
-        4,
-        pd.Series([5, 6, 2]),
-        pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2]),
-        6,
-    ],
-)
-@pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
-@pytest.mark.parametrize(
-    "ops",
-    [
-        (np.remainder, cudf.remainder),
-        (np.floor_divide, cudf.floor_divide),
-        (np.subtract, cudf.subtract),
-        (np.add, cudf.add),
-        (np.true_divide, cudf.true_divide),
-        (np.multiply, cudf.multiply),
-    ],
-)
-def test_ufunc_ops(lhs, rhs, ops):
-    np_op, cu_op = ops
-
-    if isinstance(lhs, pd.Series):
-        culhs = cudf.from_pandas(lhs)
-    else:
-        culhs = lhs
-
-    if isinstance(rhs, pd.Series):
-        curhs = cudf.from_pandas(rhs)
-    else:
-        curhs = rhs
-
-    expect = np_op(lhs, rhs)
-    with _hide_deprecated_ops_warnings(cu_op, culhs, curhs):
-        got = cu_op(culhs, curhs)
-
-    if np.isscalar(expect):
-        assert got == expect
-    else:
-        utils.assert_eq(
-            expect, got,
-        )
 
 
 def dtype_scalar(val, dtype):
