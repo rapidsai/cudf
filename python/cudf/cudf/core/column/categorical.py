@@ -1067,7 +1067,13 @@ class CategoricalColumn(column.ColumnBase):
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             fill_value = df._data["new"][df._data["old"].isnull()][0]
-            if fill_value in self.categories:
+            # TODO: This line of code does not work because we cannot use the
+            # `in` operator on self.categories (which is a column). mypy
+            # realizes that this is wrong because __iter__ is not implemented.
+            # However, it seems that this functionality has been broken for a
+            # long time so for now we're just having mypy ignore and we'll come
+            # back to this.
+            if fill_value in self.categories:  # type: ignore
                 replaced = self.fillna(fill_value)
             else:
                 new_categories = self.categories.append(
