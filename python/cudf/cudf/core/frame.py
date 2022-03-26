@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import operator
 import pickle
 import warnings
 from collections import abc
@@ -38,7 +39,6 @@ from cudf.core.column import (
     ColumnBase,
     as_column,
     build_categorical_column,
-    column_empty,
     deserialize_columns,
     serialize_columns,
 )
@@ -49,52 +49,9 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
 
 T = TypeVar("T", bound="Frame")
-
-
-# Mapping from ufuncs to the corresponding binary operators.
-_ufunc_binary_operations = {
-    # Arithmetic binary operations.
-    "add": "add",
-    "subtract": "sub",
-    "multiply": "mul",
-    "matmul": "matmul",
-    "divide": "truediv",
-    "true_divide": "truediv",
-    "floor_divide": "floordiv",
-    "power": "pow",
-    "float_power": "pow",
-    "remainder": "mod",
-    "mod": "mod",
-    "fmod": "mod",
-    # Bitwise binary operations.
-    "bitwise_and": "and",
-    "bitwise_or": "or",
-    "bitwise_xor": "xor",
-    # Comparison binary operators
-    "greater": "gt",
-    "greater_equal": "ge",
-    "less": "lt",
-    "less_equal": "le",
-    "not_equal": "ne",
-    "equal": "eq",
-}
-
-# These operators need to be mapped to their inverses when performing a
-# reflected ufunc operation because no reflected version of the operators
-# themselves exist. When these operators are invoked directly (not via
-# __array_ufunc__) Python takes care of calling the inverse operation.
-_ops_without_reflection = {
-    "gt": "lt",
-    "ge": "le",
-    "lt": "gt",
-    "le": "ge",
-    # ne and eq are symmetric, so they are their own inverse op
-    "ne": "ne",
-    "eq": "eq",
-}
 
 
 class Frame(BinaryOperand, Scannable):
@@ -2482,30 +2439,6 @@ class Frame(BinaryOperand, Scannable):
             zip(self._column_names, data_columns), self._index
         )
 
-    def _binaryop(
-        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
-    ) -> Frame:
-        """Perform a binary operation between two frames.
-
-        Parameters
-        ----------
-        other : Frame
-            The second operand.
-        op : str
-            The operation to perform.
-        fill_value : Any, default None
-            The value to replace null values with. If ``None``, nulls are not
-            filled before the operation.
-
-        Returns
-        -------
-        Frame
-            A new instance containing the result of the operation.
-        """
-        raise NotImplementedError(
-            f"Binary operations are not supported for {self.__class__}"
-        )
-
     @classmethod
     @_cudf_nvtx_annotate
     def _colwise_binop(
@@ -2535,8 +2468,6 @@ class Frame(BinaryOperand, Scannable):
             A dict of columns constructed from the result of performing the
             requested operation on the operands.
         """
-        fn = fn[2:-2]
-
         # Now actually perform the binop on the columns in left and right.
         output = {}
         for (
@@ -2567,11 +2498,9 @@ class Frame(BinaryOperand, Scannable):
             # are not numerical using the new binops mixin.
 
             outcol = (
-                left_column.binary_operator(fn, right_column, reflect=reflect)
-                if right_column is not None
-                else column_empty(
-                    left_column.size, left_column.dtype, masked=True
-                )
+                getattr(operator, fn)(right_column, left_column)
+                if reflect
+                else getattr(operator, fn)(left_column, right_column)
             )
 
             if output_mask is not None:
@@ -2581,44 +2510,8 @@ class Frame(BinaryOperand, Scannable):
 
         return output
 
-    # For more detail on this function and how it should work, see
-    # https://numpy.org/doc/stable/reference/ufuncs.html
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        # We don't currently support reduction, accumulation, etc. We also
-        # don't support any special kwargs or higher arity ufuncs than binary.
-        if method != "__call__" or kwargs or ufunc.nin > 2:
-            return NotImplemented
-
-        fname = ufunc.__name__
-        if fname in _ufunc_binary_operations:
-            reflect = self is not inputs[0]
-            other = inputs[0] if reflect else inputs[1]
-
-            op = _ufunc_binary_operations[fname]
-            if reflect and op in _ops_without_reflection:
-                op = _ops_without_reflection[op]
-                reflect = False
-            op = f"__{'r' if reflect else ''}{op}__"
-
-            # Float_power returns float irrespective of the input type.
-            if fname == "float_power":
-                return getattr(self, op)(other).astype(float)
-            return getattr(self, op)(other)
-
-        # Special handling for various unary operations.
-        if fname == "negative":
-            return self * -1
-        if fname == "positive":
-            return self.copy(deep=True)
-        if fname == "invert":
-            return ~self
-        if fname == "absolute":
-            return self.abs()
-        if fname == "fabs":
-            return self.abs().astype(np.float64)
-
-        # None is a sentinel used by subclasses to trigger cupy dispatch.
-        return None
+        return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     def _apply_cupy_ufunc_to_operands(
         self, ufunc, cupy_func, operands, **kwargs
