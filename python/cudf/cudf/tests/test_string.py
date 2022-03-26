@@ -1817,18 +1817,17 @@ def test_string_findall():
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)
 
-    assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
-    assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
-    assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
-    assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
-    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
+    assert_eq(ps.str.findall("Monkey"), gs.str.findall("Monkey"))
+    assert_eq(ps.str.findall("on"), gs.str.findall("on"))
+    assert_eq(ps.str.findall("b"), gs.str.findall("b"))
+    assert_eq(ps.str.findall("on$"), gs.str.findall("on$"))
     assert_eq(
-        ps.str.findall("on$", re.MULTILINE)[3][0],
-        gs.str.findall("on$", re.MULTILINE)[0][3],
+        ps.str.findall("on$", re.MULTILINE),
+        gs.str.findall("on$", re.MULTILINE),
     )
     assert_eq(
-        ps.str.findall("o.*k", re.DOTALL)[3][0],
-        gs.str.findall("o.*k", re.DOTALL)[0][3],
+        ps.str.findall("o.*k", re.DOTALL),
+        gs.str.findall("o.*k", re.DOTALL),
     )
 
 
