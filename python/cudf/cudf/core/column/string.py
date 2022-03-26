@@ -3528,6 +3528,11 @@ class StringMethods(ColumnMethods):
             )
 
         if expand:
+            warnings.warn(
+                "The expand parameter is deprecated and will be removed in a future version. "
+                "Use expand=False to match the future behavior.",
+                FutureWarning,
+            )
             data, index = libstrings.findall(self._column, pat, flags)
             return self._return_or_inplace(
                 cudf.core.frame.Frame(data, index), expand=expand
