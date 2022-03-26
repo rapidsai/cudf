@@ -1036,26 +1036,26 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
       auto const pos = static_cast<int>(vals.i64[2 * t]);
       __int128_t v   = decode_varint128(bs, pos);
 
-        auto const scaled_value = [&]() {
-          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
-          // val_scale. So the difference of them will be used to add 0s or remove digits.
-          int32_t const scale = (t < numvals) ? col_scale - val_scale : 0;
-          if (scale >= 0) {
-            auto const abs_scale = min(scale, 27);
-            return (v * kPow5i[abs_scale]) << abs_scale;
-          } else  // if (scale < 0)
-          {
-            auto const abs_scale = min(-scale, 27);
-            return (v / kPow5i[abs_scale]) >> abs_scale;
-          }
-        }();
-        if (dtype_id == type_id::DECIMAL32) {
-          vals.i32[t] = scaled_value;
-        } else if (dtype_id == type_id::DECIMAL64) {
-          vals.i64[t] = scaled_value;
-        } else {
-          vals.i128[t] = scaled_value;
+      auto const scaled_value = [&]() {
+        // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+        // val_scale. So the difference of them will be used to add 0s or remove digits.
+        int32_t const scale = (t < numvals) ? col_scale - val_scale : 0;
+        if (scale >= 0) {
+          auto const abs_scale = min(scale, 27);
+          return (v * kPow5i[abs_scale]) << abs_scale;
+        } else  // if (scale < 0)
+        {
+          auto const abs_scale = min(-scale, 27);
+          return (v / kPow5i[abs_scale]) >> abs_scale;
         }
+      }();
+      if (dtype_id == type_id::DECIMAL32) {
+        vals.i32[t] = scaled_value;
+      } else if (dtype_id == type_id::DECIMAL64) {
+        vals.i64[t] = scaled_value;
+      } else {
+        vals.i128[t] = scaled_value;
+      }
     }
     // There is nothing to read, so break
     if (num_vals_read == num_vals_to_read) break;
