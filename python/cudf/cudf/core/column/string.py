@@ -3529,8 +3529,8 @@ class StringMethods(ColumnMethods):
 
         if expand:
             warnings.warn(
-                "The expand parameter is deprecated and will be removed in a future version. "
-                "Use expand=False to match the future behavior.",
+                "The expand parameter is deprecated and will be removed in a "
+                "future version. Set expand=False to match future behavior.",
                 FutureWarning,
             )
             data, index = libstrings.findall(self._column, pat, flags)
