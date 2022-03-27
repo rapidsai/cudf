@@ -2299,7 +2299,7 @@ class StringMethods(ColumnMethods):
         self,
         pat: str = None,
         n: int = -1,
-        expand: bool = None,
+        expand: bool = False,
         regex: bool = None,
     ) -> SeriesOrIndex:
         """
@@ -2420,9 +2420,6 @@ class StringMethods(ColumnMethods):
         2                                <NA>  <NA>  <NA>     <NA>      <NA>
         """
 
-        if expand is None:
-            expand = False
-
         if expand not in (True, False):
             raise ValueError(
                 f"expand parameter accepts only : [True, False], "
@@ -2470,7 +2467,7 @@ class StringMethods(ColumnMethods):
         self,
         pat: str = None,
         n: int = -1,
-        expand: bool = None,
+        expand: bool = False,
         regex: bool = None,
     ) -> SeriesOrIndex:
         """
@@ -2598,9 +2595,6 @@ class StringMethods(ColumnMethods):
         1  https://docs.python.org/3/tutorial  index.html
         2                                <NA>        <NA>
         """
-
-        if expand is None:
-            expand = False
 
         if expand not in (True, False):
             raise ValueError(
