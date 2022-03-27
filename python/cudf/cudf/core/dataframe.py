@@ -1768,7 +1768,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
-            
+
             upper = cudf.concat([upper_left, upper_right], axis=1)
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
