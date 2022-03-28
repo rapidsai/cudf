@@ -289,6 +289,7 @@ def read_orc(
     use_python_file_object=True,
     **kwargs,
 ):
+    """{docstring}"""
     from cudf import DataFrame
 
     # Multiple sources are passed as a list. If a single source is passed,
