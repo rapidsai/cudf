@@ -145,7 +145,9 @@ class Frame(BinaryOperand, Scannable):
     @classmethod
     @_cudf_nvtx_annotate
     def _from_columns(
-        cls, columns: List[ColumnBase], column_names: abc.Iterable[str],
+        cls,
+        columns: List[ColumnBase],
+        column_names: abc.Iterable[str],
     ):
         """Construct a `Frame` object from a list of columns."""
         data = {name: columns[i] for i, name in enumerate(column_names)}
@@ -688,7 +690,8 @@ class Frame(BinaryOperand, Scannable):
         """
         if isinstance(self, cudf.BaseIndex):
             warnings.warn(
-                "Index.clip is deprecated and will be removed.", FutureWarning,
+                "Index.clip is deprecated and will be removed.",
+                FutureWarning,
             )
 
         if axis != 1:
@@ -1131,7 +1134,8 @@ class Frame(BinaryOperand, Scannable):
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(data=filled_data), inplace=inplace,
+            self._from_data(data=filled_data),
+            inplace=inplace,
         )
 
     @_cudf_nvtx_annotate
@@ -2656,7 +2660,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def min(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return the minimum of the values in the DataFrame.
@@ -2702,7 +2711,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def max(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return the maximum of the values in the DataFrame.
@@ -3188,7 +3202,11 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
         """
         return self._reduce(
-            "all", axis=axis, skipna=skipna, level=level, **kwargs,
+            "all",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            **kwargs,
         )
 
     @_cudf_nvtx_annotate
@@ -3224,7 +3242,11 @@ class Frame(BinaryOperand, Scannable):
         dtype: bool
         """
         return self._reduce(
-            "any", axis=axis, skipna=skipna, level=level, **kwargs,
+            "any",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            **kwargs,
         )
 
     @_cudf_nvtx_annotate
@@ -5328,7 +5350,9 @@ def _get_replacement_values_for_columns(
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
-                    value, (len(to_replace),), cudf.dtype(type(value)),
+                    value,
+                    (len(to_replace),),
+                    cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }

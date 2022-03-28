@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
 import shlex
@@ -282,7 +282,12 @@ def test_read_parquet(
 @pytest.mark.parametrize("columns", [None, ["List", "Struct"]])
 @pytest.mark.parametrize("index", [None, "Integer"])
 def test_read_parquet_ext(
-    s3_base, s3so, pdf_ext, bytes_per_thread, columns, index,
+    s3_base,
+    s3so,
+    pdf_ext,
+    bytes_per_thread,
+    columns,
+    index,
 ):
     fname = "test_parquet_reader_ext.parquet"
     bname = "parquet"

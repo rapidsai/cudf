@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import warnings
 from io import BytesIO, StringIO
 
@@ -65,7 +65,8 @@ def read_json(
         )
 
         if not ioutils.ensure_single_filepath_or_buffer(
-            path_or_data=path_or_buf, **kwargs,
+            path_or_data=path_or_buf,
+            **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "

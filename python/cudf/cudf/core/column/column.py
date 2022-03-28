@@ -553,7 +553,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
 
         # step != 1, create a scatter map with arange
         scatter_map = arange(
-            start=start, stop=stop, step=step, dtype=cudf.dtype(np.int32),
+            start=start,
+            stop=stop,
+            step=step,
+            dtype=cudf.dtype(np.int32),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -620,7 +623,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
                 raise ValueError(msg)
 
     def fillna(
-        self: T, value: Any = None, method: str = None, dtype: Dtype = None,
+        self: T,
+        value: Any = None,
+        method: str = None,
+        dtype: Dtype = None,
     ) -> T:
         """Fill null values with ``value``.
 
@@ -844,7 +850,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self: ColumnBase, ascending: bool = True, na_position: str = "last",
+        self: ColumnBase,
+        ascending: bool = True,
+        na_position: str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1884,7 +1892,8 @@ def as_column(
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
             data = as_column(
-                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
+                pa.Array.from_pandas(interval_series),
+                dtype=arbitrary.dtype,
             )
             if dtype is not None:
                 data = data.astype(dtype)
@@ -2109,7 +2118,11 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary) in ("mixed", "mixed-integer",)
+            and infer_dtype(arbitrary)
+            in (
+                "mixed",
+                "mixed-integer",
+            )
         ):
             native_dtype = "object"
         arbitrary = np.asarray(
