@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pickle
-import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -1512,6 +1511,37 @@ class BaseIndex(Serializable):
             column_names=self._column_names,
         )
 
+    def repeat(self, repeats, axis=None):
+        """Repeat elements of a Index.
+
+        Returns a new Index where each element of the current Index is repeated
+        consecutively a given number of times.
+
+        Parameters
+        ----------
+        repeats : int, or array of ints
+            The number of repetitions for each element. This should
+            be a non-negative integer. Repeating 0 times will return
+            an empty object.
+
+        Returns
+        -------
+        Index
+            A newly created object of same type as caller with repeated
+            elements.
+
+        Examples
+        --------
+        >>> index = cudf.Index([10, 22, 33, 55])
+        >>> index
+        Int64Index([10, 22, 33, 55], dtype='int64')
+        >>> index.repeat(5)
+        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
+                    33, 33, 33, 33, 55, 55, 55, 55, 55],
+                dtype='int64')
+        """
+        raise NotImplementedError
+
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:
             raise ValueError(f"Out of bound level: {levels}")
@@ -1524,27 +1554,6 @@ class BaseIndex(Serializable):
 
     def _split(self, splits):
         raise NotImplementedError
-
-    def sample(
-        self,
-        n=None,
-        frac=None,
-        replace=False,
-        weights=None,
-        random_state=None,
-        axis=None,
-        ignore_index=False,
-    ):
-        warnings.warn(
-            "Index.sample is deprecated and will be removed.", FutureWarning,
-        )
-        return cudf.core.index._index_from_data(
-            self.to_frame()
-            .sample(
-                n, frac, replace, weights, random_state, axis, ignore_index
-            )
-            ._data
-        )
 
 
 def _get_result_name(left_name, right_name):
