@@ -945,7 +945,7 @@ def test_string_upper(ps_gs):
 )
 @pytest.mark.parametrize("pat", [None, " ", "-"])
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_string_split(data, pat, n, expand):
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
@@ -967,7 +967,7 @@ def test_string_split(data, pat, n, expand):
 )
 @pytest.mark.parametrize("pat", [None, " ", "\\-+", "\\s+"])
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_string_split_re(data, pat, n, expand):
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
@@ -1510,7 +1510,7 @@ def test_strings_partition(data):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_strings_rsplit(data, n, expand):
     gs = cudf.Series(data)
     ps = pd.Series(data)
@@ -1531,7 +1531,7 @@ def test_strings_rsplit(data, n, expand):
 
 
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_string_rsplit_re(n, expand):
     data = ["a b", " c ", "   d", "e   ", "f"]
     ps = pd.Series(data, dtype="str")
@@ -1566,7 +1566,7 @@ def test_string_rsplit_re(n, expand):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True, False, None])
+@pytest.mark.parametrize("expand", [True, False])
 def test_strings_split(data, n, expand):
     gs = cudf.Series(data)
     ps = pd.Series(data)
