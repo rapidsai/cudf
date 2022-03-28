@@ -26,7 +26,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 22.04.00
+  VERSION 22.06.00
   LANGUAGES C CXX CUDA
 )
 
@@ -238,6 +238,7 @@ add_library(
   src/TableJni.cpp
   src/aggregation128_utils.cu
   src/map_lookup.cu
+  src/maps_column_view.cu
   src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )

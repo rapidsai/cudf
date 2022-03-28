@@ -3,16 +3,7 @@
 
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Dict,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -66,20 +57,6 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError("axis parameter is not implemented yet")
 
         return super()._scan(op, axis=axis, *args, **kwargs)
-
-    @classmethod
-    @_cudf_nvtx_annotate
-    def _from_data(
-        cls,
-        data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
-        name: Any = None,
-    ):
-
-        out = super()._from_data(data, index)
-        if name is not None:
-            out.name = name
-        return out
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -360,14 +337,12 @@ class SingleColumnFrame(Frame, NotIterable):
         return {result_name: (self._column, other, reflect, fill_value)}
 
     @_cudf_nvtx_annotate
-    def nunique(self, method: str = "sort", dropna: bool = True):
+    def nunique(self, dropna: bool = True):
         """
         Return count of unique values for the column.
 
         Parameters
         ----------
-        method : str, default "sort"
-            Method used by cpp_distinct_count
         dropna : bool, default True
             Don't include NaN in the counts.
 
@@ -378,4 +353,4 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         if self._column.null_count == len(self):
             return 0
-        return self._column.distinct_count(method=method, dropna=dropna)
+        return self._column.distinct_count(dropna=dropna)

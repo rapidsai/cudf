@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for reduction `standard deviation`
 
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -21,21 +20,19 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-// @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
-//                 The divisor used in calculations is N - ddof, where N
-//                 represents the number of elements.
+namespace cudf {
+namespace reduction {
 
-std::unique_ptr<cudf::scalar> cudf::reduction::standard_deviation(
-  column_view const& col,
-  cudf::data_type const output_dtype,
-  cudf::size_type ddof,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::scalar> standard_deviation(column_view const& col,
+                                                 cudf::data_type const output_dtype,
+                                                 cudf::size_type ddof,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
   using reducer =
-    cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
+    compound::detail::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
@@ -45,3 +42,6 @@ std::unique_ptr<cudf::scalar> cudf::reduction::standard_deviation(
   CUDF_FAIL("var/std reductions are not supported at debug build.");
 #endif
 }
+
+}  // namespace reduction
+}  // namespace cudf

@@ -381,7 +381,7 @@ def test_concatenate_rows_of_lists():
 
 
 def test_concatenate_list_with_nonlist():
-    with pytest.raises(TypeError, match="can only concatenate list to list"):
+    with pytest.raises(TypeError):
         gdf1 = cudf.DataFrame({"A": [["a", "c"], ["b", "d"], ["c", "d"]]})
         gdf2 = cudf.DataFrame({"A": ["a", "b", "c"]})
         gdf1["A"] + gdf2["A"]

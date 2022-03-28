@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from numbers import Number
-from typing import Any, Sequence, Tuple, Union, cast
+from typing import Any, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -12,7 +11,12 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import BinaryOperand, DatetimeLikeScalar, Dtype, DtypeObj
+from cudf._typing import (
+    ColumnBinaryOperand,
+    DatetimeLikeScalar,
+    Dtype,
+    DtypeObj,
+)
 from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -46,6 +50,27 @@ class TimeDeltaColumn(column.ColumnBase):
         The number of null values.
         If None, it is calculated automatically.
     """
+
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__sub__",
+        "__mul__",
+        "__mod__",
+        "__truediv__",
+        "__floordiv__",
+        "__radd__",
+        "__rsub__",
+        "__rmul__",
+        "__rmod__",
+        "__rtruediv__",
+        "__rfloordiv__",
+    }
 
     def __init__(
         self,
@@ -126,142 +151,106 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return pd_series
 
-    def _binary_op_floordiv(
-        self, rhs: BinaryOperand
-    ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
-        lhs = self  # type: column.ColumnBase
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-            lhs = lhs.astype(common_dtype).astype("float64")
-            if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid():
-                    rhs = cudf.Scalar(
-                        np.timedelta64(rhs.value)
-                        .astype(common_dtype)
-                        .astype("float64")
-                    )
-                else:
-                    rhs = cudf.Scalar(None, "float64")
-            else:
-                rhs = rhs.astype(common_dtype).astype("float64")
-            out_dtype = cudf.dtype("int64")
-        elif rhs.dtype.kind in ("f", "i", "u"):
+    def _binary_op_mul(self, other: ColumnBinaryOperand) -> DtypeObj:
+        if other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Floor Division of {self.dtype} with {rhs.dtype} "
-                f"cannot be performed."
-            )
-
-        return lhs, rhs, out_dtype
-
-    def _binary_op_mul(self, rhs: BinaryOperand) -> DtypeObj:
-        if rhs.dtype.kind in ("f", "i", "u"):
-            out_dtype = self.dtype
-        else:
-            raise TypeError(
-                f"Multiplication of {self.dtype} with {rhs.dtype} "
+                f"Multiplication of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
         return out_dtype
 
-    def _binary_op_mod(self, rhs: BinaryOperand) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-        elif rhs.dtype.kind in ("f", "i", "u"):
+    def _binary_op_mod(self, other: ColumnBinaryOperand) -> DtypeObj:
+        if pd.api.types.is_timedelta64_dtype(other.dtype):
+            out_dtype = determine_out_dtype(self.dtype, other.dtype)
+        elif other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Modulus of {self.dtype} with {rhs.dtype} "
+                f"Modulo of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
         return out_dtype
 
-    def _binary_op_eq_ne(self, rhs: BinaryOperand) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = np.bool_
-        else:
-            raise TypeError(
-                f"Equality of {self.dtype} with {rhs.dtype} "
-                f"cannot be performed."
-            )
-        return out_dtype
-
-    def _binary_op_lt_gt_le_ge(self, rhs: BinaryOperand) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+    def _binary_op_lt_gt_le_ge_eq_ne(
+        self, other: ColumnBinaryOperand
+    ) -> DtypeObj:
+        if pd.api.types.is_timedelta64_dtype(other.dtype):
             return np.bool_
-        else:
-            raise TypeError(
-                f"Invalid comparison between dtype={self.dtype}"
-                f" and {rhs.dtype}"
-            )
+        raise TypeError(
+            f"Invalid comparison between dtype={self.dtype}"
+            f" and {other.dtype}"
+        )
 
-    def _binary_op_truediv(
-        self, rhs: BinaryOperand
-    ) -> Tuple["column.ColumnBase", BinaryOperand, DtypeObj]:
-        lhs = self  # type: column.ColumnBase
-        if pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
-            lhs = lhs.astype(common_dtype).astype("float64")
-            if isinstance(rhs, cudf.Scalar):
-                if rhs.is_valid():
-                    rhs = rhs.value.astype(common_dtype).astype("float64")
+    def _binary_op_div(
+        self, other: ColumnBinaryOperand, op: str
+    ) -> Tuple["column.ColumnBase", ColumnBinaryOperand, DtypeObj]:
+        this: ColumnBase = self
+        if pd.api.types.is_timedelta64_dtype(other.dtype):
+            common_dtype = determine_out_dtype(self.dtype, other.dtype)
+            this = self.astype(common_dtype).astype("float64")
+            if isinstance(other, cudf.Scalar):
+                if other.is_valid():
+                    other = other.value.astype(common_dtype).astype("float64")
                 else:
-                    rhs = cudf.Scalar(None, "float64")
+                    other = cudf.Scalar(None, "float64")
             else:
-                rhs = rhs.astype(common_dtype).astype("float64")
+                other = other.astype(common_dtype).astype("float64")
 
-            out_dtype = cudf.dtype("float64")
-        elif rhs.dtype.kind in ("f", "i", "u"):
+            out_dtype = cudf.dtype(
+                "float64" if op == "__truediv__" else "int64"
+            )
+        elif other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         else:
             raise TypeError(
-                f"Division of {self.dtype} with {rhs.dtype} "
+                f"Division of {self.dtype} with {other.dtype} "
                 f"cannot be performed."
             )
 
-        return lhs, rhs, out_dtype
+        return this, other, out_dtype
 
-    def binary_operator(
-        self, op: str, rhs: BinaryOperand, reflect: bool = False
+    def _binaryop(
+        self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
-        lhs, rhs = self, rhs
+        reflect, op = self._check_reflected_op(op)
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
 
-        if op in ("eq", "ne"):
-            out_dtype = self._binary_op_eq_ne(rhs)
-        elif op in ("lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = self._binary_op_lt_gt_le_ge(rhs)
-        elif op == "mul":
-            out_dtype = self._binary_op_mul(rhs)
-        elif op == "mod":
-            out_dtype = self._binary_op_mod(rhs)
-        elif op == "truediv":
-            lhs, rhs, out_dtype = self._binary_op_truediv(rhs)  # type: ignore
-        elif op == "floordiv":
-            lhs, rhs, out_dtype = self._binary_op_floordiv(rhs)  # type: ignore
-            op = "truediv"
-        elif op == "add":
-            out_dtype = _timedelta_add_result_dtype(lhs, rhs)
-        elif op == "sub":
-            out_dtype = _timedelta_sub_result_dtype(lhs, rhs)
+        this: ColumnBinaryOperand = self
+        if op in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "NULL_EQUALS",
+        }:
+            out_dtype = self._binary_op_lt_gt_le_ge_eq_ne(other)
+        elif op == "__mul__":
+            out_dtype = self._binary_op_mul(other)
+        elif op == "__mod__":
+            out_dtype = self._binary_op_mod(other)
+        elif op in {"__truediv__", "__floordiv__"}:
+            this, other, out_dtype = self._binary_op_div(other, op)
+            op = "__truediv__"
+        elif op == "__add__":
+            out_dtype = _timedelta_add_result_dtype(self, other)
+        elif op == "__sub__":
+            out_dtype = _timedelta_sub_result_dtype(self, other)
         else:
-            raise TypeError(
-                f"Series of dtype {self.dtype} cannot perform "
-                f"the operation {op}"
-            )
+            return NotImplemented
 
-        if reflect:
-            lhs, rhs = rhs, lhs  # type: ignore
+        lhs, rhs = (other, this) if reflect else (this, other)
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
-    def normalize_binop_value(self, other) -> BinaryOperand:
-        if isinstance(other, cudf.Scalar):
+    def normalize_binop_value(self, other) -> ColumnBinaryOperand:
+        if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
-
         if isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):
@@ -281,10 +270,7 @@ class TimeDeltaColumn(column.ColumnBase):
             return cudf.Scalar(other)
         elif np.isscalar(other):
             return cudf.Scalar(other)
-        elif other is None:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            raise TypeError(f"cannot normalize {type(other)}")
+        return NotImplemented
 
     @property
     def as_numerical(self) -> "cudf.core.column.NumericalColumn":
@@ -375,12 +361,19 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> "column.ColumnBase":
         result = self.as_numerical.quantile(
-            q=q, interpolation=interpolation, exact=exact
+            q=q,
+            interpolation=interpolation,
+            exact=exact,
+            return_scalar=return_scalar,
         )
-        if isinstance(q, Number):
+        if return_scalar:
             return pd.Timedelta(result, unit=self.time_unit)
         return result.astype(self.dtype)
 
@@ -595,7 +588,7 @@ def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
 
 
 def _timedelta_add_result_dtype(
-    lhs: BinaryOperand, rhs: BinaryOperand
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
     if pd.api.types.is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
@@ -616,7 +609,7 @@ def _timedelta_add_result_dtype(
 
 
 def _timedelta_sub_result_dtype(
-    lhs: BinaryOperand, rhs: BinaryOperand
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
     if pd.api.types.is_timedelta64_dtype(
         lhs.dtype

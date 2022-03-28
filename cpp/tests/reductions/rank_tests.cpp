@@ -40,9 +40,9 @@ using percent_result_t =
   cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
 using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
 
-auto const rank         = cudf::make_rank_aggregation();
-auto const dense_rank   = cudf::make_dense_rank_aggregation();
-auto const percent_rank = cudf::make_percent_rank_aggregation();
+auto const rank         = cudf::make_rank_aggregation<scan_aggregation>();
+auto const dense_rank   = cudf::make_dense_rank_aggregation<scan_aggregation>();
+auto const percent_rank = cudf::make_percent_rank_aggregation<scan_aggregation>();
 
 auto constexpr INCLUSIVE_SCAN = cudf::scan_type::INCLUSIVE;
 auto constexpr INCLUDE_NULLS  = cudf::null_policy::INCLUDE;
@@ -51,7 +51,7 @@ template <typename T>
 struct TypedRankScanTest : BaseScanTest<T> {
   inline void test_ungrouped_rank_scan(cudf::column_view const& input,
                                        cudf::column_view const& expect_vals,
-                                       std::unique_ptr<aggregation> const& agg)
+                                       std::unique_ptr<scan_aggregation> const& agg)
   {
     auto col_out = cudf::scan(input, agg, INCLUSIVE_SCAN, INCLUDE_NULLS);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
