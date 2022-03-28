@@ -63,7 +63,7 @@ def _binaryop(self, other, op: str):
 
 
 def _check_reflected_op(op):
-    if (reflect := op[2] == "r" and op != "__rshift__") :
+    if reflect := op[2] == "r" and op != "__rshift__":
         op = op[:2] + op[3:]
     return reflect, op
 
