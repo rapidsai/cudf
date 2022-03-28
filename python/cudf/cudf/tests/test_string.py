@@ -1812,14 +1812,17 @@ def test_string_count(data, pat, flags):
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
-@pytest.mark.parameterize("pat, flags", [
-    ("Monkey", 0),
-    ("on", 0),
-    ("b", 0),
-    ("on$", 0),
-    ("on$", re.MULTILINE),
-    ("o.*k", re.DOTALL),
-])
+@pytest.mark.parameterize(
+    "pat, flags",
+    [
+        ("Monkey", 0),
+        ("on", 0),
+        ("b", 0),
+        ("on$", 0),
+        ("on$", re.MULTILINE),
+        ("o.*k", re.DOTALL),
+    ],
+)
 def test_string_findall(pat, flags):
     test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
     ps = pd.Series(test_data)
