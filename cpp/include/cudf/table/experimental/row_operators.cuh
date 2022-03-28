@@ -630,12 +630,10 @@ class device_row_comparator {
         }
       }
 
-      for (int i = 0; i < lcol.size(); ++i) {
-        bool equal = type_dispatcher<dispatch_void_if_nested>(
-          lcol.type(), element_comparator{nulls, lcol, rcol, nulls_are_equal}, i, i);
-        if (not equal) { return false; }
-      }
-      return true;
+      auto comp = element_range_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}};
+      return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp, 0, 0, lcol.size());
+
+      // return true;
     }
 
    private:
@@ -643,6 +641,32 @@ class device_row_comparator {
     column_device_view const rhs;
     Nullate const nulls;
     null_equality const nulls_are_equal;
+  };
+
+  struct element_range_comparator {
+    element_comparator const comp;
+
+    template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+    __device__ bool operator()(size_type const lhs_element_index,
+                               size_type const rhs_element_index,
+                               size_type size) const noexcept
+    {
+      for (size_type i = 0; i < size; ++i) {
+        bool equal =
+          comp.template operator()<Element>(lhs_element_index + i, rhs_element_index + i);
+        if (not equal) { return false; }
+      }
+      return true;
+    }
+
+    template <typename Element,
+              CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>())>
+    __device__ bool operator()(size_type const lhs_element_index,
+                               size_type const rhs_element_index,
+                               size_type size)
+    {
+      CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+    }
   };
 
   table_device_view const lhs;
