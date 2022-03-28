@@ -17,8 +17,10 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -27,6 +29,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
@@ -523,53 +526,113 @@ class device_row_comparator {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
+    struct validity_accessor {
+      column_device_view const col;
+
+      /**
+       * @brief constructor
+       * @param[in] _col column device view of cudf column
+       */
+      __device__ validity_accessor(column_device_view const& _col) : col{_col}
+      {
+        // verify valid is non-null, otherwise, is_valid() will crash
+        // CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+      }
+
+      __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid(i); }
+    };
+
+    auto inline __device__ make_validity_iterator(column_device_view const& column) const noexcept
+    {
+      return thrust::make_transform_iterator(thrust::make_counting_iterator(cudf::size_type{0}),
+                                             validity_accessor{column});
+    }
+
+    __device__ column_device_view get_sliced_child(column_device_view const& c) const noexcept
+    {
+      if (c.type().id() == type_id::LIST) {
+        auto lc           = detail::lists_column_device_view(c);
+        auto start        = lc.offset_at(0);
+        auto end          = lc.offset_at(lc.size());
+        auto const& child = lc.child();
+        return column_device_view(child.type(),
+                                  end - start,
+                                  child.head(),
+                                  child.null_mask(),
+                                  start,
+                                  const_cast<column_device_view*>(child.children().data()),
+                                  child.children().size());
+      } else if (c.type().id() == type_id::STRUCT) {
+        auto const& child = c.child(0);
+        return column_device_view(child.type(),
+                                  c.size(),
+                                  child.head(),
+                                  child.null_mask(),
+                                  c.offset(),
+                                  const_cast<column_device_view*>(child.children().data()),
+                                  child.children().size());
+      }
+    }
+
+    __device__ column_device_view slice(column_device_view const& c,
+                                        size_type start,
+                                        size_type end) const noexcept
+    {
+      return column_device_view(c.type(),
+                                end - start,
+                                nullptr,
+                                c.null_mask(),
+                                c.offset() + start,
+                                const_cast<column_device_view*>(c.children().data()),
+                                c.children().size());
+    }
+
+    __device__ auto make_list_size_iterator(column_device_view const& c) const noexcept
+    {
+      return thrust::make_transform_iterator(thrust::make_counting_iterator(cudf::size_type{0}),
+                                             list_size_functor{c});
+    }
+
     template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
-      column_device_view lcol = lhs;
-      column_device_view rcol = rhs;
-      int l_start_off         = lhs_element_index;
-      int r_start_off         = rhs_element_index;
-      int l_end_off           = lhs_element_index + 1;
-      int r_end_off           = rhs_element_index + 1;
+      column_device_view lcol = slice(lhs, lhs_element_index, lhs_element_index + 1);
+      column_device_view rcol = slice(rhs, rhs_element_index, rhs_element_index + 1);
       while (is_nested(lcol.type())) {
         if (nulls) {
-          for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
-            bool const lhs_is_null{lcol.is_null(i)};
-            bool const rhs_is_null{rcol.is_null(j)};
-
-            if (lhs_is_null and rhs_is_null) {
-              if (nulls_are_equal == null_equality::UNEQUAL) { return false; }
-            } else if (lhs_is_null != rhs_is_null) {
+          auto lnull = make_validity_iterator(lcol);
+          auto rnull = make_validity_iterator(rcol);
+          if (nulls_are_equal == null_equality::UNEQUAL) {
+            if (thrust::any_of(
+                  thrust::seq, lnull, lnull + lcol.size(), thrust::logical_not<bool>()) or
+                thrust::any_of(
+                  thrust::seq, rnull, rnull + rcol.size(), thrust::logical_not<bool>())) {
               return false;
             }
+          } else {
+            if (not thrust::equal(thrust::seq, lnull, lnull + lcol.size(), rnull)) { return false; }
           }
         }
         if (lcol.type().id() == type_id::STRUCT) {
-          lcol = lcol.child(0);
-          rcol = rcol.child(0);
+          lcol = get_sliced_child(lcol);
+          rcol = get_sliced_child(rcol);
         } else if (lcol.type().id() == type_id::LIST) {
-          auto l_list_col = detail::lists_column_device_view(lcol);
-          auto r_list_col = detail::lists_column_device_view(rcol);
-          for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
-            if (l_list_col.offset_at(i + 1) - l_list_col.offset_at(i) !=
-                r_list_col.offset_at(j + 1) - r_list_col.offset_at(j))
-              return false;
+          auto lsizes = make_list_size_iterator(lcol);
+          auto rsizes = make_list_size_iterator(rcol);
+          if (not thrust::equal(thrust::seq, lsizes, lsizes + lcol.size(), rsizes)) {
+            return false;
           }
-          lcol        = l_list_col.child();
-          rcol        = r_list_col.child();
-          l_start_off = l_list_col.offset_at(l_start_off);
-          r_start_off = r_list_col.offset_at(r_start_off);
-          l_end_off   = l_list_col.offset_at(l_end_off);
-          r_end_off   = r_list_col.offset_at(r_end_off);
-          if (l_end_off - l_start_off != r_end_off - r_start_off) { return false; }
+
+          lcol = get_sliced_child(lcol);
+          rcol = get_sliced_child(rcol);
+          if (lcol.size() != rcol.size()) { return false; }
         }
       }
 
-      for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
+      for (int i = 0; i < lcol.size(); ++i) {
         bool equal = type_dispatcher<dispatch_void_if_nested>(
-          lcol.type(), element_comparator{nulls, lcol, rcol, nulls_are_equal}, i, j);
+          lcol.type(), element_comparator{nulls, lcol, rcol, nulls_are_equal}, i, i);
         if (not equal) { return false; }
       }
       return true;

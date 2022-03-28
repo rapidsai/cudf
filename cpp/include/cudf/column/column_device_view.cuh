@@ -268,11 +268,11 @@ class alignas(16) column_device_view_base {
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
-  column_device_view_base(data_type type,
-                          size_type size,
-                          void const* data,
-                          bitmask_type const* null_mask,
-                          size_type offset)
+  __host__ __device__ column_device_view_base(data_type type,
+                                              size_type size,
+                                              void const* data,
+                                              bitmask_type const* null_mask,
+                                              size_type offset)
     : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset}
   {
   }
@@ -327,6 +327,19 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param d_ptr Device memory pointer on which to base any child pointers.
    */
   column_device_view(column_view column, void* h_ptr, void* d_ptr);
+
+  __device__ column_device_view(data_type type,
+                                size_type size,
+                                void const* data,
+                                bitmask_type const* null_mask,
+                                size_type offset,
+                                column_device_view* children,
+                                size_type num_children)
+    : column_device_view_base(type, size, data, null_mask, offset),
+      d_children(children),
+      _num_children(num_children)
+  {
+  }
 
   /**
    * @brief Returns reference to element at the specified index.
