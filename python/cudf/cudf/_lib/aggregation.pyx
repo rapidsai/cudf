@@ -576,6 +576,30 @@ cdef class GroupbyScanAggregation:
     cummin = min
     cummax = max
 
+    @classmethod
+    def rank(cls, method, ascending, na_option, pct):
+        cdef GroupbyScanAggregation agg = cls()
+        cdef libcudf_aggregation.rank_method c_method = (
+            <libcudf_aggregation.rank_method> (
+                <underlying_type_t_rank_method> (
+                    RankMethod[method.upper()]
+                )
+            )
+        )
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_rank_aggregation[groupby_scan_aggregation](
+                c_method,
+                (libcudf_types.order.ASCENDING if ascending else
+                    libcudf_types.order.DESCENDING),
+                (libcudf_types.null_policy.EXCLUDE if na_option == "keep" else
+                    libcudf_types.null_policy.INCLUDE),
+                (libcudf_types.null_order.BEFORE if na_option == "top" else
+                    libcudf_types.null_order.AFTER),
+                pct
+            ))
+        return agg
+
 
 cdef class ReduceAggregation:
     """A Cython wrapper for reduce aggregations.

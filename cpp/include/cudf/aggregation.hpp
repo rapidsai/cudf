@@ -395,14 +395,19 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * @endcode
  *
  * @param method The ranking method used for tie breaking (same values).
+ * @param column_order The desired sort order for ranking
  * @param null_handling  flag to include nulls during ranking. If nulls are not
  * included, corresponding rank will be null.
+ * @param null_precedence The desired order of null compared to other elements
+ * for column
  * @param percentage flag to convert ranks to percentage in range (0,1}
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_rank_aggregation(rank_method method,
-                                            null_policy null_handling = null_policy::EXCLUDE,
-                                            bool percentage           = false);
+                                            order column_order         = order::ASCENDING,
+                                            null_policy null_handling  = null_policy::EXCLUDE,
+                                            null_order null_precedence = null_order::AFTER,
+                                            bool percentage            = false);
 
 /**
  * @brief Factory to create a ANSI_SQL_PERCENT_RANK aggregation

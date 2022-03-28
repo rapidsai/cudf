@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -7,7 +8,9 @@ from libcpp.vector cimport vector
 from cudf._lib.cpp.types cimport (
     data_type,
     interpolation,
+    null_order,
     null_policy,
+    order,
     size_type,
 )
 
@@ -136,3 +139,10 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_covariance_aggregation[T](
         size_type min_periods, size_type ddof) except +
+
+    cdef unique_ptr[T] make_rank_aggregation[T](
+        rank_method method,
+        order column_order,
+        null_policy null_handling,
+        null_order null_precedence,
+        bool percentage) except +

@@ -639,13 +639,33 @@ class rank_aggregation final : public rolling_aggregation,
                                public groupby_scan_aggregation,
                                public scan_aggregation {
  public:
-  rank_aggregation(rank_method method, null_policy null_handling, bool percentage)
-    : aggregation{RANK}, _method{method}, _null_handling{null_handling}, _percentage(percentage)
+  rank_aggregation(rank_method method,
+                   order column_order,
+                   null_policy null_handling,
+                   null_order null_precedence,
+                   bool percentage)
+    : aggregation{RANK},
+      _method{method},
+      _column_order{column_order},
+      _null_handling{null_handling},
+      _null_precedence{null_precedence},
+      _percentage(percentage)
   {
   }
-  rank_method _method;         ///< rank method
-  null_policy _null_handling;  ///< include or exclude nulls in ranks
-  bool _percentage;            ///< whether to return percentage ranks
+  rank_method _method;          ///< rank method
+  order _column_order;          ///< order of the column to rank
+  null_policy _null_handling;   ///< include or exclude nulls in ranks
+  null_order _null_precedence;  ///< order of nulls in ranks
+  bool _percentage;             ///< whether to return percentage ranks
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<rank_aggregation const&>(_other);
+    return _method == other._method and _null_handling == other._null_handling and
+           _column_order == other._column_order and _null_precedence == other._null_precedence and
+           _percentage == other._percentage;
+  }
 
   size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
