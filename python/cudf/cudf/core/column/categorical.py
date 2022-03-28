@@ -24,7 +24,7 @@ from numba import cuda
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -630,6 +630,14 @@ class CategoricalColumn(column.ColumnBase):
     dtype: cudf.core.dtypes.CategoricalDtype
     _codes: Optional[NumericalColumn]
     _children: Tuple[NumericalColumn]
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+    }
 
     def __init__(
         self,
@@ -875,41 +883,29 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes.offset,
         )
 
-    def binary_operator(
-        self, op: str, rhs, reflect: bool = False
-    ) -> ColumnBase:
-        if op not in {"eq", "ne", "lt", "le", "gt", "ge", "NULL_EQUALS"}:
-            raise TypeError(
-                "Series of dtype `category` cannot perform the operation: "
-                f"{op}"
-            )
-        rhs = self._wrap_binop_normalization(rhs)
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        other = self._wrap_binop_normalization(other)
         # TODO: This is currently just here to make mypy happy, but eventually
         # we'll need to properly establish the APIs for these methods.
-        if not isinstance(rhs, CategoricalColumn):
+        if not isinstance(other, CategoricalColumn):
             raise ValueError
         # Note: at this stage we are guaranteed that the dtypes are equal.
-        if not self.ordered and op not in {"eq", "ne", "NULL_EQUALS"}:
+        if not self.ordered and op not in {"__eq__", "__ne__", "NULL_EQUALS"}:
             raise TypeError(
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical.binary_operator(op, rhs.as_numerical)
+        return self.as_numerical._binaryop(other.as_numerical, op)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):
             if not isinstance(other, CategoricalColumn):
-                raise ValueError(
-                    "Binary operations with categorical columns require both "
-                    "columns to be categorical."
-                )
+                return NotImplemented
             if other.dtype != self.dtype:
                 raise TypeError(
                     "Categoricals can only compare with the same type"
                 )
             return other
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
 
         ary = cudf.utils.utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
