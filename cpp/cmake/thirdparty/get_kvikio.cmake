@@ -19,9 +19,9 @@ function(find_and_configure_kvikio)
     KvikIO 22.04
     GLOBAL_TARGETS kvikio::kvikio
     # CPM_ARGS GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
-    CPM_ARGS
+    CPM_ARGS # TODO: use version tags when they become available
     GIT_REPOSITORY https://github.com/madsbk/kvikio.git SOURCE_SUBDIR cpp
-    GIT_TAG no_cufile # TODO: use version tags when they become available
+    GIT_TAG used_by_cudf_for_testing
     OPTIONS "KvikIO_BUILD_EXAMPLES FALSE" # No need to build the KvikIO example
   )
   set(KvikIO_INCLUDE_DIR
