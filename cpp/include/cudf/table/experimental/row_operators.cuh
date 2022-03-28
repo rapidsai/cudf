@@ -562,12 +562,6 @@ class device_row_comparator {
                                 c.children().size());
     }
 
-    __device__ auto make_list_size_iterator(column_device_view const& c) const noexcept
-    {
-      return thrust::make_transform_iterator(thrust::make_counting_iterator(cudf::size_type{0}),
-                                             list_size_functor{c});
-    }
-
     template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
@@ -598,8 +592,8 @@ class device_row_comparator {
           auto l_list_col = detail::lists_column_device_view(lcol);
           auto r_list_col = detail::lists_column_device_view(rcol);
 
-          auto lsizes = make_list_size_iterator(lcol);
-          auto rsizes = make_list_size_iterator(rcol);
+          auto lsizes = make_list_size_iterator(l_list_col);
+          auto rsizes = make_list_size_iterator(r_list_col);
           if (not thrust::equal(thrust::seq, lsizes, lsizes + lcol.size(), rsizes)) {
             return false;
           }
