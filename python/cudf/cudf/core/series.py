@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
+import warnings
 from collections import abc as abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
@@ -13,8 +14,6 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
-
-import warnings
 
 import cudf
 from cudf import _lib as libcudf
