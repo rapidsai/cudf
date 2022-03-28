@@ -97,13 +97,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
 
-    ctypedef enum rank_method:
-        FIRST "cudf::rank_method::FIRST"
-        AVERAGE "cudf::rank_method::AVERAGE"
-        MIN "cudf::rank_method::MIN"
-        MAX "cudf::rank_method::MAX"
-        DENSE "cudf::rank_method::DENSE"
-
     # A Hack to let cython compile with __int128_t symbol
     # https://stackoverflow.com/a/27609033
     ctypedef int int128 "__int128_t"

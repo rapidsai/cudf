@@ -12,6 +12,7 @@ from cudf._lib.cpp.types cimport (
 )
 
 ctypedef int32_t underlying_type_t_correlation_type
+ctypedef int32_t underlying_type_t_rank_method
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
@@ -68,6 +69,13 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         PEARSON 'cudf::correlation_type::PEARSON'
         KENDALL 'cudf::correlation_type::KENDALL'
         SPEARMAN 'cudf::correlation_type::SPEARMAN'
+
+    ctypedef enum rank_method:
+        FIRST "cudf::rank_method::FIRST"
+        AVERAGE "cudf::rank_method::AVERAGE"
+        MIN "cudf::rank_method::MIN"
+        MAX "cudf::rank_method::MAX"
+        DENSE "cudf::rank_method::DENSE"
 
     cdef unique_ptr[T] make_sum_aggregation[T]() except +
 

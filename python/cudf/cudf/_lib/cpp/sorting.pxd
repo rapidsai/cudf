@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.cpp.aggregation cimport rank_method
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
@@ -27,7 +28,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] rank(
         column_view input_view,
-        libcudf_types.rank_method method,
+        rank_method method,
         libcudf_types.order column_order,
         libcudf_types.null_policy null_handling,
         libcudf_types.null_order null_precedence,

@@ -43,6 +43,20 @@ namespace detail {
 class simple_aggregations_collector;
 class aggregation_finalizer;
 }  // namespace detail
+
+/**
+ * @brief Tie-breaker method to use for ranking the column.
+ *
+ * @ingroup column_sort
+ */
+enum class rank_method : int32_t {
+  FIRST,    ///< stable sort order ranking (no ties)
+  AVERAGE,  ///< mean of first in the group
+  MIN,      ///< min of first in the group
+  MAX,      ///< max of first in the group
+  DENSE     ///< rank always increases by 1 between groups
+};
+
 /**
  * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.

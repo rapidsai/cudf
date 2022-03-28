@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>

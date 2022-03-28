@@ -30,7 +30,10 @@ from cudf._lib.types import Interpolation
 
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
+from cudf._lib.cpp.aggregation cimport (
+    underlying_type_t_correlation_type,
+    underlying_type_t_rank_method,
+)
 
 import cudf
 
@@ -76,6 +79,14 @@ class CorrelationType(IntEnum):
         <underlying_type_t_correlation_type>
         libcudf_aggregation.correlation_type.SPEARMAN
     )
+
+
+class RankMethod(IntEnum):
+    FIRST = libcudf_aggregation.rank_method.FIRST
+    AVERAGE = libcudf_aggregation.rank_method.AVERAGE
+    MIN = libcudf_aggregation.rank_method.MIN
+    MAX = libcudf_aggregation.rank_method.MAX
+    DENSE = libcudf_aggregation.rank_method.DENSE
 
 
 cdef class RollingAggregation:

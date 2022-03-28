@@ -10,6 +10,10 @@ from libcpp.vector cimport vector
 from enum import IntEnum
 
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.aggregation cimport (
+    rank_method,
+    underlying_type_t_rank_method,
+)
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.search cimport lower_bound, upper_bound
@@ -20,8 +24,7 @@ from cudf._lib.cpp.sorting cimport (
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order, rank_method
-from cudf._lib.sort cimport underlying_type_t_rank_method
+from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
@@ -201,14 +204,6 @@ def digitize(source_values_table, bins, bool right=False):
             )
 
     return Column.from_unique_ptr(move(c_result))
-
-
-class RankMethod(IntEnum):
-    FIRST = < underlying_type_t_rank_method > rank_method.FIRST
-    AVERAGE = < underlying_type_t_rank_method > rank_method.AVERAGE
-    MIN = < underlying_type_t_rank_method > rank_method.MIN
-    MAX = < underlying_type_t_rank_method > rank_method.MAX
-    DENSE = < underlying_type_t_rank_method > rank_method.DENSE
 
 
 def rank_columns(source_table, object method, str na_option,
