@@ -395,8 +395,10 @@
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
-                                      executable="make">
-                                    <arg value="-j"/>
+                                      executable="cmake">
+                                    <arg value="--build"/>
+                                    <arg value="."/>
+                                    <arg value="--parallel ${env.PARALLEL_LEVEL}"/>
                                 </exec>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
                                 <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">

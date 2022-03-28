@@ -17,11 +17,12 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
+VALIDARGS="clean libcudf libcudfjni cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
+   libcudfni                     - build cudfjni, optionally with docker
    cudf                          - build the cudf Python package
    dask_cudf                     - build the dask_cudf Python package
    benchmarks                    - build benchmarks
@@ -260,6 +261,34 @@ if buildAll || hasArg dask_cudf; then
     else
         PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
     fi
+fi
+
+if hasArg libcudfjni; then
+    set -x
+    cd ${REPODIR}
+    cudaVersion=11.5.0
+    imageName=cudf-build:${cudaVersion}-devel-centos7
+    docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=${cudaVersion} -t $imageName .
+    CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
+    echo CURRENT_DIR $PWD
+    nvidia-docker run -u $(id -u):$(id -g) \
+        -v "/etc/group:/etc/group:ro" \
+        -v "/etc/passwd:/etc/passwd:ro" \
+        -v "/etc/shadow:/etc/shadow:ro" \
+        -v "/etc/sudoers.d:/etc/sudoers.d:ro" \
+        -v "$HOME:$HOME:rw" \
+        --workdir $REPODIR/cpp/build \
+        ${imageName} \
+        cmake .. -G"${CMAKE_GENERATOR}" \
+         -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
+         -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+         -DUSE_NVTX=$ENABLE_NVTX \
+         -DCUDF_USE_ARROW_STATIC=ON \
+         -DCUDF_ENABLE_ARROW_S3=OFF \
+         -DBUILD_TESTS=$BUILD_CPP_TESTS \
+         -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS \
+         -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
+         -DBUILD_SHARED_LIBS=OFF
 fi
 
 # Build libcudf_kafka library
