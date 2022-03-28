@@ -81,6 +81,24 @@ class lists_column_device_view {
   }
 
   /**
+   * @brief Fetches the child column of the underlying list column with offset and size applied
+   */
+  [[nodiscard]] __device__ inline column_device_view sliced_child() const
+  {
+    auto start    = offset_at(0);
+    auto end      = offset_at(size());
+    auto const& c = child();
+    return column_device_view(c.type(),
+                              end - start,
+                              c.head(),
+                              c.null_mask(),
+                              start,
+                              // TODO: Make the ctor take const span of children
+                              const_cast<column_device_view*>(c.children().data()),
+                              c.children().size());
+  }
+
+  /**
    * @brief Indicates whether the list column is nullable.
    */
   [[nodiscard]] __device__ inline bool nullable() const { return underlying.nullable(); }

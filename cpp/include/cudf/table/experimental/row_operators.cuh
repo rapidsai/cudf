@@ -23,6 +23,7 @@
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/sorting.hpp>
+#include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -548,32 +549,6 @@ class device_row_comparator {
                                              validity_accessor{column});
     }
 
-    __device__ column_device_view get_sliced_child(column_device_view const& c) const noexcept
-    {
-      if (c.type().id() == type_id::LIST) {
-        auto lc           = detail::lists_column_device_view(c);
-        auto start        = lc.offset_at(0);
-        auto end          = lc.offset_at(lc.size());
-        auto const& child = lc.child();
-        return column_device_view(child.type(),
-                                  end - start,
-                                  child.head(),
-                                  child.null_mask(),
-                                  start,
-                                  const_cast<column_device_view*>(child.children().data()),
-                                  child.children().size());
-      } else if (c.type().id() == type_id::STRUCT) {
-        auto const& child = c.child(0);
-        return column_device_view(child.type(),
-                                  c.size(),
-                                  child.head(),
-                                  child.null_mask(),
-                                  c.offset(),
-                                  const_cast<column_device_view*>(child.children().data()),
-                                  child.children().size());
-      }
-    }
-
     __device__ column_device_view slice(column_device_view const& c,
                                         size_type start,
                                         size_type end) const noexcept
@@ -601,31 +576,36 @@ class device_row_comparator {
       column_device_view rcol = slice(rhs, rhs_element_index, rhs_element_index + 1);
       while (is_nested(lcol.type())) {
         if (nulls) {
-          auto lnull = make_validity_iterator(lcol);
-          auto rnull = make_validity_iterator(rcol);
+          auto lvalid = make_validity_iterator(lcol);
+          auto rvalid = make_validity_iterator(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
             if (thrust::any_of(
-                  thrust::seq, lnull, lnull + lcol.size(), thrust::logical_not<bool>()) or
+                  thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
                 thrust::any_of(
-                  thrust::seq, rnull, rnull + rcol.size(), thrust::logical_not<bool>())) {
+                  thrust::seq, rvalid, rvalid + rcol.size(), thrust::logical_not<bool>())) {
               return false;
             }
           } else {
-            if (not thrust::equal(thrust::seq, lnull, lnull + lcol.size(), rnull)) { return false; }
+            if (not thrust::equal(thrust::seq, lvalid, lvalid + lcol.size(), rvalid)) {
+              return false;
+            }
           }
         }
         if (lcol.type().id() == type_id::STRUCT) {
-          lcol = get_sliced_child(lcol);
-          rcol = get_sliced_child(rcol);
+          lcol = detail::structs_column_device_view(lcol).sliced_child(0);
+          rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
+          auto l_list_col = detail::lists_column_device_view(lcol);
+          auto r_list_col = detail::lists_column_device_view(rcol);
+
           auto lsizes = make_list_size_iterator(lcol);
           auto rsizes = make_list_size_iterator(rcol);
           if (not thrust::equal(thrust::seq, lsizes, lsizes + lcol.size(), rsizes)) {
             return false;
           }
 
-          lcol = get_sliced_child(lcol);
-          rcol = get_sliced_child(rcol);
+          lcol = l_list_col.sliced_child();
+          rcol = r_list_col.sliced_child();
           if (lcol.size() != rcol.size()) { return false; }
         }
       }
