@@ -3537,10 +3537,19 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, index = libstrings.findall(self._column, pat, flags)
-        return self._return_or_inplace(
-            cudf.core.frame.Frame(data, index), expand=expand
-        )
+        if expand:
+            warnings.warn(
+                "The expand parameter is deprecated and will be removed in a "
+                "future version. Set expand=False to match future behavior.",
+                FutureWarning,
+            )
+            data, index = libstrings.findall(self._column, pat, flags)
+            return self._return_or_inplace(
+                cudf.core.frame.Frame(data, index), expand=expand
+            )
+        else:
+            data = libstrings.findall_record(self._column, pat, flags)
+            return self._return_or_inplace(data, expand=expand)
 
     def isempty(self) -> SeriesOrIndex:
         """
