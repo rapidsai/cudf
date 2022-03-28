@@ -34,17 +34,12 @@ struct linked_column_view : public column_view {
   //       copy of this object. Options:
   // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
   // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  linked_column_view(column_view const& col) : column_view(col), parent(nullptr)
-  {
-    std::transform(
-      col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
-        return std::make_shared<linked_column_view>(this, c);
-      });
-  }
+  linked_column_view(column_view const& col) : linked_column_view(nullptr, col) {}
 
   linked_column_view(linked_column_view* parent, column_view const& col)
     : column_view(col), parent(parent)
   {
+    children.reserve(col.num_children());
     std::transform(
       col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
         return std::make_shared<linked_column_view>(this, c);
@@ -61,9 +56,10 @@ struct linked_column_view : public column_view {
  * @param table table of columns to convert
  * @return Vector of converted linked_column_views
  */
-inline LinkedColVector input_table_to_linked_columns(table_view const& table)
+inline LinkedColVector table_to_linked_columns(table_view const& table)
 {
   LinkedColVector result;
+  result.reserve(table.num_columns());
   std::transform(table.begin(), table.end(), std::back_inserter(result), [&](column_view const& c) {
     return std::make_shared<linked_column_view>(c);
   });

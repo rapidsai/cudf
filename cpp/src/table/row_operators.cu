@@ -43,6 +43,7 @@ table_view pushdown_struct_offsets(table_view table)
     [&](column_view const& c) -> std::vector<column_view> {
     if (c.type().id() == type_id::STRUCT) {
       std::vector<column_view> sliced_children;
+      sliced_children.reserve(c.num_children());
       auto struct_col = structs_column_view(c);
       for (size_type i = 0; i < struct_col.num_children(); ++i) {
         auto sliced = struct_col.get_sliced_child(i);
@@ -62,6 +63,7 @@ table_view pushdown_struct_offsets(table_view table)
     return {c.child_begin(), c.child_end()};
   };
   std::vector<column_view> cols;
+  cols.reserve(table.num_columns());
   std::transform(table.begin(), table.end(), std::back_inserter(cols), [&](column_view const& c) {
     return column_view(c.type(),
                        c.size(),
@@ -148,7 +150,7 @@ auto decompose_structs(table_view table,
                        host_span<null_order const> null_precedence = {})
 {
   auto sliced         = pushdown_struct_offsets(table);
-  auto linked_columns = detail::input_table_to_linked_columns(sliced);
+  auto linked_columns = detail::table_to_linked_columns(sliced);
 
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
@@ -245,6 +247,8 @@ auto decompose_structs(table_view table,
                          std::move(verticalized_col_depths));
 }
 
+using column_checker_fn_t = std::function<void(column_view const&)>;
+
 /**
  * @brief Check a table for compatibility with lexicographic comparison
  *
@@ -253,7 +257,7 @@ auto decompose_structs(table_view table,
 void check_lex_compatibility(table_view const& input)
 {
   // Basically check if there's any LIST hiding anywhere in the table
-  std::function<void(column_view const&)> check_column = [&](column_view const& c) {
+  column_checker_fn_t check_column = [&](column_view const& c) {
     CUDF_EXPECTS(c.type().id() != type_id::LIST,
                  "Cannot lexicographic compare a table with a LIST column");
     if (not is_nested(c.type())) {
@@ -277,7 +281,7 @@ void check_lex_compatibility(table_view const& input)
  */
 void check_eq_compatibility(table_view const& input)
 {
-  std::function<void(column_view const&)> check_column = [&](column_view const& c) {
+  column_checker_fn_t check_column = [&](column_view const& c) {
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_equality_comparable(c.type()),
                    "Cannot compare equality for a table with a column of type " +

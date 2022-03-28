@@ -1170,7 +1170,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
-  auto vec         = input_table_to_linked_columns(table);
+  auto vec         = table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, *table_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
