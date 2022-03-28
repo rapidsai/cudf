@@ -854,9 +854,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def _binaryop(
         self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
     ) -> SingleColumnFrame:
-        reflect = self._is_reflected_op(op)
-        if reflect:
-            op = op[:2] + op[3:]
+        reflect, op = self._check_reflected_op(op)
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
