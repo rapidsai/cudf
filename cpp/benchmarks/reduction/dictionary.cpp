@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf/column/column_view.hpp>
+
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <random>
+#include <cudf/unary.hpp>
 
 class ReductionDictionary : public cudf::benchmark {
 };
@@ -33,12 +32,17 @@ void BM_reduction_dictionary(benchmark::State& state,
 {
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(
-    (agg->kind == cudf::aggregation::ALL ? 1 : 0), (agg->kind == cudf::aggregation::ANY ? 0 : 100));
-  auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [&rand_gen](cudf::size_type row) { return rand_gen.generate(); });
-  cudf::test::dictionary_column_wrapper<T, typename decltype(data_it)::value_type> values(
-    data_it, data_it + column_size);
+  // int column and encoded dictionary column
+  data_profile profile;
+  profile.set_null_frequency(std::nullopt);
+  profile.set_cardinality(0);
+  profile.set_distribution_params<long>(cudf::type_to_id<long>(),
+                                        distribution_id::UNIFORM,
+                                        (agg->kind == cudf::aggregation::ALL ? 1 : 0),
+                                        (agg->kind == cudf::aggregation::ANY ? 0 : 100));
+  auto int_table = create_random_table({cudf::type_to_id<long>()}, row_count{column_size}, profile);
+  auto number_col = cudf::cast(int_table->get_column(0), cudf::data_type{cudf::type_to_id<T>()});
+  auto values     = cudf::dictionary::encode(*number_col);
 
   cudf::data_type output_dtype = [&] {
     if (agg->kind == cudf::aggregation::ANY || agg->kind == cudf::aggregation::ALL)
@@ -49,7 +53,7 @@ void BM_reduction_dictionary(benchmark::State& state,
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = cudf::reduce(values, agg, output_dtype);
+    auto result = cudf::reduce(*values, agg, output_dtype);
   }
 }
 

@@ -6,16 +6,21 @@ import datetime as dt
 import locale
 import re
 from locale import nl_langinfo
-from numbers import Number
 from types import SimpleNamespace
-from typing import Any, Mapping, Sequence, Union, cast
+from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf._typing import (
+    ColumnBinaryOperand,
+    DatetimeLikeScalar,
+    Dtype,
+    DtypeObj,
+    ScalarLike,
+)
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
@@ -109,6 +114,19 @@ class DatetimeColumn(column.ColumnBase):
     mask : Buffer; optional
         The validity mask
     """
+
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__sub__",
+        "__radd__",
+        "__rsub__",
+    }
 
     def __init__(
         self,
@@ -225,11 +243,8 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.datetime.round_datetime(self, freq)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
-        if isinstance(other, cudf.Scalar):
+        if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
-
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
 
         if isinstance(other, dt.datetime):
             other = np.datetime64(other)
@@ -239,8 +254,7 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
-        elif isinstance(other, cudf.DateOffset):
-            return other
+
         if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=self.dtype)
@@ -250,17 +264,15 @@ class DatetimeColumn(column.ColumnBase):
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
-            if other_time_unit not in ("s", "ms", "ns", "us"):
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
                 other = other.astype("timedelta64[s]")
 
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
-        elif other is None:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            raise TypeError(f"cannot normalize {type(other)}")
+
+        return NotImplemented
 
     @property
     def as_numerical(self) -> "cudf.core.column.NumericalColumn":
@@ -375,51 +387,69 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> ColumnBase:
         result = self.as_numerical.quantile(
-            q=q, interpolation=interpolation, exact=exact
+            q=q,
+            interpolation=interpolation,
+            exact=exact,
+            return_scalar=return_scalar,
         )
-        if isinstance(q, Number):
+        if return_scalar:
             return pd.Timestamp(result, unit=self.time_unit)
         return result.astype(self.dtype)
 
-    def binary_operator(
-        self,
-        op: str,
-        rhs: Union[ColumnBase, "cudf.Scalar"],
-        reflect: bool = False,
-    ) -> ColumnBase:
-        if isinstance(rhs, cudf.DateOffset):
-            return rhs._datetime_binop(self, op, reflect=reflect)
-        lhs: Union[ScalarLike, ColumnBase] = self
-        if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = cudf.dtype(np.bool_)  # type: Dtype
-        elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        reflect, op = self._check_reflected_op(op)
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
+        if isinstance(other, cudf.DateOffset):
+            return other._datetime_binop(self, op, reflect=reflect)
+
+        # TODO: Figure out if I can reflect before we start these checks. That
+        # requires figuring out why _timedelta_add_result_dtype and
+        # _timedelta_sub_result_dtype are 1) not symmetric, and 2) different
+        # from each other.
+        if op in {
+            "__eq__",
+            "__ne__",
+            "__lt__",
+            "__gt__",
+            "__le__",
+            "__ge__",
+            "NULL_EQUALS",
+        }:
+            out_dtype: Dtype = cudf.dtype(np.bool_)
+        elif op == "__add__" and pd.api.types.is_timedelta64_dtype(
+            other.dtype
+        ):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
-                rhs, lhs
+                other, self
             )
-        elif op == "sub" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+        elif op == "__sub__" and pd.api.types.is_timedelta64_dtype(
+            other.dtype
+        ):
             out_dtype = cudf.core.column.timedelta._timedelta_sub_result_dtype(
-                rhs if reflect else lhs, lhs if reflect else rhs
+                other if reflect else self, self if reflect else other
             )
-        elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
+        elif op == "__sub__" and pd.api.types.is_datetime64_dtype(other.dtype):
             units = ["s", "ms", "us", "ns"]
-            lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+            lhs_time_unit = cudf.utils.dtypes.get_time_unit(self)
             lhs_unit = units.index(lhs_time_unit)
-            rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+            rhs_time_unit = cudf.utils.dtypes.get_time_unit(other)
             rhs_unit = units.index(rhs_time_unit)
             out_dtype = np.dtype(
                 f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
             )
         else:
-            raise TypeError(
-                f"Series of dtype {self.dtype} cannot perform "
-                f" the operation {op}"
-            )
+            return NotImplemented
 
-        if reflect:
-            lhs, rhs = rhs, lhs
+        lhs, rhs = (other, self) if reflect else (self, other)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(

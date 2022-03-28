@@ -120,7 +120,7 @@ struct RowHandle {
   template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
   __device__ void operator()(cudf::mutable_column_device_view source, cudf::size_type index)
   {
-    cudf_assert(false && "Unsupported type.");
+    CUDF_UNREACHABLE("Unsupported type.");
   }
 };
 

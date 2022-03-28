@@ -325,4 +325,29 @@ TEST_F(CollectTest, CollectStrings)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected7, dynamic_cast<list_scalar*>(ret7.get())->view());
 }
 
+TEST_F(CollectTest, CollectEmptys)
+{
+  using int_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  // test collect empty columns
+  auto empty = int_col{};
+  auto ret   = cudf::reduce(
+    empty, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<list_scalar*>(ret.get())->view());
+
+  ret = cudf::reduce(
+    empty, make_collect_set_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<list_scalar*>(ret.get())->view());
+
+  // test collect all null columns
+  auto all_nulls = int_col{{1, 2, 3, 4, 5}, {0, 0, 0, 0, 0}};
+  ret            = cudf::reduce(
+    all_nulls, make_collect_list_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<list_scalar*>(ret.get())->view());
+
+  ret = cudf::reduce(
+    all_nulls, make_collect_set_aggregation<reduce_aggregation>(), data_type{type_id::LIST});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<list_scalar*>(ret.get())->view());
+}
+
 }  // namespace cudf::test
