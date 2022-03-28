@@ -1828,7 +1828,34 @@ def test_string_findall(pat, flags):
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)
 
-    assert_eq(ps.str.findall(pat, flags), gs.str.findall(pat, flags))
+    # TODO: Update this test to remove "expand=False" when removing the expand
+    # parameter from Series.str.findall.
+    assert_eq(
+        ps.str.findall(pat, flags), gs.str.findall(pat, flags, expand=False)
+    )
+
+
+@pytest.mark.filterwarnings("ignore:The expand parameter is deprecated")
+def test_string_findall_expand_True():
+    # TODO: Remove this test when removing the expand parameter from
+    # Series.str.findall.
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    ps = pd.Series(test_data)
+    gs = cudf.Series(test_data)
+
+    assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
+    assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
+    assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
+    assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
+    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
+    assert_eq(
+        ps.str.findall("on$", re.MULTILINE)[3][0],
+        gs.str.findall("on$", re.MULTILINE)[0][3],
+    )
+    assert_eq(
+        ps.str.findall("o.*k", re.DOTALL)[3][0],
+        gs.str.findall("o.*k", re.DOTALL)[0][3],
+    )
 
 
 def test_string_replace_multi():
