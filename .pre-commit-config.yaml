@@ -28,15 +28,10 @@ repos:
                 args: ["--settings-path=python/dask_cudf/setup.cfg"]
                 files: python/dask_cudf/.*
       - repo: https://github.com/psf/black
-        rev: 19.10b0
+        rev: 22.3.0
         hooks:
               - id: black
                 files: python/.*
-                # This pinning can be removed once we upgrade our black version
-                # to one that has resolved
-                # https://github.com/psf/black/issues/2964
-                additional_dependencies:
-                  - click==8.0.4
       - repo: https://github.com/PyCQA/flake8
         rev: 3.8.3
         hooks:

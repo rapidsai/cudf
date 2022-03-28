@@ -173,7 +173,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
-            if (truediv_type := int_float_dtype_mapping.get(self.dtype.type)) :
+            if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
                 return self.astype(truediv_type)._binaryop(other, op)
 
         reflect, op = self._check_reflected_op(op)
@@ -258,7 +258,9 @@ class NumericalColumn(NumericalBaseColumn):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer(ary), dtype=ary.dtype, mask=self.mask,
+                    data=Buffer(ary),
+                    dtype=ary.dtype,
+                    mask=self.mask,
                 )
         else:
             return NotImplemented
@@ -521,7 +523,11 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
-            found = find(self.data_array_view, value, mask=self.mask,)
+            found = find(
+                self.data_array_view,
+                value,
+                mask=self.mask,
+            )
         if found == -1:
             if self.is_monotonic_increasing and closest:
                 found = find(
