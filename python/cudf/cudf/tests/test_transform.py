@@ -11,14 +11,14 @@ supported_types = NUMERIC_TYPES
 
 
 def _generic_function(a):
-    return a ** 3
+    return a**3
 
 
 @pytest.mark.parametrize("dtype", supported_types)
 @pytest.mark.parametrize(
     "udf,testfunc",
     [
-        (_generic_function, lambda ser: ser ** 3),
+        (_generic_function, lambda ser: ser**3),
         (lambda x: x in [1, 2, 3, 4], lambda ser: np.isin(ser, [1, 2, 3, 4])),
     ],
 )

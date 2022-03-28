@@ -254,7 +254,9 @@ class StringMethods(ColumnMethods):
         2    11
         dtype: int32
         """
-        return self._return_or_inplace(libstrings.count_bytes(self._column),)
+        return self._return_or_inplace(
+            libstrings.count_bytes(self._column),
+        )
 
     @overload
     def cat(self, sep: str = None, na_rep: str = None) -> str:
@@ -355,7 +357,9 @@ class StringMethods(ColumnMethods):
 
         if others is None:
             data = libstrings.join(
-                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
+                self._column,
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -783,7 +787,10 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+    def repeat(
+        self,
+        repeats: Union[int, Sequence],
+    ) -> SeriesOrIndex:
         """
         Duplicate each string in the Series or Index.
         Equivalent to `str.repeat()
@@ -828,7 +835,8 @@ class StringMethods(ColumnMethods):
         if can_convert_to_column(repeats):
             return self._return_or_inplace(
                 libstrings.repeat_sequence(
-                    self._column, column.as_column(repeats, dtype="int"),
+                    self._column,
+                    column.as_column(repeats, dtype="int"),
                 ),
             )
 
@@ -921,7 +929,9 @@ class StringMethods(ColumnMethods):
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
-                    self._column, pat, column.as_column(repl, dtype="str"),
+                    self._column,
+                    pat,
+                    column.as_column(repl, dtype="str"),
                 )
                 if regex
                 else libstrings.replace_multi(
@@ -5173,7 +5183,10 @@ class StringColumn(column.ColumnBase):
             return super().to_arrow()
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0,
+        self,
+        skipna: bool = None,
+        dtype: Dtype = None,
+        min_count: int = 0,
     ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
@@ -5417,7 +5430,10 @@ class StringColumn(column.ColumnBase):
         return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None,
+        self,
+        fill_value: Any = None,
+        method: str = None,
+        dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):

@@ -378,7 +378,10 @@ class TimeDeltaColumn(column.ColumnBase):
         return result.astype(self.dtype)
 
     def sum(
-        self, skipna: bool = None, min_count: int = 0, dtype: Dtype = None,
+        self,
+        skipna: bool = None,
+        min_count: int = 0,
+        dtype: Dtype = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
             # Since sum isn't overriden in Numerical[Base]Column, mypy only

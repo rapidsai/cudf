@@ -105,7 +105,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
         ):
             return data
         return self._frame._from_data(
-            {self._frame.name: data}, index=cudf.Index(self._frame.index[arg]),
+            {self._frame.name: data},
+            index=cudf.Index(self._frame.index[arg]),
         )
 
     @_cudf_nvtx_annotate
@@ -391,7 +392,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def __init__(
-        self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
+        self,
+        data=None,
+        index=None,
+        dtype=None,
+        name=None,
+        nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
             if name is None:
@@ -2377,8 +2383,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def transpose(self):
-        """Return the transpose, which is by definition self.
-        """
+        """Return the transpose, which is by definition self."""
 
         return self
 
@@ -3771,7 +3776,9 @@ class DatetimeProperties:
             np.int8
         )
         return Series._from_data(
-            {None: res}, index=self.series._index, name=self.series.name,
+            {None: res},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @_cudf_nvtx_annotate
@@ -3969,7 +3976,9 @@ class DatetimeProperties:
 
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property  # type: ignore
@@ -4018,7 +4027,9 @@ class DatetimeProperties:
 
         result = ((day == last_day) & last_month).fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property  # type: ignore
@@ -4090,7 +4101,9 @@ class DatetimeProperties:
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
         result = result.fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @_cudf_nvtx_annotate

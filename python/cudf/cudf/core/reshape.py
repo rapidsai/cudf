@@ -256,7 +256,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     )
                 elif isinstance(obj, pd.Series):
                     result = cudf.Series(
-                        data=obj, index=cudf.RangeIndex(len(obj)),
+                        data=obj,
+                        index=cudf.RangeIndex(len(obj)),
                     )
                 else:
                     result = cudf.DataFrame._from_data(

@@ -674,7 +674,10 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     for col in gdf:
@@ -726,7 +729,10 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     col = "col_bool"
@@ -1070,7 +1076,10 @@ def test_skip_rows_for_nested_types(columns, list_struct_buff):
         RuntimeError, match="skip_rows is not supported by nested column"
     ):
         cudf.read_orc(
-            list_struct_buff, columns=columns, use_index=True, skiprows=5,
+            list_struct_buff,
+            columns=columns,
+            use_index=True,
+            skiprows=5,
         )
 
 
