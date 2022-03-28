@@ -1812,23 +1812,20 @@ def test_string_count(data, pat, flags):
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
-def test_string_findall():
+@pytest.mark.parameterize("pat, flags", [
+    ("Monkey", 0),
+    ("on", 0),
+    ("b", 0),
+    ("on$", 0),
+    ("on$", re.MULTILINE),
+    ("o.*k", re.DOTALL),
+])
+def test_string_findall(pat, flags):
     test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)
 
-    assert_eq(ps.str.findall("Monkey"), gs.str.findall("Monkey"))
-    assert_eq(ps.str.findall("on"), gs.str.findall("on"))
-    assert_eq(ps.str.findall("b"), gs.str.findall("b"))
-    assert_eq(ps.str.findall("on$"), gs.str.findall("on$"))
-    assert_eq(
-        ps.str.findall("on$", re.MULTILINE),
-        gs.str.findall("on$", re.MULTILINE),
-    )
-    assert_eq(
-        ps.str.findall("o.*k", re.DOTALL),
-        gs.str.findall("o.*k", re.DOTALL),
-    )
+    assert_eq(ps.str.findall(pat, flags), gs.str.findall(pat, flags))
 
 
 def test_string_replace_multi():
