@@ -30,12 +30,8 @@ fi
 gpuci_logger "Starting conda uploads"
 if [[ "$BUILD_LIBCUDF" == "1" && "$UPLOAD_LIBCUDF" == "1" ]]; then
   export LIBCUDF_FILES=$(conda build --no-build-id --croot "${CONDA_BLD_DIR}" conda/recipes/libcudf --output)
-  while read -r LIBCUDF_FILE; do
-    [[ "$LIBCUDF_FILE" == *libcudf_example* ]] && { echo "skipping libcudf_example upload"; continue; }
-    test -e ${LIBCUDF_FILE}
-    echo "Upload libcudf file: ${LIBCUDF_FILE}"
-    gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_FILE} --no-progress
-  done <<< "${LIBCUDF_FILES}"
+  LIBCUDF_FILES=$(echo "$LIBCUDF_FILES" | sed 's/.*libcudf-example.*//') # skip libcudf-example pkg upload
+  gpuci_retry anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing --no-progress $LIBCUDF_FILES
 fi
 
 if [[ "$BUILD_CUDF" == "1" && "$UPLOAD_CUDF" == "1" ]]; then
