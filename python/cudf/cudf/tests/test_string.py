@@ -1812,7 +1812,7 @@ def test_string_count(data, pat, flags):
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
-@pytest.mark.parameterize(
+@pytest.mark.parametrize(
     "pat, flags",
     [
         ("Monkey", 0),
