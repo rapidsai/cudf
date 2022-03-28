@@ -295,7 +295,7 @@ outputs:
       license_family: Apache
       license_file: LICENSE
       summary: libcudf_kafka library
-  - name: libcudf_example
+  - name: libcudf-example
     version: {{ version }}
     script: install_libcudf_example.sh
     build:
