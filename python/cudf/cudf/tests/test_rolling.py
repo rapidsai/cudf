@@ -365,7 +365,7 @@ def test_rolling_dataframe_numba_udf_basic(data, center):
     def some_func(A):
         b = 0
         for a in A:
-            b = b + a ** 2
+            b = b + a**2
         return b / len(A)
 
     for window_size in range(1, len(data) + 1):

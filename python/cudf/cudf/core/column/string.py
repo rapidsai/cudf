@@ -50,7 +50,13 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
-    from cudf._typing import ColumnLike, Dtype, ScalarLike, SeriesOrIndex
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        ScalarLike,
+        SeriesOrIndex,
+    )
 
 
 _str_to_numeric_typecast_functions = {
@@ -248,7 +254,9 @@ class StringMethods(ColumnMethods):
         2    11
         dtype: int32
         """
-        return self._return_or_inplace(libstrings.count_bytes(self._column),)
+        return self._return_or_inplace(
+            libstrings.count_bytes(self._column),
+        )
 
     @overload
     def cat(self, sep: str = None, na_rep: str = None) -> str:
@@ -349,7 +357,9 @@ class StringMethods(ColumnMethods):
 
         if others is None:
             data = libstrings.join(
-                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
+                self._column,
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -777,7 +787,10 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+    def repeat(
+        self,
+        repeats: Union[int, Sequence],
+    ) -> SeriesOrIndex:
         """
         Duplicate each string in the Series or Index.
         Equivalent to `str.repeat()
@@ -822,7 +835,8 @@ class StringMethods(ColumnMethods):
         if can_convert_to_column(repeats):
             return self._return_or_inplace(
                 libstrings.repeat_sequence(
-                    self._column, column.as_column(repeats, dtype="int"),
+                    self._column,
+                    column.as_column(repeats, dtype="int"),
                 ),
             )
 
@@ -915,7 +929,9 @@ class StringMethods(ColumnMethods):
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
-                    self._column, pat, column.as_column(repl, dtype="str"),
+                    self._column,
+                    pat,
+                    column.as_column(repl, dtype="str"),
                 )
                 if regex
                 else libstrings.replace_multi(
@@ -2293,7 +2309,7 @@ class StringMethods(ColumnMethods):
         self,
         pat: str = None,
         n: int = -1,
-        expand: bool = None,
+        expand: bool = False,
         regex: bool = None,
     ) -> SeriesOrIndex:
         """
@@ -2414,9 +2430,6 @@ class StringMethods(ColumnMethods):
         2                                <NA>  <NA>  <NA>     <NA>      <NA>
         """
 
-        if expand is None:
-            expand = False
-
         if expand not in (True, False):
             raise ValueError(
                 f"expand parameter accepts only : [True, False], "
@@ -2464,7 +2477,7 @@ class StringMethods(ColumnMethods):
         self,
         pat: str = None,
         n: int = -1,
-        expand: bool = None,
+        expand: bool = False,
         regex: bool = None,
     ) -> SeriesOrIndex:
         """
@@ -2592,9 +2605,6 @@ class StringMethods(ColumnMethods):
         1  https://docs.python.org/3/tutorial  index.html
         2                                <NA>        <NA>
         """
-
-        if expand is None:
-            expand = False
 
         if expand not in (True, False):
             raise ValueError(
@@ -5025,6 +5035,26 @@ class StringColumn(column.ColumnBase):
     _start_offset: Optional[int]
     _end_offset: Optional[int]
 
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__radd__",
+        # These operators aren't actually supported, they only exist to allow
+        # empty column binops with scalars of arbitrary other dtypes. See
+        # the _binaryop method for more information.
+        "__sub__",
+        "__mul__",
+        "__mod__",
+        "__pow__",
+        "__truediv__",
+        "__floordiv__",
+    }
+
     def __init__(
         self,
         mask: Buffer = None,
@@ -5153,7 +5183,10 @@ class StringColumn(column.ColumnBase):
             return super().to_arrow()
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0,
+        self,
+        skipna: bool = None,
+        dtype: Dtype = None,
+        min_count: int = 0,
     ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
@@ -5397,7 +5430,10 @@ class StringColumn(column.ColumnBase):
         return libcudf.replace.replace(res, df._data["old"], df._data["new"])
 
     def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None,
+        self,
+        fill_value: Any = None,
+        method: str = None,
+        dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
             if not is_scalar(fill_value):
@@ -5434,50 +5470,49 @@ class StringColumn(column.ColumnBase):
             and other.dtype == "object"
         ):
             return other
-        if isinstance(other, str) or other is None:
-            return utils.scalar_broadcast_to(
-                other, size=len(self), dtype="object"
-            )
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            return utils.scalar_broadcast_to(
-                other.item(), size=len(self), dtype="object"
-            )
-        raise TypeError(f"cannot broadcast {type(other)}")
+        if isinstance(other, str):
+            return cudf.Scalar(other)
+        return NotImplemented
 
-    def binary_operator(
-        self, op: str, rhs, reflect: bool = False
+    def _binaryop(
+        self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
-        # Handle object columns that are empty or all nulls when performing
-        # binary operations
-        # See https://github.com/pandas-dev/pandas/issues/46332
+        reflect, op = self._check_reflected_op(op)
+        # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
+        # support binary operations between empty or all null string columns
+        # and columns of other dtypes, even if those operations would otherwise
+        # be invalid. For example, you cannot divide strings, but pandas allows
+        # division between an empty string column and a (nonempty) integer
+        # column. Ideally we would disable these operators entirely, but until
+        # the above issue is resolved we cannot avoid this problem.
         if self.null_count == len(self):
             if op in {
-                "add",
-                "sub",
-                "mul",
-                "mod",
-                "pow",
-                "truediv",
-                "floordiv",
-                "radd",
-                "rsub",
-                "rmul",
-                "rmod",
-                "rpow",
-                "rtruediv",
-                "rfloordiv",
+                "__add__",
+                "__sub__",
+                "__mul__",
+                "__mod__",
+                "__pow__",
+                "__truediv__",
+                "__floordiv__",
             }:
                 return self
-            elif op in {"eq", "lt", "le", "gt", "ge"}:
+            elif op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:
                 return self.notnull()
-            elif op == "ne":
+            elif op == "__ne__":
                 return self.isnull()
 
-        rhs = self._wrap_binop_normalization(rhs)
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
 
-        if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
-            lhs, rhs = (rhs, self) if reflect else (self, rhs)
-            if op == "add":
+        if isinstance(other, (StringColumn, str, cudf.Scalar)):
+            if op == "__add__":
+                if isinstance(other, cudf.Scalar):
+                    other = utils.scalar_broadcast_to(
+                        other, size=len(self), dtype="object"
+                    )
+                lhs, rhs = (other, self) if reflect else (self, other)
+
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
@@ -5486,13 +5521,20 @@ class StringColumn(column.ColumnBase):
                         na_rep=cudf.Scalar(None, "str"),
                     ),
                 )
-            elif op in {"eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"}:
+            elif op in {
+                "__eq__",
+                "__ne__",
+                "__gt__",
+                "__lt__",
+                "__ge__",
+                "__le__",
+                "NULL_EQUALS",
+            }:
+                lhs, rhs = (other, self) if reflect else (self, other)
                 return libcudf.binaryop.binaryop(
                     lhs=lhs, rhs=rhs, op=op, dtype="bool"
                 )
-        raise TypeError(
-            f"{op} not supported between {type(self)} and {type(rhs)}"
-        )
+        return NotImplemented
 
     @copy_docstring(column.ColumnBase.view)
     def view(self, dtype) -> "cudf.core.column.ColumnBase":
