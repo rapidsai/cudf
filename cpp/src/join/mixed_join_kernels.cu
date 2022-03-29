@@ -35,6 +35,7 @@ namespace detail {
 namespace cg = cooperative_groups;
 
 template <cudf::size_type block_size, bool has_nulls>
+__launch_bounds__(block_size)
 __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            table_device_view probe,
