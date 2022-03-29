@@ -575,17 +575,37 @@ class device_row_comparator {
     }
 
    private:
+    /**
+     * @brief Compares a range of elements in two columns for equality.
+     *
+     * When we want to compare a range of elements in a single column with an equal sized range of
+     * elements from another column, this saves us from type dispatching for each individual element
+     * in the range
+     */
     struct element_range_comparator {
       element_comparator const comp;
 
+      /**
+       * @brief Compare a range of elements for equality.
+       *
+       * Given two columns, compare the elements in the range
+       * [lhs_start_index, lhs_start_index + size) in lhs column with the elements in the range
+       * [rhs_start_index, rhs_start_index + size) in rhs column.
+       * `lhs` and `rhs` columns are defined as the first and second columns used to construct
+       * member `element_comparator comp`
+       *
+       * @param lhs_start_index Starting index of the range of elements in the lhs column
+       * @param rhs_start_index Starting index of the range of elements in the rhs column
+       * @param size The number of elements in the range
+       * @return True if ALL elements in the range compare equal, false otherwise
+       */
       template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
-      __device__ bool operator()(size_type const lhs_element_index,
-                                 size_type const rhs_element_index,
+      __device__ bool operator()(size_type const lhs_start_index,
+                                 size_type const rhs_start_index,
                                  size_type const size) const noexcept
       {
         for (size_type i = 0; i < size; ++i) {
-          bool equal =
-            comp.template operator()<Element>(lhs_element_index + i, rhs_element_index + i);
+          bool equal = comp.template operator()<Element>(lhs_start_index + i, rhs_start_index + i);
           if (not equal) { return false; }
         }
         return true;

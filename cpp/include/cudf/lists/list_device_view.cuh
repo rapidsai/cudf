@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -303,10 +304,22 @@ struct list_size_functor {
   }
 };
 
+/**
+ * @brief Makes an iterator that returns size of the list by row index
+ *
+ * Example:
+ * For a list_column_device_view with 3 rows, `l = {[1, 2, 3], [4, 5], [6, 7, 8, 9]}`,
+ * @code{.cpp}
+ * auto it = make_list_size_iterator(l);
+ * assert(it[0] == 3);
+ * assert(it[1] == 2);
+ * assert(it[2] == 4);
+ * @endcode
+ *
+ */
 __device__ auto inline make_list_size_iterator(detail::lists_column_device_view const& c)
 {
-  return thrust::make_transform_iterator(thrust::make_counting_iterator(cudf::size_type{0}),
-                                         list_size_functor{c});
+  return detail::make_counting_transform_iterator(0, list_size_functor{c});
 }
 
 }  // namespace cudf

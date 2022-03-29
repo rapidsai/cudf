@@ -328,6 +328,18 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   column_device_view(column_view column, void* h_ptr, void* d_ptr);
 
+  /**
+   * @brief Creates an instance of this class using pre-existing device memory pointers to data,
+   * nullmask, and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to the device memory containing the data
+   * @param null_mask Pointer to the device memory containing the null bitmask
+   * @param offset The index of the first element in the column
+   * @param children Pointer to the device memory containing child data
+   * @param num_children The number of child columns
+   */
   __host__ __device__ column_device_view(data_type type,
                                          size_type size,
                                          void const* data,
@@ -341,6 +353,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   {
   }
 
+  /**
+   * @brief Get a new column_device_view which is a slice of this column.
+   *
+   * Example:
+   * @code{.cpp}
+   * // column = column_device_view([1, 2, 3, 4, 5, 6, 7])
+   * auto c = column.slice(1, 3);
+   * // c = column_device_view([2, 3, 4])
+   * auto c1 = column.slice(2, 3);
+   * // c1 = column_device_view([3, 4, 5])
+   * @endcode
+   *
+   * @param offset The index of the first element in the slice
+   * @param size The number of elements in the slice
+   */
   __host__ __device__ column_device_view slice(size_type offset, size_type size) const noexcept
   {
     return column_device_view{
