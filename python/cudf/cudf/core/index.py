@@ -743,6 +743,33 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _binaryop(self, other, op: str):
         return self._as_int64()._binaryop(other, op=op)
 
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def _columns(self):
+        return self._as_int64()._columns
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def _column(self):
+        return self._as_int64()._column
+
+    def argsort(
+        self,
+        ascending=True,
+        na_position="last",
+    ):
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
+        indices = cupy.arange(0, len(self))
+        if ascending:
+            return indices if self._step > 0 else indices[::-1]
+        else:
+            return indices[::-1] if self._step > 0 else indices
+
+    def where(self, cond, other=None, inplace=False):
+        return self._as_int64().where(cond, other, inplace)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
