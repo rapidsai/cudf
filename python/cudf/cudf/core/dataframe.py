@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     MutableMapping,
@@ -827,7 +828,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 masked = index is not None
                 data = {
                     key: cudf.core.column.column_empty(
-                        row_count=row_count, dtype=None, masked=masked,
+                        row_count=row_count,
+                        dtype=None,
+                        masked=masked,
                     )
                     for key in extra_cols
                 }
@@ -856,7 +859,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_name, tuple
                 )
                 self._insert(
-                    i, col_name, data[col_name], nan_as_null=nan_as_null,
+                    i,
+                    col_name,
+                    data[col_name],
+                    nan_as_null=nan_as_null,
                 )
 
         if columns is not None:
@@ -2096,7 +2102,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("Duplicate column names are not allowed")
 
         self._data = ColumnAccessor(
-            data, multiindex=multiindex, level_names=level_names,
+            data,
+            multiindex=multiindex,
+            level_names=level_names,
         )
 
     def _set_column_names_like(self, other):
@@ -3371,7 +3379,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def join(
-        self, other, on=None, how="left", lsuffix="", rsuffix="", sort=False,
+        self,
+        other,
+        on=None,
+        how="left",
+        lsuffix="",
+        rsuffix="",
+        sort=False,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -3700,7 +3714,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return self._apply(func, _get_row_kernel, *args, **kwargs)
 
-    def applymap(self, func, na_action=None, **kwargs) -> DataFrame:
+    def applymap(
+        self, func: Callable, na_action: str | None = None, **kwargs
+    ) -> DataFrame:
         """
         Apply a function to a Dataframe elementwise.
         This method applies a function that accepts and returns a scalar
@@ -3721,6 +3737,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if kwargs:
             raise ValueError(
                 "DataFrame.applymap does not yet support **kwargs."
+            )
+
+        if na_action not in {"ignore", None}:
+            raise ValueError(
+                f"na_action must be 'ignore' or None. Got {repr(na_action)}"
             )
 
         if na_action == "ignore":
@@ -4554,7 +4575,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     gen_names, self.index._data.names
                 ):
                     data._insert(
-                        data.shape[1], gen_name, self.index._data[col_name],
+                        data.shape[1],
+                        gen_name,
+                        self.index._data[col_name],
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5142,7 +5165,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _reduce(
-        self, op, axis=None, level=None, numeric_only=None, **kwargs,
+        self,
+        op,
+        axis=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
@@ -5170,7 +5198,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _scan(
-        self, op, axis=None, *args, **kwargs,
+        self,
+        op,
+        axis=None,
+        *args,
+        **kwargs,
     ):
         axis = self._get_axis_from_axis_arg(axis)
 
@@ -5402,7 +5434,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result = result.set_mask(
                     cudf._lib.transform.bools_to_mask(mask._column)
                 )
-            return Series(result, index=self.index, dtype=result_dtype,)
+            return Series(
+                result,
+                index=self.index,
+                dtype=result_dtype,
+            )
         else:
             result_df = DataFrame(result).set_index(self.index)
             result_df._set_column_names_like(prepared)
@@ -6579,7 +6615,10 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        ._set_categories(categories[idx], is_unique=True,)
+                        ._set_categories(
+                            categories[idx],
+                            is_unique=True,
+                        )
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)
