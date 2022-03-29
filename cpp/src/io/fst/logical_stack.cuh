@@ -107,7 +107,7 @@ using UnsignedKeyValueOpType = typename KeyValueOpToUnsigned<sizeof(KeyValueOpT)
 template <typename KeyValueOpT, typename StackSymbolToStackOpTypeT>
 struct StackSymbolToKVOp {
   template <typename StackSymbolT>
-  __host__ __device__ __forceinline__ KeyValueOpT operator()(StackSymbolT const& stack_symbol) const
+  __host__ __device__ KeyValueOpT operator()(StackSymbolT const& stack_symbol) const
   {
     stack_op_type stack_op = symbol_to_stack_op_type(stack_symbol);
     // PUSH => +1, POP => -1, READ => 0
@@ -127,8 +127,8 @@ struct StackSymbolToKVOp {
  */
 struct AddStackLevelFromKVOp {
   template <typename KeyT, typename ValueT>
-  __host__ __device__ __forceinline__ KeyValueOp<KeyT, ValueT> operator()(
-    KeyValueOp<KeyT, ValueT> const& lhs, KeyValueOp<KeyT, ValueT> const& rhs) const
+  __host__ __device__ KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
+                                                          KeyValueOp<KeyT, ValueT> const& rhs) const
   {
     KeyT new_level = lhs.key + rhs.key;
     return KeyValueOp<KeyT, ValueT>{new_level, rhs.value};
@@ -144,8 +144,8 @@ struct AddStackLevelFromKVOp {
 template <typename StackSymbolToStackOpTypeT>
 struct PopulatePopWithPush {
   template <typename KeyT, typename ValueT>
-  __host__ __device__ __forceinline__ KeyValueOp<KeyT, ValueT> operator()(
-    KeyValueOp<KeyT, ValueT> const& lhs, KeyValueOp<KeyT, ValueT> const& rhs) const
+  __host__ __device__ KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
+                                                          KeyValueOp<KeyT, ValueT> const& rhs) const
   {
     // If RHS is a read, then we need to figure out whether we can propagate the value from the LHS
     bool is_rhs_read = symbol_to_stack_op_type(rhs.value) != stack_op_type::PUSH;
@@ -168,8 +168,8 @@ struct PopulatePopWithPush {
  */
 template <typename StackSymbolT>
 struct PropagateLastWrite {
-  __host__ __device__ __forceinline__ StackSymbolT operator()(StackSymbolT const& lhs,
-                                                              StackSymbolT const& rhs) const
+  __host__ __device__ StackSymbolT operator()(StackSymbolT const& lhs,
+                                              StackSymbolT const& rhs) const
   {
     // If RHS is a yet-to-be-propagated, then we need to check whether we can use the LHS to fill
     bool is_rhs_read = (rhs == read_symbol);
@@ -190,7 +190,7 @@ struct PropagateLastWrite {
  */
 struct KVOpToStackSymbol {
   template <typename KeyT, typename ValueT>
-  __host__ __device__ __forceinline__ ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+  __host__ __device__ ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
   {
     return kv_op.value;
   }
@@ -201,7 +201,7 @@ struct KVOpToStackSymbol {
  */
 template <typename KeyValueOpT>
 struct RemapEmptyStack {
-  __host__ __device__ __forceinline__ KeyValueOpT operator()(KeyValueOpT const& kv_op) const
+  __host__ __device__ KeyValueOpT operator()(KeyValueOpT const& kv_op) const
   {
     return kv_op.key == 0 ? empty_stack_symbol : kv_op;
   }
