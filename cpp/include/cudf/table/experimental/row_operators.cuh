@@ -177,9 +177,9 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
-                                                              size_type const rhs_element_index)
+                             not std::is_same_v<Element, cudf::struct_view>),
+              typename... Args>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -521,8 +521,9 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
-                             not cudf::is_nested<Element>())>
-    __device__ bool operator()(size_type const lhs_element_index, size_type const rhs_element_index)
+                             not cudf::is_nested<Element>()),
+              typename... Args>
+    __device__ bool operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -574,36 +575,35 @@ class device_row_comparator {
     }
 
    private:
+    struct element_range_comparator {
+      element_comparator const comp;
+
+      template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+      __device__ bool operator()(size_type const lhs_element_index,
+                                 size_type const rhs_element_index,
+                                 size_type const size) const noexcept
+      {
+        for (size_type i = 0; i < size; ++i) {
+          bool equal =
+            comp.template operator()<Element>(lhs_element_index + i, rhs_element_index + i);
+          if (not equal) { return false; }
+        }
+        return true;
+      }
+
+      template <typename Element,
+                CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>()),
+                typename... Args>
+      __device__ bool operator()(Args...) const noexcept
+      {
+        CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+      }
+    };
+
     column_device_view const lhs;
     column_device_view const rhs;
     Nullate const nulls;
     null_equality const nulls_are_equal;
-  };
-
-  struct element_range_comparator {
-    element_comparator const comp;
-
-    template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index,
-                               size_type size) const noexcept
-    {
-      for (size_type i = 0; i < size; ++i) {
-        bool equal =
-          comp.template operator()<Element>(lhs_element_index + i, rhs_element_index + i);
-        if (not equal) { return false; }
-      }
-      return true;
-    }
-
-    template <typename Element,
-              CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>())>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index,
-                               size_type size)
-    {
-      CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
-    }
   };
 
   table_device_view const lhs;
