@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -316,6 +316,15 @@ struct validity_accessor_safe {
   __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid(i); }
 };
 
+/**
+ * @brief Constructs an iterator over a column's validities.
+ *
+ * Dereferencing the returned iterator for element `i` will return the validity of `column[i]`.
+ * If the column is not nullable then the validity is always true.
+ *
+ * @param column The column to iterate
+ * @return auto Iterator that returns validities of column elements.
+ */
 __host__ __device__ auto inline make_validity_iterator_safe(column_device_view const& column)
 {
   return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor_safe{column});
