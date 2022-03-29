@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -1396,13 +1396,18 @@ def get_filepath_or_buffer(
         else:
             if use_python_file_object:
                 path_or_data = _open_remote_files(
-                    paths, fs, **(open_file_options or {}),
+                    paths,
+                    fs,
+                    **(open_file_options or {}),
                 )
             else:
                 path_or_data = [
                     BytesIO(
                         _fsspec_data_transfer(
-                            fpath, fs=fs, mode=mode, **kwargs,
+                            fpath,
+                            fs=fs,
+                            mode=mode,
+                            **kwargs,
                         )
                     )
                     for fpath in paths
@@ -1685,7 +1690,11 @@ def _fsspec_data_transfer(
         for b in range(0, file_size, bytes_per_thread)
     ]
     _read_byte_ranges(
-        path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+        path_or_fob,
+        byte_ranges,
+        buf,
+        fs=fs,
+        **kwargs,
     )
 
     return buf.tobytes()
@@ -1717,19 +1726,25 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
         # We have an open fsspec file object
         path_or_fob.seek(offset)
         local_buffer[offset : offset + nbytes] = np.frombuffer(
-            path_or_fob.read(nbytes), dtype="b",
+            path_or_fob.read(nbytes),
+            dtype="b",
         )
     else:
         # We have an fsspec filesystem and a path
         with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
             fob.seek(offset)
             local_buffer[offset : offset + nbytes] = np.frombuffer(
-                fob.read(nbytes), dtype="b",
+                fob.read(nbytes),
+                dtype="b",
             )
 
 
 def _read_byte_ranges(
-    path_or_fob, ranges, local_buffer, fs=None, **kwargs,
+    path_or_fob,
+    ranges,
+    local_buffer,
+    fs=None,
+    **kwargs,
 ):
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf

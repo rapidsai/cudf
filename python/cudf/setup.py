@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -253,7 +253,8 @@ setup(
     ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=cmdclass,
     install_requires=install_requires,
