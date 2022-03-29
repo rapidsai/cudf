@@ -125,19 +125,8 @@ function install_dask {
 # INSTALL - Install libcudf artifacts
 ################################################################################
 
-export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
-export CUDF_ROOT=${LIB_BUILD_DIR}
-export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
-
-CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
-CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
-CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
-KAFKA_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf_kafka-*.tar.bz2"`
-KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
-KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
-
-gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+gpuci_logger "Installing libcudf & libcudf_kafka"
+gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka
 
 install_dask
 

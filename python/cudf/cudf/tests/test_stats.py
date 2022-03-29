@@ -81,7 +81,7 @@ def test_series_std(ddof):
 
 
 def test_series_unique():
-    for size in [10 ** x for x in range(5)]:
+    for size in [10**x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series(arr)
@@ -423,6 +423,10 @@ def test_cov1d(data1, data2):
 )
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
 def test_corr1d(data1, data2, method):
+    if method == "spearman":
+        # Pandas uses scipy.stats.spearmanr code-path
+        pytest.importorskip("scipy")
+
     gs1 = cudf.Series(data1)
     gs2 = cudf.Series(data2)
 
