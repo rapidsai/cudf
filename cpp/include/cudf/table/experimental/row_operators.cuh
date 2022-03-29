@@ -527,28 +527,6 @@ class device_row_comparator {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
-    struct validity_accessor {
-      column_device_view const col;
-
-      /**
-       * @brief constructor
-       * @param[in] _col column device view of cudf column
-       */
-      __device__ validity_accessor(column_device_view const& _col) : col{_col}
-      {
-        // verify valid is non-null, otherwise, is_valid() will crash
-        // CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
-      }
-
-      __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid(i); }
-    };
-
-    auto inline __device__ make_validity_iterator(column_device_view const& column) const noexcept
-    {
-      return thrust::make_transform_iterator(thrust::make_counting_iterator(cudf::size_type{0}),
-                                             validity_accessor{column});
-    }
-
     template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
@@ -557,8 +535,8 @@ class device_row_comparator {
       column_device_view rcol = rhs.slice(rhs_element_index, 1);
       while (is_nested(lcol.type())) {
         if (nulls) {
-          auto lvalid = make_validity_iterator(lcol);
-          auto rvalid = make_validity_iterator(rcol);
+          auto lvalid = make_validity_iterator_safe(lcol);
+          auto rvalid = make_validity_iterator_safe(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
             if (thrust::any_of(
                   thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
@@ -593,8 +571,6 @@ class device_row_comparator {
 
       auto comp = element_range_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}};
       return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp, 0, 0, lcol.size());
-
-      // return true;
     }
 
    private:
