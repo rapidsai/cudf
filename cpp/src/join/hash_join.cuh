@@ -40,6 +40,11 @@
 namespace cudf {
 namespace detail {
 
+struct row_info {
+  rmm::device_buffer composite_bitmask;
+  cudf::size_type num_valid_rows;
+};
+
 /**
  * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
  *
@@ -197,7 +202,7 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
-  std::pair<rmm::device_buffer, cudf::size_type> const _valid_row_info;
+  cudf::detail::row_info const _valid_row_info;
   cudf::null_equality const _nulls_equal;
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
