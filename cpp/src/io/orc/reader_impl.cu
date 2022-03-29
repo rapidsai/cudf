@@ -235,17 +235,18 @@ auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
                          cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
                          int column_index)
 {
-  if (metadata.get_col_type(column_index).kind != DECIMAL) return type_id::EMPTY;
+  if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
 
   if (std::find(decimal128_columns.cbegin(),
                 decimal128_columns.cend(),
-                metadata.column_path(0, column_index)) != decimal128_columns.end())
+                metadata.column_path(0, column_index)) != decimal128_columns.end()) {
     return type_id::DECIMAL128;
+  }
 
   auto const precision = metadata.get_col_type(column_index)
                            .precision.value_or(cuda::std::numeric_limits<int64_t>::digits10);
-  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) return type_id::DECIMAL32;
-  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) return type_id::DECIMAL64;
+  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) { return type_id::DECIMAL32; }
+  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) { return type_id::DECIMAL64; }
   return type_id::DECIMAL128;
 }
 
