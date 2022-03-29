@@ -1043,8 +1043,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         if (scale >= 0) {
           auto const abs_scale = min(scale, 27);
           return (v * kPow5i[abs_scale]) << abs_scale;
-        } else  // if (scale < 0)
-        {
+        } else {
           auto const abs_scale = min(-scale, 27);
           return (v / kPow5i[abs_scale]) >> abs_scale;
         }
