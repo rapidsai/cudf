@@ -25,6 +25,7 @@ from typing import (
 )
 
 import cupy
+import numba
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -78,7 +79,6 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
-from cudf.core.udf.scalar_function import _get_scalar_kernel
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -94,8 +94,6 @@ from cudf.utils.utils import (
     _cudf_nvtx_annotate,
     _external_only_api,
 )
-
-import numba
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -829,9 +827,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 masked = index is not None
                 data = {
                     key: cudf.core.column.column_empty(
-                        row_count=row_count,
-                        dtype=None,
-                        masked=masked,
+                        row_count=row_count, dtype=None, masked=masked,
                     )
                     for key in extra_cols
                 }
@@ -860,10 +856,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_name, tuple
                 )
                 self._insert(
-                    i,
-                    col_name,
-                    data[col_name],
-                    nan_as_null=nan_as_null,
+                    i, col_name, data[col_name], nan_as_null=nan_as_null,
                 )
 
         if columns is not None:
@@ -2103,9 +2096,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("Duplicate column names are not allowed")
 
         self._data = ColumnAccessor(
-            data,
-            multiindex=multiindex,
-            level_names=level_names,
+            data, multiindex=multiindex, level_names=level_names,
         )
 
     def _set_column_names_like(self, other):
@@ -3380,13 +3371,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def join(
-        self,
-        other,
-        on=None,
-        how="left",
-        lsuffix="",
-        rsuffix="",
-        sort=False,
+        self, other, on=None, how="left", lsuffix="", rsuffix="", sort=False,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -3733,18 +3718,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Transformed DataFrame.
         """
 
+        if kwargs:
+            raise ValueError(
+                "DataFrame.applymap does not yet support **kwargs."
+            )
+
+        if na_action == "ignore":
+            devfunc = numba.cuda.jit(device=True)(func)
+
+            # promote to a null-ignoring function
+            def _func(x):
+                # promote to a null-ignoring function
+                if x is cudf.NA:
+                    return cudf.NA
+                else:
+                    return devfunc(x)
+
+        else:
+            _func = func
+
         # TODO: naive implementation
         # this could be written as a single kernel
+        result = {}
+        for name, col in self._data.items():
+            apply_sr = Series._from_data({None: col})
+            result[name] = apply_sr.apply(_func)
 
-        if na_action == 'ignore':
-            devfunc = numba.cuda.jit(device=True)(func)
-            func = lambda x: cudf.NA if x is cudf.NA else devfunc(x)
-
-        result = DataFrame()
-        for col in self._data.keys():
-            result[col] = self[col].apply(func)
-        return result
-
+        return DataFrame._from_data(result, index=self.index)
 
     @_cudf_nvtx_annotate
     @applyutils.doc_apply()
@@ -4554,9 +4554,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     gen_names, self.index._data.names
                 ):
                     data._insert(
-                        data.shape[1],
-                        gen_name,
-                        self.index._data[col_name],
+                        data.shape[1], gen_name, self.index._data[col_name],
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5144,12 +5142,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _reduce(
-        self,
-        op,
-        axis=None,
-        level=None,
-        numeric_only=None,
-        **kwargs,
+        self, op, axis=None, level=None, numeric_only=None, **kwargs,
     ):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
@@ -5177,11 +5170,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _scan(
-        self,
-        op,
-        axis=None,
-        *args,
-        **kwargs,
+        self, op, axis=None, *args, **kwargs,
     ):
         axis = self._get_axis_from_axis_arg(axis)
 
@@ -5413,11 +5402,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result = result.set_mask(
                     cudf._lib.transform.bools_to_mask(mask._column)
                 )
-            return Series(
-                result,
-                index=self.index,
-                dtype=result_dtype,
-            )
+            return Series(result, index=self.index, dtype=result_dtype,)
         else:
             result_df = DataFrame(result).set_index(self.index)
             result_df._set_column_names_like(prepared)
@@ -6594,10 +6579,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        ._set_categories(
-                            categories[idx],
-                            is_unique=True,
-                        )
+                        ._set_categories(categories[idx], is_unique=True,)
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)
