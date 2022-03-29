@@ -140,7 +140,6 @@ struct JSONToStackOp {
 };
 }  // namespace
 
-
 // Base test fixture for tests
 struct LogicalStackTest : public cudf::test::BaseFixture {
 };
@@ -178,9 +177,9 @@ TEST_F(LogicalStackTest, GroundTruth)
 "author": "Nigel Rees",
 "title": "Sayings of the Century",
 "price": 8.95
-}  )";
+}  {} [] [ ])";
 
-  // Repeat input sample 1024x 
+  // Repeat input sample 1024x
   for (std::size_t i = 0; i < 10; i++)
     input += input;
 
