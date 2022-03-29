@@ -303,7 +303,8 @@ TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexErrorTest)
   cudf::test::strings_column_wrapper strings({"this string left intentionally blank"});
   auto view = cudf::strings_column_view(strings);
 
-  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", "\\123"), cudf::logic_error);
+  // group index(3) exceeds the group count(2)
+  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w).(\\w)", "\\3"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "", "\\1"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", ""), cudf::logic_error);
 }

@@ -4987,7 +4987,7 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
-
+    // test zero as group index
     try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
          ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
              "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
@@ -4995,6 +4995,13 @@ public class ColumnVectorTest extends CudfTestBase {
              "([a-z]+)-([0-9]+)", "${0}:${1}:${2};")) {
       assertColumnsAreEqual(expected, actual);
     }
+
+    // group index exceeds group count
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("ABC123defgh");
+           ColumnVector r = v.stringReplaceWithBackrefs("([A-Z]+)([0-9]+)([a-z]+)", "\\4")) {
+      }
+    });
 
   }
 
