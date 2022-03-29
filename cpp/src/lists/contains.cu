@@ -105,17 +105,20 @@ struct finder {
 /**
  * @brief Functor to search each list row for the specified search keys.
  */
-template <bool search_keys_have_nulls>
 struct lookup_functor {
+  bool const search_keys_have_nulls;
+
+  lookup_functor(bool search_keys_have_nulls_) : search_keys_have_nulls{search_keys_have_nulls_} {}
+
   template <typename ElementType>
-  struct is_supported {
-    static constexpr bool value =
-      cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
-      cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view>;
-  };
+  auto static constexpr is_supported()
+  {
+    return cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
+           cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view>;
+  }
 
   template <typename ElementType, typename... Args>
-  std::enable_if_t<!is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<!is_supported<ElementType>(), std::unique_ptr<column>> operator()(
     Args&&...) const
   {
     CUDF_FAIL(
@@ -152,8 +155,11 @@ struct lookup_functor {
       rmm::exec_policy(stream),
       output_iterator,
       output_iterator + d_lists.size(),
-      [d_lists, search_key_pair_iter, find_option, NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(
-        auto row_index) -> thrust::pair<size_type, bool> {
+      [d_lists,
+       search_key_pair_iter,
+       find_option,
+       search_keys_have_nulls = search_keys_have_nulls,
+       NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto row_index) -> thrust::pair<size_type, bool> {
         auto [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
 
         if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
@@ -169,7 +175,7 @@ struct lookup_functor {
   }
 
   template <typename ElementType, typename SearchKeyType>
-  std::enable_if_t<is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_supported<ElementType>(), std::unique_ptr<column>> operator()(
     cudf::lists_column_view const& lists,
     SearchKeyType const& search_key,
     duplicate_find_option find_option,
@@ -186,8 +192,12 @@ struct lookup_functor {
     CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
+    if constexpr (!search_key_is_scalar) {
+      CUDF_EXPECTS(search_key.size() == lists.size(),
+                   "Number of search keys must match list column size.");
+    }
 
-    if constexpr (search_keys_have_nulls && search_key_is_scalar) {
+    if (search_key_is_scalar && search_keys_have_nulls) {
       return make_numeric_column(data_type(type_id::INT32),
                                  lists.size(),
                                  cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
@@ -208,15 +218,21 @@ struct lookup_functor {
       mutable_column_device_view::create(result_positions->mutable_view(), stream);
     auto mutable_result_validity =
       mutable_column_device_view::create(result_validity->mutable_view(), stream);
-    auto search_key_iter =
-      cudf::detail::make_pair_rep_iterator<ElementType, search_keys_have_nulls>(*d_skeys);
 
-    search_each_list_row<ElementType>(d_lists,
-                                      search_key_iter,
-                                      find_option,
-                                      *mutable_result_positions,
-                                      *mutable_result_validity,
-                                      stream);
+    auto do_search = [&](auto const& search_key_iter) {
+      search_each_list_row<ElementType>(d_lists,
+                                        search_key_iter,
+                                        find_option,
+                                        *mutable_result_positions,
+                                        *mutable_result_validity,
+                                        stream);
+    };
+
+    if (search_keys_have_nulls) {
+      do_search(cudf::detail::make_pair_rep_iterator<ElementType, true>(*d_skeys));
+    } else {
+      do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
+    }
 
     auto [null_mask, num_nulls] = construct_null_mask(lists, result_validity->view(), stream, mr);
     result_positions->set_null_mask(std::move(null_mask), num_nulls);
@@ -264,21 +280,13 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return search_key.is_valid(stream)
-           ? cudf::type_dispatcher(search_key.type(),
-                                   lookup_functor<false>{},  // No nulls in search key
-                                   lists,
-                                   search_key,
-                                   find_option,
-                                   stream,
-                                   mr)
-           : cudf::type_dispatcher(search_key.type(),
-                                   lookup_functor<true>{},  // Nulls in search key
-                                   lists,
-                                   search_key,
-                                   find_option,
-                                   stream,
-                                   mr);
+  return cudf::type_dispatcher(search_key.type(),
+                               lookup_functor{!search_key.is_valid(stream)},
+                               lists,
+                               search_key,
+                               find_option,
+                               stream,
+                               mr);
 }
 
 /**
@@ -294,24 +302,13 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(search_keys.size() == lists.size(),
-               "Number of search keys must match list column size.");
-
-  return search_keys.has_nulls()
-           ? cudf::type_dispatcher(search_keys.type(),
-                                   lookup_functor<true>{},  // Nulls in search keys
-                                   lists,
-                                   search_keys,
-                                   find_option,
-                                   stream,
-                                   mr)
-           : cudf::type_dispatcher(search_keys.type(),
-                                   lookup_functor<false>{},  // No nulls in search keys
-                                   lists,
-                                   search_keys,
-                                   find_option,
-                                   stream,
-                                   mr);
+  return cudf::type_dispatcher(search_keys.type(),
+                               lookup_functor{search_keys.has_nulls()},
+                               lists,
+                               search_keys,
+                               find_option,
+                               stream,
+                               mr);
 }
 
 /**
