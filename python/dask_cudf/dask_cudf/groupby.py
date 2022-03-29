@@ -46,11 +46,19 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def __getitem__(self, key):
         if isinstance(key, list):
             g = CudfDataFrameGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna,
+                self.obj,
+                by=self.by,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
             )
         else:
             g = CudfSeriesGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna,
+                self.obj,
+                by=self.by,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
             )
 
         g._meta = g._meta[key]
@@ -736,7 +744,7 @@ def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
     x2 = df[pow2_sum_name]
 
     # Use sum-squared approach to get variance
-    var = x2 - x ** 2 / n
+    var = x2 - x**2 / n
     div = n - ddof
     div[div < 1] = 1  # Avoid division by 0
     var /= div

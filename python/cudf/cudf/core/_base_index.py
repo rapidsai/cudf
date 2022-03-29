@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pickle
-import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -1390,7 +1389,9 @@ class BaseIndex(Serializable):
         return cudf.MultiIndex
 
     def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
+        self,
+        keep="first",
+        nulls_are_equal=True,
     ):
         """
         Drop duplicate rows in index.
@@ -1436,7 +1437,11 @@ class BaseIndex(Serializable):
         ]
 
         return self._from_columns_like_self(
-            drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
+            drop_nulls(
+                data_columns,
+                how=how,
+                keys=range(len(data_columns)),
+            ),
             self._column_names,
         )
 
@@ -1555,27 +1560,6 @@ class BaseIndex(Serializable):
 
     def _split(self, splits):
         raise NotImplementedError
-
-    def sample(
-        self,
-        n=None,
-        frac=None,
-        replace=False,
-        weights=None,
-        random_state=None,
-        axis=None,
-        ignore_index=False,
-    ):
-        warnings.warn(
-            "Index.sample is deprecated and will be removed.", FutureWarning,
-        )
-        return cudf.core.index._index_from_data(
-            self.to_frame()
-            .sample(
-                n, frac, replace, weights, random_state, axis, ignore_index
-            )
-            ._data
-        )
 
 
 def _get_result_name(left_name, right_name):

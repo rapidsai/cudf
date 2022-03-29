@@ -62,7 +62,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return 0
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4_numerator / (V ** 2)
+        term_one_section_two = m4_numerator / (V**2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
