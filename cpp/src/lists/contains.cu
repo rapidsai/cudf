@@ -267,13 +267,6 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
 }  // namespace
 
 namespace detail {
-/**
- * @copydoc cudf::lists::detail::index_of(cudf::lists_column_view const&,
- *                                        cudf::scalar const&,
- *                                        duplicate_find_option,
- *                                        rmm::cuda_stream_view,
- *                                        rmm::mr::device_memory_resource*)
- */
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  duplicate_find_option find_option,
@@ -289,13 +282,6 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                mr);
 }
 
-/**
- * @copydoc cudf::lists::detail::index_of(cudf::lists_column_view const&,
- *                                        cudf::column_view const&,
- *                                        duplicate_find_option,
- *                                        rmm::cuda_stream_view,
- *                                        rmm::mr::device_memory_resource*)
- */
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  duplicate_find_option find_option,
@@ -311,12 +297,6 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                mr);
 }
 
-/**
- * @copydoc cudf::lists::detail::contains(cudf::lists_column_view const&,
- *                                        cudf::scalar const&,
- *                                        rmm::cuda_stream_view,
- *                                        rmm::mr::device_memory_resource*)
- */
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  rmm::cuda_stream_view stream,
@@ -326,12 +306,6 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
     index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
-/**
- * @copydoc cudf::lists::detail::contains(cudf::lists_column_view const&,
- *                                        cudf::column_view const&,
- *                                        rmm::cuda_stream_view,
- *                                        rmm::mr::device_memory_resource*)
- */
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  rmm::cuda_stream_view stream,
@@ -344,11 +318,6 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
     index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
-/**
- * @copydoc cudf::lists::contain_nulls(cudf::lists_column_view const&,
- *                                     rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
 std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_lists,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
