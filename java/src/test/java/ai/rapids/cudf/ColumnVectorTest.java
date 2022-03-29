@@ -4987,6 +4987,15 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
+
+    try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
+         ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
+             "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
+         ColumnVector actual = v.stringReplaceWithBackrefs(
+             "([a-z]+)-([0-9]+)", "${0}:${1}:${2};")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
   }
 
   @Test
