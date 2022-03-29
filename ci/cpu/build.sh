@@ -64,9 +64,6 @@ conda list --show-channel-urls
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
 
-gpuci_conda_retry remove --force "arrow-cpp" "pyarrow" "orc" 'arrow-cpp-proc=*=cuda'
-mamba install -y "arrow-cpp=7.0.0" "pyarrow=7.0.0" "orc" 'arrow-cpp-proc=*=cuda'
-
 ################################################################################
 # BUILD - Conda package builds
 ################################################################################
