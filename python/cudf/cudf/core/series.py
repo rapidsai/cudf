@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
+import warnings
 from collections import abc as abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
@@ -1012,7 +1013,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result.name = self.name
             result.index = self.index
         else:
-            result = self.applymap(arg)
+            # TODO: switch to `apply`
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=FutureWarning)
+                result = self.applymap(arg)
         return result
 
     @_cudf_nvtx_annotate
@@ -2210,6 +2214,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4    105
         dtype: int64
         """
+        warnings.warn(
+            "Series.applymap is deprecated and will be removed "
+            "in a future cuDF release. Use Series.apply instead.",
+            FutureWarning,
+        )
         if not callable(udf):
             raise ValueError("Input UDF must be a callable object.")
         return self._from_data({self.name: self._unaryop(udf)}, self._index)
