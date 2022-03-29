@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
@@ -33,7 +33,7 @@ def test_generic_ptx(dtype):
     rhs_col = Series(rhs_arr)._column
 
     def generic_function(a, b):
-        return a ** 3 + b
+        return a**3 + b
 
     nb_type = numpy_support.from_dtype(cudf.dtype(dtype))
     type_signature = (nb_type, nb_type)
@@ -46,6 +46,6 @@ def test_generic_ptx(dtype):
 
     out_col = libcudf.binaryop.binaryop_udf(lhs_col, rhs_col, ptx_code, dtype)
 
-    result = lhs_arr ** 3 + rhs_arr
+    result = lhs_arr**3 + rhs_arr
 
     np.testing.assert_almost_equal(result, out_col.values_host)

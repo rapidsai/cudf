@@ -1463,8 +1463,8 @@ def test_scalar_power(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    expect = lval_host ** rval_host
-    got = lval_gpu ** rval_gpu
+    expect = lval_host**rval_host
+    got = lval_gpu**rval_gpu
 
     assert expect == got.value
     assert expect.dtype == got.dtype
@@ -1478,7 +1478,7 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
     with pytest.raises(TypeError):
-        lval_gpu ** rval_gpu
+        lval_gpu**rval_gpu
 
 
 @pytest.mark.parametrize(

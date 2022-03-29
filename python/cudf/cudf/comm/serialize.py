@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 import cudf  # noqa: F401
 from cudf.core.abc import Serializable
 
@@ -25,7 +27,6 @@ try:
     def dask_deserialize_cudf_object(header, frames):
         with log_errors():
             return Serializable.host_deserialize(header, frames)
-
 
 except ImportError:
     # distributed is probably not installed on the system
