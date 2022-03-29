@@ -549,25 +549,12 @@ class device_row_comparator {
                                              validity_accessor{column});
     }
 
-    __device__ column_device_view slice(column_device_view const& c,
-                                        size_type start,
-                                        size_type end) const noexcept
-    {
-      return column_device_view(c.type(),
-                                end - start,
-                                nullptr,
-                                c.null_mask(),
-                                c.offset() + start,
-                                const_cast<column_device_view*>(c.children().data()),
-                                c.children().size());
-    }
-
     template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
-      column_device_view lcol = slice(lhs, lhs_element_index, lhs_element_index + 1);
-      column_device_view rcol = slice(rhs, rhs_element_index, rhs_element_index + 1);
+      column_device_view lcol = lhs.slice(lhs_element_index, 1);
+      column_device_view rcol = rhs.slice(rhs_element_index, 1);
       while (is_nested(lcol.type())) {
         if (nulls) {
           auto lvalid = make_validity_iterator(lcol);

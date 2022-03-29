@@ -65,14 +65,7 @@ class structs_column_device_view {
    */
   [[nodiscard]] __device__ inline column_device_view sliced_child(size_type idx) const
   {
-    auto const& c = child(idx);
-    return column_device_view(c.type(),
-                              size(),
-                              c.head(),
-                              c.null_mask(),
-                              offset(),
-                              const_cast<column_device_view*>(c.children().data()),
-                              c.children().size());
+    return child(idx).slice(offset(), size());
   }
 
   /**

@@ -328,17 +328,23 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   column_device_view(column_view column, void* h_ptr, void* d_ptr);
 
-  __device__ column_device_view(data_type type,
-                                size_type size,
-                                void const* data,
-                                bitmask_type const* null_mask,
-                                size_type offset,
-                                column_device_view* children,
-                                size_type num_children)
+  __host__ __device__ column_device_view(data_type type,
+                                         size_type size,
+                                         void const* data,
+                                         bitmask_type const* null_mask,
+                                         size_type offset,
+                                         column_device_view* children,
+                                         size_type num_children)
     : column_device_view_base(type, size, data, null_mask, offset),
       d_children(children),
       _num_children(num_children)
   {
+  }
+
+  __host__ __device__ column_device_view slice(size_type offset, size_type size) const noexcept
+  {
+    return column_device_view{
+      _type, size, _data, _null_mask, _offset + offset, d_children, _num_children};
   }
 
   /**

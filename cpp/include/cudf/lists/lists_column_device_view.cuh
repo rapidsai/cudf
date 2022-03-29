@@ -85,17 +85,9 @@ class lists_column_device_view {
    */
   [[nodiscard]] __device__ inline column_device_view sliced_child() const
   {
-    auto start    = offset_at(0);
-    auto end      = offset_at(size());
-    auto const& c = child();
-    return column_device_view(c.type(),
-                              end - start,
-                              c.head(),
-                              c.null_mask(),
-                              start,
-                              // TODO: Make the ctor take const span of children
-                              const_cast<column_device_view*>(c.children().data()),
-                              c.children().size());
+    auto start = offset_at(0);
+    auto end   = offset_at(size());
+    return child().slice(start, end - start);
   }
 
   /**
