@@ -273,7 +273,10 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             return self._apply_agg_dataframe(self.obj, agg_name)
 
     def _reduce(
-        self, op: str, *args, **kwargs,
+        self,
+        op: str,
+        *args,
+        **kwargs,
     ):
         """Calculate the rolling {op}.
 

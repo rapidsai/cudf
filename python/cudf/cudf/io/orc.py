@@ -162,7 +162,9 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepaths_or_buffers, columns=None, **kwargs,
+    filepaths_or_buffers,
+    columns=None,
+    **kwargs,
 ):
     """{docstring}"""
 
@@ -321,7 +323,9 @@ def read_orc(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source, **kwargs,
+                passed_filesystem=None,
+                path=source,
+                **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
