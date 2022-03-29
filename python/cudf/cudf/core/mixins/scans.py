@@ -7,5 +7,10 @@ Scannable = _create_delegating_mixin(
     "Mixin encapsulating scan operations.",
     "SCAN",
     "_scan",
-    {"cumsum", "cumprod", "cummin", "cummax",},  # noqa: E231
+    {
+        "cumsum",
+        "cumprod",
+        "cummin",
+        "cummax",
+    },  # noqa: E231
 )

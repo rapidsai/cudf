@@ -88,11 +88,12 @@ std::unique_ptr<cudf::scalar> any(column_view const& col,
       dictionary_column_view(col).keys().type(), detail::any_fn{}, col, stream, mr);
   }
   // dispatch for non-dictionary types
-  return cudf::type_dispatcher(col.type(),
-                               simple::bool_result_element_dispatcher<cudf::reduction::op::max>{},
-                               col,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    col.type(),
+    simple::detail::bool_result_element_dispatcher<cudf::reduction::op::max>{},
+    col,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

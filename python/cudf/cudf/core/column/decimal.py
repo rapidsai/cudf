@@ -14,7 +14,7 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import Dtype
+from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
@@ -24,6 +24,7 @@ from cudf.core.dtypes import (
     Decimal128Dtype,
     DecimalDtype,
 )
+from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
@@ -33,6 +34,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     dtype: DecimalDtype
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
@@ -60,18 +62,25 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
-    def binary_operator(self, op, other, reflect=False):
-        if reflect:
-            self, other = other, self
-        # Decimals in libcudf don't support truediv, see
-        # https://github.com/rapidsai/cudf/pull/7435 for explanation.
-        op = op.replace("true", "")
+    # Decimals in libcudf don't support truediv, see
+    # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+    def __truediv__(self, other):
+        return self._binaryop(other, "__div__")
+
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "__rdiv__")
+
+    def _binaryop(self, other: ColumnBinaryOperand, op: str):
+        reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
+        lhs, rhs = (other, self) if reflect else (self, other)
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         try:
-            if op in {"add", "sub", "mul", "div"}:
+            if op in {"__add__", "__sub__", "__mul__", "__div__"}:
                 output_type = _get_decimal_type(self.dtype, other.dtype, op)
                 result = libcudf.binaryop.binaryop(
                     self, other, op, output_type
@@ -79,7 +88,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 # TODO:  Why is this necessary? Why isn't the result's
                 # precision already set correctly based on output_type?
                 result.dtype.precision = output_type.precision
-            elif op in {"eq", "ne", "lt", "gt", "le", "ge"}:
+            elif op in {
+                "__eq__",
+                "__ne__",
+                "__lt__",
+                "__gt__",
+                "__le__",
+                "__ge__",
+            }:
                 result = libcudf.binaryop.binaryop(self, other, op, bool)
         except RuntimeError as e:
             if "Unsupported operator for these types" in str(e):
@@ -128,10 +144,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
                 )
             elif not isinstance(other, DecimalBaseColumn):
-                raise TypeError(
-                    f"Binary operations are not supported between"
-                    f"{str(type(self))} and {str(type(other))}"
-                )
+                return NotImplemented
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
@@ -151,7 +164,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return other
         elif is_scalar(other) and isinstance(other, (int, Decimal)):
             return cudf.Scalar(Decimal(other))
-        raise TypeError(f"cannot normalize {type(other)}")
+        return NotImplemented
 
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
@@ -350,13 +363,13 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     p1, p2 = lhs_dtype.precision, rhs_dtype.precision
     s1, s2 = lhs_dtype.scale, rhs_dtype.scale
 
-    if op in ("add", "sub"):
+    if op in {"__add__", "__sub__"}:
         scale = max(s1, s2)
         precision = scale + max(p1 - s1, p2 - s2) + 1
-    elif op == "mul":
+    elif op == "__mul__":
         scale = s1 + s2
         precision = p1 + p2 + 1
-    elif op == "div":
+    elif op == "__div__":
         scale = max(6, s1 + p2 + 1)
         precision = p1 - s1 + s2 + scale
     else:

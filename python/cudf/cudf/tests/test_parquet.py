@@ -1759,7 +1759,8 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
 
 
 @pytest.mark.parametrize(
-    "pfilters", [[("b", "==", "b")], [("b", "==", "a"), ("c", "==", 1)]],
+    "pfilters",
+    [[("b", "==", "b")], [("b", "==", "a"), ("c", "==", 1)]],
 )
 @pytest.mark.parametrize("selection", ["directory", "files", "row-groups"])
 @pytest.mark.parametrize("use_cat", [True, False])
@@ -1821,12 +1822,20 @@ def test_read_parquet_partitioned_filtered(
     # backend will filter by row (and cudf can
     # only filter by column, for now)
     filters = [("a", "==", 10)]
-    got = cudf.read_parquet(read_path, filters=filters, row_groups=row_groups,)
+    got = cudf.read_parquet(
+        read_path,
+        filters=filters,
+        row_groups=row_groups,
+    )
     assert len(got) < len(df) and 10 in got["a"]
 
     # Filter on both kinds of columns
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
-    got = cudf.read_parquet(read_path, filters=filters, row_groups=row_groups,)
+    got = cudf.read_parquet(
+        read_path,
+        filters=filters,
+        row_groups=row_groups,
+    )
     assert len(got) < len(df) and (1 in got["c"] and 10 in got["a"])
 
 
