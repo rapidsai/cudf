@@ -438,7 +438,9 @@ class _CuDFColumn:
                 f"See {self.__class__.__name__}.describe_null method."
             )
 
-    def _get_offsets_buffer(self,) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
+    def _get_offsets_buffer(
+        self,
+    ) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
         """
         Return the buffer containing the offset values for
         variable-size binary data (e.g., variable-length strings)
@@ -464,7 +466,9 @@ class _CuDFColumn:
 
         return buffer, dtype
 
-    def _get_data_buffer(self,) -> Tuple[_CuDFBuffer, ProtoDtype]:
+    def _get_data_buffer(
+        self,
+    ) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
         Return the buffer containing the data and
                the buffer's associated dtype.

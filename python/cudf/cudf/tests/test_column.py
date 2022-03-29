@@ -415,8 +415,16 @@ def test_as_column_buffer(data, expected):
             {"type": pa.decimal128(3)},
             {"dtype": cudf.core.dtypes.Decimal128Dtype(3, 0)},
         ),
-        ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], {}, {},),
-        ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], {}, {},),
+        (
+            [{"a": 1, "b": 3}, {"c": 2, "d": 4}],
+            {},
+            {},
+        ),
+        (
+            [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]],
+            {},
+            {},
+        ),
     ],
 )
 def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
@@ -533,7 +541,8 @@ def test_concatenate_large_column_strings():
     ],
 )
 @pytest.mark.parametrize(
-    "data", [[1, 2, 0]],
+    "data",
+    [[1, 2, 0]],
 )
 def test_astype_with_aliases(alias, expect_dtype, data):
     pd_data = pd.Series(data)

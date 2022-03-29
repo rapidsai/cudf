@@ -278,7 +278,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(cls, data: MutableMapping, name: Any = None,) -> MultiIndex:
+    def _from_data(
+        cls,
+        data: MutableMapping,
+        name: Any = None,
+    ) -> MultiIndex:
         obj = cls.from_frame(cudf.DataFrame._from_data(data=data))
         if name is not None:
             obj.name = name
@@ -866,7 +870,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def __eq__(self, other):
         if isinstance(other, MultiIndex):
             for self_col, other_col in zip(
-                self._data.values(), other._data.values(),
+                self._data.values(),
+                other._data.values(),
             ):
                 if not self_col.equals(other_col):
                     return False
@@ -1675,9 +1680,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         partial_index = self.__class__._from_data(
             data=self._data.select_by_index(slice(key_as_table._num_columns))
         )
-        (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
-            partial_index, key_as_table, is_sorted
-        )
+        (
+            lower_bound,
+            upper_bound,
+            sort_inds,
+        ) = _lexsorted_equal_range(partial_index, key_as_table, is_sorted)
 
         if lower_bound == upper_bound:
             raise KeyError(key)

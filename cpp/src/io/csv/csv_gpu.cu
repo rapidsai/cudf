@@ -199,7 +199,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
-    if (column_flags[col] & column_parse::enabled) {
+    if (column_flags[col] & column_parse::inferred) {
       // points to last character in the field
       auto const field_len = static_cast<size_t>(next_delimiter - field_start);
       if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
