@@ -380,6 +380,10 @@ class data_profile {
   void set_struct_depth(cudf::size_type max_depth) { struct_dist_desc.max_depth = max_depth; }
   void set_struct_types(std::vector<cudf::type_id> const& types)
   {
+    CUDF_EXPECTS(
+      std::none_of(
+        types.cbegin(), types.cend(), [](auto& type) { return type == cudf::type_id::STRUCT; }),
+      "Cannot include STRUCT as its own subtype");
     struct_dist_desc.leaf_types = types;
   }
 };
