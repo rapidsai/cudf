@@ -604,11 +604,15 @@ class device_row_comparator {
                                  size_type const rhs_start_index,
                                  size_type const size) const noexcept
       {
-        for (size_type i = 0; i < size; ++i) {
-          bool equal = comp.template operator()<Element>(lhs_start_index + i, rhs_start_index + i);
-          if (not equal) { return false; }
-        }
-        return true;
+        auto comparator = [=](size_type const lhs_element_index,
+                              size_type const rhs_element_index) {
+          return comp.template operator()<Element>(lhs_element_index, rhs_element_index);
+        };
+        return thrust::equal(thrust::seq,
+                             thrust::make_counting_iterator(lhs_start_index),
+                             thrust::make_counting_iterator(lhs_start_index) + size,
+                             thrust::make_counting_iterator(rhs_start_index),
+                             comparator);
       }
 
       template <typename Element,
