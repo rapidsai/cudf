@@ -247,6 +247,8 @@ def _proc_inf_strings(col):
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
     col = libstrings.replace_multi(
-        col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
+        col,
+        as_column(["+", "inf", "inity"]),
+        as_column(["", "Inf", ""]),
     )
     return col

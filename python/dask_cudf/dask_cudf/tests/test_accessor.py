@@ -351,7 +351,8 @@ def test_create_list_series(data):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_1(), data_test_2(), data_test_non_numeric()],
+    "data",
+    [data_test_1(), data_test_2(), data_test_non_numeric()],
 )
 def test_unique(data):
     expect = Series(data).list.unique()
@@ -360,7 +361,8 @@ def test_unique(data):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_2(), data_test_non_numeric()],
+    "data",
+    [data_test_2(), data_test_non_numeric()],
 )
 def test_len(data):
     expect = Series(data).list.len()
@@ -369,7 +371,8 @@ def test_len(data):
 
 
 @pytest.mark.parametrize(
-    "data, search_key", [(data_test_2(), 1)],
+    "data, search_key",
+    [(data_test_2(), 1)],
 )
 def test_contains(data, search_key):
     expect = Series(data).list.contains(search_key)
@@ -394,7 +397,8 @@ def test_get(data, index, expectation):
 
 
 @pytest.mark.parametrize(
-    "data", [data_test_1(), data_test_2(), data_test_nested()],
+    "data",
+    [data_test_1(), data_test_2(), data_test_nested()],
 )
 def test_leaves(data):
     expect = Series(data).list.leaves
@@ -459,7 +463,8 @@ struct_accessor_data_params = [
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_create_struct_series(data):
     expect = pd.Series(data)
@@ -468,7 +473,8 @@ def test_create_struct_series(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_struct_field_str(data):
     for test_key in ["a", "b"]:
@@ -478,7 +484,8 @@ def test_struct_field_str(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_struct_field_integer(data):
     for test_key in [0, 1]:
@@ -488,7 +495,8 @@ def test_struct_field_integer(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_dask_struct_field_Key_Error(data):
     got = dgd.from_cudf(Series(data), 2)
@@ -498,7 +506,8 @@ def test_dask_struct_field_Key_Error(data):
 
 
 @pytest.mark.parametrize(
-    "data", struct_accessor_data_params,
+    "data",
+    struct_accessor_data_params,
 )
 def test_dask_struct_field_Int_Error(data):
     # breakpoint()
