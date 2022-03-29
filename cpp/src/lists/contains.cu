@@ -36,7 +36,7 @@ namespace lists {
 
 namespace {
 
-auto constexpr absent_index = size_type{-1};
+auto constexpr NOT_FOUND_IDX = size_type{-1};
 
 auto get_search_keys_device_iterable_view(cudf::column_view const& search_keys,
                                           rmm::cuda_stream_view stream)
@@ -73,7 +73,7 @@ template <duplicate_find_option find_option, typename Iterator>
 size_type __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Iterator find_iter)
 {
   if (find_iter == end) {
-    return absent_index;  // Not found.
+    return NOT_FOUND_IDX;  // Not found.
   }
 
   if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
@@ -99,7 +99,7 @@ struct finder {
         return element_is_valid && cudf::equality_compare(element, search_key);
       });
     return distance<find_option>(list_begin, list_end, find_iter);
-  };
+  }
 };
 
 /**
@@ -152,14 +152,14 @@ struct lookup_functor {
       rmm::exec_policy(stream),
       output_iterator,
       output_iterator + d_lists.size(),
-      [d_lists, search_key_pair_iter, absent_index = absent_index, find_option] __device__(
+      [d_lists, search_key_pair_iter, find_option, NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(
         auto row_index) -> thrust::pair<size_type, bool> {
         auto [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
 
-        if (search_keys_have_nulls && !search_key_is_valid) { return {absent_index, false}; }
+        if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
 
         auto list = cudf::list_device_view(d_lists, row_index);
-        if (list.is_null()) { return {absent_index, false}; }
+        if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
 
         auto const position = find_option == duplicate_find_option::FIND_FIRST
                                 ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
@@ -243,7 +243,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin,
                     positions_begin + num_rows,
                     result->mutable_view().begin<bool>(),
-                    [] __device__(auto i) { return i != absent_index; });
+                    [] __device__(auto i) { return i != NOT_FOUND_IDX; });
   [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
   result->set_null_mask(std::move(*null_mask));
   return result;
