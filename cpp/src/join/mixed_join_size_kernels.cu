@@ -35,6 +35,7 @@ namespace detail {
 namespace cg = cooperative_groups;
 
 template <int block_size, bool has_nulls>
+__launch_bounds__(block_size)
 __global__ void compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
