@@ -1474,7 +1474,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
-        usage = sum(super().memory_usage(deep=deep).values())
+        usage = sum(super().memory_usage(deep=deep)[1])
         if self.levels:
             for level in self.levels:
                 usage += level.memory_usage(deep=deep)

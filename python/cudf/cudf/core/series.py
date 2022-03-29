@@ -856,7 +856,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
-        return sum(super().memory_usage(index, deep).values())
+        return sum(super().memory_usage(index, deep)[1])
 
     @_cudf_nvtx_annotate
     def __array_function__(self, func, types, args, kwargs):

@@ -704,10 +704,11 @@ class IndexedFrame(Frame):
         >>> s.memory_usage(index=False)
         24
         """
-        usage = super().memory_usage(deep=deep)
+        col_names, usage = super().memory_usage(deep=deep)
         if index:
-            usage["Index"] = self.index.memory_usage()
-        return usage
+            col_names.append("Index")
+            usage.append(self.index.memory_usage())
+        return col_names, usage
 
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.

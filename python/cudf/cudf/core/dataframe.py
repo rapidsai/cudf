@@ -1339,8 +1339,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
-        return Series(
-            {str(k): v for k, v in super().memory_usage(index, deep).items()}
+        col_names, mem_usage = super().memory_usage(index, deep)
+        return Series._from_data(
+            data={None: as_column(mem_usage)},
+            index=as_index([str(name) for name in col_names]),
         )
 
     @_cudf_nvtx_annotate
