@@ -77,10 +77,12 @@ def test_applymap_change_out_dtype():
         lambda x: 42,
     ],
 )
-def test_applymap_dataframe(data, func):
+@pytest.mark.parametrize("na_action", [None, "ignore"])
+def test_applymap_dataframe(data, func, na_action):
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 
-    expect = pdf.applymap(func)
-    got = gdf.applymap(func)
+    expect = pdf.applymap(func, na_action=na_action)
+    got = gdf.applymap(func, na_action=na_action)
+
     utils.assert_eq(expect, got, check_dtype=False)
