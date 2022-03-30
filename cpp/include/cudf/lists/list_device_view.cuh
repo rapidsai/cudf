@@ -27,8 +27,6 @@ namespace cudf {
  * a list of elements of arbitrary type (including further nested lists).
  */
 class list_device_view {
-  using lists_column_device_view = cudf::detail::lists_column_device_view;
-
  public:
   list_device_view() = default;
 

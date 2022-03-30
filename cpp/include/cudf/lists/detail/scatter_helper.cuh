@@ -49,9 +49,6 @@ struct unbound_list_view {
    */
   enum class label_type : bool { SOURCE, TARGET };
 
-  using lists_column_device_view = cudf::detail::lists_column_device_view;
-  using list_device_view         = cudf::list_device_view;
-
   unbound_list_view()                         = default;
   unbound_list_view(unbound_list_view const&) = default;
   unbound_list_view(unbound_list_view&&)      = default;
@@ -66,7 +63,7 @@ struct unbound_list_view {
    * @param row_index Index of the row in lists_column that this instance represents
    */
   __device__ inline unbound_list_view(label_type scatter_source_label,
-                                      cudf::detail::lists_column_device_view const& lists_column,
+                                      lists_column_device_view const& lists_column,
                                       size_type const& row_index)
     : _label{scatter_source_label}, _row_index{row_index}
   {

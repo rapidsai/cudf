@@ -22,8 +22,6 @@
 
 namespace cudf {
 
-namespace detail {
-
 /**
  * @brief Given a column-device-view, an instance of this class provides a
  * wrapper on this compound column for list operations.
@@ -87,7 +85,5 @@ class lists_column_device_view {
  private:
   column_device_view underlying;
 };
-
-}  // namespace detail
 
 }  // namespace cudf

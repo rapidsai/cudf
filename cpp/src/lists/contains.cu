@@ -117,7 +117,7 @@ struct finder {
  * @param stream
  */
 template <typename ElementType, typename SearchKeyPairIter>
-void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
+void search_each_list_row(lists_column_device_view const& d_lists,
                           SearchKeyPairIter search_key_pair_iter,
                           bool search_keys_have_nulls,
                           duplicate_find_option find_option,
@@ -197,7 +197,7 @@ struct lookup_functor {
     }
 
     auto const device_view = column_device_view::create(lists.parent(), stream);
-    auto const d_lists     = cudf::detail::lists_column_device_view{*device_view};
+    auto const d_lists     = lists_column_device_view{*device_view};
     auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
 
     auto out_positions = make_numeric_column(
@@ -318,20 +318,20 @@ std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_list
   auto has_nulls_output = make_numeric_column(
     data_type{type_id::BOOL8}, input_lists.size(), mask_state::UNALLOCATED, stream, mr);
   auto const output_begin = has_nulls_output->mutable_view().template begin<bool>();
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    output_begin,
-    output_begin + num_rows,
-    [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
-      auto const list       = list_device_view{lists, list_idx};
-      auto const list_begin = thrust::make_counting_iterator(size_type{0});
-      return list.is_null() ||
-             thrust::any_of(thrust::seq, list_begin, list_begin + list.size(), [&list](auto i) {
-               return list.is_null(i);
-             });
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   output_begin,
+                   output_begin + num_rows,
+                   [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+                     auto const list       = list_device_view{lists, list_idx};
+                     auto const list_begin = thrust::make_counting_iterator(size_type{0});
+                     return list.is_null() ||
+                            thrust::any_of(
+                              thrust::seq, list_begin, list_begin + list.size(), [&list](auto i) {
+                                return list.is_null(i);
+                              });
+                   });
   auto const validity_begin = cudf::detail::make_counting_transform_iterator(
-    0, [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+    0, [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
       return not list_device_view{lists, list_idx}.is_null();
     });
   auto [null_mask, num_nulls] = cudf::detail::valid_if(
