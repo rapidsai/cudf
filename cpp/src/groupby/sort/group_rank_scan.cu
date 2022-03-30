@@ -126,15 +126,12 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
     mr);
 }
 
-std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
+std::unique_ptr<column> percent_rank_scan(column_view const& rank_min,
                                           device_span<size_type const> group_labels,
                                           device_span<size_type const> group_offsets,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  auto const rank_column = rank_scan(
-    order_by, group_labels, group_offsets, stream, rmm::mr::get_current_device_resource());
-  auto const rank_view       = rank_column->view();
   auto const group_size_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [labels  = group_labels.begin(),
@@ -150,11 +147,11 @@ std::unique_ptr<column> percent_rank_scan(column_view const& order_by,
     cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::ANSI_SQL_PERCENT_RANK>;
 
   auto percent_rank_result = cudf::make_fixed_width_column(
-    data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<result_type>()}, rank_min.size(), mask_state::UNALLOCATED, stream, mr);
 
   thrust::transform(rmm::exec_policy(stream),
-                    rank_view.begin<size_type>(),
-                    rank_view.end<size_type>(),
+                    rank_min.begin<size_type>(),
+                    rank_min.end<size_type>(),
                     group_size_iter,
                     percent_rank_result->mutable_view().begin<result_type>(),
                     [] __device__(auto const rank, auto const group_size) {

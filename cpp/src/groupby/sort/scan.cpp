@@ -115,10 +115,12 @@ template <>
 void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
-  CUDF_EXPECTS(helper.is_presorted(),
-               "Rank aggregate in groupby scan requires the keys to be presorted");
-  auto const order_by = get_grouped_values();
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
+  // TODO review: this denotes key sorted, but the values are not sorted.
+  // CUDF_EXPECTS(helper.is_presorted(),
+  //              "Rank aggregate in groupby scan requires the keys to be presorted");
+
+  auto const order_by = get_sorted_values();
+  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(values),
                "Unsupported list type in grouped rank scan.");
 
   auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
@@ -144,8 +146,13 @@ template <>
 void scan_result_functor::operator()<aggregation::ANSI_SQL_PERCENT_RANK>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
-  CUDF_EXPECTS(helper.is_presorted(),
-               "Percent rank aggregate in groupby scan requires the keys to be presorted");
+  // TODO review: this denotes key sorted, but the values are not sorted.
+  // CUDF_EXPECTS(helper.is_presorted(),
+  //              "Percent rank aggregate in groupby scan requires the keys to be presorted");
+  auto rank_min_agg = make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN);
+  operator()<aggregation::RANK>(*rank_min_agg);
+  column_view rank_min = cache.get_result(values, *rank_min_agg);
+
   auto const order_by = get_grouped_values();
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in grouped percent_rank scan.");
@@ -154,7 +161,7 @@ void scan_result_functor::operator()<aggregation::ANSI_SQL_PERCENT_RANK>(aggrega
     values,
     agg,
     detail::percent_rank_scan(
-      order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+      rank_min, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
 }
 }  // namespace detail
 
