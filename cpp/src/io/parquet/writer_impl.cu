@@ -534,7 +534,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
     [&](LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
-      auto set_field_id = [&](schema_tree_node& s, column_in_metadata const& col_meta) {
+      auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
         if (schema[parent_idx].name != "list" and col_meta.is_parquet_field_id_set()) {
           s.has_field_id = true;
           s.field_id     = col_meta.get_parquet_field_id();
