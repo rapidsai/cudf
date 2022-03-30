@@ -149,8 +149,8 @@ struct lookup_functor {
   auto static constexpr is_supported()
   {
     return cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
-           cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view>
-      /*|| std::is_same_v<ElementType, cudf::struct_view>*/;
+           cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view> ||
+           std::is_same_v<ElementType, cudf::struct_view>;
   }
 
   template <typename ElementType, typename... Args>
@@ -161,13 +161,14 @@ struct lookup_functor {
   }
 
   template <typename ElementType, typename SearchKeyType>
-  std::enable_if_t<is_supported<ElementType>(), std::unique_ptr<column>> operator()(
-    cudf::lists_column_view const& lists,
-    SearchKeyType const& search_key,
-    bool search_keys_have_nulls,
-    duplicate_find_option find_option,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
+  std::enable_if_t<is_supported<ElementType>() && !std::is_same_v<ElementType, cudf::struct_view>,
+                   std::unique_ptr<column>>
+  operator()(cudf::lists_column_view const& lists,
+             SearchKeyType const& search_key,
+             bool search_keys_have_nulls,
+             duplicate_find_option find_option,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
     if constexpr (!search_key_is_scalar) {
@@ -218,6 +219,67 @@ struct lookup_functor {
         out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
       out_positions->set_null_mask(std::move(null_mask), num_nulls);
     }
+    return out_positions;
+  }
+
+  template <typename ElementType, typename SearchKeyType>
+  std::enable_if_t<is_supported<ElementType>() && std::is_same_v<ElementType, cudf::struct_view>,
+                   std::unique_ptr<column>>
+  operator()(cudf::lists_column_view const& lists,
+             SearchKeyType const& search_key,
+             bool search_keys_have_nulls,
+             duplicate_find_option find_option,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
+  {
+    auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
+    if constexpr (!search_key_is_scalar) {
+      CUDF_EXPECTS(search_key.size() == lists.size(),
+                   "Number of search keys must match list column size.");
+    }
+    CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
+                 "Nested types not supported in list search operations.");
+    CUDF_EXPECTS(lists.child().type() == search_key.type(),
+                 "Type/Scale of search key does not match list column element type.");
+    CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
+
+    if (search_key_is_scalar && search_keys_have_nulls) {
+      return make_numeric_column(data_type(type_id::INT32),
+                                 lists.size(),
+                                 cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
+                                 lists.size(),
+                                 stream,
+                                 mr);
+    }
+
+    auto const device_view = column_device_view::create(lists.parent(), stream);
+    auto const d_lists     = lists_column_device_view{*device_view};
+    auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
+
+    auto out_positions = make_numeric_column(
+      data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
+    //    auto out_validity = rmm::device_uvector<bool>(lists.size(), stream);
+
+    //    auto const do_search = [&](auto const& search_key_iter) {
+    //      search_each_list_row<ElementType>(d_lists,
+    //                                        search_key_iter,
+    //                                        search_keys_have_nulls,
+    //                                        find_option,
+    //                                        out_positions->mutable_view().template
+    //                                        begin<size_type>(), out_validity.begin(), stream);
+    //    };
+
+    //    if (search_keys_have_nulls) {
+    //      do_search(cudf::detail::make_pair_rep_iterator<ElementType, true>(*d_skeys));
+    //    } else {
+    //      do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
+    //    }
+
+    //    if (search_keys_have_nulls || lists.has_nulls() || lists.child().has_nulls()) {
+    //      auto [null_mask, num_nulls] = cudf::detail::valid_if(
+    //        out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
+    //      out_positions->set_null_mask(std::move(null_mask), num_nulls);
+    //    }
     return out_positions;
   }
 };
