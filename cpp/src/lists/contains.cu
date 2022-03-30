@@ -99,7 +99,7 @@ struct finder {
     auto const list_end   = find_end<ElementType, find_option>(list);
     auto const find_iter  = thrust::find_if(
       thrust::seq, list_begin, list_end, [search_key] __device__(auto element_and_validity) {
-        auto [element, element_is_valid] = element_and_validity;
+        auto const [element, element_is_valid] = element_and_validity;
         return element_is_valid && cudf::equality_compare(element, search_key);
       });
     return distance<find_option>(list_begin, list_end, find_iter);
@@ -135,11 +135,10 @@ void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
      find_option,
      search_keys_have_nulls = search_keys_have_nulls,
      NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto row_index) -> thrust::pair<size_type, bool> {
-      auto [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
-
+      auto const [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
       if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
 
-      auto list = cudf::list_device_view(d_lists, row_index);
+      auto const list = list_device_view(d_lists, row_index);
       if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
 
       auto const position = find_option == duplicate_find_option::FIND_FIRST
@@ -205,7 +204,7 @@ struct lookup_functor {
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
     auto out_validity = rmm::device_uvector<bool>(lists.size(), stream);
 
-    auto do_search = [&](auto const& search_key_iter) {
+    auto const do_search = [&](auto const& search_key_iter) {
       search_each_list_row<ElementType>(d_lists,
                                         search_key_iter,
                                         search_keys_have_nulls,
@@ -324,8 +323,8 @@ std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_list
     output_begin,
     output_begin + num_rows,
     [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
-      auto list       = list_device_view{lists, list_idx};
-      auto list_begin = thrust::make_counting_iterator(size_type{0});
+      auto const list       = list_device_view{lists, list_idx};
+      auto const list_begin = thrust::make_counting_iterator(size_type{0});
       return list.is_null() ||
              thrust::any_of(thrust::seq, list_begin, list_begin + list.size(), [&list](auto i) {
                return list.is_null(i);
