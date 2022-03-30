@@ -86,7 +86,8 @@ std::unique_ptr<column> replace_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99
+ * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99, and also
+ * if the index exceeds the group count specified in the pattern
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
