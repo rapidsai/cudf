@@ -135,8 +135,11 @@ struct lookup_functor {
     if (!search_keys_have_nulls && !input_lists.has_nulls() && !input_lists.child().has_nulls()) {
       return {rmm::device_buffer{0, stream, mr}, size_type{0}};
     } else {
-      return cudf::detail::valid_if(
-        result_validity.begin<bool>(), result_validity.end<bool>(), thrust::identity{}, stream, mr);
+      return cudf::detail::valid_if(result_validity.template begin<bool>(),
+                                    result_validity.template end<bool>(),
+                                    thrust::identity{},
+                                    stream,
+                                    mr);
     }
   }
 
@@ -252,13 +255,13 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                "Expected input column of type INT32.");
   // If position == -1, the list did not contain the search key.
   auto const num_rows        = key_positions->size();
-  auto const positions_begin = key_positions->view().begin<size_type>();
+  auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result =
     make_numeric_column(data_type{type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
   thrust::transform(rmm::exec_policy(stream),
                     positions_begin,
                     positions_begin + num_rows,
-                    result->mutable_view().begin<bool>(),
+                    result->mutable_view().template begin<bool>(),
                     [] __device__(auto i) { return i != NOT_FOUND_IDX; });
   [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
   result->set_null_mask(std::move(*null_mask));
@@ -326,7 +329,7 @@ std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_list
   auto const d_lists    = column_device_view::create(input_lists.parent());
   auto has_nulls_output = make_numeric_column(
     data_type{type_id::BOOL8}, input_lists.size(), mask_state::UNALLOCATED, stream, mr);
-  auto const output_begin = has_nulls_output->mutable_view().begin<bool>();
+  auto const output_begin = has_nulls_output->mutable_view().template begin<bool>();
   thrust::tabulate(
     rmm::exec_policy(stream),
     output_begin,
