@@ -127,7 +127,7 @@ table_view pushdown_struct_offsets(table_view table)
  *  |   |
  *  i   f
  *
- * When list columns are present, The decomposition is performed similarly to pure structs but list
+ * When list columns are present, the decomposition is performed similarly to pure structs but list
  * parent columns are NOT pruned
  *
  * For example, if the original table has a column `List<Struct<int, float>>`,
