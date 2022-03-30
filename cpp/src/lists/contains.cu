@@ -107,14 +107,7 @@ struct finder {
 };
 
 /**
- * @brief search_each_list_row
- * @param d_lists
- * @param search_key_pair_iter
- * @param search_keys_have_nulls
- * @param find_option
- * @param ret_positions
- * @param ret_validity
- * @param stream
+ * @brief Search for the index of the corresponding key in each list row.
  */
 template <typename ElementType, typename SearchKeyPairIter>
 void search_each_list_row(lists_column_device_view const& d_lists,
