@@ -110,7 +110,7 @@ struct finder {
  * @brief Search for the index of the corresponding key in each list row.
  */
 template <typename ElementType, typename SearchKeyPairIter, typename OutputPairIter>
-void search_each_list_row(lists_column_device_view const& d_lists,
+void search_each_list_row(column_device_view const& d_lists,
                           SearchKeyPairIter search_key_pair_iter,
                           bool search_keys_have_nulls,
                           duplicate_find_option find_option,
@@ -121,7 +121,7 @@ void search_each_list_row(lists_column_device_view const& d_lists,
     rmm::exec_policy(stream),
     output_iters,
     output_iters + d_lists.size(),
-    [d_lists,
+    [dv_lists = lists_column_device_view{d_lists},
      search_key_pair_iter,
      find_option,
      search_keys_have_nulls = search_keys_have_nulls,
@@ -129,7 +129,7 @@ void search_each_list_row(lists_column_device_view const& d_lists,
       auto const [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
       if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
 
-      auto const list = list_device_view(d_lists, row_index);
+      auto const list = list_device_view(dv_lists, row_index);
       if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
 
       auto const position = find_option == duplicate_find_option::FIND_FIRST
@@ -188,8 +188,7 @@ struct lookup_functor {
                                  mr);
     }
 
-    auto const device_view = column_device_view::create(lists.parent(), stream);
-    auto const d_lists     = lists_column_device_view{*device_view};
+    auto const d_lists_ptr = column_device_view::create(lists.parent(), stream);
     auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
 
     auto out_positions = make_numeric_column(
@@ -203,7 +202,7 @@ struct lookup_functor {
     } else {  // not struct type
       auto const do_search = [&](auto const& search_key_iter) {
         search_each_list_row<ElementType>(
-          d_lists, search_key_iter, search_keys_have_nulls, find_option, output_iters, stream);
+          *d_lists_ptr, search_key_iter, search_keys_have_nulls, find_option, output_iters, stream);
       };
 
       if (search_keys_have_nulls) {
