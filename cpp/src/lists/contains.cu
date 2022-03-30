@@ -26,9 +26,13 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/logical.h>
+
 #include <type_traits>
 
 namespace cudf {
@@ -117,13 +121,11 @@ void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
                           SearchKeyPairIter search_key_pair_iter,
                           bool search_keys_have_nulls,
                           duplicate_find_option find_option,
-                          cudf::mutable_column_device_view ret_positions,
-                          cudf::mutable_column_device_view ret_validity,
+                          size_type* const ret_positions,
+                          bool* const ret_validity,
                           rmm::cuda_stream_view stream)
 {
-  auto output_iterator = thrust::make_zip_iterator(
-    thrust::make_tuple(ret_positions.data<size_type>(), ret_validity.data<bool>()));
-
+  auto const output_iterator = thrust::make_zip_iterator(ret_positions, ret_validity);
   thrust::tabulate(
     rmm::exec_policy(stream),
     output_iterator,
@@ -199,22 +201,17 @@ struct lookup_functor {
     auto const d_lists     = cudf::detail::lists_column_device_view{*device_view};
     auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
 
-    auto result_positions = make_numeric_column(
+    auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto result_validity = make_numeric_column(
-      data_type{type_id::BOOL8}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto mutable_result_positions =
-      mutable_column_device_view::create(result_positions->mutable_view(), stream);
-    auto mutable_result_validity =
-      mutable_column_device_view::create(result_validity->mutable_view(), stream);
+    auto out_validity = rmm::device_uvector<bool>(lists.size(), stream);
 
     auto do_search = [&](auto const& search_key_iter) {
       search_each_list_row<ElementType>(d_lists,
                                         search_key_iter,
                                         search_keys_have_nulls,
                                         find_option,
-                                        *mutable_result_positions,
-                                        *mutable_result_validity,
+                                        out_positions->mutable_view().template begin<size_type>(),
+                                        out_validity.begin(),
                                         stream);
     };
 
@@ -225,12 +222,11 @@ struct lookup_functor {
     }
 
     if (search_keys_have_nulls || lists.has_nulls() || lists.child().has_nulls()) {
-      auto const validity_begin   = result_validity->view().template begin<bool>();
       auto [null_mask, num_nulls] = cudf::detail::valid_if(
-        validity_begin, validity_begin + result_validity->size(), thrust::identity{}, stream, mr);
-      result_positions->set_null_mask(std::move(null_mask), num_nulls);
+        out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
+      out_positions->set_null_mask(std::move(null_mask), num_nulls);
     }
-    return result_positions;
+    return out_positions;
   }
 };
 
