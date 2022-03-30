@@ -23,7 +23,7 @@ namespace cudf {
 namespace detail {
 
 /**
- * @brief Given a column-device-view, an instance of this class provides a
+ * @brief Given a column_device_view, an instance of this class provides a
  * wrapper on this compound column for struct operations.
  * Analogous to struct_column_view.
  */
@@ -72,7 +72,7 @@ class structs_column_device_view {
   /**
    * @brief Indicates whether the struct column is nullable.
    */
-  [[nodiscard]] __device__ inline bool nullable() const { return underlying.nullable(); }
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool nullable() const { return underlying.nullable(); }
 
   /**
    * @brief Indicates whether the row (i.e. struct) at the specified
@@ -87,7 +87,7 @@ class structs_column_device_view {
    * @brief Fetches the offset of the underlying column_device_view,
    *        in case it is a sliced/offset column.
    */
-  [[nodiscard]] __device__ inline size_type offset() const { return underlying.offset(); }
+  [[nodiscard]] CUDF_HOST_DEVICE inline size_type offset() const { return underlying.offset(); }
 
  private:
   column_device_view underlying;

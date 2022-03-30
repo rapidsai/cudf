@@ -31,7 +31,37 @@ namespace experimental {
 namespace {
 
 /**
- * @brief Applies the offsets of struct columns onto their children.
+ * @brief Applies the offsets of struct column onto its children
+ *
+ * @param c The column whose children are to be sliced
+ * @return Children of `c` with offsets applied
+ */
+std::vector<column_view> slice_children(column_view const& c)
+{
+  if (c.type().id() == type_id::STRUCT) {
+    std::vector<column_view> sliced_children;
+    sliced_children.reserve(c.num_children());
+    auto struct_col = structs_column_view(c);
+    for (size_type i = 0; i < struct_col.num_children(); ++i) {
+      auto sliced = struct_col.get_sliced_child(i);
+      // We cannot directly use the output of `structs_column_view::get_sliced_child` because we
+      // must first traverse its children recursively to push offsets all the way down to the leaf
+      // children.
+      sliced_children.emplace_back(sliced.type(),
+                                   sliced.size(),
+                                   sliced.head<uint8_t>(),
+                                   sliced.null_mask(),
+                                   sliced.null_count(),
+                                   sliced.offset(),
+                                   slice_children(sliced));
+    }
+    return sliced_children;
+  }
+  return {c.child_begin(), c.child_end()};
+};
+
+/**
+ * @brief Applies the offsets of struct columns in a table onto their children.
  *
  * Given a table, this replaces any struct columns with similar struct columns that have their
  * offsets applied to their children. Structs that are children of list columns are not affected.
@@ -39,29 +69,6 @@ namespace {
  */
 table_view pushdown_struct_offsets(table_view table)
 {
-  std::function<std::vector<column_view>(column_view const&)> slice_children =
-    [&](column_view const& c) -> std::vector<column_view> {
-    if (c.type().id() == type_id::STRUCT) {
-      std::vector<column_view> sliced_children;
-      sliced_children.reserve(c.num_children());
-      auto struct_col = structs_column_view(c);
-      for (size_type i = 0; i < struct_col.num_children(); ++i) {
-        auto sliced = struct_col.get_sliced_child(i);
-        // The reason we don't just copy the logic of structs_column_view::get_sliced_child() is
-        // because its logic might change in the future. The following logic is merely to replace
-        // the children of an existing column_view without changing anything else.
-        sliced_children.emplace_back(sliced.type(),
-                                     sliced.size(),
-                                     sliced.head<uint8_t>(),
-                                     sliced.null_mask(),
-                                     sliced.null_count(),
-                                     sliced.offset(),
-                                     slice_children(sliced));
-      }
-      return sliced_children;
-    }
-    return {c.child_begin(), c.child_end()};
-  };
   std::vector<column_view> cols;
   cols.reserve(table.num_columns());
   std::transform(table.begin(), table.end(), std::back_inserter(cols), [&](column_view const& c) {
@@ -157,29 +164,30 @@ auto decompose_structs(table_view table,
   std::vector<null_order> new_null_precedence;
   std::vector<int> verticalized_col_depths;
   for (size_t col_idx = 0; col_idx < linked_columns.size(); ++col_idx) {
-    auto const col = linked_columns[col_idx];
+    detail::linked_column_view const* col = linked_columns[col_idx].get();
     if (is_nested(col->type())) {
       // convert and insert
       std::vector<column_view> r_verticalized_columns;
       std::vector<int> r_verticalized_col_depths;
-      std::vector<detail::LinkedColPtr> flattened;
+      std::vector<detail::linked_column_view const*> flattened;
       std::vector<int> depths;
       // TODO: Here I added a bogus leaf column at the beginning to help in the while loop below.
       //       Refactor the while loop so that it can handle the last case.
-      flattened.push_back(
-        std::make_shared<detail::linked_column_view>(make_empty_column(type_id::INT32)->view()));
-      std::function<void(detail::LinkedColPtr, int)> recursive_child = [&](detail::LinkedColPtr c,
-                                                                           int depth) {
-        flattened.push_back(c);
-        depths.push_back(depth);
-        if (c->type().id() == type_id::LIST) {
-          recursive_child(c->children[lists_column_view::child_column_index], depth + 1);
-        } else if (c->type().id() == type_id::STRUCT) {
-          for (auto& child : c->children) {
-            recursive_child(child, depth + 1);
+      auto first_col =
+        std::make_shared<detail::linked_column_view>(make_empty_column(type_id::INT32)->view());
+      flattened.push_back(first_col.get());
+      std::function<void(detail::linked_column_view const*, int)> recursive_child =
+        [&](detail::linked_column_view const* c, int depth) {
+          flattened.push_back(c);
+          depths.push_back(depth);
+          if (c->type().id() == type_id::LIST) {
+            recursive_child(c->children[lists_column_view::child_column_index].get(), depth + 1);
+          } else if (c->type().id() == type_id::STRUCT) {
+            for (auto& child : c->children) {
+              recursive_child(child.get(), depth + 1);
+            }
           }
-        }
-      };
+        };
       recursive_child(col, 0);
       int curr_col_idx     = flattened.size() - 1;
       column_view curr_col = *flattened[curr_col_idx];
