@@ -2,7 +2,7 @@
 
 import pickle
 from functools import cached_property
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -337,16 +337,18 @@ class ListMethods(ColumnMethods):
             )
         super().__init__(parent=parent)
 
-    def get(self, index: int) -> ParentType:
+    def get(
+        self, index: int, default: Optional[ScalarLike] = None
+    ) -> ParentType:
         """
-        Extract element at the given index from each component
-
-        Extract element from lists, tuples, or strings in
-        each element in the Series/Index.
+        Extract element at the given index from each list.
+        If the index is out of bounds for any list,
+        return <NA> or, if provided, ``default``.
 
         Parameters
         ----------
         index : int
+        default : scalar, optional
 
         Returns
         -------
@@ -360,14 +362,27 @@ class ListMethods(ColumnMethods):
         1    5
         2    6
         dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2)
+        0    <NA>
+        1       5
+        2       6
+        dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2, default=0)
+        0   0
+        1   5
+        2   6
+        dtype: int64
         """
-        min_col_list_len = self.len().min()
-        if -min_col_list_len <= index < min_col_list_len:
-            return self._return_or_inplace(
-                extract_element(self._column, index)
-            )
-        else:
-            raise IndexError("list index out of range")
+        out = extract_element(self._column, index)
+        return self._return_or_inplace(
+            out
+            if (default is None or default is cudf.NA)
+            else out.fillna(default)
+        )
 
     def contains(self, search_key: ScalarLike) -> ParentType:
         """

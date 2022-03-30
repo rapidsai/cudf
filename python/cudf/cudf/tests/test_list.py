@@ -292,10 +292,12 @@ def test_get_nested_lists():
     assert_eq(expect, got)
 
 
-def test_get_nulls():
-    with pytest.raises(IndexError, match="list index out of range"):
-        sr = cudf.Series([[], [], []])
-        sr.list.get(100)
+def test_get_default():
+    sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
+
+    assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2))
+    assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2, default=cudf.NA))
+    assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
 
 
 @pytest.mark.parametrize(
