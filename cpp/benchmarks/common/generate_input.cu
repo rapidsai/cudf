@@ -568,45 +568,58 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
 
-  std::vector<std::unique_ptr<cudf::column>> leaf_columns;
-  for (auto& type_id : dist_params.leaf_types)
-    leaf_columns.emplace_back(cudf::type_dispatcher(
-      cudf::data_type(type_id), create_rand_col_fn{}, profile, engine, num_rows));
+  // Generate leaf columns
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.reserve(dist_params.leaf_types.size());
+  std::transform(dist_params.leaf_types.cbegin(),
+                 dist_params.leaf_types.cend(),
+                 std::back_inserter(children),
+                 [&](auto& type_id) {
+                   return cudf::type_dispatcher(
+                     cudf::data_type(type_id), create_rand_col_fn{}, profile, engine, num_rows);
+                 });
+
   auto valid_dist =
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency().value_or(0)});
 
-  // Generate the list column bottom-up
-  auto parent_columns = std::move(leaf_columns);
+  // Generate the column bottom-up
   for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
     // Generating the next level
-    auto current_children = std::move(parent_columns);
-    parent_columns.clear();
+    std::vector<std::unique_ptr<cudf::column>> parents;
+    parents.resize(num_parents(lvl, children.size()));
 
-    auto remaining_parents  = num_parents(lvl, current_children.size());
-    auto remaining_children = current_children.size();
-    while (remaining_parents != 0) {
-      auto valids = valid_dist(engine, num_rows);
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
+    auto current_child = children.begin();
+    for (auto current_parent = parents.begin(); current_parent != parents.end(); ++current_parent) {
+      auto [null_mask, null_count] = [&]() {
+        if (profile.get_null_frequency().has_value()) {
+          auto valids = valid_dist(engine, num_rows);
+          return cudf::detail::valid_if(valids.begin(), valids.end(), thrust::identity<bool>{});
+        }
+        return std::pair<rmm::device_buffer, cudf::size_type>{};
+      }();
 
-      auto const num_to_assign = std::ceil((double)remaining_children / remaining_parents);
-      auto assign_child_begin =
-        current_children.begin() + (current_children.size() - remaining_children);
-      auto assign_child_end = assign_child_begin + num_to_assign;
-      std::vector<std::unique_ptr<cudf::column>> children_to_assign;
-      for (auto it = assign_child_begin; it < assign_child_end; ++it)
-        children_to_assign.emplace_back(std::move(*it));
+      // Adopt remaining children as evenly as possible
+      auto const num_to_adopt = cudf::util::div_rounding_up_unsafe(
+        std::distance(current_child, children.end()), std::distance(current_parent, parents.end()));
+      CUDF_EXPECTS(num_to_adopt > 0, "No children left to adopt");
 
-      parent_columns.emplace_back(cudf::make_structs_column(
-        num_rows,
-        std::move(children_to_assign),
-        profile.get_null_frequency().has_value() ? null_count : 0,  // cudf::UNKNOWN_NULL_COUNT,
-        profile.get_null_frequency().has_value() ? std::move(null_mask) : rmm::device_buffer{}));
-      --remaining_parents;
-      remaining_children -= num_to_assign;
+      std::vector<std::unique_ptr<cudf::column>> children_to_adopt;
+      children_to_adopt.insert(children_to_adopt.end(),
+                               std::make_move_iterator(current_child),
+                               std::make_move_iterator(current_child + num_to_adopt));
+      current_child += children_to_adopt.size();
+
+      *current_parent = cudf::make_structs_column(
+        num_rows, std::move(children_to_adopt), null_count, std::move(null_mask));
     }
+
+    if (lvl == 1) {
+      CUDF_EXPECTS(parents.size() == 1, "There should be one top-level column");
+      return std::move(parents.front());
+    }
+    children = std::move(parents);
   }
-  return std::move(parent_columns.front());  // return the top-level column
+  CUDF_FAIL("Reached unreachable code in struct column creation");
 }
 
 template <typename T>
