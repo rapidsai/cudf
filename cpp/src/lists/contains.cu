@@ -42,7 +42,7 @@ namespace {
 
 auto constexpr NOT_FOUND_IDX = size_type{-1};
 
-auto get_search_keys_device_iterable_view(cudf::column_view const& search_keys,
+auto get_search_keys_device_iterable_view(column_view const& search_keys,
                                           rmm::cuda_stream_view stream)
 {
   return column_device_view::create(search_keys, stream);
@@ -163,7 +163,7 @@ struct lookup_functor {
   template <typename ElementType, typename SearchKeyType>
   std::enable_if_t<is_supported<ElementType>() && !std::is_same_v<ElementType, cudf::struct_view>,
                    std::unique_ptr<column>>
-  operator()(cudf::lists_column_view const& lists,
+  operator()(lists_column_view const& lists,
              SearchKeyType const& search_key,
              bool search_keys_have_nulls,
              duplicate_find_option find_option,
@@ -225,7 +225,7 @@ struct lookup_functor {
   template <typename ElementType, typename SearchKeyType>
   std::enable_if_t<is_supported<ElementType>() && std::is_same_v<ElementType, cudf::struct_view>,
                    std::unique_ptr<column>>
-  operator()(cudf::lists_column_view const& lists,
+  operator()(lists_column_view const& lists,
              SearchKeyType const& search_key,
              bool search_keys_have_nulls,
              duplicate_find_option find_option,
@@ -233,10 +233,6 @@ struct lookup_functor {
              rmm::mr::device_memory_resource* mr) const
   {
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
-    if constexpr (!search_key_is_scalar) {
-      CUDF_EXPECTS(search_key.size() == lists.size(),
-                   "Number of search keys must match list column size.");
-    }
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
                  "Nested types not supported in list search operations.");
     CUDF_EXPECTS(lists.child().type() == search_key.type(),
@@ -311,7 +307,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
 }  // namespace
 
 namespace detail {
-std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
+std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  duplicate_find_option find_option,
                                  rmm::cuda_stream_view stream,
@@ -327,12 +323,14 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                mr);
 }
 
-std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
-                                 cudf::column_view const& search_keys,
+std::unique_ptr<column> index_of(lists_column_view const& lists,
+                                 column_view const& search_keys,
                                  duplicate_find_option find_option,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(search_keys.size() == lists.size(),
+               "Number of search keys must match list column size.");
   return cudf::type_dispatcher(search_keys.type(),
                                lookup_functor{},
                                lists,
@@ -343,7 +341,7 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                mr);
 }
 
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+std::unique_ptr<column> contains(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
@@ -352,8 +350,8 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
     index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::column_view const& search_keys,
+std::unique_ptr<column> contains(lists_column_view const& lists,
+                                 column_view const& search_keys,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
@@ -364,7 +362,7 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
     index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
-std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_lists,
+std::unique_ptr<column> contains_nulls(lists_column_view const& input_lists,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -397,7 +395,7 @@ std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_list
 
 }  // namespace detail
 
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+std::unique_ptr<column> contains(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  rmm::mr::device_memory_resource* mr)
 {
@@ -405,22 +403,22 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   return detail::contains(lists, search_key, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::column_view const& search_keys,
+std::unique_ptr<column> contains(lists_column_view const& lists,
+                                 column_view const& search_keys,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_lists,
+std::unique_ptr<column> contains_nulls(lists_column_view const& input_lists,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::contains_nulls(input_lists, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
+std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  duplicate_find_option find_option,
                                  rmm::mr::device_memory_resource* mr)
@@ -429,8 +427,8 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
   return detail::index_of(lists, search_key, find_option, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
-                                 cudf::column_view const& search_keys,
+std::unique_ptr<column> index_of(lists_column_view const& lists,
+                                 column_view const& search_keys,
                                  duplicate_find_option find_option,
                                  rmm::mr::device_memory_resource* mr)
 {
