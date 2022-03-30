@@ -339,14 +339,7 @@ class Frame(BinaryOperand, Scannable):
         -------
         The total bytes used.
         """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        return list(self._data.names), [
-            col.memory_usage for col in self._data.columns
-        ]
+        raise NotImplementedError
 
     def __len__(self):
         return self._num_rows
