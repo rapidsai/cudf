@@ -194,7 +194,9 @@ class IndexedFrame(Frame):
 
     @classmethod
     def _from_data(
-        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
     ):
         out = super()._from_data(data)
         out._index = RangeIndex(out._data.nrows) if index is None else index
@@ -1758,7 +1760,10 @@ class IndexedFrame(Frame):
             index_names,
         ) = self._index._split_columns_by_levels(level)
         if index_columns:
-            index = _index_from_columns(index_columns, name=self._index.name,)
+            index = _index_from_columns(
+                index_columns,
+                name=self._index.name,
+            )
             if isinstance(index, MultiIndex):
                 index.names = index_names
             else:
@@ -2118,9 +2123,7 @@ class IndexedFrame(Frame):
         *args,
         **kwargs,
     ):
-        reflect = self._is_reflected_op(op)
-        if reflect:
-            op = op[:2] + op[3:]
+        reflect, op = self._check_reflected_op(op)
         operands, out_index = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )

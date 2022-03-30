@@ -157,7 +157,11 @@ class _ResampleGrouping(_Grouping):
         end += offset
 
         # generate the labels for binning the key column:
-        bin_labels = cudf.date_range(start=start, end=end, freq=freq,)
+        bin_labels = cudf.date_range(
+            start=start,
+            end=end,
+            freq=freq,
+        )
 
         # We want the (resampled) column of timestamps in the result
         # to have a resolution closest to the resampling
