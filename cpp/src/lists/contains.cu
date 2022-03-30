@@ -103,6 +103,51 @@ struct finder {
 };
 
 /**
+ * @brief search_each_list_row
+ * @param d_lists
+ * @param search_key_pair_iter
+ * @param search_keys_have_nulls
+ * @param find_option
+ * @param ret_positions
+ * @param ret_validity
+ * @param stream
+ */
+template <typename ElementType, typename SearchKeyPairIter>
+void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
+                          SearchKeyPairIter search_key_pair_iter,
+                          bool search_keys_have_nulls,
+                          duplicate_find_option find_option,
+                          cudf::mutable_column_device_view ret_positions,
+                          cudf::mutable_column_device_view ret_validity,
+                          rmm::cuda_stream_view stream)
+{
+  auto output_iterator = thrust::make_zip_iterator(
+    thrust::make_tuple(ret_positions.data<size_type>(), ret_validity.data<bool>()));
+
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_iterator,
+    output_iterator + d_lists.size(),
+    [d_lists,
+     search_key_pair_iter,
+     find_option,
+     search_keys_have_nulls = search_keys_have_nulls,
+     NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto row_index) -> thrust::pair<size_type, bool> {
+      auto [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
+
+      if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
+
+      auto list = cudf::list_device_view(d_lists, row_index);
+      if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
+
+      auto const position = find_option == duplicate_find_option::FIND_FIRST
+                              ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
+                              : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
+      return {position, true};
+    });
+}
+
+/**
  * @brief Functor to search each list row for the specified search keys.
  */
 struct lookup_functor {
@@ -121,59 +166,6 @@ struct lookup_functor {
     CUDF_FAIL("Unsupported type in list search operation.");
   }
 
-  std::pair<rmm::device_buffer, size_type> construct_null_mask(
-    lists_column_view const& input_lists,
-    bool search_keys_have_nulls,
-    column_view const& result_validity,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
-  {
-    if (!search_keys_have_nulls && !input_lists.has_nulls() && !input_lists.child().has_nulls()) {
-      return {rmm::device_buffer{0, stream, mr}, size_type{0}};
-    } else {
-      return cudf::detail::valid_if(result_validity.template begin<bool>(),
-                                    result_validity.template end<bool>(),
-                                    thrust::identity{},
-                                    stream,
-                                    mr);
-    }
-  }
-
-  template <typename ElementType, typename SearchKeyPairIter>
-  void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
-                            SearchKeyPairIter search_key_pair_iter,
-                            bool search_keys_have_nulls,
-                            duplicate_find_option find_option,
-                            cudf::mutable_column_device_view ret_positions,
-                            cudf::mutable_column_device_view ret_validity,
-                            rmm::cuda_stream_view stream) const
-  {
-    auto output_iterator = thrust::make_zip_iterator(
-      thrust::make_tuple(ret_positions.data<size_type>(), ret_validity.data<bool>()));
-
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      output_iterator,
-      output_iterator + d_lists.size(),
-      [d_lists,
-       search_key_pair_iter,
-       find_option,
-       search_keys_have_nulls = search_keys_have_nulls,
-       NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto row_index) -> thrust::pair<size_type, bool> {
-        auto [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
-
-        if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
-
-        auto list = cudf::list_device_view(d_lists, row_index);
-        if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
-
-        auto const position = find_option == duplicate_find_option::FIND_FIRST
-                                ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
-                                : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
-        return {position, true};
-      });
-  }
-
   template <typename ElementType, typename SearchKeyType>
   std::enable_if_t<is_supported<ElementType>(), std::unique_ptr<column>> operator()(
     cudf::lists_column_view const& lists,
@@ -183,20 +175,16 @@ struct lookup_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
   {
-    using namespace cudf;
-    using namespace cudf::detail;
-
-    CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
-                 "Nested types not supported in list search operations.");
-    CUDF_EXPECTS(lists.child().type() == search_key.type(),
-                 "Type/Scale of search key does not match list column element type.");
-    CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
-
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
     if constexpr (!search_key_is_scalar) {
       CUDF_EXPECTS(search_key.size() == lists.size(),
                    "Number of search keys must match list column size.");
     }
+    CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
+                 "Nested types not supported in list search operations.");
+    CUDF_EXPECTS(lists.child().type() == search_key.type(),
+                 "Type/Scale of search key does not match list column element type.");
+    CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     if (search_key_is_scalar && search_keys_have_nulls) {
       return make_numeric_column(data_type(type_id::INT32),
@@ -208,7 +196,7 @@ struct lookup_functor {
     }
 
     auto const device_view = column_device_view::create(lists.parent(), stream);
-    auto const d_lists     = lists_column_device_view{*device_view};
+    auto const d_lists     = cudf::detail::lists_column_device_view{*device_view};
     auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
 
     auto result_positions = make_numeric_column(
@@ -236,9 +224,12 @@ struct lookup_functor {
       do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
     }
 
-    auto [null_mask, num_nulls] =
-      construct_null_mask(lists, search_keys_have_nulls, result_validity->view(), stream, mr);
-    result_positions->set_null_mask(std::move(null_mask), num_nulls);
+    if (search_keys_have_nulls || lists.has_nulls() || lists.child().has_nulls()) {
+      auto const validity_begin   = result_validity->view().template begin<bool>();
+      auto [null_mask, num_nulls] = cudf::detail::valid_if(
+        validity_begin, validity_begin + result_validity->size(), thrust::identity{}, stream, mr);
+      result_positions->set_null_mask(std::move(null_mask), num_nulls);
+    }
     return result_positions;
   }
 };
