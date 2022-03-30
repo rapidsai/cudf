@@ -106,28 +106,24 @@ struct finder {
  * @brief Functor to search each list row for the specified search keys.
  */
 struct lookup_functor {
-  bool const search_keys_have_nulls;
-
-  lookup_functor(bool search_keys_have_nulls_) : search_keys_have_nulls{search_keys_have_nulls_} {}
-
   template <typename ElementType>
   auto static constexpr is_supported()
   {
     return cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
-           cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view>;
+           cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view>
+      /*|| std::is_same_v<ElementType, cudf::struct_view>*/;
   }
 
   template <typename ElementType, typename... Args>
   std::enable_if_t<!is_supported<ElementType>(), std::unique_ptr<column>> operator()(
     Args&&...) const
   {
-    CUDF_FAIL(
-      "List search operations are only supported on numeric types, decimals, chrono types, and "
-      "strings.");
+    CUDF_FAIL("Unsupported type in list search operation.");
   }
 
   std::pair<rmm::device_buffer, size_type> construct_null_mask(
     lists_column_view const& input_lists,
+    bool search_keys_have_nulls,
     column_view const& result_validity,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
@@ -146,6 +142,7 @@ struct lookup_functor {
   template <typename ElementType, typename SearchKeyPairIter>
   void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
                             SearchKeyPairIter search_key_pair_iter,
+                            bool search_keys_have_nulls,
                             duplicate_find_option find_option,
                             cudf::mutable_column_device_view ret_positions,
                             cudf::mutable_column_device_view ret_validity,
@@ -181,6 +178,7 @@ struct lookup_functor {
   std::enable_if_t<is_supported<ElementType>(), std::unique_ptr<column>> operator()(
     cudf::lists_column_view const& lists,
     SearchKeyType const& search_key,
+    bool search_keys_have_nulls,
     duplicate_find_option find_option,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
@@ -225,6 +223,7 @@ struct lookup_functor {
     auto do_search = [&](auto const& search_key_iter) {
       search_each_list_row<ElementType>(d_lists,
                                         search_key_iter,
+                                        search_keys_have_nulls,
                                         find_option,
                                         *mutable_result_positions,
                                         *mutable_result_validity,
@@ -237,7 +236,8 @@ struct lookup_functor {
       do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
     }
 
-    auto [null_mask, num_nulls] = construct_null_mask(lists, result_validity->view(), stream, mr);
+    auto [null_mask, num_nulls] =
+      construct_null_mask(lists, search_keys_have_nulls, result_validity->view(), stream, mr);
     result_positions->set_null_mask(std::move(null_mask), num_nulls);
     return result_positions;
   }
@@ -277,9 +277,10 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher(search_key.type(),
-                               lookup_functor{!search_key.is_valid(stream)},
+                               lookup_functor{},
                                lists,
                                search_key,
+                               !search_key.is_valid(stream),
                                find_option,
                                stream,
                                mr);
@@ -292,9 +293,10 @@ std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher(search_keys.type(),
-                               lookup_functor{search_keys.has_nulls()},
+                               lookup_functor{},
                                lists,
                                search_keys,
+                               search_keys.has_nulls(),
                                find_option,
                                stream,
                                mr);
