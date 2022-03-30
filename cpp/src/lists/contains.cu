@@ -109,20 +109,18 @@ struct finder {
 /**
  * @brief Search for the index of the corresponding key in each list row.
  */
-template <typename ElementType, typename SearchKeyPairIter>
+template <typename ElementType, typename SearchKeyPairIter, typename OutputPairIter>
 void search_each_list_row(lists_column_device_view const& d_lists,
                           SearchKeyPairIter search_key_pair_iter,
                           bool search_keys_have_nulls,
                           duplicate_find_option find_option,
-                          size_type* const ret_positions,
-                          bool* const ret_validity,
+                          OutputPairIter const& output_iters,
                           rmm::cuda_stream_view stream)
 {
-  auto const output_iterator = thrust::make_zip_iterator(ret_positions, ret_validity);
   thrust::tabulate(
     rmm::exec_policy(stream),
-    output_iterator,
-    output_iterator + d_lists.size(),
+    output_iters,
+    output_iters + d_lists.size(),
     [d_lists,
      search_key_pair_iter,
      find_option,
@@ -196,16 +194,13 @@ struct lookup_functor {
 
     auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto out_validity = rmm::device_uvector<bool>(lists.size(), stream);
+    auto out_validity       = rmm::device_uvector<bool>(lists.size(), stream);
+    auto const output_iters = thrust::make_zip_iterator(
+      out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
     auto const do_search = [&](auto const& search_key_iter) {
-      search_each_list_row<ElementType>(d_lists,
-                                        search_key_iter,
-                                        search_keys_have_nulls,
-                                        find_option,
-                                        out_positions->mutable_view().template begin<size_type>(),
-                                        out_validity.begin(),
-                                        stream);
+      search_each_list_row<ElementType>(
+        d_lists, search_key_iter, search_keys_have_nulls, find_option, output_iters, stream);
     };
 
     if (search_keys_have_nulls) {
@@ -254,28 +249,28 @@ struct lookup_functor {
 
     auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    //    auto out_validity = rmm::device_uvector<bool>(lists.size(), stream);
+#if 0
+    auto out_validity       = rmm::device_uvector<bool>(lists.size(), stream);
+    auto const output_iters = thrust::make_zip_iterator(
+      out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    //    auto const do_search = [&](auto const& search_key_iter) {
-    //      search_each_list_row<ElementType>(d_lists,
-    //                                        search_key_iter,
-    //                                        search_keys_have_nulls,
-    //                                        find_option,
-    //                                        out_positions->mutable_view().template
-    //                                        begin<size_type>(), out_validity.begin(), stream);
-    //    };
+    auto const do_search = [&](auto const& search_key_iter) {
+      search_each_list_row<ElementType>(
+        d_lists, search_key_iter, search_keys_have_nulls, find_option, output_iters, stream);
+    };
 
-    //    if (search_keys_have_nulls) {
-    //      do_search(cudf::detail::make_pair_rep_iterator<ElementType, true>(*d_skeys));
-    //    } else {
-    //      do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
-    //    }
+    if (search_keys_have_nulls) {
+      do_search(cudf::detail::make_pair_rep_iterator<ElementType, true>(*d_skeys));
+    } else {
+      do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
+    }
 
-    //    if (search_keys_have_nulls || lists.has_nulls() || lists.child().has_nulls()) {
-    //      auto [null_mask, num_nulls] = cudf::detail::valid_if(
-    //        out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
-    //      out_positions->set_null_mask(std::move(null_mask), num_nulls);
-    //    }
+    if (search_keys_have_nulls || lists.has_nulls() || lists.child().has_nulls()) {
+      auto [null_mask, num_nulls] = cudf::detail::valid_if(
+        out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
+      out_positions->set_null_mask(std::move(null_mask), num_nulls);
+    }
+#endif
     return out_positions;
   }
 };
