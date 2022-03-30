@@ -94,12 +94,31 @@ std::unique_ptr<column> count_scan(device_span<size_type const> group_labels,
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of type size_type of rank values
  */
-std::unique_ptr<column> rank_scan(column_view const& order_by,
-                                  device_span<size_type const> group_labels,
-                                  device_span<size_type const> group_offsets,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> min_rank_scan(column_view const& order_by,
+                                      column_view const& gather_map,
+                                      device_span<size_type const> group_labels,
+                                      device_span<size_type const> group_offsets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
 
+std::unique_ptr<column> max_rank_scan(column_view const& order_by,
+                                      column_view const& gather_map,
+                                      device_span<size_type const> group_labels,
+                                      device_span<size_type const> group_offsets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> first_rank_scan(column_view const& order_by,
+                                        column_view const& gather_map,
+                                        device_span<size_type const> group_labels,
+                                        device_span<size_type const> group_offsets,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> average_rank_scan(column_view const& order_by,
+                                          column_view const& gather_map,
+                                          device_span<size_type const> group_labels,
+                                          device_span<size_type const> group_offsets,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 /**
  * @brief Internal API to calculate groupwise dense rank value
  *
@@ -111,6 +130,7 @@ std::unique_ptr<column> rank_scan(column_view const& order_by,
  * @return Column of type size_type of dense rank values
  */
 std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
+                                        column_view const& gather_map,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,

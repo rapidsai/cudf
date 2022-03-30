@@ -22,6 +22,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/scatter.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
@@ -119,27 +121,48 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   // CUDF_EXPECTS(helper.is_presorted(),
   //              "Rank aggregate in groupby scan requires the keys to be presorted");
 
-  auto const order_by = get_sorted_values();
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(values),
                "Unsupported list type in grouped rank scan.");
+  auto const& rank_agg         = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
+  auto const& group_labels     = helper.group_labels(stream);
+  auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
+  // TODO pct percentage
+  auto const gather_map =
+    (rank_agg._method == rank_method::FIRST
+       ? cudf::detail::stable_sorted_order
+       : cudf::detail::sorted_order)(table_view({group_labels_view, get_grouped_values()}),
+                                     {order::ASCENDING, rank_agg._column_order},
+                                     {null_order::AFTER, rank_agg._null_precedence},
+                                     stream,
+                                     mr);
 
-  auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
-
-  if (rank_agg._method == rank_method::MIN) {
-    cache.add_result(
-      values,
-      agg,
-      detail::rank_scan(
-        order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
-  } else if (rank_agg._method == rank_method::DENSE) {
-    cache.add_result(
-      values,
-      agg,
-      detail::dense_rank_scan(
-        order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
-  } else {
-    CUDF_FAIL("Unsupported rank method in groupby scan");
-  }
+  auto rank_scan = [&]() {
+    if (rank_agg._method == rank_method::MIN) {
+      return detail::min_rank_scan;
+    } else if (rank_agg._method == rank_method::MAX) {
+      return detail::max_rank_scan;
+    } else if (rank_agg._method == rank_method::FIRST) {
+      return detail::first_rank_scan;
+    } else if (rank_agg._method == rank_method::DENSE) {
+      return detail::dense_rank_scan;
+    } else if (rank_agg._method == rank_method::AVERAGE) {
+      return detail::average_rank_scan;
+    } else {
+      CUDF_FAIL("Unsupported rank method in groupby scan");
+    }
+  }();
+  auto result = rank_scan(get_grouped_values(),
+                          *gather_map,
+                          helper.group_labels(stream),
+                          helper.group_offsets(stream),
+                          stream,
+                          mr);
+  cache.add_result(
+    values,
+    agg,
+    std::move(cudf::detail::scatter(
+                table_view{{*result}}, *gather_map, table_view{{*result}}, false, stream, mr)
+                ->release()[0]));
 }
 
 template <>
