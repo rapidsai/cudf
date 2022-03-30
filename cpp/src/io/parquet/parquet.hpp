@@ -18,8 +18,6 @@
 
 #include "parquet_common.hpp"
 
-#include <thrust/optional.h>
-
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -162,7 +160,7 @@ struct SchemaElement {
            type_length == other.type_length && repetition_type == other.repetition_type &&
            name == other.name && num_children == other.num_children &&
            decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision &&
-           field_id == other.field_id;
+           has_field_id == other.has_field_id && field_id == other.field_id;
   }
 
   // the parquet format is a little squishy when it comes to interpreting
