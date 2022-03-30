@@ -47,7 +47,7 @@ std::unique_ptr<scalar> collect_list(column_view const& col,
 {
   if (null_handling == null_policy::EXCLUDE && col.has_nulls()) {
     auto d_view             = column_device_view::create(col, stream);
-    auto filter             = detail::validity_accessor(*d_view);
+    auto filter             = detail::validity_accessor<false>(*d_view);
     auto null_purged_table  = detail::copy_if(table_view{{col}}, filter, stream, mr);
     column* null_purged_col = null_purged_table->release().front().release();
     null_purged_col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);

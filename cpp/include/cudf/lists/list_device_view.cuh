@@ -292,7 +292,6 @@ class list_device_view {
  */
 struct list_size_functor {
   detail::lists_column_device_view const d_column;
-#pragma nv_exec_check_disable
   CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
     : d_column(d_col)
   {

@@ -25,10 +25,11 @@ namespace detail {
 /**
  * @brief Given a column-device-view, an instance of this class provides a
  * wrapper on this compound column for struct operations.
- * Analogous to list_column_view.
+ * Analogous to struct_column_view.
  */
 class structs_column_device_view {
  public:
+  structs_column_device_view()                                  = delete;
   ~structs_column_device_view()                                 = default;
   structs_column_device_view(structs_column_device_view const&) = default;
   structs_column_device_view(structs_column_device_view&&)      = default;
@@ -39,7 +40,7 @@ class structs_column_device_view {
     : underlying(underlying_)
   {
 #ifdef __CUDA_ARCH__
-    cudf_assert(underlying.type().id() == type_id::STRUCT and
+    cudf_assert(underlying_.type().id() == type_id::STRUCT and
                 "structs_column_device_view only supports structs");
 #else
     CUDF_EXPECTS(underlying_.type().id() == type_id::STRUCT,

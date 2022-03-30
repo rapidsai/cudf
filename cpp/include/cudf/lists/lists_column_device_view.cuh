@@ -31,6 +31,7 @@ namespace detail {
  */
 class lists_column_device_view {
  public:
+  lists_column_device_view()                                = delete;
   ~lists_column_device_view()                               = default;
   lists_column_device_view(lists_column_device_view const&) = default;
   lists_column_device_view(lists_column_device_view&&)      = default;
