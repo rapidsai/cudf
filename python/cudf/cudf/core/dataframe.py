@@ -1343,7 +1343,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data={
                 None: as_column(
                     [col.memory_usage for col in self._data.columns]
-                    + ([self.index.memory_usage()] if index else [])
+                    + ([self._index.memory_usage()] if index else [])
                 )
             },
             index=as_index(
