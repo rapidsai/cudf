@@ -110,7 +110,7 @@ class alignas(16) column_device_view_base {
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
-  __host__ __device__ T const* head() const noexcept
+  [[nodiscard]] __host__ __device__ T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
   }
@@ -131,7 +131,7 @@ class alignas(16) column_device_view_base {
    * @return T const* Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __host__ __device__ T const* data() const noexcept
+  [[nodiscard]] __host__ __device__ T const* data() const noexcept
   {
     return head<T>() + _offset;
   }
@@ -268,11 +268,11 @@ class alignas(16) column_device_view_base {
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
-  column_device_view_base(data_type type,
-                          size_type size,
-                          void const* data,
-                          bitmask_type const* null_mask,
-                          size_type offset)
+  __host__ __device__ column_device_view_base(data_type type,
+                                              size_type size,
+                                              void const* data,
+                                              bitmask_type const* null_mask,
+                                              size_type offset)
     : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset}
   {
   }
@@ -329,6 +329,28 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   column_device_view(column_view column, void* h_ptr, void* d_ptr);
 
   /**
+   * @brief Get a new column_device_view which is a slice of this column.
+   *
+   * Example:
+   * @code{.cpp}
+   * // column = column_device_view([1, 2, 3, 4, 5, 6, 7])
+   * auto c = column.slice(1, 3);
+   * // c = column_device_view([2, 3, 4])
+   * auto c1 = column.slice(2, 3);
+   * // c1 = column_device_view([3, 4, 5])
+   * @endcode
+   *
+   * @param offset The index of the first element in the slice
+   * @param size The number of elements in the slice
+   */
+  [[nodiscard]] __host__ __device__ column_device_view slice(size_type offset,
+                                                             size_type size) const noexcept
+  {
+    return column_device_view{
+      _type, size, _data, _null_mask, _offset + offset, d_children, _num_children};
+  }
+
+  /**
    * @brief Returns reference to element at the specified index.
    *
    * If the element at the specified index is NULL, i.e.,
@@ -345,7 +367,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __device__ T element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
   }
@@ -364,9 +386,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
   __device__ T element(size_type element_index) const noexcept
   {
-    size_type index = element_index + offset();  // account for this view's _offset
-    const int32_t* d_offsets =
-      d_children[strings_column_view::offsets_column_index].data<int32_t>();
+    size_type index       = element_index + offset();  // account for this view's _offset
+    const auto* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
     const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
     size_type offset      = d_offsets[index];
     return string_view{d_strings + offset, d_offsets[index + 1] - offset};
@@ -765,6 +786,32 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   [[nodiscard]] __host__ __device__ size_type num_child_columns() const noexcept
   {
     return _num_children;
+  }
+
+ private:
+  /**
+   * @brief Creates an instance of this class using pre-existing device memory pointers to data,
+   * nullmask, and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to the device memory containing the data
+   * @param null_mask Pointer to the device memory containing the null bitmask
+   * @param offset The index of the first element in the column
+   * @param children Pointer to the device memory containing child data
+   * @param num_children The number of child columns
+   */
+  __host__ __device__ column_device_view(data_type type,
+                                         size_type size,
+                                         void const* data,
+                                         bitmask_type const* null_mask,
+                                         size_type offset,
+                                         column_device_view* children,
+                                         size_type num_children)
+    : column_device_view_base(type, size, data, null_mask, offset),
+      d_children(children),
+      _num_children(num_children)
+  {
   }
 
  protected:

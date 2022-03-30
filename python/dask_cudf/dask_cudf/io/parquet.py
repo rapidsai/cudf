@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import warnings
 from contextlib import ExitStack
 from functools import partial
@@ -130,7 +130,8 @@ class CudfEngine(ArrowDatasetEngine):
                 # Build the column from `codes` directly
                 # (since the category is often a larger dtype)
                 codes = as_column(
-                    partitions[i].keys.index(index2), length=len(df),
+                    partitions[i].keys.index(index2),
+                    length=len(df),
                 )
                 df[name] = build_categorical_column(
                     categories=partitions[i].keys,

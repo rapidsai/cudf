@@ -18,16 +18,20 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/sorting.hpp>
+#include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
@@ -174,9 +178,9 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
-                                                              size_type const rhs_element_index)
+                             not std::is_same_v<Element, cudf::struct_view>),
+              typename... Args>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -518,8 +522,9 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
-                             not cudf::is_nested<Element>())>
-    __device__ bool operator()(size_type const lhs_element_index, size_type const rhs_element_index)
+                             not cudf::is_nested<Element>()),
+              typename... Args>
+    __device__ bool operator()(Args...)
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -528,55 +533,98 @@ class device_row_comparator {
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
-      column_device_view lcol = lhs;
-      column_device_view rcol = rhs;
-      int l_start_off         = lhs_element_index;
-      int r_start_off         = rhs_element_index;
-      int l_end_off           = lhs_element_index + 1;
-      int r_end_off           = rhs_element_index + 1;
+      column_device_view lcol = lhs.slice(lhs_element_index, 1);
+      column_device_view rcol = rhs.slice(rhs_element_index, 1);
       while (is_nested(lcol.type())) {
         if (nulls) {
-          for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
-            bool const lhs_is_null{lcol.is_null(i)};
-            bool const rhs_is_null{rcol.is_null(j)};
-
-            if (lhs_is_null and rhs_is_null) {
-              if (nulls_are_equal == null_equality::UNEQUAL) { return false; }
-            } else if (lhs_is_null != rhs_is_null) {
+          auto lvalid = make_validity_iterator_safe(lcol);
+          auto rvalid = make_validity_iterator_safe(rcol);
+          if (nulls_are_equal == null_equality::UNEQUAL) {
+            if (thrust::any_of(
+                  thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
+                thrust::any_of(
+                  thrust::seq, rvalid, rvalid + rcol.size(), thrust::logical_not<bool>())) {
+              return false;
+            }
+          } else {
+            if (not thrust::equal(thrust::seq, lvalid, lvalid + lcol.size(), rvalid)) {
               return false;
             }
           }
         }
         if (lcol.type().id() == type_id::STRUCT) {
-          lcol = lcol.child(0);
-          rcol = rcol.child(0);
+          lcol = detail::structs_column_device_view(lcol).sliced_child(0);
+          rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
           auto l_list_col = detail::lists_column_device_view(lcol);
           auto r_list_col = detail::lists_column_device_view(rcol);
-          for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
-            if (l_list_col.offset_at(i + 1) - l_list_col.offset_at(i) !=
-                r_list_col.offset_at(j + 1) - r_list_col.offset_at(j))
-              return false;
+
+          auto lsizes = make_list_size_iterator(l_list_col);
+          auto rsizes = make_list_size_iterator(r_list_col);
+          if (not thrust::equal(thrust::seq, lsizes, lsizes + lcol.size(), rsizes)) {
+            return false;
           }
-          lcol        = l_list_col.child();
-          rcol        = r_list_col.child();
-          l_start_off = l_list_col.offset_at(l_start_off);
-          r_start_off = r_list_col.offset_at(r_start_off);
-          l_end_off   = l_list_col.offset_at(l_end_off);
-          r_end_off   = r_list_col.offset_at(r_end_off);
-          if (l_end_off - l_start_off != r_end_off - r_start_off) { return false; }
+
+          lcol = l_list_col.sliced_child();
+          rcol = r_list_col.sliced_child();
+          if (lcol.size() != rcol.size()) { return false; }
         }
       }
 
-      for (int i = l_start_off, j = r_start_off; i < l_end_off; ++i, ++j) {
-        bool equal = type_dispatcher<dispatch_void_if_nested>(
-          lcol.type(), element_comparator{nulls, lcol, rcol, nulls_are_equal}, i, j);
-        if (not equal) { return false; }
-      }
-      return true;
+      auto comp = element_range_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}};
+      return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp, 0, 0, lcol.size());
     }
 
    private:
+    /**
+     * @brief Compares a range of elements in two columns for equality.
+     *
+     * When we want to compare a range of elements in a single column with an equal sized range of
+     * elements from another column, this saves us from type dispatching for each individual element
+     * in the range
+     */
+    struct element_range_comparator {
+      element_comparator const comp;
+
+      /**
+       * @brief Compare a range of elements for equality.
+       *
+       * Given two columns, compare the elements in the range
+       * [lhs_start_index, lhs_start_index + size) in lhs column with the elements in the range
+       * [rhs_start_index, rhs_start_index + size) in rhs column.
+       * `lhs` and `rhs` columns are defined as the first and second columns used to construct
+       * member `element_comparator comp`
+       *
+       * @param lhs_start_index Starting index of the range of elements in the lhs column
+       * @param rhs_start_index Starting index of the range of elements in the rhs column
+       * @param size The number of elements in the range
+       * @return True if ALL elements in the range compare equal, false otherwise
+       */
+      template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+      __device__ bool operator()(size_type const lhs_start_index,
+                                 size_type const rhs_start_index,
+                                 size_type const size) const noexcept
+      {
+        auto comparator = [=](size_type const lhs_element_index,
+                              size_type const rhs_element_index) {
+          return comp.template operator()<Element>(lhs_element_index, rhs_element_index);
+        };
+        return thrust::equal(thrust::seq,
+                             thrust::make_counting_iterator(lhs_start_index),
+                             thrust::make_counting_iterator(lhs_start_index) + size,
+                             thrust::make_counting_iterator(rhs_start_index),
+                             comparator);
+      }
+
+      template <typename Element,
+                CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>()),
+                typename... Args>
+      __device__ bool operator()(Args...) const noexcept
+      {
+        CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+      }
+    };
+
     column_device_view const lhs;
     column_device_view const rhs;
     Nullate const nulls;

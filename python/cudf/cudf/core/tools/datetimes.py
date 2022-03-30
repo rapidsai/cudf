@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import math
 import re
@@ -346,12 +346,14 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             if infer_datetime_format and format is None:
                 format = column.datetime.infer_format(
-                    element=col[0], dayfirst=dayfirst,
+                    element=col[0],
+                    dayfirst=dayfirst,
                 )
             elif format is None:
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(
-                dtype=_unit_dtype_map[unit], format=format,
+                dtype=_unit_dtype_map[unit],
+                format=format,
             )
     return col
 
@@ -587,12 +589,12 @@ class DateOffset:
     def _datetime_binop(
         self, datetime_col, op, reflect=False
     ) -> column.DatetimeColumn:
-        if reflect and op == "sub":
+        if reflect and op == "__sub__":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
                 f" from a {type(self).__name__}"
             )
-        if op not in {"add", "sub"}:
+        if op not in {"__add__", "__sub__"}:
             raise TypeError(
                 f"{op} not supported between {type(self).__name__}"
                 f" and {type(datetime_col).__name__}"
@@ -604,7 +606,7 @@ class DateOffset:
 
             for unit, value in self._scalars.items():
                 if unit != "months":
-                    value = -value if op == "sub" else value
+                    value = -value if op == "__sub__" else value
                     datetime_col += cudf.core.column.as_column(
                         value, length=len(datetime_col)
                     )
@@ -613,7 +615,7 @@ class DateOffset:
 
     def _generate_months_column(self, size, op):
         months = self._scalars["months"]
-        months = -months if op == "sub" else months
+        months = -months if op == "__sub__" else months
         # TODO: pass a scalar instead of constructing a column
         # https://github.com/rapidsai/cudf/issues/6990
         col = cudf.core.column.as_column(months, length=size)
@@ -923,8 +925,7 @@ def date_range(
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:
-    """Utility to determine if `freq` contains fixed frequency offset
-    """
+    """Utility to determine if `freq` contains fixed frequency offset"""
     fixed_frequencies = {
         "weeks",
         "days",
@@ -940,8 +941,7 @@ def _has_fixed_frequency(freq: DateOffset) -> bool:
 
 
 def _has_non_fixed_frequency(freq: DateOffset) -> bool:
-    """Utility to determine if `freq` contains non-fixed frequency offset
-    """
+    """Utility to determine if `freq` contains non-fixed frequency offset"""
     non_fixed_frequencies = {"years", "months"}
     return len(freq.kwds.keys() & non_fixed_frequencies) > 0
 

@@ -494,7 +494,7 @@ std::vector<schema_tree_node> construct_schema_tree(
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
-        struct_schema.num_children = col->num_children();
+        struct_schema.num_children = col->children.size();
         struct_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(struct_schema));
 
@@ -502,7 +502,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         // for (auto child_it = col->children.begin(); child_it < col->children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
-        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.num_children()),
+        CUDF_EXPECTS(col->children.size() == static_cast<size_t>(col_meta.num_children()),
                      "Mismatch in number of child columns between input table and metadata");
         for (size_t i = 0; i < col->children.size(); ++i) {
           add_schema(col->children[i], col_meta.child(i), struct_node_index);
@@ -541,7 +541,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         // "col_name" : { "key_value" : { "key", "value" } }
 
         // verify the List child structure is a struct<left_child, right_child>
-        auto const& struct_col = col->child(lists_column_view::child_column_index);
+        column_view struct_col = *col->children[lists_column_view::child_column_index];
         CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
         CUDF_EXPECTS(struct_col.num_children() == 2,
                      "Map should be a List of struct with two children only but found " +
@@ -689,7 +689,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // For list columns, we still need to retain the offset child column.
     auto children =
       (parent.type().id() == type_id::LIST)
-        ? std::vector<column_view>{parent.child(lists_column_view::offsets_column_index),
+        ? std::vector<column_view>{*parent.children[lists_column_view::offsets_column_index],
                                    single_inheritance_cudf_col}
         : std::vector<column_view>{single_inheritance_cudf_col};
 
@@ -1170,7 +1170,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
-  auto vec         = input_table_to_linked_columns(table);
+  auto vec         = table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, *table_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;

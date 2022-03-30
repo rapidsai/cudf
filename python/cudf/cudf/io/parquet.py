@@ -179,7 +179,11 @@ def read_parquet_metadata(path):
 
 @_cudf_nvtx_annotate
 def _process_dataset(
-    paths, fs, filters=None, row_groups=None, categorical_partitions=True,
+    paths,
+    fs,
+    filters=None,
+    row_groups=None,
+    categorical_partitions=True,
 ):
     # Returns:
     #     file_list - Expanded/filtered list of paths
@@ -203,7 +207,10 @@ def _process_dataset(
 
     # Initialize ds.FilesystemDataset
     dataset = ds.dataset(
-        paths, filesystem=fs, format="parquet", partitioning="hive",
+        paths,
+        filesystem=fs,
+        format="parquet",
+        partitioning="hive",
     )
     file_list = dataset.files
     if len(file_list) == 0:
@@ -287,7 +294,8 @@ def _process_dataset(
                 filtered_row_groups = [
                     rg_info.id
                     for rg_fragment in file_fragment.split_by_row_group(
-                        filters, schema=dataset.schema,
+                        filters,
+                        schema=dataset.schema,
                     )
                     for rg_info in rg_fragment.row_groups
                 ]
@@ -390,7 +398,10 @@ def read_parquet(
     filepaths_or_buffers = []
     if use_python_file_object:
         open_file_options = _default_open_file_options(
-            open_file_options, columns, row_groups, fs=fs,
+            open_file_options,
+            columns,
+            row_groups,
+            fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
         tmp_source, compression = ioutils.get_filepath_or_buffer(
@@ -455,7 +466,10 @@ def _parquet_to_frame(
     # one call to `_read_parquet`
     if not partition_keys:
         return _read_parquet(
-            paths_or_buffers, *args, row_groups=row_groups, **kwargs,
+            paths_or_buffers,
+            *args,
+            row_groups=row_groups,
+            **kwargs,
         )
 
     # For partitioned data, we need a distinct read for each
@@ -477,7 +491,10 @@ def _parquet_to_frame(
         # Add new DataFrame to our list
         dfs.append(
             _read_parquet(
-                key_paths, *args, row_groups=key_row_groups, **kwargs,
+                key_paths,
+                *args,
+                row_groups=key_row_groups,
+                **kwargs,
             )
         )
         # Add partition columns to the last DataFrame

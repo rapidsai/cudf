@@ -378,7 +378,9 @@ class ColumnAccessor(MutableMapping):
         keys = self.get_labels_by_index(index)
         data = {k: self._data[k] for k in keys}
         return self.__class__(
-            data, multiindex=self.multiindex, level_names=self.level_names,
+            data,
+            multiindex=self.multiindex,
+            level_names=self.level_names,
         )
 
     def set_by_label(self, key: Any, value: Any, validate: bool = True):
@@ -412,7 +414,9 @@ class ColumnAccessor(MutableMapping):
         if self.multiindex:
             data = _to_flat_dict(data)
         return self.__class__(
-            data, multiindex=self.multiindex, level_names=self.level_names,
+            data,
+            multiindex=self.multiindex,
+            level_names=self.level_names,
         )
 
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:

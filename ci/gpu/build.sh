@@ -36,10 +36,6 @@ export INSTALL_DASK_MAIN=1
 # ucx-py version
 export UCX_PY_VERSION='0.26.*'
 
-export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
-export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
-export CMAKE_C_COMPILER_LAUNCHER="sccache"
-
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
 ################################################################################
@@ -166,8 +162,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     fi
 else
     #Project Flash
-    export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
-    export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
     if hasArg --skip-tests; then
         gpuci_logger "Skipping Tests"
@@ -177,17 +171,16 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    set -x
-    cd $LIB_BUILD_DIR
+    gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
     gpuci_logger "GoogleTests"
-
-    for gt in gtests/* ; do
-        test_name=$(basename ${gt})
+    # Run libcudf and libcudf_kafka gtests from libcudf-tests package
+    for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
+    export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
     # Copy libcudf build time results
     echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
     if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
@@ -204,7 +197,7 @@ else
             export GTEST_CUDF_RMM_MODE=cuda
             COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
             mkdir -p "$WORKSPACE/test-results/"
-            for gt in gtests/*; do
+            for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
                 test_name=$(basename ${gt})
                 if [[ "$test_name" == "ERROR_TEST" ]]; then
                   continue
@@ -216,16 +209,6 @@ else
             # test-results/*.cs.log are processed in gpuci
         fi
     fi
-
-    CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
-    CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
-    CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
-    KAFKA_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf_kafka-*.tar.bz2"`
-    KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
-    KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
-
-    gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 
