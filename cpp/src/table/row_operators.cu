@@ -146,6 +146,9 @@ table_view pushdown_struct_offsets(table_view table)
  *  |
  *  i
  *
+ * The list parents are still needed to define the range of elements in the leaf that belong to the
+ * same row.
+ *
  * @param table The table whose struct columns to decompose.
  * @param column_order The per-column order if using output with lexicographic comparison
  * @param null_precedence The per-column null precedence
@@ -207,7 +210,7 @@ auto decompose_structs(table_view table,
                 nullptr,  // If we're going through this then nullmask is already in another branch
                 UNKNOWN_NULL_COUNT,
                 parent->offset(),
-                {parent->child(lists_column_view::offsets_column_index), curr_col});
+                {*parent->children[lists_column_view::offsets_column_index], curr_col});
             }
           }
           r_verticalized_columns.push_back(curr_col);
@@ -216,7 +219,8 @@ auto decompose_structs(table_view table,
         } else {
           auto children =
             (prev_col->type().id() == type_id::LIST)
-              ? std::vector<column_view>{prev_col->child(lists_column_view::offsets_column_index),
+              ? std::vector<column_view>{*prev_col
+                                            ->children[lists_column_view::offsets_column_index],
                                          curr_col}
               : std::vector<column_view>{curr_col};
           curr_col = column_view(prev_col->type(),

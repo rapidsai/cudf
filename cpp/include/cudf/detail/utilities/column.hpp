@@ -29,21 +29,34 @@ using LinkedColVector = std::vector<LinkedColPtr>;
  * @brief column_view with the added member pointer to the parent of this column.
  *
  */
-struct linked_column_view : public column_view {
-  // TODO(cp): we are currently keeping all column_view children info multiple times - once for each
-  //       copy of this object. Options:
-  // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
-  // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
+struct linked_column_view : public column_view_base {
   linked_column_view(column_view const& col) : linked_column_view(nullptr, col) {}
 
   linked_column_view(linked_column_view* parent, column_view const& col)
-    : column_view(col), parent(parent)
+    : column_view_base(col), parent(parent)
   {
     children.reserve(col.num_children());
     std::transform(
       col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
         return std::make_shared<linked_column_view>(this, c);
       });
+  }
+
+  operator column_view() const
+  {
+    std::vector<column_view> column_view_children;
+    column_view_children.reserve(children.size());
+    std::transform(children.begin(),
+                   children.end(),
+                   std::back_inserter(column_view_children),
+                   [](auto const& c) { return *c; });
+    return column_view(this->type(),
+                       this->size(),
+                       this->head(),
+                       this->null_mask(),
+                       UNKNOWN_NULL_COUNT,
+                       this->offset(),
+                       std::move(column_view_children));
   }
 
   linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
