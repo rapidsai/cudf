@@ -24,6 +24,7 @@
 #include <thrust/scatter.h>
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace io {
@@ -107,7 +108,7 @@ using UnsignedKeyValueOpType = typename KeyValueOpToUnsigned<sizeof(KeyValueOpT)
 template <typename KeyValueOpT, typename StackSymbolToStackOpTypeT>
 struct StackSymbolToKVOp {
   template <typename StackSymbolT>
-  __host__ __device__ KeyValueOpT operator()(StackSymbolT const& stack_symbol) const
+  constexpr CUDF_HOST_DEVICE KeyValueOpT operator()(StackSymbolT const& stack_symbol) const
   {
     stack_op_type stack_op = symbol_to_stack_op_type(stack_symbol);
     // PUSH => +1, POP => -1, READ => 0
@@ -127,7 +128,7 @@ struct StackSymbolToKVOp {
  */
 struct AddStackLevelFromKVOp {
   template <typename KeyT, typename ValueT>
-  __host__ __device__ KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
+  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
                                                           KeyValueOp<KeyT, ValueT> const& rhs) const
   {
     KeyT new_level = lhs.key + rhs.key;
@@ -144,7 +145,7 @@ struct AddStackLevelFromKVOp {
 template <typename StackSymbolToStackOpTypeT>
 struct PopulatePopWithPush {
   template <typename KeyT, typename ValueT>
-  __host__ __device__ KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
+  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
                                                           KeyValueOp<KeyT, ValueT> const& rhs) const
   {
     // If RHS is a read, then we need to figure out whether we can propagate the value from the LHS
@@ -168,7 +169,7 @@ struct PopulatePopWithPush {
  */
 template <typename StackSymbolT>
 struct PropagateLastWrite {
-  __host__ __device__ StackSymbolT operator()(StackSymbolT const& lhs,
+  constexpr CUDF_HOST_DEVICE StackSymbolT operator()(StackSymbolT const& lhs,
                                               StackSymbolT const& rhs) const
   {
     // If RHS is a yet-to-be-propagated, then we need to check whether we can use the LHS to fill
@@ -190,7 +191,7 @@ struct PropagateLastWrite {
  */
 struct KVOpToStackSymbol {
   template <typename KeyT, typename ValueT>
-  __host__ __device__ ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+  constexpr CUDF_HOST_DEVICE ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
   {
     return kv_op.value;
   }
@@ -201,7 +202,7 @@ struct KVOpToStackSymbol {
  */
 template <typename KeyValueOpT>
 struct RemapEmptyStack {
-  __host__ __device__ KeyValueOpT operator()(KeyValueOpT const& kv_op) const
+  constexpr CUDF_HOST_DEVICE KeyValueOpT operator()(KeyValueOpT const& kv_op) const
   {
     return kv_op.key == 0 ? empty_stack_symbol : kv_op;
   }

@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <cudf/types.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <src/io/fst/logical_stack.cuh>
 
@@ -130,7 +131,7 @@ TopOfStackOutItT to_top_of_stack(InputItT begin,
  */
 struct JSONToStackOp {
   template <typename StackSymbolT>
-  __host__ __device__ fst::stack_op_type operator()(StackSymbolT const& stack_symbol) const
+  constexpr CUDF_HOST_DEVICE fst::stack_op_type operator()(StackSymbolT const& stack_symbol) const
   {
     return (stack_symbol == '{' || stack_symbol == '[')   ? fst::stack_op_type::PUSH
            : (stack_symbol == '}' || stack_symbol == ']') ? fst::stack_op_type::POP
