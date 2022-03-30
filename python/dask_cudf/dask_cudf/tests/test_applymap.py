@@ -22,7 +22,7 @@ from .utils import _make_random_frame
 def test_applymap_basic(func, has_na):
     size = 2000
     pdf, dgdf = _make_random_frame(size, include_na=False)
-    # breakpoint()
+
     dpdf = dd.from_pandas(pdf, npartitions=dgdf.npartitions)
 
     expect = dpdf.applymap(func)
