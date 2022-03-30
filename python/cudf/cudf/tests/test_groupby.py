@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import datetime
 import itertools
@@ -1709,6 +1709,25 @@ def test_groupby_2keys_scan(nelem, func):
 
     check_dtype = False if func in _index_type_aggs else True
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
+@pytest.mark.parametrize("pct", [False])
+def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
+    pdf = make_frame(pd.DataFrame, nelem=nelem)
+    expect_df = pdf.groupby(["x", "y"], sort=True).rank(
+        method=method, ascending=ascending, na_option=na_option, pct=pct
+    )
+    got_df = (
+        make_frame(DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .rank(method=method, ascending=ascending, na_option=na_option, pct=pct)
+    )
+
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=False)
 
 
 def test_groupby_mix_agg_scan():
