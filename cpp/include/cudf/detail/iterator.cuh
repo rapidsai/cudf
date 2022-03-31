@@ -65,8 +65,8 @@ namespace detail {
  * @return A transform iterator that applies `f` to a counting iterator
  */
 template <typename UnaryFunction>
-__host__ __device__ inline auto make_counting_transform_iterator(cudf::size_type start,
-                                                                 UnaryFunction f)
+CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(cudf::size_type start,
+                                                              UnaryFunction f)
 {
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
@@ -129,7 +129,7 @@ struct validity_accessor {
    *
    * @param[in] _col column device view of cudf column
    */
-  __host__ __device__ validity_accessor(column_device_view const& _col) : col{_col}
+  CUDF_HOST_DEVICE validity_accessor(column_device_view const& _col) : col{_col}
   {
     if constexpr (not safe) {
       // verify valid is non-null, otherwise, is_valid_nocheck() will crash
@@ -322,7 +322,7 @@ auto inline make_validity_iterator(column_device_view const& column)
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
  */
-__host__ __device__ auto inline make_validity_iterator_safe(column_device_view const& column)
+CUDF_HOST_DEVICE auto inline make_validity_iterator_safe(column_device_view const& column)
 {
   return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor<true>{column});
 }
