@@ -216,6 +216,46 @@ struct RemapEmptyStack {
   StackOpT empty_stack_symbol;
 };
 
+/**
+ * @brief Function object to return only the key part from a KeyValueOp instance.
+ */
+struct KVOpToKey {
+  template <typename KeyT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE KeyT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+  {
+    return kv_op.key;
+  }
+};
+
+/**
+ * @brief Function object to return only the value part from a KeyValueOp instance.
+ */
+struct KVOpToValue {
+  template <typename KeyT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+  {
+    return kv_op.value;
+  }
+};
+
+/**
+ * @brief Retrieves an iterator that returns only the `key` part from a KeyValueOp iterator.
+ */
+template <typename KeyValueOpItT>
+auto get_key_it(KeyValueOpItT it)
+{
+  return thrust::make_transform_iterator(it, KVOpToKey{});
+}
+
+/**
+ * @brief Retrieves an iterator that returns only the `value` part from a KeyValueOp iterator.
+ */
+template <typename KeyValueOpItT>
+auto get_value_it(KeyValueOpItT it)
+{
+  return thrust::make_transform_iterator(it, KVOpToValue{});
+}
+
 }  // namespace detail
 
 /**
@@ -401,6 +441,14 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                                num_symbols_in,
                                                stream));
 
+  // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
+  test::print::print_array(num_symbols_in,
+                           stream,
+                           get_key_it(stack_symbols_in),
+                           get_value_it(stack_symbols_in),
+                           get_key_it(d_kv_operations.Current()),
+                           get_value_it(d_kv_operations.Current()));
+
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
@@ -429,6 +477,15 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     num_symbols_in,
     stream));
 
+  // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
+  // operation)
+  test::print::print_array(num_symbols_in,
+                           stream,
+                           get_key_it(kv_ops_scan_in),
+                           get_value_it(kv_ops_scan_in),
+                           get_key_it(kv_ops_scan_out),
+                           get_value_it(kv_ops_scan_out));
+
   // Fill the output tape with read-symbol
   thrust::fill(rmm::exec_policy(stream),
                thrust::device_ptr<StackSymbolT>{d_top_of_stack},
@@ -446,6 +503,11 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                   kv_op_to_stack_sym_it + num_symbols_in,
                   d_symbol_positions_db.Current(),
                   d_top_of_stack);
+
+  // Dump the output tape that has many yet-to-be-filled spots (i.e., all spots that were not given
+  // in the sparse representation)
+  test::print::print_array(
+    std::min(num_symbols_in, static_cast<decltype(num_symbols_in)>(10000)), stream, d_top_of_stack);
 
   // We perform an exclusive scan in order to fill the items at the very left that may
   // be reading the empty stack before there's the first push occurrence in the sequence.
