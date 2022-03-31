@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <cstdlib>
 #include <iostream>
@@ -217,28 +218,13 @@ TEST_F(LogicalStackTest, GroundTruth)
   // Prepare output
   std::size_t string_size = input.size();
   SymbolT* d_top_of_stack = nullptr;
-  cudaMalloc(&d_top_of_stack, string_size + 1);
-
-  // Request temporary storage requirements
-  std::size_t temp_storage_bytes = 0;
-  fst::SparseStackOpToTopOfStack<StackLevelT>(nullptr,
-                                              temp_storage_bytes,
-                                              d_stack_ops.data(),
-                                              d_stack_op_indexes.data(),
-                                              JSONToStackOp{},
-                                              d_top_of_stack,
-                                              empty_stack_symbol,
-                                              read_symbol,
-                                              num_stack_ops,
-                                              string_size,
-                                              stream);
+  cudaMalloc(&d_top_of_stack, string_size);
 
   // Allocate temporary storage required by the get-top-of-the-stack algorithm
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream_view);
+  rmm::device_buffer d_temp_storage{};
 
   // Run algorithm
-  fst::SparseStackOpToTopOfStack<StackLevelT>(d_temp_storage.data(),
-                                              temp_storage_bytes,
+  fst::SparseStackOpToTopOfStack<StackLevelT>(d_temp_storage,
                                               d_stack_ops.data(),
                                               d_stack_op_indexes.data(),
                                               JSONToStackOp{},

@@ -27,6 +27,9 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf_test/print_utilities.cuh>
 
+#include <rmm/device_uvector.hpp>
+#include <rmm/device_buffer.hpp>
+
 namespace cudf {
 namespace io {
 namespace fst {
@@ -295,8 +298,7 @@ template <typename StackLevelT,
           typename TopOfStackOutItT,
           typename StackSymbolT,
           typename OffsetT>
-void SparseStackOpToTopOfStack(void* d_temp_storage,
-                               size_t& temp_storage_bytes,
+void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                StackSymbolItT d_symbols,
                                SymbolPositionT* d_symbol_positions,
                                StackSymbolToStackOpT symbol_to_stack_op,
@@ -351,20 +353,6 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
     kv_ops_scan_in(nullptr, detail::RemapEmptyStack<KeyValueOpT>{empty_stack});
   KeyValueOpT* kv_ops_scan_out = nullptr;
 
-  //------------------------------------------------------------------------------
-  // MEMORY REQUIREMENTS
-  //------------------------------------------------------------------------------
-  enum mem_alloc_id {
-    temp_storage = 0,
-    symbol_position_alt,
-    kv_ops_current,
-    kv_ops_alt,
-    num_allocations
-  };
-
-  void* allocations[mem_alloc_id::num_allocations]            = {nullptr};
-  std::size_t allocation_sizes[mem_alloc_id::num_allocations] = {0};
-
   std::size_t stack_level_scan_bytes      = 0;
   std::size_t stack_level_sort_bytes      = 0;
   std::size_t match_level_scan_bytes      = 0;
@@ -414,49 +402,34 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
                                           stream));
 
   // Scratch memory required by the algorithms
-  allocation_sizes[mem_alloc_id::temp_storage] = std::max({stack_level_scan_bytes,
-                                                           stack_level_sort_bytes,
-                                                           match_level_scan_bytes,
-                                                           propagate_writes_scan_bytes});
+  auto total_temp_storage_bytes = std::max({stack_level_scan_bytes,
+                                                  stack_level_sort_bytes,
+                                                  match_level_scan_bytes,
+                                                  propagate_writes_scan_bytes});
 
-  // Memory requirements by auxiliary buffers
-  constexpr std::size_t extra_overlap_bytes           = 2U;
-  allocation_sizes[mem_alloc_id::symbol_position_alt] = num_symbols_in * sizeof(SymbolPositionT);
-  allocation_sizes[mem_alloc_id::kv_ops_current] =
-    (num_symbols_in + extra_overlap_bytes) * sizeof(KeyValueOpT);
-  allocation_sizes[mem_alloc_id::kv_ops_alt] =
-    (num_symbols_in + extra_overlap_bytes) * sizeof(KeyValueOpT);
+  if (temp_storage.size() < total_temp_storage_bytes) {
+    temp_storage.resize(total_temp_storage_bytes, stream);
+  }
+  // Actual device buffer size, as we need to pass in an lvalue-ref to cub algorithms as temp_storage_bytes
+  total_temp_storage_bytes = temp_storage.size();
 
-  // Try to alias into the user-provided temporary storage memory blob
-  CUDA_TRY(cub::AliasTemporaries<mem_alloc_id::num_allocations>(
-    d_temp_storage, temp_storage_bytes, allocations, allocation_sizes));
-
-  // If this call was just to retrieve auxiliary memory requirements or not sufficient memory was
-  // provided
-  if (!d_temp_storage) { return; }
+  rmm::device_uvector<SymbolPositionT> d_symbol_position_alt{num_symbols_in, stream};
+  rmm::device_uvector<KeyValueOpT> d_kv_ops_current{num_symbols_in, stream};
+  rmm::device_uvector<KeyValueOpT> d_kv_ops_alt{num_symbols_in, stream};
 
   //------------------------------------------------------------------------------
   // ALGORITHM
   //------------------------------------------------------------------------------
-  // Amount of temp storage available to CUB algorithms
-  std::size_t cub_temp_storage_bytes = allocation_sizes[mem_alloc_id::temp_storage];
-
-  // Temp storage for CUB algorithms
-  void* d_cub_temp_storage = allocations[mem_alloc_id::temp_storage];
+  // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
+  d_symbol_positions_db =
+    cub::DoubleBuffer<SymbolPositionT>{d_symbol_positions, d_symbol_position_alt.data()};
 
   // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
-  d_symbol_positions_db = cub::DoubleBuffer<SymbolPositionT>{
-    d_symbol_positions,
-    reinterpret_cast<SymbolPositionT*>(allocations[mem_alloc_id::symbol_position_alt])};
-
-  // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
-  d_kv_operations = cub::DoubleBuffer<KeyValueOpT>{
-    reinterpret_cast<KeyValueOpT*>(allocations[mem_alloc_id::kv_ops_current]),
-    reinterpret_cast<KeyValueOpT*>(allocations[mem_alloc_id::kv_ops_alt])};
+  d_kv_operations = cub::DoubleBuffer<KeyValueOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
   // Compute prefix sum of the stack level after each operation
-  CUDA_TRY(cub::DeviceScan::InclusiveScan(d_cub_temp_storage,
-                                          cub_temp_storage_bytes,
+  CUDA_TRY(cub::DeviceScan::InclusiveScan(temp_storage.data(),
+                                          total_temp_storage_bytes,
                                           stack_symbols_in,
                                           d_kv_operations.Current(),
                                           detail::AddStackLevelFromKVOp{},
@@ -475,8 +448,8 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
   d_kv_operations_unsigned =
     cub::DoubleBuffer<KVOpUnsignedT>{reinterpret_cast<KVOpUnsignedT*>(d_kv_operations.Current()),
                                      reinterpret_cast<KVOpUnsignedT*>(d_kv_operations.Alternate())};
-  CUDA_TRY(cub::DeviceRadixSort::SortPairs(d_cub_temp_storage,
-                                           cub_temp_storage_bytes,
+  CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
+                                           total_temp_storage_bytes,
                                            d_kv_operations_unsigned,
                                            d_symbol_positions_db,
                                            num_symbols_in,
@@ -496,8 +469,8 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
 
   // Exclusive scan to match pop operations with the latest push operation of that level
   CUDA_TRY(cub::DeviceScan::InclusiveScan(
-    d_cub_temp_storage,
-    cub_temp_storage_bytes,
+    temp_storage.data(),
+    total_temp_storage_bytes,
     kv_ops_scan_in,
     kv_ops_scan_out,
     detail::PopulatePopWithPush<StackSymbolToStackOpT>{symbol_to_stack_op},
@@ -539,8 +512,8 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
   // We perform an exclusive scan in order to fill the items at the very left that may
   // be reading the empty stack before there's the first push occurance in the sequence.
   // Also, we're interested in the top-of-the-stack symbol before the operation was applied.
-  CUDA_TRY(cub::DeviceScan::ExclusiveScan(d_cub_temp_storage,
-                                          cub_temp_storage_bytes,
+  CUDA_TRY(cub::DeviceScan::ExclusiveScan(temp_storage.data(),
+                                          total_temp_storage_bytes,
                                           d_top_of_stack,
                                           d_top_of_stack,
                                           detail::PropagateLastWrite<StackSymbolT>{read_symbol},
