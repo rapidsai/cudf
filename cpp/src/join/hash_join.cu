@@ -57,7 +57,7 @@ cudf::detail::row_info get_valid_row_info(cudf::table_view const& build,
   auto num_valid_rows            = build.num_rows();
   auto [row_bitmask, null_count] = cudf::detail::bitmask_and(build, stream);
   if (nulls_equal == cudf::null_equality::UNEQUAL and nullable(build)) {
-    result.num_valid_rows -= null_count;
+    num_valid_rows -= null_count;
   }
   return {std::move(row_bitmask), num_valid_rows};
 }
