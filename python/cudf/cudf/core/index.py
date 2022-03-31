@@ -773,10 +773,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             raise ValueError(f"invalid na_position: {na_position}")
 
         indices = cupy.arange(0, len(self))
-        if ascending:
-            return indices if self._step > 0 else indices[::-1]
-        else:
-            return indices[::-1] if self._step > 0 else indices
+        if (ascending and self._step < 0) or (
+            not ascending and self._step > 0
+        ):
+            indices = indices[::-1]
+            return indices
 
     def where(self, cond, other=None, inplace=False):
         return self._as_int64().where(cond, other, inplace)
