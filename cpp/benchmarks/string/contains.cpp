@@ -19,6 +19,8 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -28,25 +30,62 @@ class StringContains : public cudf::benchmark {
 
 enum contains_type { contains, count, findall };
 
+// longer pattern lengths will demand more working memory
+std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$"};
+
 static void BM_contains(benchmark::State& state, contains_type ct)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
-  cudf::strings_column_view input(table->view().column(0));
+  auto const n_rows        = static_cast<cudf::size_type>(state.range(0));
+  auto const pattern_index = static_cast<int32_t>(state.range(1));
+  auto const hit_rate      = static_cast<int32_t>(state.range(2));
+
+  std::vector<std::string> rawdata({
+    "123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
+    "012345 6789 01234 56789 0123 456",  // the rest do not match
+    "abc 4567890 DEFGHI 0987 Wxyz 123",
+    "abcdefghijklmnopqrstuvwxyz 01234",
+    "",
+    "AbcéDEFGHIJKLMNOPQRSTUVWXYZ 01",
+    "9876543210,abcdefghijklmnopqrstU",
+    "9876543210,abcdefghijklmnopqrstU",
+    "123 édf 4567890 DéFG 0987 X5",
+    "1",
+  });
+  std::vector<std::string> h_data;
+  for (std::size_t i = 0; i < rawdata.size() * rawdata.size(); ++i) {
+    h_data.push_back(rawdata[i / rawdata.size()]);
+  }
+  auto data      = cudf::test::strings_column_wrapper(h_data.begin(), h_data.end());
+  auto data_view = cudf::column_view(data);
+
+  auto matches = static_cast<int32_t>(data_view.size() * rawdata.size() / hit_rate);
+
+  // Create a randomized gather-map to build a column out of the strings in data.
+  // For hit-rate ~100%, matches is 1 -- only gathers the matching row(s).
+  // For hit-rate ~10%, matches is 10 -- use all rows from data (only 10% will match).
+  data_profile table_profile;
+  table_profile.set_distribution_params(
+    cudf::type_id::INT32, distribution_id::UNIFORM, 0, matches - 1);
+  table_profile.set_null_frequency(0.0);  // no nulls for gather-map
+
+  auto table      = create_random_table({cudf::type_id::INT32}, row_count{n_rows}, table_profile);
+  auto gather_map = cudf::column_view(table->view().column(0));
+  table           = cudf::gather(cudf::table_view({data_view}), gather_map);
+  auto input      = cudf::strings_column_view(table->view().column(0));
+
+  auto pattern = patterns[pattern_index];
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
-    // contains_re(), matches_re(), and count_re() all have similar functions
-    // with count_re() being the most regex intensive
     switch (ct) {
       case contains_type::contains:  // contains_re and matches_re use the same main logic
-        cudf::strings::contains_re(input, "\\d+");
+        cudf::strings::contains_re(input, pattern);
         break;
-      case contains_type::count:  // counts occurrences of pattern
-        cudf::strings::count_re(input, "\\d+");
+      case contains_type::count:  // counts occurrences of matches
+        cudf::strings::count_re(input, pattern);
         break;
-      case contains_type::findall:  // returns occurrences of matches
-        cudf::strings::findall(input, "\\d+");
+      case contains_type::findall:  // returns occurrences of all matches
+        cudf::strings::findall(input, pattern);
         break;
     }
   }
@@ -54,13 +93,14 @@ static void BM_contains(benchmark::State& state, contains_type ct)
   state.SetBytesProcessed(state.iterations() * input.chars_size());
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name, b)                          \
-  BENCHMARK_DEFINE_F(StringContains, name)                         \
-  (::benchmark::State & st) { BM_contains(st, contains_type::b); } \
-  BENCHMARK_REGISTER_F(StringContains, name)                       \
-    ->RangeMultiplier(8)                                           \
-    ->Ranges({{1 << 12, 1 << 24}})                                 \
-    ->UseManualTime()                                              \
+#define STRINGS_BENCHMARK_DEFINE(name, b)                                                   \
+  BENCHMARK_DEFINE_F(StringContains, name)                                                  \
+  (::benchmark::State & st) { BM_contains(st, contains_type::b); }                          \
+  BENCHMARK_REGISTER_F(StringContains, name)                                                \
+    ->ArgsProduct({{4096, 32768, 262144, 2097152, 16777216}, /* row count */                \
+                   {0, 1},                                   /* patterns index */           \
+                   {10, 18, 46, 64, 98}})                    /* 11%, 25%, 50%, 70%, 100% */ \
+    ->UseManualTime()                                                                       \
     ->Unit(benchmark::kMillisecond);
 
 STRINGS_BENCHMARK_DEFINE(contains_re, contains)
