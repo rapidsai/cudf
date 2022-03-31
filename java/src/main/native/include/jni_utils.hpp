@@ -840,9 +840,8 @@ inline jthrowable cuda_exception(JNIEnv *const env, const char *file, unsigned i
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
-    auto what =                                                                                    \
-        std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDA_ERROR_CLASS, what.c_str(), ret_val);                  \
+    /* For CUDA errors, the specific error code will be extracted from error message. */           \                                            \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDA_ERROR_CLASS, e.what(), ret_val);                      \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \

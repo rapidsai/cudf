@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CudaTest {
 
@@ -32,4 +33,18 @@ public class CudaTest {
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
   }
 
+  @Test
+  public void testCudaException() {
+    assertThrows(
+        CudaException.class,
+        () -> {
+          try {
+            Cuda.asyncMemset(1234567890L, (byte) 0, 0);
+          } catch (CudaException ex) {
+            assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
+            throw ex;
+          }
+        }
+    );
+  }
 }
