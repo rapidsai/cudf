@@ -310,6 +310,11 @@ def test_get_default():
     )
 
 
+def test_get_default_with_null():
+    sr = cudf.Series([[0, cudf.NA], [1]])
+    assert_eq(cudf.Series([cudf.NA, 0]), sr.list.get(1, default=0))
+
+
 @pytest.mark.parametrize(
     "data, scalar, expect",
     [
