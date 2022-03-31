@@ -172,8 +172,7 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::list_view
 };
 
 /**
- * @brief Lists are parameterized by the distribution of their length, maximal nesting level, and
- * the element type.
+ * @brief Structs are parameterized by the maximal nesting level, and the leaf column types.
  */
 template <typename T>
 struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>> {
