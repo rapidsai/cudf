@@ -241,30 +241,22 @@ size_t gather_stream_info(const size_t stripe_index,
 /**
  * @brief Determines cuDF type of an ORC Decimal column.
  */
-auto decimal_column_type(std::vector<std::string> const& float64_columns,
-                         std::vector<std::string> const& decimal128_columns,
+auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
                          cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
                          int column_index)
 {
-  if (metadata.get_col_type(column_index).kind != DECIMAL) return type_id::EMPTY;
+  if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
 
-  auto const& column_path = metadata.column_path(0, column_index);
-  auto is_column_in       = [&](const std::vector<std::string>& cols) {
-    return std::find(cols.cbegin(), cols.cend(), column_path) != cols.end();
-  };
-
-  auto const user_selected_float64    = is_column_in(float64_columns);
-  auto const user_selected_decimal128 = is_column_in(decimal128_columns);
-  CUDF_EXPECTS(not user_selected_float64 or not user_selected_decimal128,
-               "Both decimal128 and float64 types selected for column " + column_path);
-
-  if (user_selected_float64) return type_id::FLOAT64;
-  if (user_selected_decimal128) return type_id::DECIMAL128;
+  if (std::find(decimal128_columns.cbegin(),
+                decimal128_columns.cend(),
+                metadata.column_path(0, column_index)) != decimal128_columns.end()) {
+    return type_id::DECIMAL128;
+  }
 
   auto const precision = metadata.get_col_type(column_index)
                            .precision.value_or(cuda::std::numeric_limits<int64_t>::digits10);
-  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) return type_id::DECIMAL32;
-  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) return type_id::DECIMAL64;
+  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) { return type_id::DECIMAL32; }
+  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) { return type_id::DECIMAL64; }
   return type_id::DECIMAL128;
 }
 
@@ -796,12 +788,11 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
                                                           rmm::cuda_stream_view stream)
 {
   schema_info.name = _metadata.column_name(0, orc_col_id);
-  auto const type  = to_type_id(
-    _metadata.get_schema(orc_col_id),
-    _use_np_dtypes,
-    _timestamp_type.id(),
-    decimal_column_type(_decimal_cols_as_float, decimal128_columns, _metadata, orc_col_id));
-  int32_t scale = 0;
+  auto const type  = to_type_id(_metadata.get_schema(orc_col_id),
+                               _use_np_dtypes,
+                               _timestamp_type.id(),
+                               decimal_column_type(decimal128_columns, _metadata, orc_col_id));
+  int32_t scale    = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
   auto kind                       = _metadata.get_col_type(orc_col_id).kind;
@@ -943,8 +934,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion
-  _decimal_cols_as_float = options.get_decimal_cols_as_float();
-  decimal128_columns     = options.get_decimal128_columns();
+  decimal128_columns = options.get_decimal128_columns();
 }
 
 timezone_table reader::impl::compute_timezone_table(
@@ -1004,11 +994,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
-      auto col_type = to_type_id(
-        _metadata.get_col_type(col.id),
-        _use_np_dtypes,
-        _timestamp_type.id(),
-        decimal_column_type(_decimal_cols_as_float, decimal128_columns, _metadata, col.id));
+      auto col_type = to_type_id(_metadata.get_col_type(col.id),
+                                 _use_np_dtypes,
+                                 _timestamp_type.id(),
+                                 decimal_column_type(decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {

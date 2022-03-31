@@ -281,13 +281,32 @@ TEST_F(StringsReplaceRegexTest, BackrefWithGreedyQuantifier)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexZeroIndexTest)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"TEST123", "TEST1TEST2", "TEST2-TEST1122", "TEST1-TEST-T", "TES3"});
+  auto strings_view         = cudf::strings_column_view(strings);
+  std::string pattern       = "(TEST)(\\d+)";
+  std::string repl_template = "${0}: ${1}, ${2}; ";
+  auto results = cudf::strings::replace_with_backrefs(strings_view, pattern, repl_template);
+
+  cudf::test::strings_column_wrapper expected({
+    "TEST123: TEST, 123; ",
+    "TEST1: TEST, 1; TEST2: TEST, 2; ",
+    "TEST2: TEST, 2; -TEST1122: TEST, 1122; ",
+    "TEST1: TEST, 1; -TEST-T",
+    "TES3",
+  });
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexErrorTest)
 {
   cudf::test::strings_column_wrapper strings({"this string left intentionally blank"});
   auto view = cudf::strings_column_view(strings);
 
-  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", "\\0"), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", "\\123"), cudf::logic_error);
+  // group index(3) exceeds the group count(2)
+  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w).(\\w)", "\\3"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "", "\\1"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", ""), cudf::logic_error);
 }
