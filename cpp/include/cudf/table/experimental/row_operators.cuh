@@ -536,8 +536,8 @@ class device_row_comparator {
       column_device_view rcol = rhs.slice(rhs_element_index, 1);
       while (is_nested(lcol.type())) {
         if (nulls) {
-          auto lvalid = make_validity_iterator_safe(lcol);
-          auto rvalid = make_validity_iterator_safe(rcol);
+          auto lvalid = detail::make_validity_iterator<true>(lcol);
+          auto rvalid = detail::make_validity_iterator<true>(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
             if (thrust::any_of(
                   thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or

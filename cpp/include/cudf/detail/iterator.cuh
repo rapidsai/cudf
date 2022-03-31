@@ -118,7 +118,7 @@ struct null_replaced_value_accessor {
  * @brief validity accessor of column with null bitmask
  * A unary functor that returns validity at index `i`.
  */
-template <bool safe>
+template <bool safe = false>
 struct validity_accessor {
   column_device_view const col;
 
@@ -132,7 +132,7 @@ struct validity_accessor {
   CUDF_HOST_DEVICE validity_accessor(column_device_view const& _col) : col{_col}
   {
     if constexpr (not safe) {
-      // verify valid is non-null, otherwise, is_valid_nocheck() will crash
+      // verify col is nullable, otherwise, is_valid_nocheck() will crash
 #if defined(__CUDA_ARCH__)
       cudf_assert(_col.nullable() && "Unexpected non-nullable column.");
 #else
@@ -301,30 +301,18 @@ auto make_pair_rep_iterator(column_device_view const& column)
  *
  * Dereferencing the returned iterator for element `i` will return the validity
  * of `column[i]`
- * This iterator is only allowed for nullable columns.
+ * This iterator is only allowed for nullable columns if `safe` = false
+ * When safe = true, if the column is not nullable then the validity is always true.
  *
- * @throws cudf::logic_error if the column is not nullable.
- *
- * @param column The column to iterate
- * @return auto Iterator that returns validities of column elements.
- */
-auto inline make_validity_iterator(column_device_view const& column)
-{
-  return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor<false>{column});
-}
-
-/**
- * @brief Constructs an iterator over a column's validities.
- *
- * Dereferencing the returned iterator for element `i` will return the validity of `column[i]`.
- * If the column is not nullable then the validity is always true.
+ * @throws cudf::logic_error if the column is not nullable when safe = false
  *
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
  */
-CUDF_HOST_DEVICE auto inline make_validity_iterator_safe(column_device_view const& column)
+template <bool safe = false>
+CUDF_HOST_DEVICE auto inline make_validity_iterator(column_device_view const& column)
 {
-  return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor<true>{column});
+  return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor<safe>{column});
 }
 
 /**
