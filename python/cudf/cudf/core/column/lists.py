@@ -342,8 +342,10 @@ class ListMethods(ColumnMethods):
     ) -> ParentType:
         """
         Extract element at the given index from each list.
+
         If the index is out of bounds for any list,
         return <NA> or, if provided, ``default``.
+        Thus, this method never raises an ``IndexError``.
 
         Parameters
         ----------
