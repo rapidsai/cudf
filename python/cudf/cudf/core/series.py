@@ -98,7 +98,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
             arg = list(arg)
         data = self._frame._get_from_column(arg)
 
-        if _is_scalar_or_zero_d_array(data) or _is_null_host_scalar(data):
+        if (
+            isinstance(data, (dict, list))
+            or _is_scalar_or_zero_d_array(data)
+            or _is_null_host_scalar(data)
+        ):
             return data
         return self._frame._from_data(
             {self._frame.name: data},

@@ -1066,7 +1066,11 @@ class CategoricalColumn(column.ColumnBase):
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            fill_value = df._data["new"][df._data["old"].isnull()][0]
+            fill_value = (
+                df._data["new"]
+                .apply_boolean_mask(df._data["old"].isnull())
+                .element_indexing(0)
+            )
             # TODO: This line of code does not work because we cannot use the
             # `in` operator on self.categories (which is a column). mypy
             # realizes that this is wrong because __iter__ is not implemented.
@@ -1087,7 +1091,9 @@ class CategoricalColumn(column.ColumnBase):
         else:
             replaced = self
         if df._data["new"].null_count > 0:
-            drop_values = df._data["old"][df._data["new"].isnull()]
+            drop_values = df._data["old"].apply_boolean_mask(
+                df._data["new"].isnull()
+            )
             cur_categories = replaced.categories
             new_categories = cur_categories.apply_boolean_mask(
                 ~cudf.Series(cur_categories.isin(drop_values))
