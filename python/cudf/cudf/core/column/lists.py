@@ -386,7 +386,7 @@ class ListMethods(ColumnMethods):
             lengths = count_elements(self._column)
             out_of_bounds_indexes = (-index > lengths) | (index >= lengths)
 
-            # replace the value in those rows (should be NA) with ``default``
+            # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_indexes.any():
                 out = out._scatter_by_column(
                     out_of_bounds_indexes, cudf.Scalar(default)
