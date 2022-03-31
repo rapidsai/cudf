@@ -321,6 +321,7 @@ def test_get_ind_sequence():
     assert_eq(cudf.Series([1, 4, 8]), sr.list.get([0, 1, 2]))
     assert_eq(cudf.Series([1, 4, 8]), sr.list.get(cudf.Series([0, 1, 2])))
     assert_eq(cudf.Series([cudf.NA, 5, cudf.NA]), sr.list.get([2, 2, -5]))
+    assert_eq(cudf.Series([0, 5, 0]), sr.list.get([2, 2, -5], default=0))
 
 
 @pytest.mark.parametrize(
