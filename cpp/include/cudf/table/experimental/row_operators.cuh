@@ -570,49 +570,35 @@ class device_row_comparator {
         }
       }
 
-      auto comp = element_range_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}};
-      return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp, 0, 0, lcol.size());
+      auto comp =
+        column_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}, lcol.size()};
+      return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp);
     }
 
    private:
     /**
-     * @brief Compares a range of elements in two columns for equality.
+     * @brief Serially compare two columns for equality.
      *
-     * When we want to compare a range of elements in a single column with an equal sized range of
-     * elements from another column, this saves us from type dispatching for each individual element
-     * in the range
+     * When we want to get the equivalence of two columns by serially comparing all elements in a
+     * one column with the corresponding elements in the other column, this saves us from type
+     * dispatching for each individual element in the range
      */
-    struct element_range_comparator {
+    struct column_comparator {
       element_comparator const comp;
+      size_type const size;
 
       /**
-       * @brief Compare a range of elements for equality.
+       * @brief Serially compare two columns for equality.
        *
-       * Given two columns, compare the elements in the range
-       * [lhs_start_index, lhs_start_index + size) in lhs column with the elements in the range
-       * [rhs_start_index, rhs_start_index + size) in rhs column.
-       * `lhs` and `rhs` columns are defined as the first and second columns used to construct
-       * member `element_comparator comp`
-       *
-       * @param lhs_start_index Starting index of the range of elements in the lhs column
-       * @param rhs_start_index Starting index of the range of elements in the rhs column
-       * @param size The number of elements in the range
-       * @return True if ALL elements in the range compare equal, false otherwise
+       * @return True if ALL elements compare equal, false otherwise
        */
       template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
-      __device__ bool operator()(size_type const lhs_start_index,
-                                 size_type const rhs_start_index,
-                                 size_type const size) const noexcept
+      __device__ bool operator()() const noexcept
       {
-        auto comparator = [=](size_type const lhs_element_index,
-                              size_type const rhs_element_index) {
-          return comp.template operator()<Element>(lhs_element_index, rhs_element_index);
-        };
-        return thrust::equal(thrust::seq,
-                             thrust::make_counting_iterator(lhs_start_index),
-                             thrust::make_counting_iterator(lhs_start_index) + size,
-                             thrust::make_counting_iterator(rhs_start_index),
-                             comparator);
+        return thrust::all_of(thrust::seq,
+                              thrust::make_counting_iterator(0),
+                              thrust::make_counting_iterator(0) + size,
+                              [=](auto i) { return comp.template operator()<Element>(i, i); });
       }
 
       template <typename Element,
