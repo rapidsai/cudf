@@ -194,7 +194,9 @@ class IndexedFrame(Frame):
 
     @classmethod
     def _from_data(
-        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
     ):
         out = super()._from_data(data)
         out._index = RangeIndex(out._data.nrows) if index is None else index
@@ -702,10 +704,7 @@ class IndexedFrame(Frame):
         >>> s.memory_usage(index=False)
         24
         """
-        usage = super().memory_usage(deep=deep)
-        if index:
-            usage["Index"] = self.index.memory_usage()
-        return usage
+        raise NotImplementedError
 
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
@@ -1758,7 +1757,10 @@ class IndexedFrame(Frame):
             index_names,
         ) = self._index._split_columns_by_levels(level)
         if index_columns:
-            index = _index_from_columns(index_columns, name=self._index.name,)
+            index = _index_from_columns(
+                index_columns,
+                name=self._index.name,
+            )
             if isinstance(index, MultiIndex):
                 index.names = index_names
             else:
@@ -2118,9 +2120,7 @@ class IndexedFrame(Frame):
         *args,
         **kwargs,
     ):
-        reflect = self._is_reflected_op(op)
-        if reflect:
-            op = op[:2] + op[3:]
+        reflect, op = self._check_reflected_op(op)
         operands, out_index = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
@@ -2306,8 +2306,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-            -   ``warn`` : prints last exceptions as warnings and
-                return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
@@ -2395,25 +2393,14 @@ class IndexedFrame(Frame):
         1     2
         dtype: int64
         """
-        if errors not in ("ignore", "warn", "raise"):
+        if errors not in ("ignore", "raise"):
             raise ValueError("invalid error value specified")
-        elif errors == "warn":
-            warnings.warn(
-                "Specifying errors='warn' is deprecated and will be removed "
-                "in a future release.",
-                FutureWarning,
-            )
 
         try:
             data = super().astype(dtype, copy, **kwargs)
         except Exception as e:
             if errors == "raise":
                 raise e
-            elif errors == "warn":
-                import traceback
-
-                tb = traceback.format_exc()
-                warnings.warn(tb)
             return self
 
         return self._from_data(data, index=self._index)
