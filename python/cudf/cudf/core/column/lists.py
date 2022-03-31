@@ -2,7 +2,7 @@
 
 import pickle
 from functools import cached_property
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pyarrow as pa
@@ -343,10 +343,16 @@ class ListMethods(ColumnMethods):
         super().__init__(parent=parent)
 
     def get(
-        self, index: int, default: Optional[ScalarLike] = None
+        self,
+        index: int,
+        default: Optional[Union[ScalarLike, ColumnLike]] = None,
     ) -> ParentType:
         """
         Extract element at the given index from each list.
+
+        `index` can be an integer or a sequence of integers.
+        Passing a sequence enables extracting values at
+        different indexes for different lists.
 
         If the index is out of bounds for any list,
         return <NA> or, if provided, ``default``.
@@ -354,7 +360,7 @@ class ListMethods(ColumnMethods):
 
         Parameters
         ----------
-        index : int
+        index : int or sequence of ints
         default : scalar, optional
 
         Returns
@@ -370,17 +376,21 @@ class ListMethods(ColumnMethods):
         2    6
         dtype: int64
 
-        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
         >>> s.list.get(2)
         0    <NA>
         1       5
         2       6
         dtype: int64
 
-        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
         >>> s.list.get(2, default=0)
         0   0
         1   5
+        2   6
+        dtype: int64
+
+        >>> s.list.get([0, 1, 2])
+        0   1
+        1   4
         2   6
         dtype: int64
         """
