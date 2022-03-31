@@ -299,6 +299,7 @@ def test_get_default():
     assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2, default=cudf.NA))
     assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
     assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
+    assert_eq(cudf.Series([0, 3, 7]), sr.list.get(-3, default=0))
     assert_eq(cudf.Series([2, 5, 9]), sr.list.get(-1))
 
     string_sr = cudf.Series(
@@ -309,10 +310,8 @@ def test_get_default():
         string_sr.list.get(2, default="default"),
     )
 
-
-def test_get_default_with_null():
-    sr = cudf.Series([[0, cudf.NA], [1]])
-    assert_eq(cudf.Series([cudf.NA, 0]), sr.list.get(1, default=0))
+    sr_with_null = cudf.Series([[0, cudf.NA], [1]])
+    assert_eq(cudf.Series([cudf.NA, 0]), sr_with_null.list.get(1, default=0))
 
 
 @pytest.mark.parametrize(

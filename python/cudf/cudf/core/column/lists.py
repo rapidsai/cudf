@@ -380,11 +380,19 @@ class ListMethods(ColumnMethods):
         dtype: int64
         """
         out = extract_element(self._column, index)
-        return self._return_or_inplace(
-            out
-            if (default is None or default is cudf.NA)
-            else out.fillna(default)
-        )
+
+        if not (default is None or default is cudf.NA):
+            # determine rows for which `index` is out-of-bounds
+            lengths = count_elements(self._column)
+            out_of_bounds_indexes = (-index > lengths) | (index >= lengths)
+
+            # replace the value in those rows (should be NA) with ``default``
+            if out_of_bounds_indexes.any():
+                out = out._scatter_by_column(
+                    out_of_bounds_indexes, cudf.Scalar(default)
+                )
+
+        return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:
         """
