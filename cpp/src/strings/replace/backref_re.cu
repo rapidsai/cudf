@@ -68,7 +68,8 @@ std::string get_backref_pattern(std::string const& repl)
  * For example, for input string 'hello \2 and \1' the returned `backref_type` vector
  * contains `[(2,6),(1,11)]` and the returned string is 'hello  and '.
  */
-std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string const& repl)
+std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string const& repl,
+                                                                 int const group_count)
 {
   std::vector<backref_type> backrefs;
   std::string str = repl;  // make a modifiable copy
@@ -79,7 +80,8 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
   while (std::regex_search(str, m, ex) && !m.empty()) {
     // parse the back-ref index number
     size_type const index = static_cast<size_type>(std::atoi(std::string{m[1]}.c_str()));
-    CUDF_EXPECTS(index > 0 && index < 100, "Group index numbers must be in the range 1-99");
+    CUDF_EXPECTS(index >= 0 && index <= group_count,
+                 "Group index numbers must be in the range 0 to group count");
 
     // store the new byte offset and index value
     size_type const position = static_cast<size_type>(m.position(0));
@@ -146,7 +148,8 @@ std::unique_ptr<column> replace_with_backrefs(
     reprog_device::create(pattern, flags, get_character_flags_table(), input.size(), stream);
 
   // parse the repl string for back-ref indicators
-  auto const parse_result = parse_backrefs(replacement);
+  auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
+  auto const parse_result = parse_backrefs(replacement, group_count);
   rmm::device_uvector<backref_type> backrefs =
     cudf::detail::make_device_uvector_async(parse_result.second, stream);
   string_scalar repl_scalar(parse_result.first, true, stream);
