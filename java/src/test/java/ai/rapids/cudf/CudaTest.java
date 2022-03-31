@@ -18,8 +18,7 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class CudaTest {
 
@@ -35,13 +34,12 @@ public class CudaTest {
 
   @Test
   public void testCudaException() {
-    assertThrows(
-        CudaException.class,
-        () -> {
+    assertThrows(CudaException.class, () -> {
           try {
-            Cuda.asyncMemset(1234567890L, (byte) 0, 0);
+            Cuda.memset(Long.MAX_VALUE, (byte) 0, 1024);
           } catch (CudaException ex) {
-            assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
+            assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.cudaError);
+            assertFalse(ex.cudaError.isSticky());
             throw ex;
           }
         }

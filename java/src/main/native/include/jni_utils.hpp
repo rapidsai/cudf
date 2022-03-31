@@ -754,6 +754,8 @@ inline jthrowable cuda_exception(JNIEnv *const env, const char *file, unsigned i
   }
   const char *err_string = cudaGetErrorString(status);
 
+  // Build the error message in the format of cudf::cuda_error, so that cudf::jni::CUDA_ERROR_CLASS
+  // can parse both of them.
   std::string n_msg = "CUDA error encountered at: " + std::string{file} + ":" +
                       std::to_string(line) + ": " + std::to_string(status) + " " + err_name + " " +
                       err_string;

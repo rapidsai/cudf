@@ -15,6 +15,9 @@
  */
 package ai.rapids.cudf;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Exception from the cuda language/library.  Be aware that because of how cuda does asynchronous
  * processing exceptions from cuda can be thrown by method calls that did not cause the exception
@@ -40,6 +43,9 @@ public class CudaException extends RuntimeException {
 
   public final CudaError cudaError;
 
+  /**
+   * The Java mirror of cudaError, which facilities the tracking of CUDA errors in JVM.
+   */
   public enum CudaError {
     cudaErrorInvalidValue(1),
     cudaErrorMemoryAllocation(2),
@@ -166,8 +172,31 @@ public class CudaException extends RuntimeException {
 
     final int code;
 
+    private static final Set<CudaError> stickyErrors = new HashSet<CudaError>(){{
+      add(CudaError.cudaErrorIllegalAddress);
+      add(CudaError.cudaErrorLaunchTimeout);
+      add(CudaError.cudaErrorHardwareStackError);
+      add(CudaError.cudaErrorIllegalInstruction);
+      add(CudaError.cudaErrorMisalignedAddress);
+      add(CudaError.cudaErrorInvalidAddressSpace);
+      add(CudaError.cudaErrorInvalidPc);
+      add(CudaError.cudaErrorLaunchFailure);
+      add(CudaError.cudaErrorExternalDevice);
+      add(CudaError.cudaErrorUnknown);
+    }};
+
     CudaError(int errorCode) {
       this.code = errorCode;
+    }
+
+    /**
+     * Returns whether this CudaError is sticky or not.
+     *
+     * Sticky errors leave the process in an inconsistent state and any further CUDA work will return
+     * the same error. To continue using CUDA, the process must be terminated and relaunched.
+     */
+    public boolean isSticky() {
+      return stickyErrors.contains(this);
     }
   }
 
