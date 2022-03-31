@@ -392,6 +392,16 @@ def test_contains_null_search_key(data, expect):
             "y",
             [3, -1],
         ),
+        (
+            [["d", None, "e"], [None, "f"], []],
+            cudf.Scalar(cudf.NA, "O"),
+            [None, None, None],
+        ),
+        (
+            [None, [10, 9, 8], [5, 8, None]],
+            cudf.Scalar(cudf.NA, "int64"),
+            [None, None, None],
+        ),
     ],
 )
 def test_index_of_scalar(data, scalar, expect):
