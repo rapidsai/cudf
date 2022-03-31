@@ -608,8 +608,10 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         map_schema.converted_type = ConvertedType::MAP;
         map_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        map_schema.name         = col_meta.get_name();
-        map_schema.field_id     = col_meta.get_parquet_field_id();
+        map_schema.name = col_meta.get_name();
+        if (col_meta.is_parquet_field_id_set()) {
+          map_schema.field_id = col_meta.get_parquet_field_id();
+        }
         map_schema.num_children = 1;
         map_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(map_schema));
