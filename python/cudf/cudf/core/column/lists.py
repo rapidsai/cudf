@@ -13,10 +13,10 @@ from cudf._lib.lists import (
     concatenate_list_elements,
     concatenate_rows,
     contains_scalar,
-    index_of_scalar,
     count_elements,
     drop_list_duplicates,
     extract_element,
+    index_of_scalar,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column

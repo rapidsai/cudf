@@ -386,11 +386,7 @@ def test_contains_null_search_key(data, expect):
             "f",
             [-1, -1, 2],
         ),
-        (
-            [[-5, None, 8], None, []],
-            -5,
-            [0, None, -1]
-        ),
+        ([[-5, None, 8], None, []], -5, [0, None, -1]),
         (
             [[None, "x", None, "y"], ["z", "i", "j"]],
             "y",

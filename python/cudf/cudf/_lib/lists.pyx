@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
@@ -163,16 +163,16 @@ def contains_scalar(Column col, object py_search_key):
 
 
 def index_of_scalar(Column col, object py_search_key):
-    
+
     cdef DeviceScalar search_key = py_search_key.device_value
-    
+
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
     cdef const scalar* search_key_value = search_key.get_raw_ptr()
-    
+
     cdef unique_ptr[column] c_result
-    
+
     with nogil:
         c_result = move(index_of(
             list_view.get()[0],
