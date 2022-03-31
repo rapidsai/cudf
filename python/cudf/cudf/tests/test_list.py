@@ -313,6 +313,13 @@ def test_get_default():
     sr_with_null = cudf.Series([[0, cudf.NA], [1]])
     assert_eq(cudf.Series([cudf.NA, 0]), sr_with_null.list.get(1, default=0))
 
+    sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
+    assert_eq(cudf.Series([[3, 4], [7, 8]]), sr_nested.list.get(1))
+    assert_eq(cudf.Series([[5, 6], cudf.NA]), sr_nested.list.get(2))
+    assert_eq(
+        cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0])
+    )
+
 
 @pytest.mark.parametrize(
     "data, scalar, expect",
