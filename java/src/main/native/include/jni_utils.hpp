@@ -736,7 +736,9 @@ public:
 /**
  * @brief create a cuda exception from a given cudaError_t
  */
-inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowable cause = NULL) {
+inline jthrowable cuda_exception(JNIEnv *const env,
+                                 const char* file, unsigned int line,
+                                 cudaError_t status, jthrowable cause=NULL) {
   jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);
   if (ex_class == NULL) {
     return NULL;
@@ -747,26 +749,30 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
     return NULL;
   }
 
-  jstring msg = env->NewStringUTF(cudaGetErrorString(status));
+  std::string n_msg {"CUDA error encountered at: " + std::string{file} + ":" +
+                     std::to_string(line) + ": " + std::to_string(error) + " " +
+                     cudaGetErrorName(error) + " " + cudaGetErrorString(error)};
+  jstring j_msg = env->NewStringUTF(cudaGetErrorString(n_msg));
   if (msg == NULL) {
     return NULL;
   }
 
-  jobject ret = env->NewObject(ex_class, ctor_id, msg, cause);
+  jobject ret = env->NewObject(ex_class, ctor_id, j_msg, cause);
   return (jthrowable)ret;
 }
 
-inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
-  if (cudaSuccess != cuda_status) {
-    // Clear the last error so it does not propagate.
-    cudaGetLastError();
-    jthrowable jt = cuda_exception(env, cuda_status);
-    if (jt != NULL) {
-      env->Throw(jt);
-      throw jni_exception("CUDA ERROR");
+#define JNI_CUDA_CHECK(env, cuda_status)
+  {
+    if (cudaSuccess != cuda_status) {
+      /* Clear the last error so it does not propagate.*/                                          \
+      cudaGetLastError();
+      jthrowable jt = cudf::jni::cuda_exception(env, __FILE__, __LINE__, cuda_status);
+      if (jt != NULL) {
+        env->Throw(jt);
+        throw jni_exception("CUDA ERROR");
+      }
     }
   }
-}
 
 } // namespace jni
 } // namespace cudf
@@ -796,7 +802,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (cudaSuccess != internal_cuda_status) {                                                     \
       /* Clear the last error so it does not propagate.*/                                          \
       cudaGetLastError();                                                                          \
-      jthrowable jt = cudf::jni::cuda_exception(env, internal_cuda_status);                        \
+      jthrowable jt = cudf::jni::cuda_exception(env, __FILE__, __LINE__, internal_cuda_status);                        \
       if (jt != NULL) {                                                                            \
         env->Throw(jt);                                                                            \
       }                                                                                            \
@@ -830,6 +836,11 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     auto what =                                                                                    \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
+  }                                                                                                \
+  catch (const cudf::cuda_error &e) {                                                              \
+    auto what =                                                                                    \
+        std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDA_ERROR_CLASS, what.c_str(), ret_val);                  \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
