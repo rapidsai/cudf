@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
@@ -126,7 +126,7 @@ def sort_lists(Column col, bool ascending, str na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def extract_element(Column col, size_type index):
+def extract_element_scalar(Column col, int index):
     # shared_ptr required because lists_column_view has no default
     # ctor
     cdef shared_ptr[lists_column_view] list_view = (
@@ -137,6 +137,22 @@ def extract_element(Column col, size_type index):
 
     with nogil:
         c_result = move(extract_list_element(list_view.get()[0], index))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def extract_element_column(Column col, Column index):
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+
+    cdef column_view index_view = index.view()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(extract_list_element(list_view.get()[0], index_view))
 
     result = Column.from_unique_ptr(move(c_result))
     return result

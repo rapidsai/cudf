@@ -15,12 +15,17 @@ from cudf._lib.lists import (
     contains_scalar,
     count_elements,
     drop_list_duplicates,
-    extract_element,
+    extract_element_column,
+    extract_element_scalar,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    is_list_dtype,
+    is_scalar,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
@@ -379,7 +384,10 @@ class ListMethods(ColumnMethods):
         2   6
         dtype: int64
         """
-        out = extract_element(self._column, index)
+        if is_scalar(index):
+            out = extract_element_scalar(self._column, cudf.Scalar(index))
+        else:
+            out = extract_element_column(self._column, as_column(index))
 
         if not (default is None or default is cudf.NA):
             # determine rows for which `index` is out-of-bounds
