@@ -409,7 +409,7 @@ class ListMethods(ColumnMethods):
         else:
             return res
 
-    def index_of(self, search_key: ScalarLike) -> ParentType:
+    def index(self, search_key: ScalarLike) -> ParentType:
         search_key = cudf.Scalar(search_key)
         try:
             res = self._return_or_inplace(
@@ -417,13 +417,10 @@ class ListMethods(ColumnMethods):
             )
         except RuntimeError as e:
             if (
-                "Type/Scale of search key does not"
-                "match list column element type" in str(e)
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
             ):
-                raise TypeError(
-                    "Type/Scale of search key does not"
-                    "match list column element type"
-                ) from e
+                raise TypeError(str(e)) from e
             raise
         else:
             return res
