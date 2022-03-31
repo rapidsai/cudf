@@ -941,7 +941,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
-        return sum(super().memory_usage(deep=deep).values())
+        return self._column.memory_usage
 
     @_cudf_nvtx_annotate
     def equals(self, other, **kwargs):
