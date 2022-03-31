@@ -26,7 +26,7 @@ build:
 
 requirements:
   build:
-    - cmake >=3.20.1
+    - cmake >=3.20.1,<3.23
   host:
     - libcudf {{version}}
     - librdkafka >=1.7.0,<1.8.0a0
