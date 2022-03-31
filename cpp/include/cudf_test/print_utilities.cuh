@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
+
 #include "cub/util_type.cuh"
 #include <cub/cub.cuh>
-#include <cudf/types.hpp>
+
 #include <type_traits>
 
 namespace cudf {
@@ -53,13 +56,13 @@ auto hex(InItT it)
     it, ToTaggedType<tagged_t>{});
 }
 
-template <typename T, std::enable_if_t<std::is_integral_v<T> && std::is_signed_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> && std::is_signed_v<T>)>
 CUDF_HOST_DEVICE void print_value(int32_t width, T arg)
 {
   printf("%*d", width, arg);
 }
 
-template <typename T, std::enable_if_t<std::is_integral_v<T> && std::is_unsigned_v<T>>* = nullptr>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> && std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE void print_value(int32_t width, T arg)
 {
   printf("%*d", width, arg);
@@ -73,8 +76,7 @@ CUDF_HOST_DEVICE void print_value(int32_t width, hex_t<T> arg)
   printf("%*X", width, arg.v);
 }
 
-namespace detail
-{
+namespace detail {
 template <typename T>
 CUDF_HOST_DEVICE void print_line(int32_t width, char delimiter, T arg)
 {
@@ -100,11 +102,11 @@ __global__ void print_array_kernel(std::size_t count, int32_t width, char delimi
     }
   }
 }
-}
+}  // namespace detail
 
 /**
  * @brief Prints \p count elements from each of the given device-accessible iterators.
- * 
+ *
  * @param count The number of items to print from each device-accessible iterator
  * @param stream The cuda stream to which the printing kernel shall be dispatched
  * @param args List of iterators to be printed
@@ -113,7 +115,7 @@ template <typename... Ts>
 void print_array(std::size_t count, cudaStream_t stream, Ts... args)
 {
   // The width to pad printed numbers to
-  constexpr int32_t width  = 6;
+  constexpr int32_t width = 6;
 
   // Delimiter used for separating values from subsequent iterators
   constexpr char delimiter = ',';

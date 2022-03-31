@@ -15,20 +15,22 @@
  */
 #pragma once
 
-#include <algorithm>
-#include <cstdint>
-#include <cub/cub.cuh>
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
-#include <thrust/fill.h>
-#include <thrust/scatter.h>
-
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf_test/print_utilities.cuh>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/device_ptr.h>
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
+#include <thrust/scatter.h>
+
+#include <cub/cub.cuh>
+
+#include <algorithm>
+#include <cstdint>
 
 namespace cudf {
 namespace io {
@@ -307,7 +309,7 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                StackSymbolT read_symbol,
                                OffsetT num_symbols_in,
                                OffsetT num_symbols_out,
-                               cudaStream_t stream = nullptr)
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
   // Type used to hold key-value pairs (key being the stack level and the value being the stack
   // symbol)
