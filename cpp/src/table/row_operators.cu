@@ -193,7 +193,7 @@ auto decompose_structs(table_view table,
         };
       recursive_child(col, 0);
       int curr_col_idx     = flattened.size() - 1;
-      column_view curr_col = *flattened[curr_col_idx];
+      column_view temp_col = *flattened[curr_col_idx];
       while (curr_col_idx > 0) {
         auto const prev_col = flattened[curr_col_idx - 1];
         if (not is_nested(prev_col->type())) {
@@ -203,33 +203,33 @@ auto decompose_structs(table_view table,
                parent                             = parent->parent) {
             if (parent->type().id() == type_id::LIST) {
               // Include this parent
-              curr_col = column_view(
+              temp_col = column_view(
                 parent->type(),
                 parent->size(),
                 nullptr,  // list has no data of its own
                 nullptr,  // If we're going through this then nullmask is already in another branch
                 UNKNOWN_NULL_COUNT,
                 parent->offset(),
-                {*parent->children[lists_column_view::offsets_column_index], curr_col});
+                {*parent->children[lists_column_view::offsets_column_index], temp_col});
             }
           }
-          r_verticalized_columns.push_back(curr_col);
+          r_verticalized_columns.push_back(temp_col);
           r_verticalized_col_depths.push_back(depths[curr_col_idx - 1]);
-          curr_col = *prev_col;
+          temp_col = *prev_col;
         } else {
           auto children =
             (prev_col->type().id() == type_id::LIST)
               ? std::vector<column_view>{*prev_col
                                             ->children[lists_column_view::offsets_column_index],
-                                         curr_col}
-              : std::vector<column_view>{curr_col};
-          curr_col = column_view(prev_col->type(),
+                                         temp_col}
+              : std::vector<column_view>{temp_col};
+          temp_col = column_view(prev_col->type(),
                                  prev_col->size(),
                                  nullptr,
                                  prev_col->null_mask(),
                                  UNKNOWN_NULL_COUNT,
                                  prev_col->offset(),
-                                 children);
+                                 std::move(children));
         }
         --curr_col_idx;
       }

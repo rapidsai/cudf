@@ -29,7 +29,7 @@ namespace detail {
  * wrapper on this compound column for list operations.
  * Analogous to list_column_view.
  */
-class lists_column_device_view {
+class lists_column_device_view : private column_device_view {
  public:
   lists_column_device_view()                                = delete;
   ~lists_column_device_view()                               = default;
@@ -39,10 +39,10 @@ class lists_column_device_view {
   lists_column_device_view& operator=(lists_column_device_view&&) = default;
 
   CUDF_HOST_DEVICE lists_column_device_view(column_device_view const& underlying_)
-    : underlying(underlying_)
+    : column_device_view(underlying_)
   {
 #ifdef __CUDA_ARCH__
-    cudf_assert(underlying.type().id() == type_id::LIST and
+    cudf_assert(underlying_.type().id() == type_id::LIST and
                 "lists_column_device_view only supports lists");
 #else
     CUDF_EXPECTS(underlying_.type().id() == type_id::LIST,
@@ -50,17 +50,17 @@ class lists_column_device_view {
 #endif
   }
 
-  /**
-   * @brief Fetches number of rows in the lists column
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE inline cudf::size_type size() const { return underlying.size(); }
+  using column_device_view::is_null;
+  using column_device_view::nullable;
+  using column_device_view::offset;
+  using column_device_view::size;
 
   /**
    * @brief Fetches the offsets column of the underlying list column.
    */
   [[nodiscard]] __device__ inline column_device_view offsets() const
   {
-    return underlying.child(lists_column_view::offsets_column_index);
+    return column_device_view::child(lists_column_view::offsets_column_index);
   }
 
   /**
@@ -69,7 +69,7 @@ class lists_column_device_view {
    */
   [[nodiscard]] __device__ inline size_type offset_at(size_type idx) const
   {
-    return underlying.child(lists_column_view::offsets_column_index)
+    return column_device_view::child(lists_column_view::offsets_column_index)
       .element<size_type>(offset() + idx);
   }
 
@@ -78,7 +78,7 @@ class lists_column_device_view {
    */
   [[nodiscard]] __device__ inline column_device_view child() const
   {
-    return underlying.child(lists_column_view::child_column_index);
+    return column_device_view::child(lists_column_view::child_column_index);
   }
 
   /**
@@ -90,29 +90,6 @@ class lists_column_device_view {
     auto end   = offset_at(size());
     return child().slice(start, end - start);
   }
-
-  /**
-   * @brief Indicates whether the list column is nullable.
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE inline bool nullable() const { return underlying.nullable(); }
-
-  /**
-   * @brief Indicates whether the row (i.e. list) at the specified
-   * index is null.
-   */
-  [[nodiscard]] __device__ inline bool is_null(size_type idx) const
-  {
-    return underlying.is_null(idx);
-  }
-
-  /**
-   * @brief Fetches the offset of the underlying column_device_view,
-   *        in case it is a sliced/offset column.
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE inline size_type offset() const { return underlying.offset(); }
-
- private:
-  column_device_view underlying;
 };
 
 }  // namespace detail
