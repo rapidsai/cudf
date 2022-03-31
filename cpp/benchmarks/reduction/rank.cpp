@@ -30,12 +30,12 @@ static void nvbench_reduction_scan(nvbench::state& state, nvbench::type_list<typ
 
   auto const dtype = cudf::type_to_id<type>();
 
-  bool const include_nulls = state.get_int64("include_nulls");
-  size_t const size        = state.get_int64("data_size");
+  double const null_frequency = state.get_float64("null_frequency");
+  size_t const size           = state.get_int64("data_size");
 
   data_profile table_data_profile;
   table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 5);
-  table_data_profile.set_null_frequency((include_nulls) ? 0.1 : 0.0);
+  table_data_profile.set_null_frequency(null_frequency);
 
   auto const table = create_random_table({dtype}, table_size_bytes{size / 2}, table_data_profile);
 
@@ -53,7 +53,7 @@ using data_type = nvbench::type_list<int32_t, cudf::list_view>;
 
 NVBENCH_BENCH_TYPES(nvbench_reduction_scan, NVBENCH_TYPE_AXES(data_type))
   .set_name("rank_scan")
-  .add_int64_axis("include_nulls", {0, 1})
+  .add_float64_axis("null_frequency", {0, 0.1, 0.5})
   .add_int64_axis("data_size",
                   {
                     10000,      // 10k
