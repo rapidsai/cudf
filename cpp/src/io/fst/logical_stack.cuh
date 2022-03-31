@@ -23,8 +23,9 @@
 #include <thrust/fill.h>
 #include <thrust/scatter.h>
 
-#include <cudf/utilities/error.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf_test/print_utilities.cuh>
 
 namespace cudf {
 namespace io {
@@ -128,8 +129,8 @@ struct StackSymbolToKVOp {
  */
 struct AddStackLevelFromKVOp {
   template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
-                                                          KeyValueOp<KeyT, ValueT> const& rhs) const
+  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(
+    KeyValueOp<KeyT, ValueT> const& lhs, KeyValueOp<KeyT, ValueT> const& rhs) const
   {
     KeyT new_level = lhs.key + rhs.key;
     return KeyValueOp<KeyT, ValueT>{new_level, rhs.value};
@@ -145,8 +146,8 @@ struct AddStackLevelFromKVOp {
 template <typename StackSymbolToStackOpTypeT>
 struct PopulatePopWithPush {
   template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(KeyValueOp<KeyT, ValueT> const& lhs,
-                                                          KeyValueOp<KeyT, ValueT> const& rhs) const
+  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(
+    KeyValueOp<KeyT, ValueT> const& lhs, KeyValueOp<KeyT, ValueT> const& rhs) const
   {
     // If RHS is a read, then we need to figure out whether we can propagate the value from the LHS
     bool is_rhs_read = symbol_to_stack_op_type(rhs.value) != stack_op_type::PUSH;
@@ -170,7 +171,7 @@ struct PopulatePopWithPush {
 template <typename StackSymbolT>
 struct PropagateLastWrite {
   constexpr CUDF_HOST_DEVICE StackSymbolT operator()(StackSymbolT const& lhs,
-                                              StackSymbolT const& rhs) const
+                                                     StackSymbolT const& rhs) const
   {
     // If RHS is a yet-to-be-propagated, then we need to check whether we can use the LHS to fill
     bool is_rhs_read = (rhs == read_symbol);
@@ -208,6 +209,46 @@ struct RemapEmptyStack {
   }
   KeyValueOpT empty_stack_symbol;
 };
+
+/**
+ * @brief Function object to return only the key part from a KeyValueOp instance.
+ */
+struct KVOpToKey {
+  template <typename KeyT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE KeyT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+  {
+    return kv_op.key;
+  }
+};
+
+/**
+ * @brief Function object to return only the value part from a KeyValueOp instance.
+ */
+struct KVOpToValue {
+  template <typename KeyT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+  {
+    return kv_op.value;
+  }
+};
+
+/**
+ * @brief Retrieves an iterator that returns only the `key` part from a KeyValueOp iterator.
+ */
+template <typename KeyValueOpItT>
+auto get_key_it(KeyValueOpItT it)
+{
+  return thrust::make_transform_iterator(it, KVOpToKey{});
+}
+
+/**
+ * @brief Retrieves an iterator that returns only the `value` part from a KeyValueOp iterator.
+ */
+template <typename KeyValueOpItT>
+auto get_value_it(KeyValueOpItT it)
+{
+  return thrust::make_transform_iterator(it, KVOpToValue{});
+}
 
 }  // namespace detail
 
@@ -294,11 +335,7 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
   // Double-buffer for sorting the key-value store operations
   cub::DoubleBuffer<KeyValueOpT> d_kv_operations{nullptr, nullptr};
 
-  // A double-buffer that aliases memory from d_kv_operations but offset by one item (to discard the
-  // exclusive scans first item)
-  cub::DoubleBuffer<KeyValueOpT> d_kv_operations_offset{nullptr, nullptr};
-
-  // A double-buffer that aliases memory from d_kv_operations_offset with unsigned types in order to
+  // A double-buffer that aliases memory from d_kv_operations with unsigned types in order to
   // be able to perform a radix sort
   cub::DoubleBuffer<KVOpUnsignedT> d_kv_operations_unsigned{nullptr, nullptr};
 
@@ -338,7 +375,7 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
   CUDA_TRY(cub::DeviceScan::InclusiveScan(nullptr,
                                           stack_level_scan_bytes,
                                           stack_symbols_in,
-                                          d_kv_operations_offset.Current(),
+                                          d_kv_operations.Current(),
                                           detail::AddStackLevelFromKVOp{},
                                           num_symbols_in,
                                           stream));
@@ -417,22 +454,27 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
     reinterpret_cast<KeyValueOpT*>(allocations[mem_alloc_id::kv_ops_current]),
     reinterpret_cast<KeyValueOpT*>(allocations[mem_alloc_id::kv_ops_alt])};
 
-  d_kv_operations_offset =
-    cub::DoubleBuffer<KeyValueOpT>{d_kv_operations.Current(), d_kv_operations.Alternate()};
-
   // Compute prefix sum of the stack level after each operation
   CUDA_TRY(cub::DeviceScan::InclusiveScan(d_cub_temp_storage,
                                           cub_temp_storage_bytes,
                                           stack_symbols_in,
-                                          d_kv_operations_offset.Current(),
+                                          d_kv_operations.Current(),
                                           detail::AddStackLevelFromKVOp{},
                                           num_symbols_in,
                                           stream));
 
+  // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
+  test::print::print_array(num_symbols_in,
+                           stream,
+                           get_key_it(stack_symbols_in),
+                           get_value_it(stack_symbols_in),
+                           get_key_it(d_kv_operations.Current()),
+                           get_value_it(d_kv_operations.Current()));
+
   // Stable radix sort, sorting by stack level of the operations
-  d_kv_operations_unsigned = cub::DoubleBuffer<KVOpUnsignedT>{
-    reinterpret_cast<KVOpUnsignedT*>(d_kv_operations_offset.Current()),
-    reinterpret_cast<KVOpUnsignedT*>(d_kv_operations_offset.Alternate())};
+  d_kv_operations_unsigned =
+    cub::DoubleBuffer<KVOpUnsignedT>{reinterpret_cast<KVOpUnsignedT*>(d_kv_operations.Current()),
+                                     reinterpret_cast<KVOpUnsignedT*>(d_kv_operations.Alternate())};
   CUDA_TRY(cub::DeviceRadixSort::SortPairs(d_cub_temp_storage,
                                            cub_temp_storage_bytes,
                                            d_kv_operations_unsigned,
@@ -447,6 +489,11 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
                     detail::RemapEmptyStack<KeyValueOpT>{empty_stack}};
   kv_ops_scan_out = reinterpret_cast<KeyValueOpT*>(d_kv_operations_unsigned.Alternate());
 
+  // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
+  // operation)
+  test::print::print_array(
+    num_symbols_in, stream, get_key_it(kv_ops_scan_in), get_value_it(kv_ops_scan_in));
+
   // Exclusive scan to match pop operations with the latest push operation of that level
   CUDA_TRY(cub::DeviceScan::InclusiveScan(
     d_cub_temp_storage,
@@ -456,6 +503,15 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
     detail::PopulatePopWithPush<StackSymbolToStackOpT>{symbol_to_stack_op},
     num_symbols_in,
     stream));
+
+  // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
+  // operation)
+  test::print::print_array(num_symbols_in,
+                           stream,
+                           get_key_it(kv_ops_scan_in),
+                           get_value_it(kv_ops_scan_in),
+                           get_key_it(kv_ops_scan_out),
+                           get_value_it(kv_ops_scan_out));
 
   // Fill the output tape with read-symbol
   thrust::fill(thrust::cuda::par.on(stream),
@@ -475,6 +531,11 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
                   d_symbol_positions_db.Current(),
                   d_top_of_stack);
 
+  // Dump the output tape that has many yet-to-be-filled spots (i.e., all spots that were not given
+  // in the sparse representation)
+  test::print::print_array(
+    std::min(num_symbols_in, static_cast<decltype(num_symbols_in)>(10000)), stream, d_top_of_stack);
+
   // We perform an exclusive scan in order to fill the items at the very left that may
   // be reading the empty stack before there's the first push occurance in the sequence.
   // Also, we're interested in the top-of-the-stack symbol before the operation was applied.
@@ -486,6 +547,10 @@ void SparseStackOpToTopOfStack(void* d_temp_storage,
                                           empty_stack_symbol,
                                           num_symbols_out,
                                           stream));
+
+  // Dump the final output
+  test::print::print_array(
+    std::min(num_symbols_in, static_cast<decltype(num_symbols_in)>(10000)), stream, d_top_of_stack);
 }
 
 }  // namespace fst
