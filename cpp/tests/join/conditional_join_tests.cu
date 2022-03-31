@@ -25,10 +25,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
-#include <thrust/equal.h>
 
 #include <algorithm>
 #include <iostream>
