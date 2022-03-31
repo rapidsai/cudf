@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/row_operators.cuh>
@@ -42,10 +43,10 @@ struct unique_comparator {
       permute(sorted_order)
   {
   }
-  __device__ ReturnType operator()(size_type index, size_type index1) const noexcept
+  __device__ ReturnType operator()(size_type index1, size_type index2) const noexcept
   {
     // return index == 0 || not  comparator(permute[index], permute[index - 1]);
-    return comparator(permute[index], permute[index1]);
+    return comparator(permute[index1], permute[index2]);
   };
 
  private:
@@ -82,12 +83,9 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  // row_equality_comparator comparator( nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order,
-  // null_equality::EQUAL);
   auto sorted_index_order = gather_map.begin<size_type>();
   auto comparator         = unique_comparator<size_type, decltype(sorted_index_order)>(
     *d_flat_order, sorted_index_order, has_nulls);
-  // auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
@@ -136,8 +134,6 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& order_by,
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  // row_equality_comparator comparator( nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order,
-  // null_equality::EQUAL);
   auto sorted_index_order = gather_map.begin<size_type>();
   auto comparator         = unique_comparator<size_type, decltype(sorted_index_order)>(
     *d_flat_order, sorted_index_order, has_nulls);
@@ -148,7 +144,7 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& order_by,
                                        stream,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
-  // MAX
+
   thrust::tabulate(
     rmm::exec_policy(stream),
     mutable_ranks.begin<size_type>(),
@@ -167,11 +163,6 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& order_by,
                                 thrust::reverse_iterator(mutable_ranks.end<size_type>()),
                                 thrust::equal_to{},
                                 scan_op);
-  // DEBUG PRINT
-  // thrust::for_each_n(rmm::exec_policy(stream),
-  //                    mutable_ranks.begin<size_type>(),
-  //                    mutable_ranks.size(),
-  //                    [] __device__(size_type label) { printf("%d\n", label); });
   return ranks;
 }
 }  // namespace
@@ -292,6 +283,40 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
     has_nested_nulls(table_view{{order_by}}),
     stream,
     mr);
+}
+
+std::unique_ptr<column> group_rank_to_percentage(bool is_dense,
+                                                 column_view const& rank,
+                                                 column_view const& count,
+                                                 device_span<size_type const> group_labels,
+                                                 device_span<size_type const> group_offsets,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  auto ranks = make_fixed_width_column(
+    data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
+  ranks->set_null_mask(copy_bitmask(rank, stream, mr));
+  auto mutable_ranks = ranks->mutable_view();
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<double>(),
+                   mutable_ranks.end<double>(),
+                   [is_dense,
+                    is_double = rank.type().id() == type_id::FLOAT64,
+                    dcount    = count.begin<size_type>(),
+                    labels    = group_labels.data(),
+                    offsets   = group_offsets.begin(),
+                    d_rank    = rank.begin<double>(),
+                    s_rank    = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                     double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                     auto const count = dcount[labels[row_index]];
+                     if (is_dense) {
+                       size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
+                       auto const last_rank            = s_rank[last_rank_index];
+                       return r / last_rank;
+                     }
+                     return r / count;
+                   });
+  return ranks;
 }
 
 std::unique_ptr<column> percent_rank_scan(column_view const& rank_min,

@@ -16,12 +16,14 @@
 
 #include <groupby/common/utils.hpp>
 #include <groupby/sort/functors.hpp>
+#include <groupby/sort/group_reductions.hpp>
 #include <groupby/sort/group_scan.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
@@ -126,7 +128,6 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   auto const& rank_agg         = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
   auto const& group_labels     = helper.group_labels(stream);
   auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
-  // TODO pct percentage
   auto const gather_map =
     (rank_agg._method == rank_method::FIRST
        ? cudf::detail::stable_sorted_order
@@ -134,7 +135,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                      {order::ASCENDING, rank_agg._column_order},
                                      {null_order::AFTER, rank_agg._null_precedence},
                                      stream,
-                                     mr);
+                                     rmm::mr::get_current_device_resource());
 
   auto rank_scan = [&]() {
     if (rank_agg._method == rank_method::MIN) {
@@ -156,13 +157,33 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                           helper.group_labels(stream),
                           helper.group_offsets(stream),
                           stream,
-                          mr);
-  cache.add_result(
-    values,
-    agg,
-    std::move(cudf::detail::scatter(
-                table_view{{*result}}, *gather_map, table_view{{*result}}, false, stream, mr)
-                ->release()[0]));
+                          rmm::mr::get_current_device_resource());
+  if (rank_agg._percentage) {
+    auto count = get_grouped_values().nullable() and rank_agg._null_handling == null_policy::EXCLUDE
+                   ? detail::group_count_valid(get_grouped_values(),
+                                               helper.group_labels(stream),
+                                               helper.num_groups(stream),
+                                               stream,
+                                               rmm::mr::get_current_device_resource())
+                   : detail::group_count_all(helper.group_offsets(stream),
+                                             helper.num_groups(stream),
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
+    result     = detail::group_rank_to_percentage(rank_agg._method == rank_method::DENSE,
+                                              *result,
+                                              *count,
+                                              helper.group_labels(stream),
+                                              helper.group_offsets(stream),
+                                              stream,
+                                              mr);
+  }
+  result = std::move(cudf::detail::scatter(
+                       table_view{{*result}}, *gather_map, table_view{{*result}}, false, stream, mr)
+                       ->release()[0]);
+  if (rank_agg._null_handling == null_policy::EXCLUDE) {
+    result->set_null_mask(cudf::detail::copy_bitmask(get_grouped_values(), stream, mr));
+  }
+  cache.add_result(values, agg, std::move(result));
 }
 
 template <>
