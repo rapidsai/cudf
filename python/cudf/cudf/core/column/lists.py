@@ -387,12 +387,15 @@ class ListMethods(ColumnMethods):
         if is_scalar(index):
             out = extract_element_scalar(self._column, cudf.Scalar(index))
         else:
+            index = as_column(index)
             out = extract_element_column(self._column, as_column(index))
 
         if not (default is None or default is cudf.NA):
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
-            out_of_bounds_indexes = (-index > lengths) | (index >= lengths)
+            out_of_bounds_indexes = (np.negative(index) > lengths) | (
+                index >= lengths
+            )
 
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_indexes.any():
