@@ -551,14 +551,30 @@ struct create_rand_col_fn {
   }
 };
 
-int num_parents(int lvls, int num_children)
+/**
+ * @brief Calculates the number of direct parents needed to generate a struct column hierarchy with
+ * lowest maximum number of children in any nested column.
+ *
+ * Used to generate an "evenly distributed" struct column hierarchy with the given number of leaf
+ * columns and nesting levels. The column tree is considered evenly distributed if all columns have
+ * nearly the same number of child columns (difference not larger than one).
+ */
+int num_direct_parents(int num_lvls, int num_leaf_columns)
 {
-  auto const nest           = std::pow(num_children, 1. / lvls);
-  int const nest_lower      = std::floor(nest);
-  int const nest_upper      = std::ceil(nest);
-  int const min_for_nesting = std::ceil((double)num_children / nest_upper);
-  int const min_for_nested  = std::pow(nest_lower, lvls - 1);
-  return std::max(min_for_nesting, min_for_nested);
+  // Estimated average number of children in the hierarchy;
+  auto const num_children_avg = std::pow(num_leaf_columns, 1. / num_lvls);
+  // Minimum number of children columns for any column in the heirarchy
+  int const num_children_min = std::floor(num_children_avg);
+  // Maximum number of children columns for any column in the heirarchy
+  int const num_children_max = std::ceil(num_children_avg);
+
+  // Minimum number of columns needed so that their number of children does not exceed the maximum
+  int const min_for_current_nesting = std::ceil((double)num_leaf_columns / num_children_max);
+  // Minimum number of columns needed so that columns at the higher levels have at least the minimum
+  // number of children
+  int const min_for_upper_nesting = std::pow(num_children_min, num_lvls - 1);
+  // Both conditions need to be satisfied
+  return std::max(min_for_current_nesting, min_for_upper_nesting);
 }
 
 template <>
@@ -586,7 +602,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
   for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
     // Generating the next level
     std::vector<std::unique_ptr<cudf::column>> parents;
-    parents.resize(num_parents(lvl, children.size()));
+    parents.resize(num_direct_parents(lvl, children.size()));
 
     auto current_child = children.begin();
     for (auto current_parent = parents.begin(); current_parent != parents.end(); ++current_parent) {
@@ -601,7 +617,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
       // Adopt remaining children as evenly as possible
       auto const num_to_adopt = cudf::util::div_rounding_up_unsafe(
         std::distance(current_child, children.end()), std::distance(current_parent, parents.end()));
-      CUDF_EXPECTS(num_to_adopt > 0, "No children left to adopt");
+      CUDF_EXPECTS(num_to_adopt > 0, "No children columns left to adopt");
 
       std::vector<std::unique_ptr<cudf::column>> children_to_adopt;
       children_to_adopt.insert(children_to_adopt.end(),
