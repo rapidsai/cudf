@@ -736,9 +736,8 @@ public:
 /**
  * @brief create a cuda exception from a given cudaError_t
  */
-inline jthrowable cuda_exception(JNIEnv *const env,
-                                 const char* file, unsigned int line,
-                                 cudaError_t status, jthrowable cause=NULL) {
+inline jthrowable cuda_exception(JNIEnv *const env, const char *file, unsigned int line,
+                                 cudaError_t status, jthrowable cause = NULL) {
   jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);
   if (ex_class == NULL) {
     return NULL;
@@ -749,33 +748,20 @@ inline jthrowable cuda_exception(JNIEnv *const env,
     return NULL;
   }
 
-  std::string err_name   = cudaGetErrorName(status);
-  std::string err_string = cudaGetErrorString(status);
-  if (err_name == NULL) {
+  const char *err_name = cudaGetErrorName(status);
+  if (err_name == nullptr) {
     return NULL;
   }
+  const char *err_string = cudaGetErrorString(status);
 
   std::string n_msg = "CUDA error encountered at: " + std::string{file} + ":" +
-                       std::to_string(line) + ": " + std::to_string(error) + " " +
-                       err_name + " " + err_string;
-  jstring j_msg = env->NewStringUTF(n_msg);
+                      std::to_string(line) + ": " + std::to_string(status) + " " + err_name + " " +
+                      err_string;
+  jstring j_msg = env->NewStringUTF(n_msg.c_str());
 
   jobject ret = env->NewObject(ex_class, ctor_id, j_msg, cause);
   return (jthrowable)ret;
 }
-
-#define JNI_CUDA_CHECK(env, cuda_status)
-  {
-    if (cudaSuccess != cuda_status) {
-      /* Clear the last error so it does not propagate.*/                                          \
-      cudaGetLastError();
-      jthrowable jt = cudf::jni::cuda_exception(env, __FILE__, __LINE__, cuda_status);
-      if (jt != NULL) {
-        env->Throw(jt);
-        throw jni_exception("CUDA ERROR");
-      }
-    }
-  }
 
 } // namespace jni
 } // namespace cudf
@@ -805,11 +791,24 @@ inline jthrowable cuda_exception(JNIEnv *const env,
     if (cudaSuccess != internal_cuda_status) {                                                     \
       /* Clear the last error so it does not propagate.*/                                          \
       cudaGetLastError();                                                                          \
-      jthrowable jt = cudf::jni::cuda_exception(env, __FILE__, __LINE__, internal_cuda_status);                        \
+      jthrowable jt = cudf::jni::cuda_exception(env, __FILE__, __LINE__, internal_cuda_status);    \
       if (jt != NULL) {                                                                            \
         env->Throw(jt);                                                                            \
       }                                                                                            \
       return ret_val;                                                                              \
+    }                                                                                              \
+  }
+
+#define JNI_CUDA_CHECK(env, cuda_status)                                                           \
+  {                                                                                                \
+    if (cudaSuccess != cuda_status) {                                                              \
+      /* Clear the last error so it does not propagate.*/                                          \
+      cudaGetLastError();                                                                          \
+      jthrowable jt = cudf::jni::cuda_exception(env, __FILE__, __LINE__, cuda_status);             \
+      if (jt != NULL) {                                                                            \
+        env->Throw(jt);                                                                            \
+        throw cudf::jni::jni_exception("CUDA ERROR");                                              \
+      }                                                                                            \
     }                                                                                              \
   }
 
