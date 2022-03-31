@@ -1715,16 +1715,25 @@ def test_groupby_2keys_scan(nelem, func):
 @pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
-@pytest.mark.parametrize("pct", [False])
+@pytest.mark.parametrize("pct", [False, True])
 def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
-    pdf = make_frame(pd.DataFrame, nelem=nelem)
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    pdf.columns = ["x", "y", "z"]
+    gdf = cudf.from_pandas(pdf)
     expect_df = pdf.groupby(["x", "y"], sort=True).rank(
         method=method, ascending=ascending, na_option=na_option, pct=pct
     )
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .rank(method=method, ascending=ascending, na_option=na_option, pct=pct)
+    got_df = gdf.groupby(["x", "y"], sort=True).rank(
+        method=method, ascending=ascending, na_option=na_option, pct=pct
     )
 
     assert_groupby_results_equal(got_df, expect_df, check_dtype=False)

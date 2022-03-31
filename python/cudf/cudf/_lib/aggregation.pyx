@@ -594,7 +594,8 @@ cdef class GroupbyScanAggregation:
                     libcudf_types.order.DESCENDING),
                 (libcudf_types.null_policy.EXCLUDE if na_option == "keep" else
                     libcudf_types.null_policy.INCLUDE),
-                (libcudf_types.null_order.BEFORE if na_option == "top" else
+                (libcudf_types.null_order.BEFORE
+                    if (na_option == "top") == ascending else
                     libcudf_types.null_order.AFTER),
                 pct
             ))
