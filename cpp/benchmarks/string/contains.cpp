@@ -30,7 +30,7 @@ class StringContains : public cudf::benchmark {
 
 enum contains_type { contains, count, findall };
 
-// longer pattern lengths will demand more working memory
+// longer pattern lengths demand more working memory per string
 std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$"};
 
 static void BM_contains(benchmark::State& state, contains_type ct)
@@ -39,6 +39,7 @@ static void BM_contains(benchmark::State& state, contains_type ct)
   auto const pattern_index = static_cast<int32_t>(state.range(1));
   auto const hit_rate      = static_cast<int32_t>(state.range(2));
 
+  // build 100 rows using the following data
   std::vector<std::string> rawdata({
     "123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
     "012345 6789 01234 56789 0123 456",  // the rest do not match
@@ -58,11 +59,10 @@ static void BM_contains(benchmark::State& state, contains_type ct)
   auto data      = cudf::test::strings_column_wrapper(h_data.begin(), h_data.end());
   auto data_view = cudf::column_view(data);
 
-  auto matches = static_cast<int32_t>(data_view.size() * rawdata.size() / hit_rate);
-
   // Create a randomized gather-map to build a column out of the strings in data.
   // For hit-rate ~100%, matches is 1 -- only gathers the matching row(s).
   // For hit-rate ~10%, matches is 10 -- use all rows from data (only 10% will match).
+  auto matches = static_cast<int32_t>(data_view.size() * rawdata.size() / hit_rate);
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::INT32, distribution_id::UNIFORM, 0, matches - 1);
