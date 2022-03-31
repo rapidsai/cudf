@@ -9,6 +9,7 @@ import re
 import string
 import textwrap
 import warnings
+from contextlib import contextmanager
 from copy import copy
 
 import cupy
@@ -2018,6 +2019,15 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     )
 
 
+@contextmanager
+def _hide_host_other_warning(other):
+    if isinstance(other, (dict, list)):
+        with pytest.warns(FutureWarning):
+            yield
+    else:
+        yield
+
+
 @pytest.mark.parametrize(
     "binop",
     [
@@ -2068,17 +2078,22 @@ def test_binops_df(pdf, gdf, binop, other):
         if isinstance(other, (pd.Series, pd.DataFrame)):
             other = cudf.from_pandas(other)
 
-        assert_exceptions_equal(
-            lfunc=binop,
-            rfunc=binop,
-            lfunc_args_and_kwargs=([pdf, other], {}),
-            rfunc_args_and_kwargs=([gdf, other], {}),
-            compare_error_message=False,
-        )
+        # TODO: When we remove support for binary operations with lists and
+        # dicts, those cases should all be checked in a `pytest.raises` block
+        # that returns before we enter this try-except.
+        with _hide_host_other_warning(other):
+            assert_exceptions_equal(
+                lfunc=binop,
+                rfunc=binop,
+                lfunc_args_and_kwargs=([pdf, other], {}),
+                rfunc_args_and_kwargs=([gdf, other], {}),
+                compare_error_message=False,
+            )
     else:
         if isinstance(other, (pd.Series, pd.DataFrame)):
             other = cudf.from_pandas(other)
-        g = binop(gdf, other)
+        with _hide_host_other_warning(other):
+            g = binop(gdf, other)
         try:
             assert_eq(d, g)
         except AssertionError:

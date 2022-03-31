@@ -10,7 +10,7 @@ import pickle
 import sys
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import (
     Any,
     Dict,
@@ -1855,7 +1855,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Optional[BaseIndex],
     ]:
         # Check built-in types first for speed.
-        if isinstance(other, (list, dict, Sequence, MutableMapping)):
+        if isinstance(other, (list, dict, Sequence, Mapping)):
+            warnings.warn(
+                "Binary operations between host objects such as "
+                f"{type(other)} and cudf.DataFrame are deprecated and will be "
+                "removed in a future release. Please convert it to a cudf "
+                "object before performing the operation.",
+                FutureWarning,
+            )
             if len(other) != self._num_columns:
                 raise ValueError(
                     "Other is the wrong length. Expected "
@@ -1898,7 +1905,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # the fill value.
             left_default = fill_value
 
-        if not isinstance(rhs, (dict, MutableMapping)):
+        if not isinstance(rhs, (dict, Mapping)):
             return NotImplemented, None
 
         operands = {
