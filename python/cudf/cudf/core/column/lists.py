@@ -13,6 +13,7 @@ from cudf._lib.lists import (
     concatenate_list_elements,
     concatenate_rows,
     contains_scalar,
+    index_of_scalar,
     count_elements,
     drop_list_duplicates,
     extract_element,
@@ -394,6 +395,25 @@ class ListMethods(ColumnMethods):
         try:
             res = self._return_or_inplace(
                 contains_scalar(self._column, search_key)
+            )
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not"
+                "match list column element type" in str(e)
+            ):
+                raise TypeError(
+                    "Type/Scale of search key does not"
+                    "match list column element type"
+                ) from e
+            raise
+        else:
+            return res
+
+    def index_of(self, search_key: ScalarLike) -> ParentType:
+        search_key = cudf.Scalar(search_key)
+        try:
+            res = self._return_or_inplace(
+                index_of_scalar(self._column, search_key)
             )
         except RuntimeError as e:
             if (

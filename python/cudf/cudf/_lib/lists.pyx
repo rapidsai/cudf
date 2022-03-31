@@ -40,7 +40,7 @@ from cudf._lib.types cimport (
 
 from cudf.core.dtypes import ListDtype
 
-from cudf._lib.cpp.lists.contains cimport contains
+from cudf._lib.cpp.lists.contains cimport contains, index_of
 from cudf._lib.cpp.lists.extract cimport extract_list_element
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
@@ -155,6 +155,26 @@ def contains_scalar(Column col, object py_search_key):
 
     with nogil:
         c_result = move(contains(
+            list_view.get()[0],
+            search_key_value[0],
+        ))
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def index_of_scalar(Column col, object py_search_key):
+    
+    cdef DeviceScalar search_key = py_search_key.device_value
+    
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+    cdef const scalar* search_key_value = search_key.get_raw_ptr()
+    
+    cdef unique_ptr[column] c_result
+    
+    with nogil:
+        c_result = move(index_of(
             list_view.get()[0],
             search_key_value[0],
         ))
