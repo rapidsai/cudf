@@ -27,7 +27,7 @@ namespace detail {
  * wrapper on this compound column for struct operations.
  * Analogous to struct_column_view.
  */
-class structs_column_device_view {
+class structs_column_device_view : private column_device_view {
  public:
   structs_column_device_view()                                  = delete;
   ~structs_column_device_view()                                 = default;
@@ -37,7 +37,7 @@ class structs_column_device_view {
   structs_column_device_view& operator=(structs_column_device_view&&) = default;
 
   CUDF_HOST_DEVICE structs_column_device_view(column_device_view const& underlying_)
-    : underlying(underlying_)
+    : column_device_view(underlying_)
   {
 #ifdef __CUDA_ARCH__
     cudf_assert(underlying_.type().id() == type_id::STRUCT and
@@ -48,18 +48,11 @@ class structs_column_device_view {
 #endif
   }
 
-  /**
-   * @brief Fetches number of rows in the struct column
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE inline cudf::size_type size() const { return underlying.size(); }
-
-  /**
-   * @brief Fetches the child column of the underlying struct column.
-   */
-  [[nodiscard]] __device__ inline column_device_view child(size_type idx) const
-  {
-    return underlying.child(idx);
-  }
+  using column_device_view::child;
+  using column_device_view::is_null;
+  using column_device_view::nullable;
+  using column_device_view::offset;
+  using column_device_view::size;
 
   /**
    * @brief Fetches the child column of the underlying struct column.
@@ -68,29 +61,6 @@ class structs_column_device_view {
   {
     return child(idx).slice(offset(), size());
   }
-
-  /**
-   * @brief Indicates whether the struct column is nullable.
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE inline bool nullable() const { return underlying.nullable(); }
-
-  /**
-   * @brief Indicates whether the row (i.e. struct) at the specified
-   * index is null.
-   */
-  [[nodiscard]] __device__ inline bool is_null(size_type idx) const
-  {
-    return underlying.is_null(idx);
-  }
-
-  /**
-   * @brief Fetches the offset of the underlying column_device_view,
-   *        in case it is a sliced/offset column.
-   */
-  [[nodiscard]] CUDF_HOST_DEVICE inline size_type offset() const { return underlying.offset(); }
-
- private:
-  column_device_view underlying;
 };
 
 }  // namespace detail
