@@ -749,13 +749,16 @@ inline jthrowable cuda_exception(JNIEnv *const env,
     return NULL;
   }
 
-  std::string n_msg {"CUDA error encountered at: " + std::string{file} + ":" +
-                     std::to_string(line) + ": " + std::to_string(error) + " " +
-                     cudaGetErrorName(error) + " " + cudaGetErrorString(error)};
-  jstring j_msg = env->NewStringUTF(cudaGetErrorString(n_msg));
-  if (msg == NULL) {
+  std::string err_name   = cudaGetErrorName(status);
+  std::string err_string = cudaGetErrorString(status);
+  if (err_name == NULL) {
     return NULL;
   }
+
+  std::string n_msg = "CUDA error encountered at: " + std::string{file} + ":" +
+                       std::to_string(line) + ": " + std::to_string(error) + " " +
+                       err_name + " " + err_string;
+  jstring j_msg = env->NewStringUTF(n_msg);
 
   jobject ret = env->NewObject(ex_class, ctor_id, j_msg, cause);
   return (jthrowable)ret;
