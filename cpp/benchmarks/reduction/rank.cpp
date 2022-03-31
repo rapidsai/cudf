@@ -53,7 +53,7 @@ using data_type = nvbench::type_list<int32_t, cudf::list_view>;
 
 NVBENCH_BENCH_TYPES(nvbench_reduction_scan, NVBENCH_TYPE_AXES(data_type))
   .set_name("rank_scan")
-  .add_float64_axis("null_frequency", {0, 0.1, 0.5})
+  .add_float64_axis("null_frequency", {0, 0.1, 0.5, 0.9})
   .add_int64_axis("data_size",
                   {
                     10000,      // 10k
