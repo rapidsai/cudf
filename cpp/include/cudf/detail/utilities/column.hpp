@@ -18,6 +18,8 @@
 
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf::detail {
 
 struct linked_column_view;
@@ -44,19 +46,15 @@ struct linked_column_view : public column_view_base {
 
   operator column_view() const
   {
-    std::vector<column_view> column_view_children;
-    column_view_children.reserve(children.size());
-    std::transform(children.begin(),
-                   children.end(),
-                   std::back_inserter(column_view_children),
-                   [](auto const& c) { return *c; });
+    auto child_it =
+      thrust::make_transform_iterator(children.begin(), [](auto const& c) { return *c; });
     return column_view(this->type(),
                        this->size(),
                        this->head(),
                        this->null_mask(),
                        UNKNOWN_NULL_COUNT,
                        this->offset(),
-                       std::move(column_view_children));
+                       std::vector<column_view>(child_it, child_it + children.size()));
   }
 
   linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
