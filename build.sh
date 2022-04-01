@@ -17,13 +17,13 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf libcudfjni cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
+VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
-   libcudfni                     - build cudfjni, optionally with docker
    cudf                          - build the cudf Python package
+   cudfjar                       - build cudf JAR with static libcudf using devtoolset-9 toolchain
    dask_cudf                     - build the dask_cudf Python package
    benchmarks                    - build benchmarks
    tests                         - build tests
@@ -100,6 +100,54 @@ function cmakeArgs {
 
 function buildAll {
     ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
+}
+
+function buildLibCudfJniInDocker {
+    local cudaVersion=11.5.0
+    local imageName=cudf-build:${cudaVersion}-devel-centos7
+    local CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
+    local workspaceDir=/rapids
+
+    mkdir -p "$REPODIR/cpp/build"
+    nvidia-docker build \
+        -f java/ci/Dockerfile.centos7 \
+        --build-arg CUDA_VERSION=${cudaVersion} \
+        -t $imageName .
+    nvidia-docker run -it -u $(id -u):$(id -g) \
+        -v "/etc/group:/etc/group:ro" \
+        -v "/etc/passwd:/etc/passwd:ro" \
+        -v "/etc/shadow:/etc/shadow:ro" \
+        -v "/etc/sudoers.d:/etc/sudoers.d:ro" \
+        -v "$REPODIR:/rapids:rw" \
+        --workdir "$workspaceDir/cpp/build" \
+        ${imageName} \
+        scl enable devtoolset-9 \
+            "cmake .. \
+                -G${CMAKE_GENERATOR} \
+                -DCUDA_STATIC_RUNTIME=ON \
+                -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
+                -DCMAKE_INSTALL_PREFIX==/usr/local/rapids \
+                -DUSE_NVTX=ON -DCUDF_USE_ARROW_STATIC=ON \
+                -DCUDF_ENABLE_ARROW_S3=OFF \
+                -DBUILD_TESTS=OFF \
+                -DPER_THREAD_DEFAULT_STREAM=ON \
+                -DRMM_LOGGING_LEVEL=OFF \
+                -DBUILD_SHARED_LIBS=OFF && \
+             cmake --build . --parallel ${PARALLEL_LEVEL} && \
+             cd $workspaceDir/java && \
+             mvn ${MVN_PHASES:-"clean package"} \
+                -Dmaven.repo.local=$workspaceDir/.m2 \
+                -DskipTests=${SKIP_TESTS:-false} \
+                -Dparallel.level=${PARALLEL_LEVEL} \
+                -DCUDF_CPP_BUILD_DIR=$workspaceDir/cpp/build \
+                -DCUDA_STATIC_RUNTIME=ON \
+                -DPER_THREAD_DEFAULT_STREAM=ON \
+                -DRMM_LOGGING_LEVEL=OFF \
+                -DUSE_GDS=OFF \
+                -DGPU_ARCHS=NATIVE \
+                -DCUDF_JNI_ARROW_STATIC=ON \
+                -DCUDF_JNI_LIBCUDF_STATIC=ON \
+                -Dtest=*,!CuFileTest"
 }
 
 if hasArg -h || hasArg --h || hasArg --help; then
@@ -263,32 +311,8 @@ if buildAll || hasArg dask_cudf; then
     fi
 fi
 
-if hasArg libcudfjni; then
-    set -x
-    cd ${REPODIR}
-    cudaVersion=11.5.0
-    imageName=cudf-build:${cudaVersion}-devel-centos7
-    docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=${cudaVersion} -t $imageName .
-    CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
-    echo CURRENT_DIR $PWD
-    nvidia-docker run -u $(id -u):$(id -g) \
-        -v "/etc/group:/etc/group:ro" \
-        -v "/etc/passwd:/etc/passwd:ro" \
-        -v "/etc/shadow:/etc/shadow:ro" \
-        -v "/etc/sudoers.d:/etc/sudoers.d:ro" \
-        -v "$HOME:$HOME:rw" \
-        --workdir $REPODIR/cpp/build \
-        ${imageName} \
-        cmake .. -G"${CMAKE_GENERATOR}" \
-         -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
-         -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
-         -DUSE_NVTX=$ENABLE_NVTX \
-         -DCUDF_USE_ARROW_STATIC=ON \
-         -DCUDF_ENABLE_ARROW_S3=OFF \
-         -DBUILD_TESTS=$BUILD_CPP_TESTS \
-         -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS \
-         -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
-         -DBUILD_SHARED_LIBS=OFF
+if hasArg cudfjar; then
+    buildLibCudfJniInDocker
 fi
 
 # Build libcudf_kafka library
