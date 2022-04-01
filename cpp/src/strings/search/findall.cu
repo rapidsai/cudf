@@ -42,19 +42,19 @@ using indices_span      = cudf::detail::device_2dspan<string_index_pair>;
 
 namespace {
 /**
- * @brief This functor handles extracting matched strings by applying the compiled regex pattern
- * and creating string_index_pairs for all the substrings within the current row.
+ * @brief This functor calls regex find on each string and creates
+ * string_index_pairs for all matching substrings.
  *
  * The number of output columns is dependent on the string with the most matches.
- * For strings with fewer matches, null entries are appended into the output row
- * up to the column count.
+ * For strings with fewer matches, null entries are appended into d_indices
+ * up to the maximum column count.
  */
 template <int stack_size>
 struct findall_fn {
   column_device_view const d_strings;
   reprog_device prog;
-  size_type const* d_counts;  ///< matches for each string
-  indices_span d_indices;     ///< output matches added here
+  size_type const* d_counts;  ///< match counts for each string
+  indices_span d_indices;     ///< 2D-span: output matches added here
 
   __device__ void operator()(size_type idx)
   {
@@ -80,7 +80,7 @@ struct findall_fn {
       }
     }
 
-    // fill remaining column entries for this row with nulls
+    // fill the remaining entries for this row with nulls
     thrust::fill(
       thrust::seq, d_output.begin() + match_count, d_output.end(), string_index_pair{nullptr, 0});
   }
