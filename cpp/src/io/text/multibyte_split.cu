@@ -35,6 +35,7 @@
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/transform.h>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>

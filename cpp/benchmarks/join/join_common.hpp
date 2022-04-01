@@ -34,6 +34,7 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/uniform_int_distribution.h>

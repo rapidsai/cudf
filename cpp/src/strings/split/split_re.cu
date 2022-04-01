@@ -32,7 +32,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/distance.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {

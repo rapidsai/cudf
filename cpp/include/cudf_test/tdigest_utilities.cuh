@@ -25,7 +25,13 @@
 
 #include <tests/groupby/groupby_test_util.hpp>
 
+#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <rmm/exec_policy.hpp>
 
