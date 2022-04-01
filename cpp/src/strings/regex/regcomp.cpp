@@ -16,6 +16,7 @@
 
 #include <strings/regex/regcomp.h>
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
@@ -57,6 +58,37 @@ const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
 const std::array<char, 33> escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
+
+/**
+ * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
+ *
+ * No character conversion occurs.
+ * Each UTF-8 character is promoted into a 32-bit value.
+ * The last entry in the returned vector will be a 0 value.
+ * The fixed-width vector makes it easier to compile and faster to execute.
+ *
+ * @param pattern Regular expression encoded with UTF-8.
+ * @return Fixed-width 32-bit character vector.
+ */
+std::vector<char32_t> string_to_char32_vector(std::string const& pattern)
+{
+  size_type size  = static_cast<size_type>(pattern.size());
+  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+    return is_begin_utf8_char(static_cast<uint8_t>(ch));
+  });
+  std::vector<char32_t> result(count + 1);
+  char32_t* output_ptr  = result.data();
+  const char* input_ptr = pattern.data();
+  for (size_type idx = 0; idx < size; ++idx) {
+    char_utf8 output_character = 0;
+    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    input_ptr += ch_width;
+    idx += ch_width - 1;
+    *output_ptr++ = output_character;
+  }
+  result[count] = 0;  // last entry set to 0
+  return result;
+}
 
 }  // namespace
 
@@ -838,10 +870,11 @@ class regex_compiler {
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
+reprog reprog::create_from(std::string const& pattern, regex_flags const flags)
 {
   reprog rtn;
-  regex_compiler compiler(pattern, flags, rtn);
+  auto pattern32 = string_to_char32_vector(pattern);
+  regex_compiler compiler(pattern32.data(), flags, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
