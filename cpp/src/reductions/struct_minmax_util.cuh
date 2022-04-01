@@ -25,6 +25,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+
 namespace cudf {
 namespace reduction {
 namespace detail {

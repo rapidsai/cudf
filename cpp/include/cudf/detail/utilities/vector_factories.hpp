@@ -28,6 +28,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <vector>
 
 namespace cudf {
