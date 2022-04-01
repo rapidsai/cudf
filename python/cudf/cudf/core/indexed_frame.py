@@ -44,6 +44,7 @@ from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
@@ -69,6 +70,53 @@ doc_reset_index_template = """
         Examples
         --------
         {example}
+"""
+
+
+doc_binop_template = """\
+        Get {operation} of DataFrame or Series and other, element-wise (binary
+        operator `{op_name}`).
+
+        Equivalent to ``frame + other``, but with support to substitute a
+        ``fill_value`` for missing data in one of the inputs.
+
+        Parameters
+        ----------
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
+            for dataframe
+        level : int or name
+            Broadcast across a level, matching Index values on the
+            passed MultiIndex level. Not yet supported.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame or Series
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame(
+        ...     {{'angles': [0, 3, 4], 'degrees': [360, 180, 360]}},
+        ...     index=['circle', 'triangle', 'rectangle']
+        ... )
+        {df_op_example}
+
+        **Series**
+
+        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
+        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+        {ser_op_example}
 """
 
 
@@ -2648,6 +2696,705 @@ class IndexedFrame(Frame):
         if not ignore_index and self._index is not None:
             res.index.names = self._index.names
         return res
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Addition",
+            op_name="add",
+            equivalent_op="frame + other",
+            df_op_example=""">>> df.add(1)
+                   angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+            """,
+            ser_op_example=""">>> a.add(b)
+        a       2
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.add(b, fill_value=0)
+        a       2
+        b       1
+        c       1
+        d       1
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def add(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__add__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Addition",
+            op_name="add",
+            equivalent_op="other + frame",
+            df_op_example=""">>> df.add(1)
+                   angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+            """,
+            ser_op_example=""">>> a.add(b)
+        a       2
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.radd(b, fill_value=0)
+        a       2
+        b       1
+        c       1
+        d       1
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def radd(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__radd__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Subtraction",
+            op_name="sub",
+            equivalent_op="frame - other",
+            df_op_example=""">>> df.sub(1)
+                   angles  degrees
+        circle         -1      359
+        triangle        2      179
+        rectangle       3      359
+            """,
+            ser_op_example=""">>> a.sub(b)
+        a       0
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.sub(b, fill_value=0)
+        a       2
+        b       1
+        c       1
+        d      -1
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def subtract(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__sub__", fill_value)
+
+    sub = subtract
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Subtraction",
+            op_name="rsub",
+            equivalent_op="other - frame",
+            df_op_example=""">>> df.rsub(1)
+                   angles  degrees
+        circle          1     -359
+        triangle       -2     -179
+        rectangle      -3     -359
+            """,
+            ser_op_example=""">>> a.rsub(b)
+        a       0
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.rsub(b, fill_value=0)
+        a       0
+        b      -1
+        c      -1
+        d       1
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def rsub(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rsub__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Multiplication",
+            op_name="mul",
+            equivalent_op="frame * other",
+            df_op_example=""">>> df.multiply(1)
+                   angles  degrees
+        circle          0      360
+        triangle        3      180
+        rectangle       4      360
+            """,
+            ser_op_example=""">>> a.multiply(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.multiply(b, fill_value=0)
+        a       1
+        b       0
+        c       0
+        d       0
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def multiply(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__mul__", fill_value)
+
+    mul = multiply
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Multiplication",
+            op_name="rmul",
+            equivalent_op="other * frame",
+            df_op_example=""">>> df.rmul(1)
+                   angles  degrees
+        circle          0      360
+        triangle        3      180
+        rectangle       4      360
+            """,
+            ser_op_example=""">>> a.rmul(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.multiply(b, fill_value=0)
+        a       1
+        b       0
+        c       0
+        d       0
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def rmul(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rmul__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Modulo",
+            op_name="mod",
+            equivalent_op="frame % other",
+            df_op_example=""">>> df.mod(1)
+                   angles  degrees
+        circle          0        0
+        triangle        0        0
+        rectangle       0        0
+            """,
+            ser_op_example=""">>> a.mod(b)
+        a       0
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.mod(b, fill_value=0)
+        a             0
+        b    4294967295
+        c    4294967295
+        d             0
+        e          <NA>
+        dtype: int64""",
+        )
+    )
+    def mod(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__mod__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Modulo",
+            op_name="rmod",
+            equivalent_op="other % frame",
+            df_op_example=""">>> df.rmod(1)
+                       angles  degrees
+        circle     4294967295        1
+        triangle            1        1
+        rectangle           1        1
+            """,
+            ser_op_example=""">>> a.rmod(b)
+        a       0
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.mod(b, fill_value=0)
+        a             0
+        b             0
+        c             0
+        d    4294967295
+        e          <NA>
+        dtype: int64""",
+        )
+    )
+    def rmod(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rmod__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Exponential",
+            op_name="pow",
+            equivalent_op="frame ** other",
+            df_op_example=""">>> df.pow(1)
+                   angles  degrees
+        circle          0      360
+        triangle        2      180
+        rectangle       4      360
+            """,
+            ser_op_example=""">>> a.pow(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.pow(b, fill_value=0)
+        a       1
+        b       1
+        c       1
+        d       0
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def pow(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__pow__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Exponential",
+            op_name="rpow",
+            equivalent_op="other ** frame",
+            df_op_example=""">>> df.rpow(1)
+                   angles  degrees
+        circle          1        1
+        triangle        1        1
+        rectangle       1        1
+            """,
+            ser_op_example=""">>> a.rpow(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.rpow(b, fill_value=0)
+        a       1
+        b       0
+        c       0
+        d       1
+        e    <NA>
+        dtype: int64""",
+        )
+    )
+    def rpow(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rpow__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Integer division",
+            op_name="floordiv",
+            equivalent_op="frame // other",
+            df_op_example=""">>> df.floordiv(1)
+                   angles  degrees
+        circle          0      360
+        triangle        3      180
+        rectangle       4      360
+            """,
+            ser_op_example=""">>> a.floordiv(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.floordiv(b, fill_value=0)
+        a                      1
+        b    9223372036854775807
+        c    9223372036854775807
+        d                      0
+        e                   <NA>
+        dtype: int64""",
+        )
+    )
+    def floordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__floordiv__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Integer division",
+            op_name="rfloordiv",
+            equivalent_op="other // frame",
+            df_op_example=""">>> df.rfloordiv(1)
+                                angles  degrees
+        circle     9223372036854775807        0
+        triangle                     0        0
+        rectangle                    0        0
+            """,
+            ser_op_example=""">>> a.rfloordiv(b)
+        a       1
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.rfloordiv(b, fill_value=0)
+        a                      1
+        b                      0
+        c                      0
+        d    9223372036854775807
+        e                   <NA>
+        dtype: int64""",
+        )
+    )
+    def rfloordiv(
+        self, other, axis, level=None, fill_value=None
+    ):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rfloordiv__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Floating division",
+            op_name="truediv",
+            equivalent_op="frame / other",
+            df_op_example=""">>> df.truediv(1)
+                   angles  degrees
+        circle        0.0    360.0
+        triangle      3.0    180.0
+        rectangle     4.0    360.0
+            """,
+            ser_op_example=""">>> a.truediv(b)
+        a     1.0
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: float64
+        >>> a.truediv(b, fill_value=0)
+        a     1.0
+        b     Inf
+        c     Inf
+        d     0.0
+        e    <NA>
+        dtype: float64""",
+        )
+    )
+    def truediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__truediv__", fill_value)
+
+    # Alias for truediv
+    div = truediv
+    divide = truediv
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Floating division",
+            op_name="rtruediv",
+            equivalent_op="other / frame",
+            df_op_example=""">>> df.rtruediv(1)
+                     angles   degrees
+        circle          inf  0.002778
+        triangle   0.333333  0.005556
+        rectangle  0.250000  0.002778
+            """,
+            ser_op_example=""">>> a.rtruediv(b)
+        a     1.0
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: float64
+        >>> a.rtruediv(b, fill_value=0)
+        a     1.0
+        b     0.0
+        c     0.0
+        d     Inf
+        e    <NA>
+        dtype: float64""",
+        )
+    )
+    def rtruediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rtruediv__", fill_value)
+
+    # Alias for rtruediv
+    rdiv = rtruediv
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Equal to",
+            op_name="eq",
+            equivalent_op="frame == other",
+            df_op_example=""">>> df.eq(1)
+                   angles  degrees
+        circle      False    False
+        triangle    False    False
+        rectangle   False    False
+            """,
+            ser_op_example=""">>> a.rtruediv(b)
+        a    True
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: bool
+        >>> a.rtruediv(b, fill_value=0)
+        a    True
+        b   False
+        c   False
+        d   False
+        e    <NA>
+        dtype: bool""",
+        )
+    )
+    def eq(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__eq__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Not equal to",
+            op_name="ne",
+            equivalent_op="frame != other",
+            df_op_example=""">>> df.ne(1)
+                   angles  degrees
+        circle       True     True
+        triangle     True     True
+        rectangle    True     True
+            """,
+            ser_op_example=""">>> a.ne(b)
+        a    False
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: bool
+        >>> a.ne(b, fill_value=0)
+        a   False
+        b    True
+        c    True
+        d    True
+        e    <NA>
+        dtype: bool""",
+        )
+    )
+    def ne(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__ne__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Less than",
+            op_name="lt",
+            equivalent_op="frame < other",
+            df_op_example=""">>> df.lt(1)
+                   angles  degrees
+        circle       True    False
+        triangle    False    False
+        rectangle   False    False
+            """,
+            ser_op_example=""">>> a.lt(b)
+        a   False
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: bool
+        >>> a.lt(b, fill_value=0)
+        a   False
+        b   False
+        c   False
+        d    True
+        e    <NA>
+        dtype: bool""",
+        )
+    )
+    def lt(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__lt__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Less than or equal to",
+            op_name="le",
+            equivalent_op="frame <= other",
+            df_op_example=""">>> df.le(1)
+                   angles  degrees
+        circle       True    False
+        triangle    False    False
+        rectangle   False    False
+            """,
+            ser_op_example=""">>> a.le(b)
+        a    True
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: bool
+        >>> a.le(b, fill_value=0)
+        a    True
+        b   False
+        c   False
+        d    True
+        e    <NA>
+        dtype: bool""",
+        )
+    )
+    def le(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__le__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Greater than",
+            op_name="gt",
+            equivalent_op="frame > other",
+            df_op_example=""">>> df.gt(1)
+                   angles  degrees
+        circle      False     True
+        triangle     True     True
+        rectangle    True     True
+            """,
+            ser_op_example=""">>> a.gt(b)
+        a   False
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: bool
+        >>> a.gt(b, fill_value=0)
+        a   False
+        b    True
+        c    True
+        d   False
+        e    <NA>
+        dtype: bool""",
+        )
+    )
+    def gt(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__gt__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Greater than or equal to",
+            op_name="ge",
+            equivalent_op="frame >= other",
+            df_op_example=""">>> df.ge(1)
+                   angles  degrees
+        circle      False     True
+        triangle     True     True
+        rectangle    True     True
+            """,
+            ser_op_example=""">>> a.ge(b)
+        a    True
+        b    <NA>
+        c    <NA>
+        d    <NA>
+        e    <NA>
+        dtype: bool
+        >>> a.ge(b, fill_value=0)
+        a   True
+        b    True
+        c    True
+        d   False
+        e    <NA>
+        dtype: bool""",
+        )
+    )
+    def ge(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__ge__", fill_value=fill_value, can_reindex=True
+        )
 
 
 def _check_duplicate_level_names(specified, level_names):
