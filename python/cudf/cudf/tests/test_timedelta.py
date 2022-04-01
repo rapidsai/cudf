@@ -1161,10 +1161,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
-        expected_error_message=re.escape(
-            f"Addition of {sr.dtype} with {np.dtype('object')} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     dt_sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
