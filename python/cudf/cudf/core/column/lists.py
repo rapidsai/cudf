@@ -381,7 +381,7 @@ class ListMethods(ColumnMethods):
         """
         out = extract_element(self._column, index)
 
-        if not (default is None or default is cudf.NA):
+        if default not in {None, cudf.NA}:
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
             out_of_bounds_indexes = (-index > lengths) | (index >= lengths)
