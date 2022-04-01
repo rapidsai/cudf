@@ -16,6 +16,10 @@
 
 #include <sort/sort_impl.cuh>
 
+#include <thrust/functional.h>
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
+
 namespace cudf {
 namespace detail {
 namespace {

@@ -38,7 +38,9 @@ def _hide_deprecated_pandas_categorical_inplace_warnings(function_name):
 def _hide_cudf_safe_casting_warning():
     with warnings.catch_warnings():
         warnings.filterwarnings(
-            "ignore", "Can't safely cast column", category=UserWarning,
+            "ignore",
+            "Can't safely cast column",
+            category=UserWarning,
         )
         yield
 

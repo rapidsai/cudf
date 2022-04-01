@@ -1389,7 +1389,9 @@ class BaseIndex(Serializable):
         return cudf.MultiIndex
 
     def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
+        self,
+        keep="first",
+        nulls_are_equal=True,
     ):
         """
         Drop duplicate rows in index.
@@ -1435,7 +1437,11 @@ class BaseIndex(Serializable):
         ]
 
         return self._from_columns_like_self(
-            drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
+            drop_nulls(
+                data_columns,
+                how=how,
+                keys=range(len(data_columns)),
+            ),
             self._column_names,
         )
 

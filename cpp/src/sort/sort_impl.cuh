@@ -32,6 +32,7 @@
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
+#include <thrust/swap.h>
 
 namespace cudf {
 namespace detail {

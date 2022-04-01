@@ -39,11 +39,19 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
+#include <thrust/generate.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+#include <thrust/scatter.h>
 #include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 #include <numeric>
 #include <sstream>

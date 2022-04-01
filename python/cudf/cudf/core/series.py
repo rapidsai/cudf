@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
+import warnings
 from collections import abc as abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
@@ -104,7 +105,8 @@ class _SeriesIlocIndexer(_FrameIndexer):
         ):
             return data
         return self._frame._from_data(
-            {self._frame.name: data}, index=cudf.Index(self._frame.index[arg]),
+            {self._frame.name: data},
+            index=cudf.Index(self._frame.index[arg]),
         )
 
     @_cudf_nvtx_annotate
@@ -390,7 +392,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def __init__(
-        self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
+        self,
+        data=None,
+        index=None,
+        dtype=None,
+        name=None,
+        nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
             if name is None:
@@ -849,7 +856,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
-        return sum(super().memory_usage(index, deep).values())
+        return self._column.memory_usage + (
+            self._index.memory_usage() if index else 0
+        )
 
     @_cudf_nvtx_annotate
     def __array_function__(self, func, types, args, kwargs):
@@ -1006,7 +1015,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             result.name = self.name
             result.index = self.index
         else:
-            result = self.applymap(arg)
+            # TODO: switch to `apply`
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=FutureWarning)
+                result = self.applymap(arg)
         return result
 
     @_cudf_nvtx_annotate
@@ -2204,6 +2216,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         4    105
         dtype: int64
         """
+        warnings.warn(
+            "Series.applymap is deprecated and will be removed "
+            "in a future cuDF release. Use Series.apply instead.",
+            FutureWarning,
+        )
         if not callable(udf):
             raise ValueError("Input UDF must be a callable object.")
         return self._from_data({self.name: self._unaryop(udf)}, self._index)
@@ -2368,8 +2385,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def transpose(self):
-        """Return the transpose, which is by definition self.
-        """
+        """Return the transpose, which is by definition self."""
 
         return self
 
@@ -3762,7 +3778,9 @@ class DatetimeProperties:
             np.int8
         )
         return Series._from_data(
-            {None: res}, index=self.series._index, name=self.series.name,
+            {None: res},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @_cudf_nvtx_annotate
@@ -3960,7 +3978,9 @@ class DatetimeProperties:
 
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property  # type: ignore
@@ -4009,7 +4029,9 @@ class DatetimeProperties:
 
         result = ((day == last_day) & last_month).fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property  # type: ignore
@@ -4081,7 +4103,9 @@ class DatetimeProperties:
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
         result = result.fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @_cudf_nvtx_annotate
