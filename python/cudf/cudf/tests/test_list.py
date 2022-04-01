@@ -298,7 +298,6 @@ def test_get_default():
     assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2))
     assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2, default=cudf.NA))
     assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
-    assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
     assert_eq(cudf.Series([0, 3, 7]), sr.list.get(-3, default=0))
     assert_eq(cudf.Series([2, 5, 9]), sr.list.get(-1))
 
