@@ -17,7 +17,7 @@ from cudf._typing import (
     Dtype,
     DtypeObj,
 )
-from cudf.api.types import is_scalar
+from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
@@ -162,7 +162,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return out_dtype
 
     def _binary_op_mod(self, other: ColumnBinaryOperand) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(other.dtype):
+        if is_timedelta64_dtype(other.dtype):
             out_dtype = determine_out_dtype(self.dtype, other.dtype)
         elif other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
@@ -176,7 +176,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def _binary_op_lt_gt_le_ge_eq_ne(
         self, other: ColumnBinaryOperand
     ) -> DtypeObj:
-        if pd.api.types.is_timedelta64_dtype(other.dtype):
+        if is_timedelta64_dtype(other.dtype):
             return np.bool_
         raise TypeError(
             f"Invalid comparison between dtype={self.dtype}"
@@ -187,7 +187,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self, other: ColumnBinaryOperand, op: str
     ) -> Tuple["column.ColumnBase", ColumnBinaryOperand, DtypeObj]:
         this: ColumnBase = self
-        if pd.api.types.is_timedelta64_dtype(other.dtype):
+        if is_timedelta64_dtype(other.dtype):
             common_dtype = determine_out_dtype(self.dtype, other.dtype)
             this = self.astype(common_dtype).astype("float64")
             if isinstance(other, cudf.Scalar):
@@ -242,7 +242,7 @@ class TimeDeltaColumn(column.ColumnBase):
         elif op in {
             "__add__",
             "__sub__",
-        } and pd.api.types.is_timedelta64_dtype(other):
+        } and is_timedelta64_dtype(other):
             out_dtype = determine_out_dtype(self.dtype, other.dtype)
         else:
             return NotImplemented
@@ -601,7 +601,7 @@ def _timedelta_add_result_dtype(
     # Is addition symmetric for timedelta + datetime? Conceptually it only
     # really makes sense to think of datetime + timedelta, but maybe pandas
     # allows the opposite too (because why not).
-    if pd.api.types.is_timedelta64_dtype(rhs.dtype):
+    if is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
     elif pd.api.types.is_datetime64_dtype(rhs.dtype):
         units = ["s", "ms", "us", "ns"]
@@ -629,13 +629,11 @@ def _timedelta_sub_result_dtype(
     # for. In cases where both are timedeltas it doesn't matter, but if only
     # one of them is then we need to account for the asymmetry.
     # It is also valid to subtract a datetime from a datetime to get a delta.
-    if pd.api.types.is_timedelta64_dtype(
-        lhs.dtype
-    ) and pd.api.types.is_timedelta64_dtype(rhs.dtype):
+    if is_timedelta64_dtype(lhs.dtype) and is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-    elif pd.api.types.is_timedelta64_dtype(
-        rhs.dtype
-    ) and pd.api.types.is_datetime64_dtype(lhs.dtype):
+    elif is_timedelta64_dtype(rhs.dtype) and pd.api.types.is_datetime64_dtype(
+        lhs.dtype
+    ):
         units = ["s", "ms", "us", "ns"]
         lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
         lhs_unit = units.index(lhs_time_unit)
