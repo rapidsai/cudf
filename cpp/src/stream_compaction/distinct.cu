@@ -27,7 +27,6 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/row_operator_list.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -66,13 +65,13 @@ std::unique_ptr<table> distinct(table_view const& input,
                         stream.value()};
 
   compaction_hash hash_key{has_null, *table_ptr};
-  cudf::experimental::equality_hashing::row_equality_comparator row_equal(
-    has_null, *table_ptr, *table_ptr, nulls_equal);
+  cudf::experimental::row::equality::self_comparator row_equal(input, stream);
+  auto d_row_equal = row_equal.device_comparator(has_null);
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
   // insert distinct indices into the map.
-  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+  key_map.insert(iter, iter + num_rows, hash_key, d_row_equal, stream.value());
 
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   rmm::device_uvector<bool> index_exists_in_map(num_rows, stream, mr);
