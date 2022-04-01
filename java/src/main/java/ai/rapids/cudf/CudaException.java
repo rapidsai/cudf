@@ -15,7 +15,7 @@
  */
 package ai.rapids.cudf;
 
-import java.util.HashSet;
+import java.util.EnumSet;
 import java.util.Set;
 
 /**
@@ -172,18 +172,18 @@ public class CudaException extends RuntimeException {
 
     final int code;
 
-    private static final Set<CudaError> stickyErrors = new HashSet<CudaError>(){{
-      add(CudaError.cudaErrorIllegalAddress);
-      add(CudaError.cudaErrorLaunchTimeout);
-      add(CudaError.cudaErrorHardwareStackError);
-      add(CudaError.cudaErrorIllegalInstruction);
-      add(CudaError.cudaErrorMisalignedAddress);
-      add(CudaError.cudaErrorInvalidAddressSpace);
-      add(CudaError.cudaErrorInvalidPc);
-      add(CudaError.cudaErrorLaunchFailure);
-      add(CudaError.cudaErrorExternalDevice);
-      add(CudaError.cudaErrorUnknown);
-    }};
+    private static final Set<CudaError> stickyErrors = EnumSet.of(
+        CudaError.cudaErrorIllegalAddress,
+        CudaError.cudaErrorLaunchTimeout,
+        CudaError.cudaErrorHardwareStackError,
+        CudaError.cudaErrorIllegalInstruction,
+        CudaError.cudaErrorMisalignedAddress,
+        CudaError.cudaErrorInvalidAddressSpace,
+        CudaError.cudaErrorInvalidPc,
+        CudaError.cudaErrorLaunchFailure,
+        CudaError.cudaErrorExternalDevice,
+        CudaError.cudaErrorUnknown
+    );
 
     CudaError(int errorCode) {
       this.code = errorCode;
