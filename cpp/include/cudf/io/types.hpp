@@ -393,16 +393,9 @@ class column_in_metadata {
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
 
   /**
-   * @brief Get whether parquet field id has been set for this column
-   */
-  [[nodiscard]] bool is_parquet_field_id_set() const { return _parquet_field_id.has_value(); }
-
-  /**
    * @brief Get the parquet field id that was set for this column.
-   * @throws If parquet field id was not set for this column.
-   *         Check using `is_parquet_field_id_set()` first.
    */
-  [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
+  [[nodiscard]] thrust::optional<int32_t> get_parquet_field_id() const { return _parquet_field_id; }
 
   /**
    * @brief Get the number of children of this column

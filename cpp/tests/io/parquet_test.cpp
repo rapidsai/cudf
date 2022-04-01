@@ -3221,8 +3221,9 @@ TYPED_TEST(ParquetWriterSchemaTest, FieldID)
       .metadata(&expected_metadata);
 
   auto got_metadata = out_opts.get_metadata();
-  EXPECT_TRUE(got_metadata->column_metadata[0].is_parquet_field_id_set());
-  EXPECT_EQ(gold, got_metadata->column_metadata[0].get_parquet_field_id());
+  auto field_id     = got_metadata->column_metadata[0].get_parquet_field_id();
+  EXPECT_TRUE(field_id);
+  EXPECT_EQ(gold, field_id.value());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
