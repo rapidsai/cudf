@@ -237,10 +237,13 @@ class TimeDeltaColumn(column.ColumnBase):
         elif op in {"__truediv__", "__floordiv__"}:
             this, other, out_dtype = self._binary_op_div(other, op)
             op = "__truediv__"
-        elif op == "__add__":
-            out_dtype = _timedelta_add_result_dtype(self, other)
-        elif op == "__sub__":
-            out_dtype = _timedelta_sub_result_dtype(self, other)
+        # Use `other` instead of rhs because we already know that self is of
+        # timedelta64 dtype so checking post-reflection would add work.
+        elif op in {
+            "__add__",
+            "__sub__",
+        } and pd.api.types.is_timedelta64_dtype(other):
+            out_dtype = determine_out_dtype(self.dtype, other.dtype)
         else:
             return NotImplemented
 
@@ -593,6 +596,11 @@ def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
 def _timedelta_add_result_dtype(
     lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
+    # It is valid to add two timedeltas, or to add a timedelta to a datetime.
+    # Is it valid to add two datetimes?
+    # Is addition symmetric for timedelta + datetime? Conceptually it only
+    # really makes sense to think of datetime + timedelta, but maybe pandas
+    # allows the opposite too (because why not).
     if pd.api.types.is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
     elif pd.api.types.is_datetime64_dtype(rhs.dtype):
@@ -614,6 +622,13 @@ def _timedelta_add_result_dtype(
 def _timedelta_sub_result_dtype(
     lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
+    # It's valid to subtract a timedelta from a datetime or a timedelta from a
+    # timedelta. However, it is not valid to subtract a datetime from a
+    # timedelta. Therefore, this function is not symmetric. Furthermore, it
+    # means that we have to apply this function after reflection is accounted
+    # for. In cases where both are timedeltas it doesn't matter, but if only
+    # one of them is then we need to account for the asymmetry.
+    # It is also valid to subtract a datetime from a datetime to get a delta.
     if pd.api.types.is_timedelta64_dtype(
         lhs.dtype
     ) and pd.api.types.is_timedelta64_dtype(rhs.dtype):

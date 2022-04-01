@@ -1153,10 +1153,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([psr, 1],),
         rfunc_args_and_kwargs=([sr, 1],),
-        expected_error_message=re.escape(
-            f"Addition of {sr.dtype} with {np.dtype('int64')} "
-            f"cannot be performed."
-        ),
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
