@@ -375,15 +375,30 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * A grouped rank aggregation scan with:
  *   groupby column      : venue
  *   input orderby column: time
+ * Produces the following first rank column:
+ * {   1,     2,     3,     4,     5,      1,     2,     3,     4,     5}
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
+ *
+ * Produces the following average rank column:
+ * {   1,     2,   3.5,   3.5,     5,      1,   2.5,   2.5,     4,     5}
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
+ *
  * Produces the following min rank column:
  * {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
  * (This corresponds to the following grouping and `driver` rows:)
  * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
  *   <----------silverstone----------->|<-------------monza-------------->
  *
- * A grouped dense rank aggregation scan with:
- *   groupby column      : venue
- *   input orderby column: time
+ * Produces the following max rank column:
+ * {   1,     2,     4,     4,     5,      1,     3,     3,     4,     5}
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
+ *
  * Produces the following dense rank column:
  * {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
  * (This corresponds to the following grouping and `driver` rows:)
