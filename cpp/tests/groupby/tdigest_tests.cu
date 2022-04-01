@@ -25,7 +25,9 @@
 #include <cudf_test/tdigest_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/copy.h>
 #include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace test {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 #pragma once
 
-#include <thrust/reduce.h>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/time_utils.cuh>
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/time_utils.cuh>
+#include <thrust/execution_policy.h>
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace io {

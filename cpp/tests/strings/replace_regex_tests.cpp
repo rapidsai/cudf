@@ -21,6 +21,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <tests/strings/utilities.h>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsReplaceRegexTest : public cudf::test::BaseFixture {

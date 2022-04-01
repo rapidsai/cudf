@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/pair.h>
+#include <thrust/sort.h>
+#include <thrust/transform.h>
 
 using cudf::host_span;
 
