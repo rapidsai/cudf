@@ -25,9 +25,11 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -129,13 +131,16 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   auto const& group_labels     = helper.group_labels(stream);
   auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
   auto const gather_map =
-    (rank_agg._method == rank_method::FIRST
-       ? cudf::detail::stable_sorted_order
-       : cudf::detail::sorted_order)(table_view({group_labels_view, get_grouped_values()}),
-                                     {order::ASCENDING, rank_agg._column_order},
-                                     {null_order::AFTER, rank_agg._null_precedence},
-                                     stream,
-                                     rmm::mr::get_current_device_resource());
+    is_presorted()
+      ? cudf::detail::sequence(
+          group_labels.size(), *cudf::make_fixed_width_scalar(size_type{0}, stream), stream)
+      : ((rank_agg._method == rank_method::FIRST
+            ? cudf::detail::stable_sorted_order
+            : cudf::detail::sorted_order)(table_view({group_labels_view, get_grouped_values()}),
+                                          {order::ASCENDING, rank_agg._column_order},
+                                          {null_order::AFTER, rank_agg._null_precedence},
+                                          stream,
+                                          rmm::mr::get_current_device_resource()));
 
   auto rank_scan = [&]() {
     if (rank_agg._method == rank_method::MIN) {
