@@ -87,6 +87,13 @@ T get_distribution_mean(distribution_params<T> const& dist)
   }
 }
 
+/**
+ *  Computes the average element size in a column, given the data profile.
+ *
+ * Random distribution paramters like average string length and maximum list nesting level affect
+ * the element size of non-fixed width columns. For lists and structs, `avg_element_size` is called
+ * recursively to determine the size of nested columns.
+ */
 size_t avg_element_size(data_profile const& profile, cudf::data_type dtype);
 
 // Utilities to determine the mean size of an element, given the data profile
@@ -114,7 +121,7 @@ size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const element_size      = cudf::size_of(cudf::data_type{dist_params.element_type});
+  auto const element_size = avg_element_size(profile, cudf::data_type{dist_params.element_type});
   return element_size * pow(single_level_mean, dist_params.max_depth);
 }
 
@@ -567,9 +574,9 @@ int num_direct_parents(int num_lvls, int num_leaf_columns)
 {
   // Estimated average number of children in the hierarchy;
   auto const num_children_avg = std::pow(num_leaf_columns, 1. / num_lvls);
-  // Minimum number of children columns for any column in the heirarchy
+  // Minimum number of children columns for any column in the hierarchy
   int const num_children_min = std::floor(num_children_avg);
-  // Maximum number of children columns for any column in the heirarchy
+  // Maximum number of children columns for any column in the hierarchy
   int const num_children_max = std::ceil(num_children_avg);
 
   // Minimum number of columns needed so that their number of children does not exceed the maximum
