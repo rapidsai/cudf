@@ -195,30 +195,32 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv *env
   CATCH_STD(env, -2);
 }
 
-namespace {
-
-jint cuda_device_get_attribute_impl(JNIEnv *env, cudaDeviceAttr const &attribute_label) {
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMajor(JNIEnv *env, jclass) {
   try {
     cudf::jni::auto_set_device(env);
     int device;
     JNI_CUDA_TRY(env, -2, ::cudaGetDevice(&device));
     int attribute_value;
-    JNI_CUDA_TRY(env, -2, ::cudaDeviceGetAttribute(&attribute_value, attribute_label, device));
+    JNI_CUDA_TRY(
+        env, -2,
+        ::cudaDeviceGetAttribute(&attribute_value, ::cudaDevAttrComputeCapabilityMajor, device));
     return attribute_value;
   }
   CATCH_STD(env, -2);
 }
 
-} // namespace
-
-JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getCurrentComputeCapabilityMajor(JNIEnv *env,
-                                                                                 jclass) {
-  return cuda_device_get_attribute_impl(env, ::cudaDevAttrComputeCapabilityMajor);
-}
-
-JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getCurrentComputeCapabilityMinor(JNIEnv *env,
-                                                                                 jclass) {
-  return cuda_device_get_attribute_impl(env, ::cudaDevAttrComputeCapabilityMinor);
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMinor(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, ::cudaGetDevice(&device));
+    int attribute_value;
+    JNI_CUDA_TRY(
+        env, -2,
+        ::cudaDeviceGetAttribute(&attribute_value, ::cudaDevAttrComputeCapabilityMinor, device));
+    return attribute_value;
+  }
+  CATCH_STD(env, -2);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {

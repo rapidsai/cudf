@@ -402,7 +402,7 @@ public class Cuda {
    * @return The Major compute capability version number of the current CUDA device
    * @throws CudaException on any error
    */
-  public static native int getCurrentComputeCapabilityMajor() throws CudaException;  
+  public static native int getComputeCapabilityMajor() throws CudaException;  
 
   /**
    * Gets the minor CUDA compute capability of the current device.
@@ -420,7 +420,7 @@ public class Cuda {
    * @return The Minor compute capability version number of the current CUDA device
    * @throws CudaException on any error
    */
-  public static native int getCurrentComputeCapabilityMinor() throws CudaException;
+  public static native int getComputeCapabilityMinor() throws CudaException;
 
   /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
