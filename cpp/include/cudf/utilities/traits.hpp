@@ -124,6 +124,31 @@ constexpr inline bool is_relationally_comparable()
   return detail::is_relationally_comparable_impl<L, R>::value;
 }
 
+namespace detail {
+/**
+ * @brief Helper functor to check if a specified type `T` supports relational comparisons.
+ */
+struct unary_relationally_comparable_functor {
+  template <typename T>
+  inline bool operator()() const
+  {
+    return cudf::is_relationally_comparable<T, T>();
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Checks whether `data_type` `type` supports relational comparisons.
+ *
+ * @param type Data_type for comparison.
+ * @return true If `type` supports relational comparisons.
+ * @return false If `type` does not support relational comparisons.
+ */
+inline bool is_relationally_comparable(data_type type)
+{
+  return type_dispatcher(type, detail::unary_relationally_comparable_functor{});
+}
+
 /**
  * @brief Indicates whether objects of types `L` and `R` can be compared
  * for equality.

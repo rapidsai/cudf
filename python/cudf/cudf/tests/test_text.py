@@ -1,5 +1,7 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+from io import StringIO
+
 import numpy as np
 import pytest
 
@@ -820,12 +822,22 @@ def test_read_text_byte_range(datadir):
     assert_eq(expected, actual)
 
 
-def test_read_text_byte_range_large(datadir):
-    content = str(("\n" if x % 5 == 0 else "x") for x in range(0, 300000000))
+def test_read_text_byte_range_large(tmpdir):
+    content = str([["\n" if x % 5 == 0 else "x"] for x in range(0, 3000)])
     delimiter = "1."
-    temp_file = str(datadir) + "/temp.txt"
+    temp_file = str(tmpdir) + "/temp.txt"
 
     with open(temp_file, "w") as f:
         f.write(content)
 
     cudf.read_text(temp_file, delimiter=delimiter)
+
+
+def test_read_text_in_memory(datadir):
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(["x::", "y::", "z"])
+
+    actual = cudf.read_text(StringIO("x::y::z"), delimiter="::")
+
+    assert_eq(expected, actual)

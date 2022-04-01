@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import os
 import shutil
 import sysconfig
@@ -104,7 +104,8 @@ setup(
     ),
     packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf_kafka._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
