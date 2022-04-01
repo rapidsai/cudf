@@ -113,7 +113,7 @@ function buildLibCudfJniInDocker {
         -f java/ci/Dockerfile.centos7 \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
-    nvidia-docker run -it -u $(id -u):$(id -g) \
+    nvidia-docker run -it -u $(id -u):$(id -g) --rm \
         -v "/etc/group:/etc/group:ro" \
         -v "/etc/passwd:/etc/passwd:ro" \
         -v "/etc/shadow:/etc/shadow:ro" \
@@ -125,7 +125,7 @@ function buildLibCudfJniInDocker {
             "cmake .. \
                 -G${CMAKE_GENERATOR} \
                 -DCUDA_STATIC_RUNTIME=ON \
-                -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
+                -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCMAKE_INSTALL_PREFIX==/usr/local/rapids \
                 -DUSE_NVTX=ON -DCUDF_USE_ARROW_STATIC=ON \
                 -DCUDF_ENABLE_ARROW_S3=OFF \
@@ -144,7 +144,7 @@ function buildLibCudfJniInDocker {
                 -DPER_THREAD_DEFAULT_STREAM=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
                 -DUSE_GDS=OFF \
-                -DGPU_ARCHS=NATIVE \
+                -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_ARROW_STATIC=ON \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
                 -Dtest=*,!CuFileTest"
@@ -227,15 +227,17 @@ fi
 ################################################################################
 # Configure, build, and install libcudf
 
-if buildAll || hasArg libcudf; then
+if buildAll || hasArg libcudf || hasArg cudfjar; then
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=NATIVE"
+        CUDF_CMAKE_CUDA_ARCHITECTURES="NATIVE"
         echo "Building for the architecture of the GPU in the system..."
     else
-        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=ALL"
+        CUDF_CMAKE_CUDA_ARCHITECTURES="ALL"
         echo "Building for *ALL* supported GPU architectures..."
     fi
+fi
 
+if buildAll || hasArg libcudf; then
     # get the current count before the compile starts
     if [[ "$BUILD_REPORT_INCL_CACHE_STATS" == "ON" && -x "$(command -v sccache)" ]]; then
         # zero the sccache statistics
@@ -244,7 +246,7 @@ if buildAll || hasArg libcudf; then
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
+          -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
