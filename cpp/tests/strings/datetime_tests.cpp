@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <tests/strings/utilities.h>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -409,7 +411,7 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfYear)
 cudf::test::strings_column_wrapper format_names({"AM", "PM",
   "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
   "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-  "January", "February", "March", "April", "May", "June", "July", 
+  "January", "February", "March", "April", "May", "June", "July",
   "August", "September", "October", "November", "December",
   "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"});
 // clang-format on

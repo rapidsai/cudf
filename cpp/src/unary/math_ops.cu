@@ -25,6 +25,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/transform.h>
+
 #include <cmath>
 #include <type_traits>
 

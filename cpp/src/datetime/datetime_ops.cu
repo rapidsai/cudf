@@ -36,6 +36,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace datetime {
