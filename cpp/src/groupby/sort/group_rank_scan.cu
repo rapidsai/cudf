@@ -35,7 +35,10 @@ namespace groupby {
 namespace detail {
 namespace {
 
-// Functor to identify unique elements in a sorted order table/column
+/**
+ * @brief Functor to identify unique elements in a sorted order table/column
+ *
+ */
 template <typename ReturnType, typename Iterator>
 struct unique_comparator {
   unique_comparator(table_device_view device_table, Iterator const sorted_order, bool has_nulls)
@@ -58,19 +61,21 @@ struct unique_comparator {
  *
  * @tparam value_resolver flag value resolver function with boolean first and row number arguments
  * @tparam scan_operator scan function ran on the flag values
- * @param order_by input column to generate ranks for
+ * @param grouped_values input column to generate ranks for
+ * @param value_order column of type INT32 that contains the order of the values in the
+ * grouped_values column
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets group index offsets with group ID indices
  * @param resolver flag value resolver
  * @param scan_op scan operation ran on the flag results
- * @param has_nulls true if nulls are included in the `order_by` column
+ * @param has_nulls true if nulls are included in the `grouped_values` column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> rank values
  */
 template <typename value_resolver, typename scan_operator>
-std::unique_ptr<column> rank_generator(column_view const& order_by,
-                                       column_view const& gather_map,
+std::unique_ptr<column> rank_generator(column_view const& grouped_values,
+                                       column_view const& value_order,
                                        device_span<size_type const> group_labels,
                                        device_span<size_type const> group_offsets,
                                        value_resolver resolver,
@@ -80,9 +85,9 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+    table_view{{grouped_values}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  auto sorted_index_order = gather_map.begin<size_type>();
+  auto sorted_index_order = value_order.begin<size_type>();
   auto comparator         = unique_comparator<size_type, decltype(sorted_index_order)>(
     *d_flat_order, sorted_index_order, has_nulls);
 
@@ -111,12 +116,13 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                 mutable_ranks.begin<size_type>(),
                                 thrust::equal_to{},
                                 scan_op);
+
   return ranks;
 }
 
 template <typename value_resolver, typename scan_operator>
-std::unique_ptr<column> rank_generator_reverse(column_view const& order_by,
-                                               column_view const& gather_map,
+std::unique_ptr<column> rank_generator_reverse(column_view const& grouped_values,
+                                               column_view const& value_order,
                                                device_span<size_type const> group_labels,
                                                device_span<size_type const> group_offsets,
                                                value_resolver resolver,
@@ -126,9 +132,9 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& order_by,
                                                rmm::mr::device_memory_resource* mr)
 {
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
+    table_view{{grouped_values}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  auto sorted_index_order = gather_map.begin<size_type>();
+  auto sorted_index_order = value_order.begin<size_type>();
   auto comparator         = unique_comparator<size_type, decltype(sorted_index_order)>(
     *d_flat_order, sorted_index_order, has_nulls);
 
@@ -157,41 +163,42 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& order_by,
                                 thrust::reverse_iterator(mutable_ranks.end<size_type>()),
                                 thrust::equal_to{},
                                 scan_op);
+
   return ranks;
 }
 }  // namespace
 
-std::unique_ptr<column> min_rank_scan(column_view const& order_by,
-                                      column_view const& gather_map,
+std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
+                                      column_view const& value_order,
                                       device_span<size_type const> group_labels,
                                       device_span<size_type const> group_offsets,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   return rank_generator(
-    order_by,
-    gather_map,
+    grouped_values,
+    value_order,
     group_labels,
     group_offsets,
     [] __device__(bool unequal, auto row_index_in_group) {
       return unequal ? row_index_in_group + 1 : 0;
     },
     DeviceMax{},
-    has_nested_nulls(table_view{{order_by}}),
+    has_nested_nulls(table_view{{grouped_values}}),
     stream,
     mr);
 }
 
-std::unique_ptr<column> max_rank_scan(column_view const& order_by,
-                                      column_view const& gather_map,
+std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
+                                      column_view const& value_order,
                                       device_span<size_type const> group_labels,
                                       device_span<size_type const> group_offsets,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   return rank_generator_reverse(
-    order_by,
-    gather_map,
+    grouped_values,
+    value_order,
     group_labels,
     group_offsets,
     [] __device__(bool unequal, auto row_index_in_group) {
@@ -200,12 +207,12 @@ std::unique_ptr<column> max_rank_scan(column_view const& order_by,
     [] __device__(auto val1, auto val2) {
       return val1 == 0 or val2 == 0 ? std::max(val1, val2) : std::min(val1, val2);
     },
-    has_nested_nulls(table_view{{order_by}}),
+    has_nested_nulls(table_view{{grouped_values}}),
     stream,
     mr);
 }
 
-std::unique_ptr<column> first_rank_scan(column_view const& order_by,
+std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
                                         column_view const&,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
@@ -226,21 +233,21 @@ std::unique_ptr<column> first_rank_scan(column_view const& order_by,
   return ranks;
 }
 
-std::unique_ptr<column> average_rank_scan(column_view const& order_by,
-                                          column_view const& gather_map,
+std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
+                                          column_view const& value_order,
                                           device_span<size_type const> group_labels,
                                           device_span<size_type const> group_offsets,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  auto max_rank = max_rank_scan(order_by,
-                                gather_map,
+  auto max_rank = max_rank_scan(grouped_values,
+                                value_order,
                                 group_labels,
                                 group_offsets,
                                 stream,
                                 rmm::mr::get_current_device_resource());
-  auto min_rank = min_rank_scan(order_by,
-                                gather_map,
+  auto min_rank = min_rank_scan(grouped_values,
+                                value_order,
                                 group_labels,
                                 group_offsets,
                                 stream,
@@ -259,26 +266,26 @@ std::unique_ptr<column> average_rank_scan(column_view const& order_by,
   return ranks;
 }
 
-std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
-                                        column_view const& gather_map,
+std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
+                                        column_view const& value_order,
                                         device_span<size_type const> group_labels,
                                         device_span<size_type const> group_offsets,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
   return rank_generator(
-    order_by,
-    gather_map,
+    grouped_values,
+    value_order,
     group_labels,
     group_offsets,
     [] __device__(bool const unequal, size_type const) { return unequal ? 1 : 0; },
     DeviceSum{},
-    has_nested_nulls(table_view{{order_by}}),
+    has_nested_nulls(table_view{{grouped_values}}),
     stream,
     mr);
 }
 
-std::unique_ptr<column> group_rank_to_percentage(bool is_dense,
+std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
                                                  column_view const& rank,
                                                  column_view const& count,
                                                  device_span<size_type const> group_labels,
@@ -293,7 +300,7 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense,
   thrust::tabulate(rmm::exec_policy(stream),
                    mutable_ranks.begin<double>(),
                    mutable_ranks.end<double>(),
-                   [is_dense,
+                   [is_dense_rank,
                     is_double = rank.type().id() == type_id::FLOAT64,
                     dcount    = count.begin<size_type>(),
                     labels    = group_labels.data(),
@@ -302,7 +309,7 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense,
                     s_rank    = rank.begin<size_type>()] __device__(size_type row_index) -> double {
                      double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
                      auto const count = dcount[labels[row_index]];
-                     if (is_dense) {
+                     if (is_dense_rank) {
                        size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
                        auto const last_rank            = s_rank[last_rank_index];
                        return r / last_rank;
