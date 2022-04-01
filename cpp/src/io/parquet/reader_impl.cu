@@ -27,6 +27,7 @@
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -38,6 +39,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <nvcomp/snappy.h>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <array>
@@ -1044,6 +1050,37 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
+__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> stats,
+                                        bool* any_block_failure)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < stats.size()) {
+    if (stats[tid].status != 0) {
+      *any_block_failure = true;  // Doesn't need to be atomic
+    }
+  }
+}
+
+void decompress_check(device_span<gpu_inflate_status_s> stats,
+                      bool* any_block_failure,
+                      rmm::cuda_stream_view stream)
+{
+  if (stats.empty()) { return; }  // early exit for empty stats
+
+  dim3 block(128);
+  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
+  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
+}
+
+__global__ void convert_nvcomp_status(device_span<nvcompStatus_t const> nvcomp_stats,
+                                      device_span<gpu_inflate_status_s> stats)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < stats.size()) {
+    stats[tid].status = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
+  }
+}
+
 void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
                        device_span<gpu_inflate_status_s> comp_stat,
                        size_t max_uncomp_page_size,
@@ -1072,6 +1109,7 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_comp_pages, stream);
   // Convertible to comp_stat.status
   rmm::device_uvector<nvcompStatus_t> statuses(num_comp_pages, stream);
+  device_span<nvcompStatus_t const> statuses_span(statuses.data(), statuses.size());
 
   // Prepare the vectors
   auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
@@ -1099,16 +1137,9 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "unable to perform snappy decompression");
 
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             uncompressed_data_sizes.begin(),
-                             uncompressed_data_sizes.end(),
-                             actual_uncompressed_data_sizes.begin()),
-               "Mismatch in expected and actual decompressed size during snappy decompression");
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             statuses.begin(),
-                             statuses.end(),
-                             thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),
-               "Error during snappy decompression");
+  dim3 block(128);
+  dim3 grid(cudf::util::div_rounding_up_safe(num_comp_pages, static_cast<size_t>(block.x)));
+  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(statuses_span, comp_stat);
 }
 
 /**
@@ -1165,6 +1196,10 @@ rmm::device_buffer reader::impl::decompress_page_data(
   rmm::device_buffer decomp_pages(total_decomp_size, stream);
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
+
+  hostdevice_vector<bool> any_block_failure(1, stream);
+  any_block_failure[0] = false;
+  any_block_failure.host_to_device(stream);
 
   device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
   device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
@@ -1240,7 +1275,10 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                stream.value()));
     }
   }
-  stream.synchronize();
+
+  decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
+  any_block_failure.device_to_host(stream, true);  // synchronizes stream
+  CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer

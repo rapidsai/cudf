@@ -55,6 +55,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/count.h>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
@@ -1008,24 +1009,24 @@ __launch_bounds__(block_size) __global__
                    PrecedingWindowIterator preceding_window_begin,
                    FollowingWindowIterator following_window_begin)
 {
-  size_type i      = blockIdx.x * block_size + threadIdx.x;
-  size_type stride = block_size * gridDim.x;
+  thread_index_type i            = blockIdx.x * block_size + threadIdx.x;
+  thread_index_type const stride = block_size * gridDim.x;
 
   size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
   while (i < input.size()) {
     // to prevent overflow issues when computing bounds use int64_t
-    int64_t preceding_window = preceding_window_begin[i];
-    int64_t following_window = following_window_begin[i];
+    int64_t const preceding_window = preceding_window_begin[i];
+    int64_t const following_window = following_window_begin[i];
 
     // compute bounds
-    auto start = static_cast<size_type>(
-      min(static_cast<int64_t>(input.size()), max(0L, i - preceding_window + 1)));
-    auto end = static_cast<size_type>(
-      min(static_cast<int64_t>(input.size()), max(0L, i + following_window + 1)));
-    size_type start_index = min(start, end);
-    size_type end_index   = max(start, end);
+    auto const start = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(int64_t{0}, i - preceding_window + 1)));
+    auto const end = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(int64_t{0}, i + following_window + 1)));
+    auto const start_index = min(start, end);
+    auto const end_index   = max(start, end);
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -1037,7 +1038,7 @@ __launch_bounds__(block_size) __global__
       input, default_outputs, output, start_index, end_index, i);
 
     // set the mask
-    cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
+    cudf::bitmask_type const result_mask{__ballot_sync(active_threads, output_is_valid)};
 
     // only one thread writes the mask
     if (0 == threadIdx.x % cudf::detail::warp_size) {

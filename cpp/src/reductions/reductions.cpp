@@ -22,6 +22,7 @@
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
@@ -118,6 +119,18 @@ struct reduce_dispatch_functor {
         auto col_agg = dynamic_cast<merge_sets_aggregation const*>(agg.get());
         return reduction::merge_sets(col, col_agg->_nulls_equal, col_agg->_nans_equal, stream, mr);
       } break;
+      case aggregation::TDIGEST: {
+        CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
+                     "Tdigest aggregations expect output type to be STRUCT");
+        auto td_agg = dynamic_cast<tdigest_aggregation const*>(agg.get());
+        return detail::tdigest::reduce_tdigest(col, td_agg->max_centroids, stream, mr);
+      } break;
+      case aggregation::MERGE_TDIGEST: {
+        CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
+                     "Tdigest aggregations expect output type to be STRUCT");
+        auto td_agg = dynamic_cast<merge_tdigest_aggregation const*>(agg.get());
+        return detail::tdigest::reduce_merge_tdigest(col, td_agg->max_centroids, stream, mr);
+      } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
@@ -133,6 +146,9 @@ std::unique_ptr<scalar> reduce(
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
+    if (agg->kind == aggregation::TDIGEST || agg->kind == aggregation::MERGE_TDIGEST) {
+      return detail::tdigest::make_empty_tdigest_scalar();
+    }
     if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
       // Under some circumstance, the output type will become the List of input type,
       // such as: collect_list or collect_set. So, we have to handcraft the default scalar.

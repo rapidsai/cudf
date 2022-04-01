@@ -113,7 +113,7 @@ def _index_from_data(data: MutableMapping, name: Any = None):
             index_class_type = IntervalIndex
     else:
         index_class_type = cudf.MultiIndex
-    return index_class_type._from_data(data, None, name)
+    return index_class_type._from_data(data, name)
 
 
 def _index_from_columns(
@@ -375,7 +375,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 other._step,
             ):
                 return True
-        return Int64Index._from_data(self._data).equals(other)
+        return self._as_int64().equals(other)
 
     @_cudf_nvtx_annotate
     def serialize(self):
@@ -841,13 +841,25 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         return NotImplemented
 
+    @classmethod
     @_cudf_nvtx_annotate
+    def _from_data(
+        cls, data: MutableMapping, name: Any = None
+    ) -> GenericIndex:
+        out = super()._from_data(data=data)
+        if name is not None:
+            out.name = name
+        return out
+
     def _binaryop(
-        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
+        self,
+        other: T,
+        op: str,
+        fill_value: Any = None,
+        *args,
+        **kwargs,
     ) -> SingleColumnFrame:
-        reflect = self._is_reflected_op(op)
-        if reflect:
-            op = op[:2] + op[3:]
+        reflect, op = self._check_reflected_op(op)
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         if operands is NotImplemented:
             return NotImplemented
@@ -902,7 +914,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
-        return sum(super().memory_usage(deep=deep).values())
+        return self._column.memory_usage
 
     @_cudf_nvtx_annotate
     def equals(self, other, **kwargs):
@@ -915,22 +927,28 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if not isinstance(other, BaseIndex):
+        if (
+            other is None
+            or not isinstance(other, BaseIndex)
+            or len(self) != len(other)
+        ):
             return False
 
-        check_types = False
+        check_dtypes = False
 
         self_is_categorical = isinstance(self, CategoricalIndex)
         other_is_categorical = isinstance(other, CategoricalIndex)
         if self_is_categorical and not other_is_categorical:
             other = other.astype(self.dtype)
-            check_types = True
+            check_dtypes = True
         elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
-            check_types = True
+            check_dtypes = True
 
         try:
-            return super().equals(other, check_types=check_types)
+            return self._column.equals(
+                other._column, check_dtypes=check_dtypes
+            )
         except TypeError:
             return False
 
@@ -2356,7 +2374,12 @@ class CategoricalIndex(GenericIndex):
 
 @_cudf_nvtx_annotate
 def interval_range(
-    start=None, end=None, periods=None, freq=None, name=None, closed="right",
+    start=None,
+    end=None,
+    periods=None,
+    freq=None,
+    name=None,
+    closed="right",
 ) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
@@ -2519,7 +2542,12 @@ class IntervalIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(
-        self, data, closed=None, dtype=None, copy=False, name=None,
+        self,
+        data,
+        closed=None,
+        dtype=None,
+        copy=False,
+        name=None,
     ):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -2529,7 +2557,10 @@ class IntervalIndex(GenericIndex):
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
-            data = column.as_column(data, dtype=dtype,)
+            data = column.as_column(
+                data,
+                dtype=dtype,
+            )
         elif not data:
             dtype = IntervalDtype("int64", closed)
             data = column.column_empty_like_same_mask(

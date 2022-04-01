@@ -5,4 +5,4 @@ auto_merger: true
 branch_checker: true
 label_checker: true
 release_drafter: true
-external_contributors: true
+external_contributors: false

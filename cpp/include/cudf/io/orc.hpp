@@ -67,9 +67,6 @@ class orc_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
-  // Columns that should be converted from Decimal to Float64
-  std::vector<std::string> _decimal_cols_as_float;
-
   // Columns that should be read as Decimal128
   std::vector<std::string> _decimal128_columns;
 
@@ -139,14 +136,6 @@ class orc_reader_options {
   data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Fully qualified names of columns that should be converted from Decimal to Float64.
-   */
-  std::vector<std::string> const& get_decimal_cols_as_float() const
-  {
-    return _decimal_cols_as_float;
-  }
-
-  /**
    * @brief Fully qualified names of columns that should be read as 128-bit Decimal.
    */
   std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
@@ -214,18 +203,6 @@ class orc_reader_options {
    * @param type Type of timestamp.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
-
-  /**
-   * @brief Set columns that should be converted from Decimal to Float64
-   *
-   * @param val Vector of fully qualified column names.
-   */
-  [[deprecated(
-    "Decimal to float conversion is deprecated and will be remove in future release")]] void
-  set_decimal_cols_as_float(std::vector<std::string> val)
-  {
-    _decimal_cols_as_float = std::move(val);
-  }
 
   /**
    * @brief Set columns that should be read as 128-bit Decimal
@@ -337,21 +314,6 @@ class orc_reader_options_builder {
   orc_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
-    return *this;
-  }
-
-  /**
-   * @brief Columns that should be converted from decimals to float64.
-   *
-   * @param val Vector of column names.
-   * @return this for chaining.
-   */
-  [[deprecated(
-    "Decimal to float conversion is deprecated and will be remove in future "
-    "release")]] orc_reader_options_builder&
-  decimal_cols_as_float(std::vector<std::string> val)
-  {
-    options._decimal_cols_as_float = std::move(val);
     return *this;
   }
 

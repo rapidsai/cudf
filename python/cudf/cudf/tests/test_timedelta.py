@@ -318,7 +318,8 @@ def test_timedelta_ops_misc_inputs(data, other, dtype, ops):
 @pytest.mark.parametrize("datetime_dtype", utils.DATETIME_TYPES)
 @pytest.mark.parametrize("timedelta_dtype", utils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize(
-    "ops", ["add", "sub"],
+    "ops",
+    ["add", "sub"],
 )
 def test_timedelta_ops_datetime_inputs(
     datetime_data, timedelta_data, datetime_dtype, timedelta_dtype, ops
@@ -645,7 +646,8 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_components(data, dtype):
@@ -662,7 +664,8 @@ def test_timedelta_dt_components(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
@@ -697,7 +700,8 @@ def test_timedelta_dt_properties(data, dtype):
 
 
 @pytest.mark.parametrize(
-    "data", _TIMEDELTA_DATA,
+    "data",
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_index(data, dtype):
@@ -1175,8 +1179,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, dt_psr],),
         rfunc_args_and_kwargs=([sr, dt_sr],),
         expected_error_message=re.escape(
-            f"Modulus of {sr.dtype} with {dt_sr.dtype} "
-            f"cannot be performed."
+            f"Modulo of {sr.dtype} with {dt_sr.dtype} " f"cannot be performed."
         ),
     )
 
@@ -1186,7 +1189,7 @@ def test_timedelta_invalid_ops():
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
         expected_error_message=re.escape(
-            f"Modulus of {sr.dtype} with {np.dtype('object')} "
+            f"Modulo of {sr.dtype} with {np.dtype('object')} "
             f"cannot be performed."
         ),
     )
@@ -1285,9 +1288,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.xor,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        expected_error_message=re.escape(
-            f"Series of dtype {sr.dtype} cannot perform the operation xor"
-        ),
+        compare_error_message=False,
     )
 
 

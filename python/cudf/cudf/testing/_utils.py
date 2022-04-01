@@ -320,7 +320,8 @@ def gen_rand_series(dtype, size, **kwargs):
 
 def _decimal_series(input, dtype):
     return cudf.Series(
-        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+        [x if x is None else Decimal(x) for x in input],
+        dtype=dtype,
     )
 
 

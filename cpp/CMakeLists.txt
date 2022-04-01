@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.04.00
+  VERSION 22.06.00
   LANGUAGES C CXX CUDA
 )
 
@@ -470,6 +470,7 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
@@ -626,8 +627,12 @@ add_library(cudf::cudf ALIAS cudf)
 
 add_library(
   cudftestutil STATIC
-  tests/utilities/base_fixture.cpp tests/utilities/column_utilities.cu
-  tests/utilities/table_utilities.cu tests/io/metadata_utilities.cpp tests/strings/utilities.cpp
+  tests/io/metadata_utilities.cpp
+  tests/quantiles/tdigest_utilities.cu
+  tests/utilities/base_fixture.cpp
+  tests/utilities/column_utilities.cu
+  tests/utilities/table_utilities.cu
+  tests/strings/utilities.cpp
 )
 
 set_target_properties(
