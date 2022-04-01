@@ -1062,7 +1062,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
-writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
+writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   statistics_freq stats_freq,
   orc_table_view const& orc_table,
   file_segmentation const& segmentation)
@@ -1072,7 +1072,7 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   auto const num_file_blobs         = orc_table.num_columns();
   auto const num_stat_blobs         = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
   auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
-  if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
+  if (not are_statistics_enabled or num_stat_blobs == 0) { return {stream}; }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs, stream);
@@ -1136,7 +1136,6 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
   rmm::device_uvector<statistics_chunk> stat_chunks(num_stat_blobs, stream);
   auto rowgroup_stat_chunks = stat_chunks.data();
   auto stripe_stat_chunks   = rowgroup_stat_chunks + num_rowgroup_blobs;
-  auto file_stat_chunks     = stripe_stat_chunks + num_stripe_blobs;
 
   rmm::device_uvector<statistics_group> stat_groups(num_rowgroup_blobs, stream);
   gpu::orc_init_statistics_groups(
@@ -1152,12 +1151,36 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
     num_stripe_blobs,
     stream);
 
+  // in single write mode, stat_chunks contains all data for row group, stripe, and file statistics
+  return {std::move(stat_chunks), std::move(stat_merge)};
+}
+
+writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
+  statistics_freq stats_freq,
+  orc_table_view const& orc_table,
+  file_segmentation const& segmentation,
+  writer::impl::intermediate_statistics& incoming_stats)
+{
+  auto const num_rowgroup_blobs = segmentation.rowgroups.count();
+  auto const num_stripe_blobs   = segmentation.num_stripes() * orc_table.num_columns();
+  auto const num_file_blobs     = orc_table.num_columns();
+  auto const num_stat_blobs     = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
+
+  auto& stat_merge  = incoming_stats._stat_merge;
+  auto& stat_chunks = incoming_stats._stat_chunks;
+
+  auto rowgroup_stat_chunks = stat_chunks.data();
+  auto stripe_stat_chunks   = rowgroup_stat_chunks + num_rowgroup_blobs;
+  auto file_stat_chunks     = stripe_stat_chunks + num_stripe_blobs;
+
   detail::merge_group_statistics<detail::io_file_format::ORC>(
     file_stat_chunks,
     stripe_stat_chunks,
     stat_merge.device_ptr(num_rowgroup_blobs + num_stripe_blobs),
     num_file_blobs,
     stream);
+
+  // figure out the buffer size needed for protobuf format
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
   stat_merge.device_to_host(stream, true);
@@ -1174,6 +1197,10 @@ writer::impl::encoded_statistics writer::impl::gather_statistic_blobs(
                              stream);
   stat_merge.device_to_host(stream);
   blobs.device_to_host(stream, true);
+
+  auto rowgroup_stat_merge = stat_merge.host_ptr();
+  auto stripe_stat_merge   = rowgroup_stat_merge + num_rowgroup_blobs;
+  auto file_stat_merge     = stripe_stat_merge + num_stripe_blobs;
 
   auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
     if (not is_granularity_rowgroup) { return {}; }
@@ -1964,7 +1991,10 @@ void writer::impl::write(table_view const& table)
 
     ProtobufWriter pbw_(&buffer_);
 
-    auto const statistics = gather_statistic_blobs(stats_freq_, orc_table, segmentation);
+    auto intermediate_stats = gather_statistic_blobs(stats_freq_, orc_table, segmentation);
+
+    auto const statistics =
+      finish_statistic_blobs(stats_freq_, orc_table, segmentation, intermediate_stats);
 
     // Write stripes
     std::vector<std::future<void>> write_tasks;

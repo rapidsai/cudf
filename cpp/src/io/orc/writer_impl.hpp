@@ -284,6 +284,16 @@ class writer::impl {
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
+  struct intermediate_statistics {
+    intermediate_statistics(rmm::cuda_stream_view stream) : _stat_chunks(0, stream) {}
+    intermediate_statistics(rmm::device_uvector<statistics_chunk> stat_chunks,
+                            hostdevice_vector<statistics_merge_group> stat_merge)
+      : _stat_chunks(std::move(stat_chunks)), _stat_merge(std::move(stat_merge)){};
+
+    rmm::device_uvector<statistics_chunk> _stat_chunks;
+    hostdevice_vector<statistics_merge_group> _stat_merge;
+  };
+
   struct encoded_statistics {
     std::vector<ColStatsBlob> rowgroup_level;
     std::vector<ColStatsBlob> stripe_level;
@@ -291,17 +301,30 @@ class writer::impl {
   };
 
   /**
-   * @brief Returns column statistics encoded in ORC protobuf format.
+   * @brief Returns column statistics in an intermediate format.
    *
    * @param statistics_freq Frequency of statistics to be included in the output file
    * @param orc_table Table information to be written
-   * @param columns List of columns
    * @param segmentation stripe and rowgroup ranges
-   * @return The statistic blobs
+   * @return The statistic information
    */
-  encoded_statistics gather_statistic_blobs(statistics_freq statistics_freq,
+  intermediate_statistics gather_statistic_blobs(statistics_freq statistics_freq,
+                                                 orc_table_view const& orc_table,
+                                                 file_segmentation const& segmentation);
+
+  /**
+   * @brief Returns column statistics encoded in ORC protobuf format.
+   *
+   * @param stats_freq Frequence of statistics to be included in the output file
+   * @param orc_table Table information to be written
+   * @param segmentation stripe and rowgroup ranges
+   * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+   * @return The encoded statistic blobs
+   */
+  encoded_statistics finish_statistic_blobs(statistics_freq stats_freq,
                                             orc_table_view const& orc_table,
-                                            file_segmentation const& segmentation);
+                                            file_segmentation const& segmentation,
+                                            intermediate_statistics& incoming_stats);
 
   /**
    * @brief Writes the specified column's row index stream.
