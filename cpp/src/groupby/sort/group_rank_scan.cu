@@ -45,7 +45,6 @@ struct unique_comparator {
   }
   __device__ ReturnType operator()(size_type index1, size_type index2) const noexcept
   {
-    // return index == 0 || not  comparator(permute[index], permute[index - 1]);
     return comparator(permute[index1], permute[index2]);
   };
 
@@ -112,11 +111,6 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                 mutable_ranks.begin<size_type>(),
                                 thrust::equal_to{},
                                 scan_op);
-  // DEBUG PRINT
-  // thrust::for_each_n(rmm::exec_policy(stream),
-  //                    mutable_ranks.begin<size_type>(),
-  //                    mutable_ranks.size(),
-  //                    [] __device__(size_type label) { printf("%d\n", label); });
   return ranks;
 }
 
@@ -201,9 +195,8 @@ std::unique_ptr<column> max_rank_scan(column_view const& order_by,
     group_labels,
     group_offsets,
     [] __device__(bool unequal, auto row_index_in_group) {
-      return unequal ? row_index_in_group + 1 : 0;  // std::numeric_limits<size_type>::max();
+      return unequal ? row_index_in_group + 1 : 0;
     },
-    // DeviceMin{},
     [] __device__(auto val1, auto val2) {
       return val1 == 0 or val2 == 0 ? std::max(val1, val2) : std::min(val1, val2);
     },

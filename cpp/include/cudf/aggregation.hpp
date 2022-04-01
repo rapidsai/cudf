@@ -336,11 +336,8 @@ std::unique_ptr<Base> make_row_number_aggregation();
 /**
  * @brief Factory to create a RANK aggregation
  *
- * `RANK` returns a non-nullable column of size_type "ranks"
- * Method "min": the number of rows preceding or equal to the current row plus one. As a result,
- * ranks are not unique and gaps will appear in the ranking sequence.
- * Method "dense": the preceding unique value's rank plus one. As a result, ranks are not unique but
- * there are no gaps in the ranking sequence.
+ * `RANK` returns a column of size_type or double "ranks" for given rank method and column order.
+ * If nulls are excluded, the rank will be null for those rows.
  *
  * This aggregation only works with "scan" algorithms. The input column into the group or
  * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
@@ -348,10 +345,11 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * column containing the ordering columns.
  *
  * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `RANK` aggregations will return a fully valid column regardless of null_handling policy
- *     specified in the scan.
- *  3. `RANK` aggregations are not compatible with exclusive scans.
+ *  1. This method could work faster with the rows that are presorted by the group keys and order_by
+ * columns.
+ *  2. `RANK` aggregations are not compatible with exclusive scans.
+ *  3. All rank methods except AVERAGE method and percentage=True returns size_type column.
+ *     For AVERAGE method and percentage=True, the return type is double column.
  *
  * @code{.pseudo}
  * Example: Consider a motor-racing statistics dataset, containing the following columns:
@@ -375,14 +373,13 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *  ]
  *
  * A grouped rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: struct_column{num_overtakes, lap_number}
- *  result: column<size_type>{1, 2, 2, 4, 5, 1, 1, 3, 4}
- *
- * A grouped rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: num_overtakes
- *  result: column<size_type>{1, 1, 1, 4, 4, 1, 1, 3, 4}
+ *   groupby column      : venue
+ *   input orderby column: time
+ * Produces the following min rank column:
+ * {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
+ * (This corresponds to the following grouping and `driver` rows:)
+ * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *   <----------silverstone----------->|<-------------monza-------------->
  *
  * A grouped dense rank aggregation scan with:
  *   groupby column      : venue
@@ -396,10 +393,9 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *
  * @param method The ranking method used for tie breaking (same values).
  * @param column_order The desired sort order for ranking
- * @param null_handling  flag to include nulls during ranking. If nulls are not
- * included, corresponding rank will be null.
- * @param null_precedence The desired order of null compared to other elements
- * for column
+ * @param null_handling  flag to include nulls during ranking. If nulls are not included,
+ * corresponding rank will be null.
+ * @param null_precedence The desired order of null compared to other elements for column
  * @param percentage flag to convert ranks to percentage in range (0,1}
  */
 template <typename Base = aggregation>
