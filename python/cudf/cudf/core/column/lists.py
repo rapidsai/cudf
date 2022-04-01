@@ -384,12 +384,14 @@ class ListMethods(ColumnMethods):
         if not (default is None or default is cudf.NA):
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
-            out_of_bounds_indexes = (-index > lengths) | (index >= lengths)
+            out_of_bounds_mask = (np.negative(index) > lengths) | (
+                index >= lengths
+            )
 
             # replace the value in those rows (should be NA) with `default`
-            if out_of_bounds_indexes.any():
+            if out_of_bounds_mask.any():
                 out = out._scatter_by_column(
-                    out_of_bounds_indexes, cudf.Scalar(default)
+                    out_of_bounds_mask, cudf.Scalar(default)
                 )
 
         return self._return_or_inplace(out)
