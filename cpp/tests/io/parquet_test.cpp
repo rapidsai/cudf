@@ -3206,13 +3206,7 @@ TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
 
 TYPED_TEST(ParquetWriterSchemaTest, FieldID)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  constexpr auto num_rows = 800;
-  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
-    sequence, sequence + num_rows, validity);
-
+  column_wrapper<TypeParam> col;
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
@@ -3227,7 +3221,7 @@ TYPED_TEST(ParquetWriterSchemaTest, FieldID)
       .metadata(&expected_metadata);
 
   auto got_metadata = out_opts.get_metadata();
-  EXPECT_EQ(true, got_metadata->column_metadata[0].is_parquet_field_id_set());
+  EXPECT_TRUE(got_metadata->column_metadata[0].is_parquet_field_id_set());
   EXPECT_EQ(gold, got_metadata->column_metadata[0].get_parquet_field_id());
 }
 
