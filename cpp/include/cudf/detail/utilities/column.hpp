@@ -32,6 +32,9 @@ using LinkedColVector = std::vector<LinkedColPtr>;
  *
  */
 struct linked_column_view : public column_view_base {
+  linked_column_view(linked_column_view const&) = delete;
+  linked_column_view& operator=(linked_column_view const&) = delete;
+
   linked_column_view(column_view const& col) : linked_column_view(nullptr, col) {}
 
   linked_column_view(linked_column_view* parent, column_view const& col)
@@ -46,8 +49,8 @@ struct linked_column_view : public column_view_base {
 
   operator column_view() const
   {
-    auto child_it =
-      thrust::make_transform_iterator(children.begin(), [](auto const& c) { return *c; });
+    auto child_it = thrust::make_transform_iterator(
+      children.begin(), [](auto const& c) { return static_cast<column_view>(*c); });
     return column_view(this->type(),
                        this->size(),
                        this->head(),
