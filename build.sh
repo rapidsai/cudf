@@ -229,8 +229,12 @@ fi
 
 if buildAll || hasArg libcudf || hasArg cudfjar; then
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-        CUDF_CMAKE_CUDA_ARCHITECTURES="NATIVE"
-        echo "Building for the architecture of the GPU in the system..."
+        CUDF_CMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES:-NATIVE}"
+        if [[ "$CUDF_CMAKE_CUDA_ARCHITECTURES" == "NATIVE" ]]; then
+            echo "Building for the architecture of the GPU in the system..."
+        else
+            echo "Building for the GPU architecture(s) $CUDF_CMAKE_CUDA_ARCHITECTURES ..."
+        fi
     else
         CUDF_CMAKE_CUDA_ARCHITECTURES="ALL"
         echo "Building for *ALL* supported GPU architectures..."
