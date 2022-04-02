@@ -292,8 +292,15 @@ class writer::impl {
 
     rmm::device_uvector<statistics_chunk> _stat_chunks;
     hostdevice_vector<statistics_merge_group> _stat_merge;
+    std::vector<ColStatsBlob> rowgroup_blobs;
+    std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
   };
 
+// used for chunked writes to persist data between calls to write.
+struct persisted_statistics {
+  std::vector<rmm::device_uvector<statistics_chunk>> stripe_chunks;
+  std::vector<hostdevice_vector<statistics_merge_group>> stripe_merge;
+};
   struct encoded_statistics {
     std::vector<ColStatsBlob> rowgroup_level;
     std::vector<ColStatsBlob> stripe_level;

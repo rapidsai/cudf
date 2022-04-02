@@ -1062,6 +1062,25 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
+hostdevice_vector<uint8_t> allocate_and_encode_blobs(hostdevice_vector<statistics_merge_group> &stats_merge_groups, rmm::device_uvector<statistics_chunk> &stat_chunks, int num_stat_blobs, rmm::cuda_stream_view stream)
+{
+      // figure out the buffer size needed for protobuf format
+    gpu::orc_init_statistics_buffersize(
+      stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
+    stats_merge_groups.device_to_host(stream, true);
+
+    hostdevice_vector<uint8_t> blobs(
+      stats_merge_groups[num_stat_blobs - 1].start_chunk + stats_merge_groups[num_stat_blobs - 1].num_chunks, stream);
+    gpu::orc_encode_statistics(blobs.device_ptr(),
+                              stats_merge_groups.device_ptr(),
+                              stat_chunks.data(),
+                              num_stat_blobs,
+                              stream);
+    stats_merge_groups.device_to_host(stream);
+    blobs.device_to_host(stream, true);
+    return blobs;
+}
+
 writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   statistics_freq stats_freq,
   orc_table_view const& orc_table,
@@ -1070,15 +1089,16 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   auto const num_rowgroup_blobs     = segmentation.rowgroups.count();
   auto const num_stripe_blobs       = segmentation.num_stripes() * orc_table.num_columns();
   auto const num_file_blobs         = orc_table.num_columns();
-  auto const num_stat_blobs         = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
+  auto const num_stat_blobs         = num_rowgroup_blobs + single_write_mode ? 0 : num_stripe_blobs + num_file_blobs;
   auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
   if (not are_statistics_enabled or num_stat_blobs == 0) { return {stream}; }
 
   hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
   hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs, stream);
+  hostdevice_vector<statistics_merge_group> stripe_merge(single_write_mode ? 0 : num_stripe_blobs);
   auto rowgroup_stat_merge = stat_merge.host_ptr();
-  auto stripe_stat_merge   = rowgroup_stat_merge + num_rowgroup_blobs;
-  auto file_stat_merge     = stripe_stat_merge + num_stripe_blobs;
+  auto stripe_stat_merge   = single_write_mode ? rowgroup_stat_merge + num_rowgroup_blobs : stripe_merge.host_ptr();
+  auto file_stat_merge     = single_write_mode ? stripe_stat_merge + num_stripe_blobs : nullptr;
 
   for (auto const& column : orc_table.columns) {
     stats_column_desc* desc = &stat_desc[column.index()];
@@ -1124,18 +1144,27 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
         rg_grp.num_chunks  = 1;
       }
     }
-    auto col_stats         = &file_stat_merge[column.index()];
-    col_stats->col         = stat_desc.device_ptr(column.index());
-    col_stats->start_chunk = static_cast<uint32_t>(column.index() * segmentation.num_stripes());
-    col_stats->num_chunks  = static_cast<uint32_t>(segmentation.num_stripes());
+
+    // no file-level stats yet if we are writing in chunks
+    if (single_write_mode) {
+      auto col_stats         = &file_stat_merge[column.index()];
+      col_stats->col         = stat_desc.device_ptr(column.index());
+      col_stats->start_chunk = static_cast<uint32_t>(column.index() * segmentation.num_stripes());
+      col_stats->num_chunks  = static_cast<uint32_t>(segmentation.num_stripes());
+    }
   }
   stat_desc.host_to_device(stream);
   stat_merge.host_to_device(stream);
+  if (single_write_mode) stripe_stat_merge.host_to_device(stream);
   set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
-  rmm::device_uvector<statistics_chunk> stat_chunks(num_stat_blobs, stream);
+  // rowgroup stat chunks are written out in each stripe stripe and file-level chunks are written in the footer.
+  // to prevent persisting the rowgroup stat chunks across multiple calls to write in a chunked write
+  // situation, these allocations are split up so stripe data can persist until the footer write
+  rmm::device_uvector<statistics_chunk> stat_chunks(single_write_mode ? num_stat_blobs : num_rowgroup_blobs, stream);
+  rmm::device_uvector<statistics_chunk> stripe_chunks(single_write_mode ? 0 : num_stripe_blobs);
   auto rowgroup_stat_chunks = stat_chunks.data();
-  auto stripe_stat_chunks   = rowgroup_stat_chunks + num_rowgroup_blobs;
+  auto stripe_stat_chunks   = single_write_mode ? rowgroup_stat_chunks + num_rowgroup_blobs : stripe_chunks.data();
 
   rmm::device_uvector<statistics_group> stat_groups(num_rowgroup_blobs, stream);
   gpu::orc_init_statistics_groups(
@@ -1151,8 +1180,33 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
     num_stripe_blobs,
     stream);
 
+  // with chunked writes, the orc table can be deallocated between write calls.
+  // This forces our hand to encode row groups and stripes only in this stage and further
+  // we have to persist any data from the table that we need, min/max strings.
+  // We write rowgroup data with each stripe and then save each stripe's stats
+  // until the end where we merge those all together to get the file-level stats.
+
+  // Skip rowgroup blobs when encoding, if chosen granularity is coarser than "ROW_GROUP".
+  auto const is_granularity_rowgroup = stats_freq == ORC_STATISTICS_ROW_GROUP;
+  // we have to encode the row groups now IF they are being written out
+  auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
+    if (not is_granularity_rowgroup or single_write_mode) { return {}; }
+
+    hostdevice_vector<uint8_t> blobs = allocate_and_encode_blobs(stats_merge, stat_chunks, num_stat_blobs, stream);
+
+    auto rowgroup_stat_merge = stat_merge.host_ptr();
+
+    std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
+    for (size_t i = 0; i < num_rowgroup_blobs; i++) {
+      auto const stat_begin = blobs.host_ptr(rowgroup_stat_merge[i].start_chunk);
+      auto const stat_end   = stat_begin + rowgroup_stat_merge[i].num_chunks;
+      rowgroup_blobs[i].assign(stat_begin, stat_end);
+    }
+    return rowgroup_blobs;
+  }();
+
   // in single write mode, stat_chunks contains all data for row group, stripe, and file statistics
-  return {std::move(stat_chunks), std::move(stat_merge)};
+  return {std::move(stat_chunks), std::move(stat_merge), std::move(rowgroup_blobs)};
 }
 
 writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
@@ -1162,7 +1216,7 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
   writer::impl::intermediate_statistics& incoming_stats)
 {
   auto const num_rowgroup_blobs = segmentation.rowgroups.count();
-  auto const num_stripe_blobs   = segmentation.num_stripes() * orc_table.num_columns();
+  auto const num_stripe_blobs   = single_write_mode ? segmentation.num_stripes() * orc_table.num_columns() : thrust::reduce(thrust::make_transform_iterator(incoming_stats.stripe_stat_merge.begin(), [](auto i) { return i.size(); }), incoming_stats.stripe_stat_merge.end());
   auto const num_file_blobs     = orc_table.num_columns();
   auto const num_stat_blobs     = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
 
@@ -1173,36 +1227,35 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
   auto stripe_stat_chunks   = rowgroup_stat_chunks + num_rowgroup_blobs;
   auto file_stat_chunks     = stripe_stat_chunks + num_stripe_blobs;
 
+  hostdevice_vector<statistics_merge_group> file_stats_merge(single_write_mode ? 0 : num_file_blobs, stream);
+
+  // build file-level statistics from stripe statistics
+  if (not single_write_mode) {
+    auto file_stat_merge = file_stats_merge.data();
+    for (auto const& column : orc_table.columns) {
+      auto col_stats         = &file_stat_merge[column.index()];
+      col_stats->col         = stat_desc.device_ptr(column.index());
+      col_stats->start_chunk = static_cast<uint32_t>(column.index() * segmentation.num_stripes());
+      col_stats->num_chunks  = static_cast<uint32_t>(segmentation.num_stripes());
+    }
+    file_stats_merge.host_to_device(stream);
+  }
+
   detail::merge_group_statistics<detail::io_file_format::ORC>(
     file_stat_chunks,
     stripe_stat_chunks,
-    stat_merge.device_ptr(num_rowgroup_blobs + num_stripe_blobs),
+    single_write_mode ? stat_merge.device_ptr(num_rowgroup_blobs + num_stripe_blobs) : file_stats_merge.device_ptr(),
     num_file_blobs,
     stream);
 
-  // figure out the buffer size needed for protobuf format
-  gpu::orc_init_statistics_buffersize(
-    stat_merge.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
-  stat_merge.device_to_host(stream, true);
-
-  hostdevice_vector<uint8_t> blobs(
-    stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks, stream);
-  // Skip rowgroup blobs when encoding, if chosen granularity is coarser than "ROW_GROUP".
-  auto const is_granularity_rowgroup = stats_freq == ORC_STATISTICS_ROW_GROUP;
-  auto const num_skip                = is_granularity_rowgroup ? 0 : num_rowgroup_blobs;
-  gpu::orc_encode_statistics(blobs.device_ptr(),
-                             stat_merge.device_ptr(num_skip),
-                             stat_chunks.data() + num_skip,
-                             num_stat_blobs - num_skip,
-                             stream);
-  stat_merge.device_to_host(stream);
-  blobs.device_to_host(stream, true);
-
+  hostdevice_vector<uint8_t> blobs = single_write_mode ? allocate_and_encode_blobs(stats_merge, stat_chunks, num_stat_blobs, stream) : allocate_and_encode_blobs(file_stats_merge, file_stat_chunks, num_file_blobs, stream);
+  
   auto rowgroup_stat_merge = stat_merge.host_ptr();
-  auto stripe_stat_merge   = rowgroup_stat_merge + num_rowgroup_blobs;
-  auto file_stat_merge     = stripe_stat_merge + num_stripe_blobs;
+  auto stripe_stat_merge   = single_write_mode ? {rowgroup_stat_merge + num_rowgroup_blobs} : incoming_stats.stripe_stat_merge;
+  auto file_stat_merge     = single_write_mode ? stripe_stat_merge + num_stripe_blobs : file_stats_merge.host_ptr();
 
   auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
+    if (not single_write_mode) { return incoming_stats.rowgroup_blob; }
     if (not is_granularity_rowgroup) { return {}; }
     std::vector<ColStatsBlob> rowgroup_blobs(num_rowgroup_blobs);
     for (size_t i = 0; i < num_rowgroup_blobs; i++) {
