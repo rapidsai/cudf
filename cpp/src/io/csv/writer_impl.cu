@@ -44,8 +44,10 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
+#include <thrust/tabulate.h>
 
 #include <algorithm>
 #include <memory>

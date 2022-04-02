@@ -26,6 +26,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/sequence.h>
+#include <thrust/tabulate.h>
+
 namespace cudf {
 namespace detail {
 namespace {
