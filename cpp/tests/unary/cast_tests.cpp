@@ -26,6 +26,9 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+
 #include <type_traits>
 #include <vector>
 

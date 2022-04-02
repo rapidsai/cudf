@@ -34,6 +34,8 @@
 
 #include <tests/interop/arrow_utils.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(

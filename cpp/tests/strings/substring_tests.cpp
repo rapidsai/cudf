@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <tests/strings/utilities.h>
 
-#include <string>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/sequence.h>
+
+#include <string>
 #include <vector>
 
 struct StringsSubstringsTest : public cudf::test::BaseFixture {

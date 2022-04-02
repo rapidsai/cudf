@@ -24,6 +24,9 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/reverse_iterator.h>
+
 #include <optional>
 
 using cudf::device_span;
