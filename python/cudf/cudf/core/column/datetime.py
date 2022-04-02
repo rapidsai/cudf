@@ -21,7 +21,7 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import is_scalar, is_timedelta64_dtype
+from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
@@ -405,10 +405,13 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
 
-        # TODO: Figure out if I can reflect before we start these checks. That
-        # requires figuring out why _timedelta_add_result_dtype and
-        # _timedelta_sub_result_dtype are 1) not symmetric, and 2) different
-        # from each other.
+        # We check this on `other` before reflection since we already know the
+        # dtype of `self`.
+        other_is_timedelta = is_timedelta64_dtype(other.dtype)
+        other_is_datetime64 = not other_is_timedelta and is_datetime64_dtype(
+            other.dtype
+        )
+        lhs, rhs = (other, self) if reflect else (self, other)
         if op in {
             "__eq__",
             "__ne__",
@@ -419,29 +422,15 @@ class DatetimeColumn(column.ColumnBase):
             "NULL_EQUALS",
         }:
             out_dtype: Dtype = cudf.dtype(np.bool_)
-        elif op == "__add__" and pd.api.types.is_timedelta64_dtype(
-            other.dtype
-        ):
+        elif op == "__add__" and other_is_timedelta:
             out_dtype = _timedelta_add_result_dtype(other, self)
-        elif op == "__sub__" and pd.api.types.is_timedelta64_dtype(
-            other.dtype
-        ):
-            out_dtype = _timedelta_sub_result_dtype(
-                other if reflect else self, self if reflect else other
-            )
-        elif op == "__sub__" and pd.api.types.is_datetime64_dtype(other.dtype):
-            units = ["s", "ms", "us", "ns"]
-            lhs_time_unit = cudf.utils.dtypes.get_time_unit(self)
-            lhs_unit = units.index(lhs_time_unit)
-            rhs_time_unit = cudf.utils.dtypes.get_time_unit(other)
-            rhs_unit = units.index(rhs_time_unit)
-            out_dtype = np.dtype(
-                f"timedelta64[{units[max(lhs_unit, rhs_unit)]}]"
-            )
+        elif op == "__sub__" and other_is_timedelta:
+            out_dtype = _timedelta_sub_result_dtype(lhs, rhs)
+        elif op == "__sub__" and other_is_datetime64:
+            out_dtype = _resolve_mixed_dtypes(lhs, rhs, "timedelta64")
         else:
             return NotImplemented
 
-        lhs, rhs = (other, self) if reflect else (self, other)
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(
@@ -563,23 +552,29 @@ def infer_format(element: str, **kwargs) -> str:
     return fmt
 
 
+def _resolve_mixed_dtypes(
+    lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand, base_type: str
+) -> Dtype:
+    units = ["s", "ms", "us", "ns"]
+    lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
+    lhs_unit = units.index(lhs_time_unit)
+    rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
+    rhs_unit = units.index(rhs_time_unit)
+    return cudf.dtype(f"{base_type}[{units[max(lhs_unit, rhs_unit)]}]")
+
+
 def _timedelta_add_result_dtype(
     lhs: ColumnBinaryOperand, rhs: ColumnBinaryOperand
 ) -> Dtype:
     # It is valid to add two timedeltas, or to add a timedelta to a datetime.
-    # Is it valid to add two datetimes?
+    # It is not valid to add two datetimes.
     # Is addition symmetric for timedelta + datetime? Conceptually it only
     # really makes sense to think of datetime + timedelta, but maybe pandas
-    # allows the opposite too (because why not).
+    # allows the opposite too (because why not). Yes, pandas does.
     if is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-    elif pd.api.types.is_datetime64_dtype(rhs.dtype):
-        units = ["s", "ms", "us", "ns"]
-        lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
-        lhs_unit = units.index(lhs_time_unit)
-        rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
-        rhs_unit = units.index(rhs_time_unit)
-        out_dtype = cudf.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+    elif is_datetime64_dtype(rhs.dtype):
+        out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
     else:
         raise TypeError(
             f"Addition of {lhs.dtype} with {rhs.dtype} "
@@ -601,15 +596,8 @@ def _timedelta_sub_result_dtype(
     # It is also valid to subtract a datetime from a datetime to get a delta.
     if is_timedelta64_dtype(lhs.dtype) and is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
-    elif is_timedelta64_dtype(rhs.dtype) and pd.api.types.is_datetime64_dtype(
-        lhs.dtype
-    ):
-        units = ["s", "ms", "us", "ns"]
-        lhs_time_unit = cudf.utils.dtypes.get_time_unit(lhs)
-        lhs_unit = units.index(lhs_time_unit)
-        rhs_time_unit = cudf.utils.dtypes.get_time_unit(rhs)
-        rhs_unit = units.index(rhs_time_unit)
-        out_dtype = cudf.dtype(f"datetime64[{units[max(lhs_unit, rhs_unit)]}]")
+    elif is_timedelta64_dtype(rhs.dtype) and is_datetime64_dtype(lhs.dtype):
+        out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
     else:
         raise TypeError(
             f"Subtraction of {lhs.dtype} with {rhs.dtype} "
