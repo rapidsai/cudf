@@ -55,7 +55,6 @@ rm -rf "$WORKSPACE/cpp/build"
 mkdir -p "$WORKSPACE/cpp/build"
 cd "$WORKSPACE/cpp/build"
 cmake .. -G"${CMAKE_GENERATOR}" \
-         -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
          -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
          -DUSE_NVTX=$ENABLE_NVTX \
          -DCUDF_USE_ARROW_STATIC=ON \
