@@ -42,7 +42,7 @@ using hex_t = TaggedType<hex_tag, T>;
  * @brief Function object to transform a built-in type to a tagged type (e.g., in order to print
  * values from an iterator returning uint32_t as hex values)
  *
- * @tparam TaggedTypeT A TaggedType template specialisation 
+ * @tparam TaggedTypeT A TaggedType template specialisation
  */
 template <typename TaggedTypeT>
 struct ToTaggedType {
@@ -55,10 +55,10 @@ struct ToTaggedType {
 
 /**
  * @brief Returns an iterator that causes the values from \p it to be printed as hex values.
- * 
+ *
  * @tparam InItT A random-access input iterator type
  * @param it A random-access input iterator t
- * @return 
+ * @return
  */
 template <typename InItT>
 auto hex(InItT it)

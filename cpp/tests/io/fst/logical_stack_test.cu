@@ -22,8 +22,8 @@
 #include <src/io/fst/logical_stack.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <cstdlib>
 #include <iostream>
@@ -202,6 +202,7 @@ TEST_F(LogicalStackTest, GroundTruth)
   rmm::device_uvector<SymbolT> d_stack_ops(stack_symbols.size(), stream_view);
   rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes(stack_op_indexes.size(), stream_view);
   auto top_of_stack_gpu = hostdevice_vector<SymbolT>(input.size(), stream_view);
+  cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes.data(), d_stack_op_indexes.size()};
 
   cudaMemcpyAsync(d_stack_ops.data(),
                   stack_symbols.data(),
@@ -224,16 +225,16 @@ TEST_F(LogicalStackTest, GroundTruth)
   rmm::device_buffer d_temp_storage{};
 
   // Run algorithm
-  fst::SparseStackOpToTopOfStack<StackLevelT>(d_temp_storage,
-                                              d_stack_ops.data(),
-                                              d_stack_op_indexes.data(),
-                                              JSONToStackOp{},
-                                              top_of_stack_gpu.device_ptr(),
-                                              empty_stack_symbol,
-                                              read_symbol,
-                                              num_stack_ops,
-                                              string_size,
-                                              stream);
+  fst::SparseStackOpToTopOfStack<StackLevelT>(
+    d_temp_storage,
+    d_stack_ops.data(),
+    d_stack_op_idx_span,
+    JSONToStackOp{},
+    top_of_stack_gpu.device_ptr(),
+    empty_stack_symbol,
+    read_symbol,
+    string_size,
+    stream);
 
   // Async copy results from device to host
   top_of_stack_gpu.device_to_host(stream_view);
