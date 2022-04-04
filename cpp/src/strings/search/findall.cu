@@ -126,8 +126,7 @@ std::unique_ptr<table> findall(
     reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
   auto const regex_insts = d_prog->insts_counts();
 
-  auto find_counts =
-    count_matches(*d_strings, *d_prog, stream, rmm::mr::get_current_device_resource());
+  auto find_counts   = count_matches(*d_strings, *d_prog, input.size() + 1, stream);
   auto d_find_counts = find_counts->mutable_view().data<size_type>();
 
   std::vector<std::unique_ptr<column>> results;
