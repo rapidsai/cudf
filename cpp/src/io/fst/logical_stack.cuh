@@ -441,9 +441,9 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_key_it(stack_symbols_in),
+                           get_stack_level_it(stack_symbols_in),
                            get_value_it(stack_symbols_in),
-                           get_key_it(d_kv_operations.Current()),
+                           get_stack_level_it(d_kv_operations.Current()),
                            get_value_it(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
