@@ -137,7 +137,7 @@ std::unique_ptr<column> extract_all_record(
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto offsets   = count_matches(*d_strings, *d_prog, input.size() + 1, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
 
   // Compute null output rows

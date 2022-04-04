@@ -34,6 +34,8 @@ class reprog_device;
  *
  * A null entry will result in a zero count for that output row.
  *
+ * @throw cudf::logic_error if `output_size < d_strings.size()`
+ *
  * @param d_strings Device view of the input strings column.
  * @param d_prog Regex instance to evaluate on each string.
  * @param output_size Number of rows for the output column.
