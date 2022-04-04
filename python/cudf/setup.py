@@ -34,7 +34,7 @@ install_requires = [
     "Cython>=0.29,<0.30",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.4.0dev0",
+    "pandas>=1.0,<1.5.0dev0",
     "typing_extensions",
     "protobuf",
     "nvtx>=0.2.1",
