@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Sequence, Tuple, cast
+from typing import Any, Sequence, cast
 
 import numpy as np
 import pandas as pd
@@ -11,12 +11,7 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import (
-    ColumnBinaryOperand,
-    DatetimeLikeScalar,
-    Dtype,
-    DtypeObj,
-)
+from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -160,66 +155,6 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return pd_series
 
-    def _binary_op_mul(self, other: ColumnBinaryOperand) -> DtypeObj:
-        if other.dtype.kind in ("f", "i", "u"):
-            out_dtype = self.dtype
-        else:
-            raise TypeError(
-                f"Multiplication of {self.dtype} with {other.dtype} "
-                f"cannot be performed."
-            )
-        return out_dtype
-
-    def _binary_op_mod(self, other: ColumnBinaryOperand) -> DtypeObj:
-        if is_timedelta64_dtype(other.dtype):
-            out_dtype = determine_out_dtype(self.dtype, other.dtype)
-        elif other.dtype.kind in ("f", "i", "u"):
-            out_dtype = self.dtype
-        else:
-            raise TypeError(
-                f"Modulo of {self.dtype} with {other.dtype} "
-                f"cannot be performed."
-            )
-        return out_dtype
-
-    def _binary_op_lt_gt_le_ge_eq_ne(
-        self, other: ColumnBinaryOperand
-    ) -> DtypeObj:
-        if is_timedelta64_dtype(other.dtype):
-            return np.bool_
-        raise TypeError(
-            f"Invalid comparison between dtype={self.dtype}"
-            f" and {other.dtype}"
-        )
-
-    def _binary_op_div(
-        self, other: ColumnBinaryOperand, op: str
-    ) -> Tuple["column.ColumnBase", ColumnBinaryOperand, DtypeObj]:
-        this: ColumnBase = self
-        if is_timedelta64_dtype(other.dtype):
-            common_dtype = determine_out_dtype(self.dtype, other.dtype)
-            this = self.astype(common_dtype).astype("float64")
-            if isinstance(other, cudf.Scalar):
-                if other.is_valid():
-                    other = other.value.astype(common_dtype).astype("float64")
-                else:
-                    other = cudf.Scalar(None, "float64")
-            else:
-                other = other.astype(common_dtype).astype("float64")
-
-            out_dtype = cudf.dtype(
-                "float64" if op == "__truediv__" else "int64"
-            )
-        elif other.dtype.kind in ("f", "i", "u"):
-            out_dtype = self.dtype
-        else:
-            raise TypeError(
-                f"Division of {self.dtype} with {other.dtype} "
-                f"cannot be performed."
-            )
-
-        return this, other, out_dtype
-
     def _binaryop(
         self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
@@ -229,6 +164,9 @@ class TimeDeltaColumn(column.ColumnBase):
             return NotImplemented
 
         this: ColumnBinaryOperand = self
+
+        other_is_timedelta = is_timedelta64_dtype(other.dtype)
+
         if op in {
             "__eq__",
             "__ne__",
@@ -238,16 +176,44 @@ class TimeDeltaColumn(column.ColumnBase):
             "__ge__",
             "NULL_EQUALS",
         }:
-            out_dtype = self._binary_op_lt_gt_le_ge_eq_ne(other)
-        elif op == "__mul__":
-            out_dtype = self._binary_op_mul(other)
+            if other_is_timedelta:
+                out_dtype = np.bool_
+            else:
+                return NotImplemented
+        elif op == "__mul__" and other.dtype.kind in ("f", "i", "u"):
+            out_dtype = self.dtype
         elif op == "__mod__":
-            out_dtype = self._binary_op_mod(other)
+            if other_is_timedelta:
+                out_dtype = determine_out_dtype(self.dtype, other.dtype)
+            elif other.dtype.kind in ("f", "i", "u"):
+                out_dtype = self.dtype
+            else:
+                return NotImplemented
         elif op in {"__truediv__", "__floordiv__"}:
-            this, other, out_dtype = self._binary_op_div(other, op)
+            if other_is_timedelta:
+                common_dtype = determine_out_dtype(self.dtype, other.dtype)
+                this = self.astype(common_dtype).astype("float64")
+                if isinstance(other, cudf.Scalar):
+                    if other.is_valid():
+                        other = other.value.astype(common_dtype).astype(
+                            "float64"
+                        )
+                    else:
+                        other = cudf.Scalar(None, "float64")
+                else:
+                    other = other.astype(common_dtype).astype("float64")
+
+                out_dtype = cudf.dtype(
+                    "float64" if op == "__truediv__" else "int64"
+                )
+            elif other.dtype.kind in ("f", "i", "u"):
+                out_dtype = self.dtype
+            else:
+                return NotImplemented
             op = "__truediv__"
-        # Use `other` instead of rhs because we already know that self is of
-        # timedelta64 dtype so checking post-reflection would add work.
+        # Use `other` instead of rhs to check whether the other argument is a
+        # timedelta because we already know that self is of timedelta64 dtype
+        # so checking post-reflection would add work.
         elif op in {
             "__add__",
             "__sub__",

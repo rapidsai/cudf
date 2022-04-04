@@ -411,14 +411,21 @@ class DatetimeColumn(column.ColumnBase):
         lhs, rhs = (other, self) if reflect else (self, other)
         if op in {
             "__eq__",
-            "__ne__",
-            "__lt__",
-            "__gt__",
-            "__le__",
-            "__ge__",
             "NULL_EQUALS",
         }:
             out_dtype: Dtype = cudf.dtype(np.bool_)
+        elif (
+            op
+            in {
+                "__ne__",
+                "__lt__",
+                "__gt__",
+                "__le__",
+                "__ge__",
+            }
+            and other_is_datetime64
+        ):
+            out_dtype = cudf.dtype(np.bool_)
         elif op == "__add__" and other_is_timedelta:
             # The only thing we can add to a datetime is a timedelta. This
             # operation is symmetric, i.e. we allow `datetime + timedelta` or
