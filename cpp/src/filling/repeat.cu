@@ -34,10 +34,13 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 
 #include <limits>
 #include <memory>

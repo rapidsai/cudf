@@ -25,6 +25,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <algorithm>
 
 template <typename T>

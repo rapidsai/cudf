@@ -34,6 +34,9 @@
 
 #include <tests/copying/slice_tests.cuh>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
 std::vector<cudf::size_type> splits_to_indices(std::vector<cudf::size_type> splits,
                                                cudf::size_type size)
 {

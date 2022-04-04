@@ -27,6 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/fill.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
