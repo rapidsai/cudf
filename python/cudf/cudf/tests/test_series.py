@@ -601,7 +601,7 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
 
 
 @pytest.mark.parametrize(
-    "df",
+    "gs",
     [
         cudf.Series([1, 2, 3]),
         cudf.Series([None]),
@@ -653,11 +653,11 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     ],
 )
 @pytest.mark.parametrize("dropna", [True, False])
-def test_series_mode(df, dropna):
-    pdf = df.to_pandas()
+def test_series_mode(gs, dropna):
+    ps = gs.to_pandas()
 
-    expected = pdf.mode(dropna=dropna)
-    actual = df.mode(dropna=dropna)
+    expected = ps.mode(dropna=dropna)
+    actual = gs.mode(dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
 

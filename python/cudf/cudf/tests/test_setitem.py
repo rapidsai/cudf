@@ -222,7 +222,9 @@ def test_column_set_unequal_length_object_by_mask():
 def test_categorical_setitem_invalid():
     ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")
+    import pdb
 
+    pdb.set_trace()
     assert_exceptions_equal(
         lfunc=ps.__setitem__,
         rfunc=gs.__setitem__,

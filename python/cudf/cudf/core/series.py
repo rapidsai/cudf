@@ -400,17 +400,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
-            if name is None:
-                name = data.name
+            name = name or data.name
             if isinstance(data.index, pd.MultiIndex):
                 index = cudf.from_pandas(data.index)
             else:
                 index = as_index(data.index)
         elif isinstance(data, pd.Index):
-            name = data.name
+            name = name or data.name
             data = data.values
         elif isinstance(data, BaseIndex):
-            name = data.name
+            name = name or data.name
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
@@ -422,8 +421,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         if isinstance(data, Series):
             index = data._index if index is None else index
-            if name is None:
-                name = data.name
+            name = name or data.name
             data = data._column
             if dtype is not None:
                 data = data.astype(dtype)
@@ -806,8 +804,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return cudf.core.dataframe.DataFrame._from_data(data, index)
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
+        # ``name`` has to be ignored when `drop=True`
         return self._mimic_inplace(
-            Series._from_data(data, index, name if inplace else None),
+            Series._from_data(data, index, self.name),
             inplace=inplace,
         )
 
