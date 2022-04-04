@@ -36,7 +36,7 @@ _numpy_to_pandas_conversion = {
 }
 
 
-class TimeDeltaColumn(column.ColumnBase):
+class TimeDeltaColumn(ColumnBase):
     """
     Parameters
     ----------
@@ -155,9 +155,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return pd_series
 
-    def _binaryop(
-        self, other: ColumnBinaryOperand, op: str
-    ) -> "column.ColumnBase":
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
         if other is NotImplemented:
@@ -255,7 +253,7 @@ class TimeDeltaColumn(column.ColumnBase):
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
-            col = self  # type: column.ColumnBase
+            col: ColumnBase = self
             if is_scalar(fill_value):
                 if isinstance(fill_value, np.timedelta64):
                     dtype = determine_out_dtype(self.dtype, fill_value.dtype)
@@ -326,7 +324,7 @@ class TimeDeltaColumn(column.ColumnBase):
         interpolation: str,
         exact: bool,
         return_scalar: bool,
-    ) -> "column.ColumnBase":
+    ) -> ColumnBase:
         result = self.as_numerical.quantile(
             q=q,
             interpolation=interpolation,
