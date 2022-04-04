@@ -217,43 +217,32 @@ struct RemapEmptyStack {
 };
 
 /**
- * @brief Function object to return only the key part from a KeyValueOp instance.
+ * @brief Function object to return only the stack_level part from a StackOp instance.
  */
-struct KVOpToKey {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE KeyT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+struct StackOpToStackLevel {
+  template <typename StackLevelT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE StackLevelT operator()(StackOp<StackLevelT, ValueT> const& kv_op) const
   {
-    return kv_op.key;
+    return kv_op.stack_level;
   }
 };
 
 /**
- * @brief Function object to return only the value part from a KeyValueOp instance.
+ * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
  */
-struct KVOpToValue {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
-  {
-    return kv_op.value;
-  }
-};
-
-/**
- * @brief Retrieves an iterator that returns only the `key` part from a KeyValueOp iterator.
- */
-template <typename KeyValueOpItT>
-auto get_key_it(KeyValueOpItT it)
+template <typename StackOpItT>
+auto get_stack_level_it(StackOpItT it)
 {
-  return thrust::make_transform_iterator(it, KVOpToKey{});
+  return thrust::make_transform_iterator(it, StackOpToStackLevel{});
 }
 
 /**
- * @brief Retrieves an iterator that returns only the `value` part from a KeyValueOp iterator.
+ * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
  */
-template <typename KeyValueOpItT>
-auto get_value_it(KeyValueOpItT it)
+template <typename StackOpItT>
+auto get_value_it(StackOpItT it)
 {
-  return thrust::make_transform_iterator(it, KVOpToValue{});
+  return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
 }
 
 }  // namespace detail
@@ -444,9 +433,9 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_key_it(stack_symbols_in),
+                           get_stack_level_it(stack_symbols_in),
                            get_value_it(stack_symbols_in),
-                           get_key_it(d_kv_operations.Current()),
+                           get_stack_level_it(d_kv_operations.Current()),
                            get_value_it(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
@@ -481,9 +470,9 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // operation)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_key_it(kv_ops_scan_in),
+                           get_stack_level_it(kv_ops_scan_in),
                            get_value_it(kv_ops_scan_in),
-                           get_key_it(kv_ops_scan_out),
+                           get_stack_level_it(kv_ops_scan_out),
                            get_value_it(kv_ops_scan_out));
 
   // Fill the output tape with read-symbol
