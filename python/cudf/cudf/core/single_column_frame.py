@@ -364,7 +364,7 @@ class SingleColumnFrame(Frame, NotIterable):
             return 0
         return self._column.distinct_count(dropna=dropna)
 
-    def _get_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:
+    def _get_elements_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:
         # A generic method for getting elements from a column that supports a
         # wide range of different inputs. This method should only used where
         # _absolutely_ necessary, since in almost all cases a more specific
