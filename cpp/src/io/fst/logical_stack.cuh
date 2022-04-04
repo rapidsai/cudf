@@ -48,10 +48,10 @@ enum class stack_op_type : int32_t {
 namespace detail {
 
 /**
- * @brief A convenience struct that represents a stack opepration as a key-value pair, where the key
+ * @brief A convenience struct that represents a stack opepration as a pair, where the stack_level
  * represents the stack's level and the value represents the stack symbol.
  *
- * @tparam KeyT The key type sufficient to cover all stack levels. Must be signed type as any
+ * @tparam StackLevelT The stack level type sufficient to cover all stack levels. Must be signed type as any
  * subsequence of stack operations must be able to be covered. E.g., consider the first 10
  * operations are all push and the last 10 operations are all pop operations, we need to be able to
  * represent a partial aggregate of the first ten items, which is '+10', just as well as a partial
@@ -59,69 +59,69 @@ namespace detail {
  * @tparam ValueT The value type that corresponds to the stack symbols (i.e., covers the stack
  * alphabet).
  */
-template <typename KeyT, typename ValueT>
-struct KeyValueOp {
-  KeyT key;
+template <typename StackLevelT, typename ValueT>
+struct StackOp {
+  StackLevelT stack_level;
   ValueT value;
 };
 
 /**
- * @brief Helper class to assist with radix sorting KeyValueOp instances by key.
+ * @brief Helper class to assist with radix sorting StackOp instances by stack level.
  *
- * @tparam BYTE_SIZE The size of the KeyValueOp.
+ * @tparam BYTE_SIZE The size of the StackOp.
  */
 template <std::size_t BYTE_SIZE>
-struct KeyValueOpToUnsigned {
+struct StackOpToUnsigned {
 };
 
 template <>
-struct KeyValueOpToUnsigned<1U> {
+struct StackOpToUnsigned<1U> {
   using UnsignedT = uint8_t;
 };
 
 template <>
-struct KeyValueOpToUnsigned<2U> {
+struct StackOpToUnsigned<2U> {
   using UnsignedT = uint16_t;
 };
 
 template <>
-struct KeyValueOpToUnsigned<4U> {
+struct StackOpToUnsigned<4U> {
   using UnsignedT = uint32_t;
 };
 
 template <>
-struct KeyValueOpToUnsigned<8U> {
+struct StackOpToUnsigned<8U> {
   using UnsignedT = uint64_t;
 };
 
 /**
  * @brief Alias template to retrieve an unsigned bit-representation that can be used for radix
- * sorting the key of a KeyValueOp.
+ * sorting the stack level of a StackOp.
  *
- * @tparam KeyValueOpT The KeyValueOp class template instance for which to get an unsigned
+ * @tparam StackOpT The StackOp class template instance for which to get an unsigned
  * bit-representation
  */
-template <typename KeyValueOpT>
-using UnsignedKeyValueOpType = typename KeyValueOpToUnsigned<sizeof(KeyValueOpT)>::UnsignedT;
+template <typename StackOpT>
+using UnsignedStackOpType = typename StackOpToUnsigned<sizeof(StackOpT)>::UnsignedT;
 
 /**
- * @brief Function object class template used for converting a stack operation to a key-value store
- * operation, where the key corresponds to the stack level being accessed.
+ * @brief Function object class template used for converting a stack symbol to a stack
+ * operation that has a stack level to which an operation applies.
  *
- * @tparam KeyValueOpT
+ * @tparam StackOpT
  * @tparam StackSymbolToStackOpTypeT
  */
-template <typename KeyValueOpT, typename StackSymbolToStackOpTypeT>
-struct StackSymbolToKVOp {
+template <typename StackOpT, typename StackSymbolToStackOpTypeT>
+struct StackSymbolToStackOp {
   template <typename StackSymbolT>
-  constexpr CUDF_HOST_DEVICE KeyValueOpT operator()(StackSymbolT const& stack_symbol) const
+  constexpr CUDF_HOST_DEVICE StackOpT operator()(StackSymbolT const& stack_symbol) const
   {
     stack_op_type stack_op = symbol_to_stack_op_type(stack_symbol);
     // PUSH => +1, POP => -1, READ => 0
     int32_t level_delta = stack_op == stack_op_type::PUSH  ? 1
                           : stack_op == stack_op_type::POP ? -1
                                                            : 0;
-    return KeyValueOpT{static_cast<decltype(KeyValueOpT::key)>(level_delta), stack_symbol};
+    return StackOpT{static_cast<decltype(StackOpT::stack_level)>(level_delta), stack_symbol};
   }
 
   /// Function object returning a stack operation type for a given stack symbol
@@ -132,27 +132,27 @@ struct StackSymbolToKVOp {
  * @brief Binary reduction operator to compute the absolute stack level from relative stack levels
  * (i.e., +1 for a PUSH, -1 for a POP operation).
  */
-struct AddStackLevelFromKVOp {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(
-    KeyValueOp<KeyT, ValueT> const& lhs, KeyValueOp<KeyT, ValueT> const& rhs) const
+struct AddStackLevelFromStackOp {
+  template <typename StackLevelT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE StackOp<StackLevelT, ValueT> operator()(
+    StackOp<StackLevelT, ValueT> const& lhs, StackOp<StackLevelT, ValueT> const& rhs) const
   {
-    KeyT new_level = lhs.key + rhs.key;
-    return KeyValueOp<KeyT, ValueT>{new_level, rhs.value};
+    StackLevelT new_level = lhs.stack_level + rhs.stack_level;
+    return StackOp<StackLevelT, ValueT>{new_level, rhs.value};
   }
 };
 
 /**
- * @brief Binary reduction operator that propagates a write operation for a specific key to all
- * reads of that same key. That is, if the key of LHS compares equal to the key of the RHS and if
+ * @brief Binary reduction operator that propagates a write operation for a specific stack level to all
+ * reads of that same stack level. That is, if the stack level of LHS compares equal to the stack level of the RHS and if
  * the RHS is a read and the LHS is a write operation type, then we return LHS, otherwise we return
  * the RHS.
  */
 template <typename StackSymbolToStackOpTypeT>
 struct PopulatePopWithPush {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE KeyValueOp<KeyT, ValueT> operator()(
-    KeyValueOp<KeyT, ValueT> const& lhs, KeyValueOp<KeyT, ValueT> const& rhs) const
+  template <typename StackLevelT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE StackOp<StackLevelT, ValueT> operator()(
+    StackOp<StackLevelT, ValueT> const& lhs, StackOp<StackLevelT, ValueT> const& rhs) const
   {
     // If RHS is a read, then we need to figure out whether we can propagate the value from the LHS
     bool is_rhs_read = symbol_to_stack_op_type(rhs.value) != stack_op_type::PUSH;
@@ -160,7 +160,7 @@ struct PopulatePopWithPush {
     // Whether LHS is a matching write (i.e., the push operation that is on top of the stack for the
     // RHS's read)
     bool is_lhs_matching_write =
-      (lhs.key == rhs.key) && symbol_to_stack_op_type(lhs.value) == stack_op_type::PUSH;
+      (lhs.stack_level == rhs.stack_level) && symbol_to_stack_op_type(lhs.value) == stack_op_type::PUSH;
 
     return (is_rhs_read && is_lhs_matching_write) ? lhs : rhs;
   }
@@ -192,12 +192,12 @@ struct PropagateLastWrite {
 };
 
 /**
- * @brief Helper function object class to convert a KeyValueOp to the stack symbol of that
- * KeyValueOp.
+ * @brief Helper function object class to convert a StackOp to the stack symbol of that
+ * StackOp.
  */
-struct KVOpToStackSymbol {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+struct StackOpToStackSymbol {
+  template <typename StackLevelT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE ValueT operator()(StackOp<StackLevelT, ValueT> const& kv_op) const
   {
     return kv_op.value;
   }
@@ -206,53 +206,42 @@ struct KVOpToStackSymbol {
 /**
  * @brief Replaces all operations that apply to stack level '0' with the empty stack symbol
  */
-template <typename KeyValueOpT>
+template <typename StackOpT>
 struct RemapEmptyStack {
-  constexpr CUDF_HOST_DEVICE KeyValueOpT operator()(KeyValueOpT const& kv_op) const
+  constexpr CUDF_HOST_DEVICE StackOpT operator()(StackOpT const& kv_op) const
   {
-    return kv_op.key == 0 ? empty_stack_symbol : kv_op;
+    return kv_op.stack_level == 0 ? empty_stack_symbol : kv_op;
   }
-  KeyValueOpT empty_stack_symbol;
+  StackOpT empty_stack_symbol;
 };
 
 /**
- * @brief Function object to return only the key part from a KeyValueOp instance.
+ * @brief Function object to return only the stack_level part from a StackOp instance.
  */
-struct KVOpToKey {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE KeyT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
+struct StackOpToStackLevel {
+  template <typename StackLevelT, typename ValueT>
+  constexpr CUDF_HOST_DEVICE StackLevelT operator()(StackOp<StackLevelT, ValueT> const& kv_op) const
   {
-    return kv_op.key;
-  }
-};
-
-/**
- * @brief Function object to return only the value part from a KeyValueOp instance.
- */
-struct KVOpToValue {
-  template <typename KeyT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE ValueT operator()(KeyValueOp<KeyT, ValueT> const& kv_op) const
-  {
-    return kv_op.value;
+    return kv_op.stack_level;
   }
 };
 
 /**
- * @brief Retrieves an iterator that returns only the `key` part from a KeyValueOp iterator.
+ * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
  */
-template <typename KeyValueOpItT>
-auto get_key_it(KeyValueOpItT it)
+template <typename StackOpItT>
+auto get_stack_level_it(StackOpItT it)
 {
-  return thrust::make_transform_iterator(it, KVOpToKey{});
+  return thrust::make_transform_iterator(it, StackOpToStackLevel{});
 }
 
 /**
- * @brief Retrieves an iterator that returns only the `value` part from a KeyValueOp iterator.
+ * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
  */
-template <typename KeyValueOpItT>
-auto get_value_it(KeyValueOpItT it)
+template <typename StackOpItT>
+auto get_value_it(StackOpItT it)
 {
-  return thrust::make_transform_iterator(it, KVOpToValue{});
+  return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
 }
 
 }  // namespace detail
@@ -268,7 +257,7 @@ auto get_value_it(KeyValueOpItT it)
  * @tparam StackSymbolItT An input iterator type that provides the sequence of symbols that
  * represent stack operations
  * @tparam SymbolPositionT The index that this stack operation is supposed to apply to
- * @tparam StackSymbolToStackOpT Function object class to transform items from StackSymbolItT to
+ * @tparam StackSymbolToStackOpTypeT Function object class to transform items from StackSymbolItT to
  * stack_op_type
  * @tparam TopOfStackOutItT Output iterator type to which StackSymbolT are being assigned
  * @tparam StackSymbolT The internal type being used (usually corresponding to StackSymbolItT's
@@ -296,14 +285,14 @@ auto get_value_it(KeyValueOpItT it)
 template <typename StackLevelT,
           typename StackSymbolItT,
           typename SymbolPositionT,
-          typename StackSymbolToStackOpT,
+          typename StackSymbolToStackOpTypeT,
           typename TopOfStackOutItT,
           typename StackSymbolT,
           typename OffsetT>
 void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                StackSymbolItT d_symbols,
                                SymbolPositionT* d_symbol_positions,
-                               StackSymbolToStackOpT symbol_to_stack_op,
+                               StackSymbolToStackOpTypeT symbol_to_stack_op,
                                TopOfStackOutItT d_top_of_stack,
                                StackSymbolT empty_stack_symbol,
                                StackSymbolT read_symbol,
@@ -311,49 +300,46 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                OffsetT num_symbols_out,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
-  // Type used to hold key-value pairs (key being the stack level and the value being the stack
-  // symbol)
-  using KeyValueOpT = detail::KeyValueOp<StackLevelT, StackSymbolT>;
+  // Type used to hold pairs of (stack_level, value) pairs
+  using StackOpT = detail::StackOp<StackLevelT, StackSymbolT>;
 
-  // The unsigned integer type that we use for radix sorting items of type KeyValueOpT
-  using KVOpUnsignedT = detail::UnsignedKeyValueOpType<KeyValueOpT>;
+  // The unsigned integer type that we use for radix sorting items of type StackOpT
+  using StackOpUnsignedT = detail::UnsignedStackOpType<StackOpT>;
 
-  // Transforming sequence of stack symbols to key-value store operations, where the key corresponds
-  // to the stack level of a given stack operation and the value corresponds to the stack symbol of
-  // that operation
-  using StackSymbolToKVOpT = detail::StackSymbolToKVOp<KeyValueOpT, StackSymbolToStackOpT>;
+  // Transforming sequence of stack symbols to stack operations
+  using StackSymbolToStackOpT = detail::StackSymbolToStackOp<StackOpT, StackSymbolToStackOpTypeT>;
 
-  // TransformInputIterator converting stack symbols to key-value store operations
+  // TransformInputIterator converting stack symbols to stack operations
   using TransformInputItT =
-    cub::TransformInputIterator<KeyValueOpT, StackSymbolToKVOpT, StackSymbolItT>;
+    cub::TransformInputIterator<StackOpT, StackSymbolToStackOpT, StackSymbolItT>;
 
-  // Converting a stack symbol that may either push or pop to a key-value store operation:
+  // Converting a stack symbol that may either push or pop to a stack operation:
   // stack_symbol -> ([+1,0,-1], stack_symbol)
-  StackSymbolToKVOpT stack_sym_to_kv_op{symbol_to_stack_op};
+  StackSymbolToStackOpT stack_sym_to_kv_op{symbol_to_stack_op};
   TransformInputItT stack_symbols_in(d_symbols, stack_sym_to_kv_op);
 
   // Double-buffer for sorting along the given sequence of symbol positions (the sparse
   // representation)
   cub::DoubleBuffer<SymbolPositionT> d_symbol_positions_db{nullptr, nullptr};
 
-  // Double-buffer for sorting the key-value store operations
-  cub::DoubleBuffer<KeyValueOpT> d_kv_operations{nullptr, nullptr};
+  // Double-buffer for sorting the stack operations by the stack level to which such operation applies
+  cub::DoubleBuffer<StackOpT> d_kv_operations{nullptr, nullptr};
 
   // A double-buffer that aliases memory from d_kv_operations with unsigned types in order to
   // be able to perform a radix sort
-  cub::DoubleBuffer<KVOpUnsignedT> d_kv_operations_unsigned{nullptr, nullptr};
+  cub::DoubleBuffer<StackOpUnsignedT> d_kv_operations_unsigned{nullptr, nullptr};
 
   constexpr std::size_t bits_per_byte = 8;
-  constexpr std::size_t begin_bit     = offsetof(KeyValueOpT, key) * bits_per_byte;
-  constexpr std::size_t end_bit       = begin_bit + (sizeof(KeyValueOpT::key) * bits_per_byte);
+  constexpr std::size_t begin_bit     = offsetof(StackOpT, stack_level) * bits_per_byte;
+  constexpr std::size_t end_bit       = begin_bit + (sizeof(StackOpT::stack_level) * bits_per_byte);
 
-  // The key-value store operation that makes sure that reads for stack level '0' will be populated
+  // The stack operation that makes sure that reads for stack level '0' will be populated
   // with the empty_stack_symbol
-  KeyValueOpT const empty_stack{0, empty_stack_symbol};
+  StackOpT const empty_stack{0, empty_stack_symbol};
 
-  cub::TransformInputIterator<KeyValueOpT, detail::RemapEmptyStack<KeyValueOpT>, KeyValueOpT*>
-    kv_ops_scan_in(nullptr, detail::RemapEmptyStack<KeyValueOpT>{empty_stack});
-  KeyValueOpT* kv_ops_scan_out = nullptr;
+  cub::TransformInputIterator<StackOpT, detail::RemapEmptyStack<StackOpT>, StackOpT*>
+    kv_ops_scan_in(nullptr, detail::RemapEmptyStack<StackOpT>{empty_stack});
+  StackOpT* kv_ops_scan_out = nullptr;
 
   std::size_t stack_level_scan_bytes      = 0;
   std::size_t stack_level_sort_bytes      = 0;
@@ -366,7 +352,7 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                           stack_level_scan_bytes,
                                           stack_symbols_in,
                                           d_kv_operations.Current(),
-                                          detail::AddStackLevelFromKVOp{},
+                                          detail::AddStackLevelFromStackOp{},
                                           num_symbols_in,
                                           stream));
 
@@ -388,7 +374,7 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
     match_level_scan_bytes,
     kv_ops_scan_in,
     kv_ops_scan_out,
-    detail::PopulatePopWithPush<StackSymbolToStackOpT>{symbol_to_stack_op},
+    detail::PopulatePopWithPush<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
     num_symbols_in,
     stream));
 
@@ -416,8 +402,8 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   total_temp_storage_bytes = temp_storage.size();
 
   rmm::device_uvector<SymbolPositionT> d_symbol_position_alt{num_symbols_in, stream};
-  rmm::device_uvector<KeyValueOpT> d_kv_ops_current{num_symbols_in, stream};
-  rmm::device_uvector<KeyValueOpT> d_kv_ops_alt{num_symbols_in, stream};
+  rmm::device_uvector<StackOpT> d_kv_ops_current{num_symbols_in, stream};
+  rmm::device_uvector<StackOpT> d_kv_ops_alt{num_symbols_in, stream};
 
   //------------------------------------------------------------------------------
   // ALGORITHM
@@ -427,29 +413,29 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
     cub::DoubleBuffer<SymbolPositionT>{d_symbol_positions, d_symbol_position_alt.data()};
 
   // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
-  d_kv_operations = cub::DoubleBuffer<KeyValueOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
+  d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
   // Compute prefix sum of the stack level after each operation
   CUDA_TRY(cub::DeviceScan::InclusiveScan(temp_storage.data(),
                                           total_temp_storage_bytes,
                                           stack_symbols_in,
                                           d_kv_operations.Current(),
-                                          detail::AddStackLevelFromKVOp{},
+                                          detail::AddStackLevelFromStackOp{},
                                           num_symbols_in,
                                           stream));
 
   // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_key_it(stack_symbols_in),
+                           get_stack_level_it(stack_symbols_in),
                            get_value_it(stack_symbols_in),
-                           get_key_it(d_kv_operations.Current()),
+                           get_stack_level_it(d_kv_operations.Current()),
                            get_value_it(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned =
-    cub::DoubleBuffer<KVOpUnsignedT>{reinterpret_cast<KVOpUnsignedT*>(d_kv_operations.Current()),
-                                     reinterpret_cast<KVOpUnsignedT*>(d_kv_operations.Alternate())};
+    cub::DoubleBuffer<StackOpUnsignedT>{reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
+                                     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Alternate())};
   CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
                                            total_temp_storage_bytes,
                                            d_kv_operations_unsigned,
@@ -460,22 +446,22 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                            stream));
 
   // TransformInputIterator that remaps all operations on stack level 0 to the empty stack symbol
-  kv_ops_scan_in  = {reinterpret_cast<KeyValueOpT*>(d_kv_operations_unsigned.Current()),
-                    detail::RemapEmptyStack<KeyValueOpT>{empty_stack}};
-  kv_ops_scan_out = reinterpret_cast<KeyValueOpT*>(d_kv_operations_unsigned.Alternate());
+  kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
+                    detail::RemapEmptyStack<StackOpT>{empty_stack}};
+  kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
 
   // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
   // operation)
   test::print::print_array(
-    num_symbols_in, stream, get_key_it(kv_ops_scan_in), get_value_it(kv_ops_scan_in));
+    num_symbols_in, stream, get_stack_level_it(kv_ops_scan_in), get_value_it(kv_ops_scan_in));
 
-  // Exclusive scan to match pop operations with the latest push operation of that level
+  // Inclusive scan to match pop operations with the latest push operation of that level
   CUDA_TRY(cub::DeviceScan::InclusiveScan(
     temp_storage.data(),
     total_temp_storage_bytes,
     kv_ops_scan_in,
     kv_ops_scan_out,
-    detail::PopulatePopWithPush<StackSymbolToStackOpT>{symbol_to_stack_op},
+    detail::PopulatePopWithPush<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
     num_symbols_in,
     stream));
 
@@ -483,9 +469,9 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   // operation)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_key_it(kv_ops_scan_in),
+                           get_stack_level_it(kv_ops_scan_in),
                            get_value_it(kv_ops_scan_in),
-                           get_key_it(kv_ops_scan_out),
+                           get_stack_level_it(kv_ops_scan_out),
                            get_value_it(kv_ops_scan_out));
 
   // Fill the output tape with read-symbol
@@ -494,9 +480,9 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
 
-  // Transform the key-value operations to the stack symbol they represent
-  cub::TransformInputIterator<StackSymbolT, detail::KVOpToStackSymbol, KeyValueOpT*>
-    kv_op_to_stack_sym_it(kv_ops_scan_out, detail::KVOpToStackSymbol{});
+  // Transform the stack operations to the stack symbol they represent
+  cub::TransformInputIterator<StackSymbolT, detail::StackOpToStackSymbol, StackOpT*>
+    kv_op_to_stack_sym_it(kv_ops_scan_out, detail::StackOpToStackSymbol{});
 
   // Scatter the stack symbols to the output tape (spots that are not scattered to have been
   // pre-filled with the read-symbol)
