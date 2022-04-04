@@ -409,11 +409,12 @@ class DatetimeColumn(column.ColumnBase):
             other.dtype
         )
         lhs, rhs = (other, self) if reflect else (self, other)
+        out_dtype = None
         if op in {
             "__eq__",
             "NULL_EQUALS",
         }:
-            out_dtype: Dtype = cudf.dtype(np.bool_)
+            out_dtype = cudf.dtype(np.bool_)
         elif (
             op
             in {
@@ -440,9 +441,7 @@ class DatetimeColumn(column.ColumnBase):
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
-            else:
-                return NotImplemented
-        else:
+        if out_dtype is None:
             return NotImplemented
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)

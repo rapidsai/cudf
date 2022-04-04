@@ -164,7 +164,7 @@ class TimeDeltaColumn(column.ColumnBase):
             return NotImplemented
 
         this: ColumnBinaryOperand = self
-
+        out_dtype = None
         other_is_timedelta = is_timedelta64_dtype(other.dtype)
 
         if op in {
@@ -178,8 +178,6 @@ class TimeDeltaColumn(column.ColumnBase):
         }:
             if other_is_timedelta:
                 out_dtype = np.bool_
-            else:
-                return NotImplemented
         elif op == "__mul__" and other.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype
         elif op == "__mod__":
@@ -187,8 +185,6 @@ class TimeDeltaColumn(column.ColumnBase):
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
             elif other.dtype.kind in ("f", "i", "u"):
                 out_dtype = self.dtype
-            else:
-                return NotImplemented
         elif op in {"__truediv__", "__floordiv__"}:
             if other_is_timedelta:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
@@ -208,8 +204,6 @@ class TimeDeltaColumn(column.ColumnBase):
                 )
             elif other.dtype.kind in ("f", "i", "u"):
                 out_dtype = self.dtype
-            else:
-                return NotImplemented
             op = "__truediv__"
         # Use `other` instead of rhs to check whether the other argument is a
         # timedelta because we already know that self is of timedelta64 dtype
@@ -219,7 +213,8 @@ class TimeDeltaColumn(column.ColumnBase):
             "__sub__",
         } and is_timedelta64_dtype(other):
             out_dtype = determine_out_dtype(self.dtype, other.dtype)
-        else:
+
+        if out_dtype is None:
             return NotImplemented
 
         lhs, rhs = (other, this) if reflect else (this, other)
