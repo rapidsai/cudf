@@ -262,7 +262,7 @@ def to_datetime(
             )
 
             if is_scalar(arg):
-                return col[0]
+                return col.element_indexing(0)
             else:
                 return as_index(col)
     except Exception as e:
@@ -346,11 +346,13 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             if infer_datetime_format and format is None:
                 format = column.datetime.infer_format(
-                    element=col[0],
+                    element=col.element_indexing(0),
                     dayfirst=dayfirst,
                 )
             elif format is None:
-                format = column.datetime.infer_format(element=col[0])
+                format = column.datetime.infer_format(
+                    element=col.element_indexing(0)
+                )
             col = col.as_datetime_column(
                 dtype=_unit_dtype_map[unit],
                 format=format,
@@ -909,9 +911,9 @@ def date_range(
             # As mentioned in [1], this is a post processing step to trim extra
             # elements when `periods` is an estimated value. Only offset
             # specified with non fixed frequencies requires trimming.
-            res = res[
+            res = res.apply_boolean_mask(
                 (res <= end) if _is_increment_sequence else (res <= start)
-            ]
+            )
     else:
         # If `offset` is fixed frequency, we generate a range of
         # treating `start`, `stop` and `step` as ints:
