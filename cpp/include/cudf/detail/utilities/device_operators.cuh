@@ -21,6 +21,7 @@
  * @file
  */
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -260,6 +261,37 @@ struct DeviceLeadLag {
   const size_type row_offset;
 
   explicit CUDF_HOST_DEVICE inline DeviceLeadLag(size_type offset_) : row_offset(offset_) {}
+};
+
+/**
+ * @brief Binary `argmin`/`argmax` operator
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
+template <typename T>
+struct element_arg_minmax_fn {
+  column_device_view const d_col;
+  bool const has_nulls;
+  bool const arg_min;
+
+  __device__ inline auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
+  {
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
+    // where invalid random values may be passed here by thrust::reduce_by_key
+    if (lhs_idx < 0 || lhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(lhs_idx))) {
+      return rhs_idx;
+    }
+    if (rhs_idx < 0 || rhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(rhs_idx))) {
+      return lhs_idx;
+    }
+
+    // Return `lhs_idx` iff:
+    //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
+    //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
+    auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
+    return less == arg_min ? lhs_idx : rhs_idx;
+  }
 };
 
 }  // namespace cudf
