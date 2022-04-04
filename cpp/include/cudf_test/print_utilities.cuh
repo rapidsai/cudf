@@ -38,15 +38,28 @@ struct TaggedType {
 template <typename T>
 using hex_t = TaggedType<hex_tag, T>;
 
-template <typename WrappedTypeT>
+/**
+ * @brief Function object to transform a built-in type to a tagged type (e.g., in order to print
+ * values from an iterator returning uint32_t as hex values)
+ *
+ * @tparam TaggedTypeT A TaggedType template specialisation 
+ */
+template <typename TaggedTypeT>
 struct ToTaggedType {
   template <typename T>
-  CUDF_HOST_DEVICE WrappedTypeT operator()(T const& v) const
+  CUDF_HOST_DEVICE TaggedTypeT operator()(T const& v) const
   {
-    return WrappedTypeT{v};
+    return TaggedTypeT{v};
   }
 };
 
+/**
+ * @brief Returns an iterator that causes the values from \p it to be printed as hex values.
+ * 
+ * @tparam InItT A random-access input iterator type
+ * @param it A random-access input iterator t
+ * @return 
+ */
 template <typename InItT>
 auto hex(InItT it)
 {
@@ -56,13 +69,13 @@ auto hex(InItT it)
     it, ToTaggedType<tagged_t>{});
 }
 
-template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> && std::is_signed_v<T>)>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>&& std::is_signed_v<T>)>
 CUDF_HOST_DEVICE void print_value(int32_t width, T arg)
 {
   printf("%*d", width, arg);
 }
 
-template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> && std::is_unsigned_v<T>)>
+template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>&& std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE void print_value(int32_t width, T arg)
 {
   printf("%*d", width, arg);
@@ -78,17 +91,17 @@ CUDF_HOST_DEVICE void print_value(int32_t width, hex_t<T> arg)
 
 namespace detail {
 template <typename T>
-CUDF_HOST_DEVICE void print_line(int32_t width, char delimiter, T arg)
+CUDF_HOST_DEVICE void print_values(int32_t width, char delimiter, T arg)
 {
   print_value(width, arg);
 }
 
 template <typename T, typename... Ts>
-CUDF_HOST_DEVICE void print_line(int32_t width, char delimiter, T arg, Ts... args)
+CUDF_HOST_DEVICE void print_values(int32_t width, char delimiter, T arg, Ts... args)
 {
   print_value(width, arg);
   if (delimiter) printf("%c", delimiter);
-  print_line(width, delimiter, args...);
+  print_values(width, delimiter, args...);
 }
 
 template <typename... Ts>
@@ -97,7 +110,7 @@ __global__ void print_array_kernel(std::size_t count, int32_t width, char delimi
   if (threadIdx.x == 0 && blockIdx.x == 0) {
     for (std::size_t i = 0; i < count; i++) {
       printf("%6lu: ", i);
-      print_line(width, delimiter, args[i]...);
+      print_values(width, delimiter, args[i]...);
       printf("\n");
     }
   }
