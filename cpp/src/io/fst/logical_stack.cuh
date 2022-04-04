@@ -17,10 +17,11 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf_test/print_utilities.cuh>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -51,11 +52,11 @@ namespace detail {
  * @brief A convenience struct that represents a stack opepration as a pair, where the stack_level
  * represents the stack's level and the value represents the stack symbol.
  *
- * @tparam StackLevelT The stack level type sufficient to cover all stack levels. Must be signed type as any
- * subsequence of stack operations must be able to be covered. E.g., consider the first 10
- * operations are all push and the last 10 operations are all pop operations, we need to be able to
- * represent a partial aggregate of the first ten items, which is '+10', just as well as a partial
- * aggregate of the last ten items, which is '-10'.
+ * @tparam StackLevelT The stack level type sufficient to cover all stack levels. Must be signed
+ * type as any subsequence of stack operations must be able to be covered. E.g., consider the first
+ * 10 operations are all push and the last 10 operations are all pop operations, we need to be able
+ * to represent a partial aggregate of the first ten items, which is '+10', just as well as a
+ * partial aggregate of the last ten items, which is '-10'.
  * @tparam ValueT The value type that corresponds to the stack symbols (i.e., covers the stack
  * alphabet).
  */
@@ -143,10 +144,10 @@ struct AddStackLevelFromStackOp {
 };
 
 /**
- * @brief Binary reduction operator that propagates a write operation for a specific stack level to all
- * reads of that same stack level. That is, if the stack level of LHS compares equal to the stack level of the RHS and if
- * the RHS is a read and the LHS is a write operation type, then we return LHS, otherwise we return
- * the RHS.
+ * @brief Binary reduction operator that propagates a write operation for a specific stack level to
+ * all reads of that same stack level. That is, if the stack level of LHS compares equal to the
+ * stack level of the RHS and if the RHS is a read and the LHS is a write operation type, then we
+ * return LHS, otherwise we return the RHS.
  */
 template <typename StackSymbolToStackOpTypeT>
 struct PopulatePopWithPush {
@@ -159,8 +160,8 @@ struct PopulatePopWithPush {
 
     // Whether LHS is a matching write (i.e., the push operation that is on top of the stack for the
     // RHS's read)
-    bool is_lhs_matching_write =
-      (lhs.stack_level == rhs.stack_level) && symbol_to_stack_op_type(lhs.value) == stack_op_type::PUSH;
+    bool is_lhs_matching_write = (lhs.stack_level == rhs.stack_level) &&
+                                 symbol_to_stack_op_type(lhs.value) == stack_op_type::PUSH;
 
     return (is_rhs_read && is_lhs_matching_write) ? lhs : rhs;
   }
@@ -277,7 +278,6 @@ auto get_value_it(StackOpItT it)
  * was empty
  * @param[in] read_symbol A symbol that may not be confused for a symbol that would push to the
  * stack
- * @param[in] num_symbols_in The number of symbols in the sparse representation
  * @param[in] num_symbols_out The number of symbols that are supposed to be filled with
  * what-is-on-top-of-the-stack
  * @param[in] stream The cuda stream to which to dispatch the work
@@ -287,17 +287,15 @@ template <typename StackLevelT,
           typename SymbolPositionT,
           typename StackSymbolToStackOpTypeT,
           typename TopOfStackOutItT,
-          typename StackSymbolT,
-          typename OffsetT>
+          typename StackSymbolT>
 void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                                StackSymbolItT d_symbols,
-                               SymbolPositionT* d_symbol_positions,
+                               device_span<SymbolPositionT> d_symbol_positions,
                                StackSymbolToStackOpTypeT symbol_to_stack_op,
                                TopOfStackOutItT d_top_of_stack,
                                StackSymbolT empty_stack_symbol,
                                StackSymbolT read_symbol,
-                               OffsetT num_symbols_in,
-                               OffsetT num_symbols_out,
+                               std::size_t num_symbols_out,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
   // Type used to hold pairs of (stack_level, value) pairs
@@ -313,6 +311,8 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   using TransformInputItT =
     cub::TransformInputIterator<StackOpT, StackSymbolToStackOpT, StackSymbolItT>;
 
+  auto const num_symbols_in = d_symbol_positions.size();
+
   // Converting a stack symbol that may either push or pop to a stack operation:
   // stack_symbol -> ([+1,0,-1], stack_symbol)
   StackSymbolToStackOpT stack_sym_to_kv_op{symbol_to_stack_op};
@@ -322,7 +322,8 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   // representation)
   cub::DoubleBuffer<SymbolPositionT> d_symbol_positions_db{nullptr, nullptr};
 
-  // Double-buffer for sorting the stack operations by the stack level to which such operation applies
+  // Double-buffer for sorting the stack operations by the stack level to which such operation
+  // applies
   cub::DoubleBuffer<StackOpT> d_kv_operations{nullptr, nullptr};
 
   // A double-buffer that aliases memory from d_kv_operations with unsigned types in order to
@@ -391,14 +392,15 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
 
   // Scratch memory required by the algorithms
   auto total_temp_storage_bytes = std::max({stack_level_scan_bytes,
-                                                  stack_level_sort_bytes,
-                                                  match_level_scan_bytes,
-                                                  propagate_writes_scan_bytes});
+                                            stack_level_sort_bytes,
+                                            match_level_scan_bytes,
+                                            propagate_writes_scan_bytes});
 
   if (temp_storage.size() < total_temp_storage_bytes) {
     temp_storage.resize(total_temp_storage_bytes, stream);
   }
-  // Actual device buffer size, as we need to pass in an lvalue-ref to cub algorithms as temp_storage_bytes
+  // Actual device buffer size, as we need to pass in an lvalue-ref to cub algorithms as
+  // temp_storage_bytes
   total_temp_storage_bytes = temp_storage.size();
 
   rmm::device_uvector<SymbolPositionT> d_symbol_position_alt{num_symbols_in, stream};
@@ -410,7 +412,7 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   //------------------------------------------------------------------------------
   // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
   d_symbol_positions_db =
-    cub::DoubleBuffer<SymbolPositionT>{d_symbol_positions, d_symbol_position_alt.data()};
+    cub::DoubleBuffer<SymbolPositionT>{d_symbol_positions.data(), d_symbol_position_alt.data()};
 
   // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
   d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
@@ -433,9 +435,9 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
                            get_value_it(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
-  d_kv_operations_unsigned =
-    cub::DoubleBuffer<StackOpUnsignedT>{reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
-                                     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Alternate())};
+  d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
+    reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
+    reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Alternate())};
   CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
                                            total_temp_storage_bytes,
                                            d_kv_operations_unsigned,
