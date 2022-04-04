@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <tests/strings/utilities.h>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -77,14 +79,14 @@ TEST_F(StringsFindallTests, FindallTest)
 
 TEST_F(StringsFindallTests, FindallRecord)
 {
+  bool valids[] = {1, 1, 1, 1, 1, 0, 1, 1};
   cudf::test::strings_column_wrapper input(
     {"3-A", "4-May 5-Day 6-Hay", "12-Dec-2021-Jan", "Feb-March", "4 ABC", "", "", "25-9000-Hal"},
-    {1, 1, 1, 1, 1, 0, 1, 1});
+    valids);
 
   auto results = cudf::strings::findall_record(cudf::strings_column_view(input), "(\\d+)-(\\w+)");
 
-  bool valids[] = {1, 1, 1, 0, 0, 0, 0, 1};
-  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"3-A"},
                 LCW{"4-May", "5-Day", "6-Hay"},
                 LCW{"12-Dec", "2021-Jan"},
@@ -94,7 +96,7 @@ TEST_F(StringsFindallTests, FindallRecord)
                 LCW{},
                 LCW{"25-9000"}},
                valids);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TEST_F(StringsFindallTests, Multiline)
@@ -108,15 +110,14 @@ TEST_F(StringsFindallTests, Multiline)
       cudf::test::strings_column_wrapper({"abc", "abc", "abc", "", "abc"}, {1, 1, 1, 0, 1});
     auto col1     = cudf::test::strings_column_wrapper({"abc", "", "", "", ""}, {1, 0, 0, 0, 0});
     auto expected = cudf::table_view({col0, col1});
-    CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(results->view(), expected);
   }
   {
     auto results =
       cudf::strings::findall_record(view, "(^abc$)", cudf::strings::regex_flags::MULTILINE);
-    bool valids[] = {1, 1, 1, 0, 1};
-    using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
-    LCW expected({LCW{"abc", "abc"}, LCW{"abc"}, LCW{"abc"}, LCW{}, LCW{"abc"}}, valids);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+    LCW expected({LCW{"abc", "abc"}, LCW{"abc"}, LCW{"abc"}, LCW{}, LCW{"abc"}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
 
@@ -130,15 +131,14 @@ TEST_F(StringsFindallTests, DotAll)
     auto col0 =
       cudf::test::strings_column_wrapper({"bc\nfa\nef", "bbc\nfff", "bcdef", ""}, {1, 1, 1, 0});
     auto expected = cudf::table_view({col0});
-    CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), expected);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(results->view(), expected);
   }
   {
     auto results =
       cudf::strings::findall_record(view, "(b.*f)", cudf::strings::regex_flags::DOTALL);
-    bool valids[] = {1, 1, 1, 0};
-    using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
-    LCW expected({LCW{"bc\nfa\nef"}, LCW{"bbc\nfff"}, LCW{"bcdef"}, LCW{}}, valids);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+    using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+    LCW expected({LCW{"bc\nfa\nef"}, LCW{"bbc\nfff"}, LCW{"bcdef"}, LCW{}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
   }
 }
 

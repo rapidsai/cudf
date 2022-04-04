@@ -464,7 +464,8 @@ def test_range_index_from_range(data):
 
 
 @pytest.mark.parametrize(
-    "n", [-10, -5, -2, 0, 1, 0, 2, 5, 10],
+    "n",
+    [-10, -5, -2, 0, 1, 0, 2, 5, 10],
 )
 def test_empty_df_head_tail_index(n):
     df = cudf.DataFrame()
@@ -511,11 +512,36 @@ def test_empty_df_head_tail_index(n):
             -pd.Index(np.arange(10)),
             None,
         ),
-        (pd.Index([1, 2, np.nan]), pd.Index([1, 2, np.nan]) == 4, None, None,),
-        (pd.Index([1, 2, np.nan]), pd.Index([1, 2, np.nan]) != 4, None, None,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True], None, ValueError,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True, False], None, None,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True, False], 17, None,),
+        (
+            pd.Index([1, 2, np.nan]),
+            pd.Index([1, 2, np.nan]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Index([1, 2, np.nan]),
+            pd.Index([1, 2, np.nan]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True],
+            None,
+            ValueError,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True, False],
+            None,
+            None,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True, False],
+            17,
+            None,
+        ),
         (pd.Index(list("abcdgh")), pd.Index(list("abcdgh")) != "g", "3", None),
         (
             pd.Index(list("abcdgh")),
@@ -1566,114 +1592,6 @@ def test_interval_index_from_breaks(closed):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
-@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-def test_index_sample_basic(n, frac, replace):
-    psr = pd.Series([1, 2, 3, 4, 5])
-    gindex = cudf.Index(psr)
-    random_state = 0
-
-    try:
-        pout = psr.sample(
-            n=n, frac=frac, replace=replace, random_state=random_state
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=psr.sample,
-            rfunc=gindex.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                },
-            ),
-            compare_error_message=False,
-        )
-    else:
-        gout = gindex.sample(
-            n=n, frac=frac, replace=replace, random_state=random_state
-        )
-
-        assert pout.shape == gout.shape
-
-
-@pytest.mark.parametrize("n", [2, 5, 10, None])
-@pytest.mark.parametrize("frac", [0.5, 1, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-@pytest.mark.parametrize("axis", [0, 1])
-def test_multiindex_sample_basic(n, frac, replace, axis):
-    # as we currently don't support column with same name
-    if axis == 1 and replace:
-        return
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5],
-            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
-            "int": [1, 3, 5, 4, 2],
-        },
-    )
-    mul_index = cudf.Index(cudf.from_pandas(pdf))
-    random_state = 0
-
-    try:
-        pout = pdf.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=random_state,
-            axis=axis,
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=pdf.sample,
-            rfunc=mul_index.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                    "axis": axis,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                    "axis": axis,
-                },
-            ),
-        )
-    else:
-        gout = mul_index.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=random_state,
-            axis=axis,
-        )
-        if axis == 1 and n is None and frac is None:
-            pout = pout.iloc[:, 0]
-        assert pout.shape == gout.shape
-
-
 @pytest.mark.parametrize(
     "data",
     [
@@ -1926,7 +1844,8 @@ def test_index_rangeindex_search_range():
 
 
 @pytest.mark.parametrize(
-    "rge", [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
+    "rge",
+    [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
 )
 def test_index_rangeindex_get_item_basic(rge):
     pridx = pd.RangeIndex(*rge)
@@ -1937,7 +1856,8 @@ def test_index_rangeindex_get_item_basic(rge):
 
 
 @pytest.mark.parametrize(
-    "rge", [(1, 10, 3), (10, 1, -3)],
+    "rge",
+    [(1, 10, 3), (10, 1, -3)],
 )
 def test_index_rangeindex_get_item_out_of_bounds(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -1946,7 +1866,8 @@ def test_index_rangeindex_get_item_out_of_bounds(rge):
 
 
 @pytest.mark.parametrize(
-    "rge", [(10, 1, 1), (-17, 10, -3)],
+    "rge",
+    [(10, 1, 1), (-17, 10, -3)],
 )
 def test_index_rangeindex_get_item_null_range(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -2053,7 +1974,8 @@ def test_get_loc_single_unique_numeric(idx, key, method):
 
 
 @pytest.mark.parametrize(
-    "idx", [pd.RangeIndex(3, 100, 4)],
+    "idx",
+    [pd.RangeIndex(3, 100, 4)],
 )
 @pytest.mark.parametrize("key", list(range(1, 110, 3)))
 @pytest.mark.parametrize("method", [None, "ffill"])
