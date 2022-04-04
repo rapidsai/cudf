@@ -165,28 +165,21 @@ class TimeDeltaColumn(column.ColumnBase):
 
         this: ColumnBinaryOperand = self
         out_dtype = None
-        other_is_timedelta = is_timedelta64_dtype(other.dtype)
 
-        if op in {
-            "__eq__",
-            "__ne__",
-            "__lt__",
-            "__gt__",
-            "__le__",
-            "__ge__",
-            "NULL_EQUALS",
-        }:
-            if other_is_timedelta:
+        if is_timedelta64_dtype(other.dtype):
+            if op in {
+                "__eq__",
+                "__ne__",
+                "__lt__",
+                "__gt__",
+                "__le__",
+                "__ge__",
+                "NULL_EQUALS",
+            }:
                 out_dtype = np.bool_
-        elif op == "__mul__" and other.dtype.kind in ("f", "i", "u"):
-            out_dtype = self.dtype
-        elif op == "__mod__":
-            if other_is_timedelta:
+            elif op == "__mod__":
                 out_dtype = determine_out_dtype(self.dtype, other.dtype)
-            elif other.dtype.kind in ("f", "i", "u"):
-                out_dtype = self.dtype
-        elif op in {"__truediv__", "__floordiv__"}:
-            if other_is_timedelta:
+            elif op in {"__truediv__", "__floordiv__"}:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
                 this = self.astype(common_dtype).astype("float64")
                 if isinstance(other, cudf.Scalar):
@@ -198,24 +191,18 @@ class TimeDeltaColumn(column.ColumnBase):
                         other = cudf.Scalar(None, "float64")
                 else:
                     other = other.astype(common_dtype).astype("float64")
-
-                out_dtype = cudf.dtype(
-                    "float64" if op == "__truediv__" else "int64"
-                )
-            elif other.dtype.kind in ("f", "i", "u"):
+                out_dtype = np.float64 if op == "__truediv__" else np.int64
+            elif op in {"__add__", "__sub__"}:
+                out_dtype = determine_out_dtype(self.dtype, other.dtype)
+        elif other.dtype.kind in {"f", "i", "u"}:
+            if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
-            op = "__truediv__"
-        # Use `other` instead of rhs to check whether the other argument is a
-        # timedelta because we already know that self is of timedelta64 dtype
-        # so checking post-reflection would add work.
-        elif op in {
-            "__add__",
-            "__sub__",
-        } and is_timedelta64_dtype(other):
-            out_dtype = determine_out_dtype(self.dtype, other.dtype)
 
         if out_dtype is None:
             return NotImplemented
+
+        if op == "__floordiv__":
+            op = "__truediv__"
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
