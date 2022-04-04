@@ -701,9 +701,10 @@ class self_comparator {
    * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
    */
   template <typename Nullate>
-  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  device_row_comparator<Nullate> device_comparator(
+    Nullate nullate = {}, null_equality nulls_are_equal = null_equality::EQUAL) const
   {
-    return device_row_comparator(nullate, *d_t, *d_t);
+    return device_row_comparator(nullate, *d_t, *d_t, nulls_are_equal);
   }
 
  private:
