@@ -342,7 +342,6 @@ try:
             n,
         )
 
-
 except ImportError:
     pass
 
@@ -399,7 +398,10 @@ def group_split_cudf(df, c, k, ignore_index=False):
 @sizeof_dispatch.register(cudf.DataFrame)
 @_dask_cudf_nvtx_annotate
 def sizeof_cudf_dataframe(df):
-    return int(df.memory_usage().sum())
+    return int(
+        sum(col.memory_usage for col in df._data.columns)
+        + df._index.memory_usage()
+    )
 
 
 @sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))

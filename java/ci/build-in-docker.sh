@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -92,9 +92,6 @@ fi
 
 cd "$WORKSPACE/java"
 mvn -B clean package $BUILD_ARG
-
-###### Sanity test: fail if static cudart found ######
-find . -name '*.so' | xargs -I{} readelf -Ws {} | grep cuInit && echo "Found statically linked CUDA runtime, this is currently not tested" && exit 1
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH

@@ -194,7 +194,9 @@ class IndexedFrame(Frame):
 
     @classmethod
     def _from_data(
-        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
     ):
         out = super()._from_data(data)
         out._index = RangeIndex(out._data.nrows) if index is None else index
@@ -702,10 +704,7 @@ class IndexedFrame(Frame):
         >>> s.memory_usage(index=False)
         24
         """
-        usage = super().memory_usage(deep=deep)
-        if index:
-            usage["Index"] = self.index.memory_usage()
-        return usage
+        raise NotImplementedError
 
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
@@ -1758,7 +1757,10 @@ class IndexedFrame(Frame):
             index_names,
         ) = self._index._split_columns_by_levels(level)
         if index_columns:
-            index = _index_from_columns(index_columns, name=self._index.name,)
+            index = _index_from_columns(
+                index_columns,
+                name=self._index.name,
+            )
             if isinstance(index, MultiIndex):
                 index.names = index_names
             else:

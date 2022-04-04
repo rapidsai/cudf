@@ -26,6 +26,7 @@
 
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {

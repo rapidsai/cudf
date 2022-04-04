@@ -25,6 +25,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/host_vector.h>
+
 using aggregation = cudf::aggregation;
 using cudf::null_policy;
 using cudf::scan_type;

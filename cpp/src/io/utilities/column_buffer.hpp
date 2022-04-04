@@ -32,6 +32,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/pair.h>
+
 namespace cudf {
 namespace io {
 namespace detail {

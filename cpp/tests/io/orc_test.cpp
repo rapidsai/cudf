@@ -1421,17 +1421,9 @@ TEST_F(OrcReaderTest, DecimalOptions)
 
   cudf_io::orc_reader_options valid_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .decimal128_columns({"dec", "fake_name"})
-      .decimal_cols_as_float({"decc", "fake_name"});
-  // Should not throw, even with "fake name" in both options
+      .decimal128_columns({"dec", "fake_name"});
+  // Should not throw, even with "fake name"
   EXPECT_NO_THROW(cudf_io::read_orc(valid_opts));
-
-  cudf_io::orc_reader_options invalid_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .decimal128_columns({"dec", "fake_name"})
-      .decimal_cols_as_float({"dec", "fake_name"});
-  // Should throw, options overlap
-  EXPECT_THROW(cudf_io::read_orc(invalid_opts), cudf::logic_error);
 }
 
 TEST_F(OrcWriterTest, DecimalOptionsNested)

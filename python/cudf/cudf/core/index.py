@@ -852,7 +852,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return out
 
     def _binaryop(
-        self, other: T, op: str, fill_value: Any = None, *args, **kwargs,
+        self,
+        other: T,
+        op: str,
+        fill_value: Any = None,
+        *args,
+        **kwargs,
     ) -> SingleColumnFrame:
         reflect, op = self._check_reflected_op(op)
         operands = self._make_operands_for_binop(other, fill_value, reflect)
@@ -909,7 +914,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
-        return sum(super().memory_usage(deep=deep).values())
+        return self._column.memory_usage
 
     @_cudf_nvtx_annotate
     def equals(self, other, **kwargs):
@@ -2369,7 +2374,12 @@ class CategoricalIndex(GenericIndex):
 
 @_cudf_nvtx_annotate
 def interval_range(
-    start=None, end=None, periods=None, freq=None, name=None, closed="right",
+    start=None,
+    end=None,
+    periods=None,
+    freq=None,
+    name=None,
+    closed="right",
 ) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
@@ -2532,7 +2542,12 @@ class IntervalIndex(GenericIndex):
 
     @_cudf_nvtx_annotate
     def __init__(
-        self, data, closed=None, dtype=None, copy=False, name=None,
+        self,
+        data,
+        closed=None,
+        dtype=None,
+        copy=False,
+        name=None,
     ):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -2542,7 +2557,10 @@ class IntervalIndex(GenericIndex):
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
-            data = column.as_column(data, dtype=dtype,)
+            data = column.as_column(
+                data,
+                dtype=dtype,
+            )
         elif not data:
             dtype = IntervalDtype("int64", closed)
             data = column.column_empty_like_same_mask(

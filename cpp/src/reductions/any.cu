@@ -19,6 +19,11 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+
 namespace cudf {
 namespace reduction {
 namespace detail {

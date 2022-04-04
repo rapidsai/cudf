@@ -346,12 +346,14 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             if infer_datetime_format and format is None:
                 format = column.datetime.infer_format(
-                    element=col[0], dayfirst=dayfirst,
+                    element=col[0],
+                    dayfirst=dayfirst,
                 )
             elif format is None:
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(
-                dtype=_unit_dtype_map[unit], format=format,
+                dtype=_unit_dtype_map[unit],
+                format=format,
             )
     return col
 
@@ -923,8 +925,7 @@ def date_range(
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:
-    """Utility to determine if `freq` contains fixed frequency offset
-    """
+    """Utility to determine if `freq` contains fixed frequency offset"""
     fixed_frequencies = {
         "weeks",
         "days",
@@ -940,8 +941,7 @@ def _has_fixed_frequency(freq: DateOffset) -> bool:
 
 
 def _has_non_fixed_frequency(freq: DateOffset) -> bool:
-    """Utility to determine if `freq` contains non-fixed frequency offset
-    """
+    """Utility to determine if `freq` contains non-fixed frequency offset"""
     non_fixed_frequencies = {"years", "months"}
     return len(freq.kwds.keys() & non_fixed_frequencies) > 0
 
