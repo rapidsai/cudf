@@ -749,21 +749,25 @@ class element_hasher {
     column_device_view curr_col = col;
     int start_off               = row_index;
     int end_off                 = row_index + 1;
-    while (curr_col.type().id() == type_id::LIST) {
+    while (is_nested(curr_col.type())) {
       if (has_nulls) {
         for (int i = start_off; i < end_off; ++i) {
           hash = detail::hash_combine(
             hash, curr_col.is_null(i) ? std::numeric_limits<hash_value_type>::max() : 0);
         }
       }
-      auto offsets = curr_col.child(lists_column_view::offsets_column_index);
-      for (int i = start_off; i < end_off; ++i) {
-        auto const child_size = offsets.element<size_type>(i + 1) - offsets.element<size_type>(i);
-        hash = cudf::detail::hash_combine(hash, hash_function<decltype(child_size)>{}(child_size));
+      if (curr_col.type().id() == type_id::STRUCT) {
+        curr_col = curr_col.child(0);
+      } else if (curr_col.type().id() == type_id::LIST) {
+        auto offsets = curr_col.child(lists_column_view::offsets_column_index);
+        for (int i = start_off; i < end_off; ++i) {
+          auto const child_size = offsets.element<size_type>(i + 1) - offsets.element<size_type>(i);
+          hash = cudf::detail::hash_combine(hash, hash_function<size_type>{}(child_size));
+        }
+        curr_col  = curr_col.child(lists_column_view::child_column_index);
+        start_off = offsets.element<size_type>(start_off);
+        end_off   = offsets.element<size_type>(end_off);
       }
-      curr_col  = curr_col.child(lists_column_view::child_column_index);
-      start_off = offsets.element<size_type>(start_off);
-      end_off   = offsets.element<size_type>(end_off);
     }
     for (int i = start_off; i < end_off; ++i) {
       hash = cudf::detail::hash_combine(
@@ -771,7 +775,6 @@ class element_hasher {
         type_dispatcher<dispatch_void_if_nested>(
           curr_col.type(), element_hasher<hash_function, Nullate>{has_nulls}, curr_col, i));
     }
-    // printf("row_index, %d, hash %d\n", row_index, hash);
     return hash;
   }
 

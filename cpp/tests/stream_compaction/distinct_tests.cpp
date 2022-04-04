@@ -184,3 +184,63 @@ TEST_F(Distinct, NullableList)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
 }
+
+TEST_F(Distinct, ListOfStruct)
+{
+  // Constructing a list of struct of two elements
+  // 0.   []                  ==
+  // 1.   []                  !=
+  // 2.   Null                ==
+  // 3.   Null                !=
+  // 4.   [Null, Null]        !=
+  // 5.   [Null]              ==
+  // 6.   [Null]              ==
+  // 7.   [Null]              !=
+  // 8.   [{Null, Null}]      !=
+  // 9.   [{1,'a'}, {2,'b'}]  !=
+  // 10.  [{0,'a'}, {2,'b'}]  !=
+  // 11.  [{0,'a'}, {2,'c'}]  ==
+  // 12.  [{0,'a'}, {2,'c'}]  !=
+  // 13.  [{0,Null}]          ==
+  // 14.  [{0,Null}]          !=
+  // 15.  [{Null, 0}]         ==
+  // 16.  [{Null, 0}]
+
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  auto col2 = cudf::test::strings_column_wrapper{
+    {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
+  auto struc = cudf::test::structs_column_wrapper{
+    {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto nullmask_buf =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                                       17,
+                                       nullptr,
+                                       static_cast<cudf::bitmask_type*>(nullmask_buf.data()),
+                                       cudf::UNKNOWN_NULL_COUNT,
+                                       0,
+                                       {offsets, struc});
+
+  auto idx = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
+
+  auto input = cudf::table_view({idx, list_column});
+
+  auto expect_map =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 5, 8, 9, 10, 11, 13, 15};
+
+  auto expect_table = cudf::gather(input, expect_map);
+
+  auto result        = cudf::distinct(input, {1});
+  auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *sorted_result);
+}
