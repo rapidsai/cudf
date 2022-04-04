@@ -23,7 +23,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
                                    over)
    libcudf                       - build the cudf C++ code only
    cudf                          - build the cudf Python package
-   cudfjar                       - build cudf JAR with static libcudf using devtoolset-9 toolchain
+   cudfjar                       - build cudf JAR with static libcudf using devtoolset toolchain
    dask_cudf                     - build the dask_cudf Python package
    benchmarks                    - build benchmarks
    tests                         - build tests
