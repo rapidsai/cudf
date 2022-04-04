@@ -166,11 +166,11 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t ch,
   return false;
 }
 
-__device__ __forceinline__ reinst reprog_device::get_inst(int32_t idx) const { return _insts[idx]; }
+__device__ __forceinline__ reinst reprog_device::get_inst(int32_t id) const { return _insts[id]; }
 
-__device__ __forceinline__ reclass_device reprog_device::get_class(int32_t idx) const
+__device__ __forceinline__ reclass_device reprog_device::get_class(int32_t id) const
 {
-  return _classes[idx];
+  return _classes[id];
 }
 
 __device__ __forceinline__ bool reprog_device::is_empty() const

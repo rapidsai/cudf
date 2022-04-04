@@ -199,14 +199,14 @@ class reprog_device {
   };
 
   /**
-   * @brief Returns the regex instruction object for a given index.
+   * @brief Returns the regex instruction object for a given id.
    */
-  __device__ inline reinst get_inst(int32_t idx) const;
+  __device__ inline reinst get_inst(int32_t id) const;
 
   /**
-   * @brief Returns the regex class object for a given index.
+   * @brief Returns the regex class object for a given id.
    */
-  __device__ inline reclass_device get_class(int32_t idx) const;
+  __device__ inline reclass_device get_class(int32_t id) const;
 
   /**
    * @brief Executes the regex pattern on the given string.
