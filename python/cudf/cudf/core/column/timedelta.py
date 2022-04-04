@@ -165,6 +165,8 @@ class TimeDeltaColumn(ColumnBase):
         out_dtype = None
 
         if is_timedelta64_dtype(other.dtype):
+            # TODO: pandas will allow these operators to work but return false
+            # when comparing to non-timedelta dtypes. We should do the same.
             if op in {
                 "__eq__",
                 "__ne__",
@@ -220,12 +222,11 @@ class TimeDeltaColumn(ColumnBase):
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=self.dtype)
 
-            if other_time_unit not in ("s", "ms", "ns", "us"):
-                other = other.astype("timedelta64[s]")
+            if other_time_unit not in {"s", "ms", "ns", "us"}:
+                common_dtype = "timedelta64[s]"
             else:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                other = other.astype(common_dtype)
-            return cudf.Scalar(other)
+            return cudf.Scalar(other.astype(common_dtype))
         elif np.isscalar(other):
             return cudf.Scalar(other)
         return NotImplemented
