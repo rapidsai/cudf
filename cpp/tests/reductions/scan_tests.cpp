@@ -25,7 +25,9 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <numeric>

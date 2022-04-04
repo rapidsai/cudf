@@ -22,6 +22,8 @@
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/device_vector.h>
+
 #include <limits>
 
 namespace cudf {

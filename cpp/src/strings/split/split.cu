@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,16 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>  // upper_bound()
-#include <thrust/copy.h>           // copy_if()
-#include <thrust/count.h>          // count_if()
-#include <thrust/reduce.h>         // maximum()
-#include <thrust/transform.h>      // transform()
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/count.h>
+#include <thrust/fill.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
