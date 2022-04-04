@@ -425,6 +425,10 @@ class self_comparator {
 
 }  // namespace lexicographic
 
+namespace hash {
+class row_hasher;
+}
+
 namespace equality {
 
 template <typename Nullate>
@@ -639,6 +643,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class hash::row_hasher;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -707,7 +712,7 @@ class self_comparator {
 
 }  // namespace equality
 
-}  // namespace row
+namespace hash {
 
 /**
  * @brief Computes the hash value of an element in the given column.
@@ -779,14 +784,14 @@ class element_hasher {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
-class row_hasher {
+class device_row_hasher {
  public:
-  row_hasher() = delete;
-  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t)
+  device_row_hasher() = delete;
+  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls, table_device_view t)
     : _table{t}, _has_nulls{has_nulls}
   {
   }
-  CUDF_HOST_DEVICE row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
+  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
     : _table{t}, _seed(seed), _has_nulls{has_nulls}
   {
   }
@@ -829,6 +834,55 @@ class row_hasher {
   Nullate _has_nulls;
   uint32_t _seed{DEFAULT_HASH_SEED};
 };
+
+using preprocessed_table = row::equality::preprocessed_table;
+
+class row_hasher {
+ public:
+  /**
+   * @brief Construct an owning object for hashing the rows of a table
+   *
+   * @param t The table whose rows to hash
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  row_hasher(table_view const& t, rmm::cuda_stream_view stream)
+    : d_t(preprocessed_table::create(t, stream))
+  {
+  }
+
+  /**
+   * @brief Construct an owning object for hashing the rows of a table
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple hashers.
+   *
+   * @param t A table preprocessed for hashing
+   */
+  row_hasher(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
+
+  /**
+   * @brief Get the hash operator to use on the device
+   *
+   * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_t)`.
+   *
+   * `F(i)` returns the hash of row i.
+   *
+   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   */
+  template <template <typename> class hash_function = default_hash, typename Nullate>
+  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {}) const
+  {
+    return device_row_hasher<hash_function, Nullate>(nullate, *d_t);
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_t;
+};
+
+}  // namespace hash
+
+}  // namespace row
 
 }  // namespace experimental
 }  // namespace cudf

@@ -42,7 +42,7 @@ using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allo
 using hash_map_type =
   cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
 
-using row_hash = cudf::experimental::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
+using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
 }  // namespace detail
 }  // namespace cudf
