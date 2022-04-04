@@ -142,24 +142,22 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   auto counting_iter = thrust::counting_iterator<size_type>(0);
   thrust::for_each(
-          rmm::exec_policy(stream),
-          counting_iter,
-          counting_iter + left_num_rows,
-          [flagged_d, hash_table_view, join_type_boolean, hash_probe, equality_probe] __device__(
-                  const size_type idx) {
-              flagged_d[idx] =
-                      hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
-          });
+    rmm::exec_policy(stream),
+    counting_iter,
+    counting_iter + left_num_rows,
+    [flagged_d, hash_table_view, join_type_boolean, hash_probe, equality_probe] __device__(
+      const size_type idx) {
+      flagged_d[idx] =
+        hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
+    });
 
   // gather_map_end will be the end of valid data in gather_map
-  auto gather_map_end = thrust::copy_if(
-          rmm::exec_policy(stream),
-          thrust::make_counting_iterator(0),
-          thrust::make_counting_iterator(left_num_rows),
-          gather_map->begin(),
-  [flagged_d]__device__(size_type const idx) {
-    return flagged_d[idx];
-  });
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator(0),
+                    thrust::make_counting_iterator(left_num_rows),
+                    gather_map->begin(),
+                    [flagged_d] __device__(size_type const idx) { return flagged_d[idx]; });
 
   auto join_size = thrust::distance(gather_map->begin(), gather_map_end);
   gather_map->resize(join_size, stream);
