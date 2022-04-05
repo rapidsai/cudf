@@ -48,6 +48,11 @@ bool is_always_enabled();
  */
 bool is_gds_enabled();
 
+/**
+ * @brief Returns true if KvikIO is enabled.
+ */
+bool is_kvikio_enabled();
+
 }  // namespace cufile_integration
 
 namespace nvcomp_integration {

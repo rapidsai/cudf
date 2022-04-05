@@ -20,6 +20,9 @@
 #include <cudf/utilities/error.hpp>
 #include <io/utilities/config_utils.hpp>
 
+#include <kvikio/file_handle.hpp>
+#include <rmm/device_buffer.hpp>
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -33,39 +36,26 @@ namespace {
  */
 class file_source : public datasource {
  public:
-  explicit file_source(const char* filepath)
-    : _file(filepath, O_RDONLY), _cufile_in(detail::make_cufile_input(filepath))
+  explicit file_source(const char* filepath) : _file(filepath, O_RDONLY)
   {
+    if (detail::cufile_integration::is_kvikio_enabled()) {
+      _kvikio_file = kvikio::FileHandle(filepath);
+      _use_kvikio  = true;
+    } else {
+      _cufile_in = std::unique_ptr<detail::cufile_input_impl>(detail::make_cufile_input(filepath));
+    }
   }
 
   virtual ~file_source() = default;
 
-  [[nodiscard]] bool supports_device_read() const override { return _cufile_in != nullptr; }
+  [[nodiscard]] bool supports_device_read() const override
+  {
+    return _use_kvikio || _cufile_in != nullptr;
+  }
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
-  }
-
-  std::unique_ptr<datasource::buffer> device_read(size_t offset,
-                                                  size_t size,
-                                                  rmm::cuda_stream_view stream) override
-  {
-    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
-
-    auto const read_size = std::min(size, _file.size() - offset);
-    return _cufile_in->read(offset, read_size, stream);
-  }
-
-  size_t device_read(size_t offset,
-                     size_t size,
-                     uint8_t* dst,
-                     rmm::cuda_stream_view stream) override
-  {
-    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
-
-    auto const read_size = std::min(size, _file.size() - offset);
-    return _cufile_in->read(offset, read_size, dst, stream);
+    return _use_kvikio || (_cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size));
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -76,7 +66,36 @@ class file_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, _file.size() - offset);
+    if (_use_kvikio) { return _kvikio_file.pread(dst, read_size, offset); }
     return _cufile_in->read_async(offset, read_size, dst, stream);
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
+
+    if (_use_kvikio) { return device_read_async(offset, size, dst, stream).get(); }
+    auto const read_size = std::min(size, _file.size() - offset);
+    return _cufile_in->read(offset, read_size, dst, stream);
+  }
+
+  std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                  size_t size,
+                                                  rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
+
+    if (_use_kvikio) {
+      rmm::device_buffer out_data(size, stream);
+      size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+      out_data.resize(read, stream);
+      return datasource::buffer::create(std::move(out_data));
+    }
+    auto const read_size = std::min(size, _file.size() - offset);
+    return _cufile_in->read(offset, read_size, stream);
   }
 
   [[nodiscard]] size_t size() const override { return _file.size(); }
@@ -86,6 +105,8 @@ class file_source : public datasource {
 
  private:
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
+  kvikio::FileHandle _kvikio_file;
+  bool _use_kvikio{false};
 };
 
 /**
