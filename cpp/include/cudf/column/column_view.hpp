@@ -217,6 +217,8 @@ class column_view_base {
    */
   [[nodiscard]] size_type offset() const noexcept { return _offset; }
 
+  std::shared_ptr<int> _x = std::make_shared<int>(1);
+
  protected:
   data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
