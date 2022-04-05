@@ -455,11 +455,9 @@ TEST_F(StringsContainsTests, MediumRegex)
   {
     auto results         = cudf::strings::count_re(strings_view, medium_regex);
     int32_t h_expected[] = {1, 0, 0};
-    cudf::test::fixed_width_column_wrapper<int32_t> expected(
-      h_expected,
-      h_expected + h_strings.size(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected(h_expected,
+                                                             h_expected + h_strings.size());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
 }
 
@@ -504,18 +502,16 @@ TEST_F(StringsContainsTests, LargeRegex)
   {
     auto results         = cudf::strings::count_re(strings_view, large_regex);
     int32_t h_expected[] = {1, 0, 0};
-    cudf::test::fixed_width_column_wrapper<int32_t> expected(
-      h_expected,
-      h_expected + h_strings.size(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected(h_expected,
+                                                             h_expected + h_strings.size());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
 }
 
 TEST_F(StringsContainsTests, ExtraLargeRegex)
 {
-  // This results in ~950 regex instructions which is above the 'large' range.
-  std::string data(950, '0');
+  // This results in 321 regex instructions which is above the 'large' range.
+  std::string data(320, '0');
   cudf::test::strings_column_wrapper strings({data, data, data, data, data, "00"});
   std::string pattern = data;
 
