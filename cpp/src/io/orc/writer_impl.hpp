@@ -285,24 +285,32 @@ class writer::impl {
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
   struct intermediate_statistics {
-    intermediate_statistics(rmm::cuda_stream_view stream) : _stat_chunks(0, stream) {}
-    intermediate_statistics(rmm::device_uvector<statistics_chunk> stat_chunks,
-                            hostdevice_vector<statistics_merge_group> stat_merge)
-      : _stat_chunks(std::move(stat_chunks)), _stat_merge(std::move(stat_merge)){};
+    intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream){};
+    intermediate_statistics(std::vector<ColStatsBlob> rb,
+                            rmm::device_uvector<statistics_chunk> sc,
+                            hostdevice_vector<statistics_merge_group> smg,
+                            hostdevice_vector<stats_column_desc> scd)
+      : rowgroup_blobs(std::move(rb)),
+        stripe_stat_chunks(std::move(sc)),
+        stripe_stat_merge(std::move(smg)),
+        stats_desc(std::move(scd)){};
 
-    rmm::device_uvector<statistics_chunk> _stat_chunks;
-    hostdevice_vector<statistics_merge_group> _stat_merge;
+    // blobs for the rowgroup. Not persisted
     std::vector<ColStatsBlob> rowgroup_blobs;
-    std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+
+    rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
+    hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+    hostdevice_vector<stats_column_desc> stats_desc;
   };
 
-// used for chunked writes to persist data between calls to write.
-struct persisted_statistics {
-  std::vector<rmm::device_uvector<statistics_chunk>> stripe_chunks;
-  std::vector<hostdevice_vector<statistics_merge_group>> stripe_merge;
-};
+  // used for chunked writes to persist data between calls to write.
+  struct persisted_statistics {
+    std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
+    std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+    hostdevice_vector<stats_column_desc> stats_desc;
+  };
+
   struct encoded_statistics {
-    std::vector<ColStatsBlob> rowgroup_level;
     std::vector<ColStatsBlob> stripe_level;
     std::vector<ColStatsBlob> file_level;
   };
@@ -328,10 +336,9 @@ struct persisted_statistics {
    * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
    * @return The encoded statistic blobs
    */
-  encoded_statistics finish_statistic_blobs(statistics_freq stats_freq,
-                                            orc_table_view const& orc_table,
-                                            file_segmentation const& segmentation,
-                                            intermediate_statistics& incoming_stats);
+  encoded_statistics finish_statistic_blobs(int num_columns,
+                                            int num_stripes,
+                                            writer::impl::persisted_statistics& incoming_stats);
 
   /**
    * @brief Writes the specified column's row index stream.
@@ -412,6 +419,8 @@ struct persisted_statistics {
   std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
+
+  persisted_statistics persisted_stripe_statistics;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
