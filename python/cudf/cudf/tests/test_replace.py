@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_134
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -986,7 +987,8 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43232"
+                condition=not PANDAS_GE_134,
+                reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
         (

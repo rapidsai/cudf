@@ -12,7 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -1246,7 +1246,8 @@ def test_series_upcast_float16(data):
             pd.RangeIndex(4, -1, -2),
             marks=[
                 pytest.mark.xfail(
-                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                    condition=PANDAS_LT_140,
+                    reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
             ],
         ),

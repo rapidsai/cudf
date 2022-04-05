@@ -14,6 +14,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -1464,7 +1465,7 @@ date_range_test_freq = [
     pytest.param(
         {"hours": 10, "days": 57, "nanoseconds": 3},
         marks=pytest.mark.xfail(
-            True,
+            condition=PANDAS_LT_140,
             reason="Pandas ignoring nanoseconds component. "
             "https://github.com/pandas-dev/pandas/issues/44393",
         ),

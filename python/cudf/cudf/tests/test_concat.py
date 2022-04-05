@@ -798,18 +798,8 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         ignore_index=ignore_index,
         axis=axis,
     )
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=False
-        if sort
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
-    )
+
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -875,18 +865,8 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
     actual = gd.concat(
         [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=False
-        if sort
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
-    )
+
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -931,19 +911,7 @@ def test_concat_join_no_overlapping_columns(
         axis=axis,
     )
 
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=False
-        if sort
-        and axis == 1
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
-    )
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [False, True])
