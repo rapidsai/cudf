@@ -62,19 +62,18 @@ constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
  *
  * This class holds the unique data for any regex CCLASS instruction.
  */
-class reclass_device {
- public:
+struct reclass_device {
   int32_t builtins{};
   int32_t count{};
-  char32_t* literals{};
+  char32_t const* literals{};
 
-  __device__ bool is_match(char32_t ch, uint8_t const* flags) const;
+  __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
 };
 
 /**
  * @brief Regex program of instructions/data for a specific regex pattern.
  *
- * Once create, this find/extract methods are used to evaluating the regex instructions
+ * Once created, the find/extract methods are used to evaluate the regex instructions
  * against a single string.
  */
 class reprog_device {
@@ -161,7 +160,7 @@ class reprog_device {
   __device__ inline int32_t find(int32_t idx,
                                  string_view const d_str,
                                  cudf::size_type& begin,
-                                 cudf::size_type& end);
+                                 cudf::size_type& end) const;
 
   /**
    * @brief Does an extract evaluation using the compiled expression on the given string.
@@ -171,8 +170,8 @@ class reprog_device {
    * the matched section.
    *
    * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
-   * @param idx The string index used for mapping the state memory for this string in global memory
-   * (if necessary).
+   * @param idx The string index used for mapping the state memory for this string in global
+   * memory (if necessary).
    * @param d_str The string to search.
    * @param begin Position index to begin the search. If found, returns the position found
    * in the string.
@@ -186,7 +185,7 @@ class reprog_device {
                                          string_view const d_str,
                                          cudf::size_type begin,
                                          cudf::size_type end,
-                                         cudf::size_type group_id);
+                                         cudf::size_type const group_id) const;
 
  private:
   struct reljunk {
@@ -194,6 +193,7 @@ class reprog_device {
     relist* list2;
     int32_t starttype{};
     char32_t startchar{};
+
     __device__ inline reljunk(relist* list1, relist* list2, reinst const inst);
     __device__ inline void swaplist();
   };
@@ -211,23 +211,29 @@ class reprog_device {
   /**
    * @brief Executes the regex pattern on the given string.
    */
-  __device__ inline int32_t regexec(
-    string_view const d_str, reljunk jnk, int32_t& begin, int32_t& end, int32_t group_id = 0);
+  __device__ inline int32_t regexec(string_view const d_str,
+                                    reljunk jnk,
+                                    cudf::size_type& begin,
+                                    cudf::size_type& end,
+                                    cudf::size_type const group_id = 0) const;
 
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
   template <int stack_size>
-  __device__ inline int32_t call_regexec(
-    int32_t idx, string_view const d_str, int32_t& begin, int32_t& end, int32_t group_id = 0);
+  __device__ inline int32_t call_regexec(int32_t idx,
+                                         string_view const d_str,
+                                         cudf::size_type& begin,
+                                         cudf::size_type& end,
+                                         cudf::size_type const group_id = 0) const;
 
   reprog_device(reprog&);
 
-  int32_t _startinst_id;
-  int32_t _num_capturing_groups;
-  int32_t _insts_count;
-  int32_t _starts_count;
-  int32_t _classes_count;
+  int32_t _startinst_id;          // first instruction id
+  int32_t _num_capturing_groups;  // instruction groups
+  int32_t _insts_count;           // number of instructions
+  int32_t _starts_count;          // number of start-insts ids
+  int32_t _classes_count;         // number of classes
 
   uint8_t const* _codepoint_flags{};  // table of character types
   reinst const* _insts{};             // array of regex instructions

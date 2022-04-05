@@ -20,8 +20,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/string_view.cuh>
 
-#include <memory.h>
-
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -97,17 +95,17 @@ struct alignas(8) relist {
   int16_t size{};
   int16_t masksize{};
   int32_t reserved;
-  int2* ranges{};       // pair per instruction
-  int16_t* inst_ids{};  // one per instruction
-  u_char* mask{};       // bit per instruction
+  int2* ranges;       // pair per instruction
+  int16_t* inst_ids;  // one per instruction
+  u_char* mask;       // bit per instruction
 
-  __device__ __forceinline__ void writeMask(int32_t pos)
+  __device__ __forceinline__ void writeMask(int32_t pos) const
   {
     u_char const uc = 1 << (pos & 7);
     mask[pos >> 3] |= uc;
   }
 
-  __device__ __forceinline__ bool readMask(int32_t pos)
+  __device__ __forceinline__ bool readMask(int32_t pos) const
   {
     u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);
@@ -139,7 +137,7 @@ __device__ __forceinline__ void reprog_device::reljunk::swaplist()
  * @param codepoint_flags Used for mapping a character to type for builtin classes.
  * @return true if the character matches
  */
-__device__ __forceinline__ bool reclass_device::is_match(char32_t ch,
+__device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
                                                          uint8_t const* codepoint_flags) const
 {
   for (int i = 0; i < count; ++i) {
@@ -192,8 +190,11 @@ __device__ __forceinline__ bool reprog_device::is_empty() const
  * @param group_id Index of the group to match in a multi-group regex pattern.
  * @return >0 if match found
  */
-__device__ __forceinline__ int32_t reprog_device::regexec(
-  string_view const dstr, reljunk jnk, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr,
+                                                          reljunk jnk,
+                                                          cudf::size_type& begin,
+                                                          cudf::size_type& end,
+                                                          cudf::size_type const group_id) const
 {
   int32_t match       = 0;
   auto pos            = begin;
@@ -206,7 +207,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(
 
   jnk.list1->reset();
   do {
-    // fast check for first char
+    // fast check for first CHAR or BOL
     if (checkstart) {
       auto startchar = static_cast<char_utf8>(jnk.startchar);
       switch (jnk.starttype) {
@@ -304,7 +305,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(
 
     } while (expanded);
 
-    // execute
+    // execute instructions
     bool continue_execute = true;
     jnk.list2->reset();
     for (int16_t i = 0; continue_execute && i < jnk.list1->get_size(); i++) {
@@ -333,7 +334,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(
           match = 1;
           begin = range.x;
           end   = group_id == 0 ? pos : range.y;
-
+          // done with execute
           continue_execute = false;
           break;
       }
@@ -351,8 +352,10 @@ __device__ __forceinline__ int32_t reprog_device::regexec(
 }
 
 template <int stack_size>
-__device__ __forceinline__ int32_t
-reprog_device::find(int32_t idx, string_view const dstr, int32_t& begin, int32_t& end)
+__device__ __forceinline__ int32_t reprog_device::find(int32_t idx,
+                                                       string_view const dstr,
+                                                       cudf::size_type& begin,
+                                                       cudf::size_type& end) const
 {
   int32_t rtn = call_regexec<stack_size>(idx, dstr, begin, end);
   if (rtn <= 0) begin = end = -1;
@@ -364,7 +367,7 @@ __device__ __forceinline__ match_result reprog_device::extract(cudf::size_type i
                                                                string_view const dstr,
                                                                cudf::size_type begin,
                                                                cudf::size_type end,
-                                                               cudf::size_type group_id)
+                                                               cudf::size_type const group_id) const
 {
   end = begin + 1;
   return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1) > 0
@@ -373,8 +376,11 @@ __device__ __forceinline__ match_result reprog_device::extract(cudf::size_type i
 }
 
 template <int stack_size>
-__device__ __forceinline__ int32_t reprog_device::call_regexec(
-  int32_t idx, string_view const dstr, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ __forceinline__ int32_t reprog_device::call_regexec(int32_t idx,
+                                                               string_view const dstr,
+                                                               cudf::size_type& begin,
+                                                               cudf::size_type& end,
+                                                               cudf::size_type const group_id) const
 {
   u_char data1[stack_size], data2[stack_size];
 
@@ -386,8 +392,12 @@ __device__ __forceinline__ int32_t reprog_device::call_regexec(
 }
 
 template <>
-__device__ __forceinline__ int32_t reprog_device::call_regexec<RX_STACK_ANY>(
-  int32_t idx, string_view const dstr, int32_t& begin, int32_t& end, int32_t group_id)
+__device__ __forceinline__ int32_t
+reprog_device::call_regexec<RX_STACK_ANY>(int32_t idx,
+                                          string_view const dstr,
+                                          cudf::size_type& begin,
+                                          cudf::size_type& end,
+                                          cudf::size_type const group_id) const
 {
   auto const relists_size = relist::alloc_size(_insts_count);
   auto* listmem           = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;

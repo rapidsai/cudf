@@ -66,12 +66,9 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   auto const starts_count  = h_prog.starts_count();
 
   // compute size of each section; make sure each is aligned appropriately
-  auto insts_size =
-    cudf::util::round_up_safe<size_t>(insts_count * sizeof(_insts[0]), sizeof(size_t));
-  auto startids_size =
-    cudf::util::round_up_safe<size_t>(starts_count * sizeof(_startinst_ids[0]), sizeof(size_t));
-  auto classes_size =
-    cudf::util::round_up_safe<size_t>(classes_count * sizeof(_classes[0]), sizeof(size_t));
+  auto insts_size    = insts_count * sizeof(_insts[0]);
+  auto startids_size = starts_count * sizeof(_startinst_ids[0]);
+  auto classes_size  = classes_count * sizeof(_classes[0]);
   for (auto idx = 0; idx < classes_count; ++idx)
     classes_size += static_cast<int32_t>((h_prog.class_at(idx).literals.size()) * sizeof(char32_t));
   // make sure each section is aligned for the subsequent section's data type
