@@ -137,7 +137,7 @@ function buildLibCudfJniInDocker {
                 -DBUILD_SHARED_LIBS=OFF && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
              cd $workspaceDir/java && \
-             mvn -X ${MVN_PHASES:-"package"} \
+             mvn ${MVN_PHASES:-"package"} \
                 -Dmaven.repo.local=$workspaceDir/.m2 \
                 -DskipTests=${SKIP_TESTS:-false} \
                 -Dparallel.level=${PARALLEL_LEVEL} \
