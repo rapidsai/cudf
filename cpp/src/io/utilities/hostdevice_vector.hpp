@@ -54,7 +54,7 @@ class hostdevice_vector {
     : num_elements(initial_size), max_elements(max_size)
   {
     if (max_elements != 0) {
-      CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
+      CUDF_CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
       d_data.resize(sizeof(T) * max_elements, stream);
     }
   }
@@ -101,14 +101,14 @@ class hostdevice_vector {
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }

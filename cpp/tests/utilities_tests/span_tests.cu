@@ -24,6 +24,9 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_vector.hpp>
 
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+
 #include <cstddef>
 #include <cstring>
 #include <string>

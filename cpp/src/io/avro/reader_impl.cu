@@ -16,7 +16,6 @@
 
 #include "avro.h"
 #include "avro_gpu.h"
-#include "thrust/iterator/transform_output_iterator.h"
 
 #include <io/comp/gpuinflate.h>
 #include <io/utilities/column_buffer.hpp>
@@ -31,15 +30,21 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <numeric>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/equal.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/tabulate.h>
+
 #include <nvcomp/snappy.h>
 
 #include <memory>
+#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
@@ -187,9 +192,9 @@ rmm::device_buffer decompress_data(datasource& source,
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
       inflate_in.host_to_device(stream);
-      CUDA_TRY(
+      CUDF_CUDA_TRY(
         cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
-      CUDA_TRY(gpuinflate(
+      CUDF_CUDA_TRY(gpuinflate(
         inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
       inflate_out.device_to_host(stream, true);
 
@@ -419,11 +424,11 @@ std::vector<column_buffer> decode_data(metadata& meta,
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
     if (valid_alias[i] != nullptr) {
-      CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
-                               valid_alias[i],
-                               out_buffers[i].null_mask_size(),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
+                                    valid_alias[i],
+                                    out_buffers[i].null_mask_size(),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
     }
   }
   schema_desc.device_to_host(stream, true);
