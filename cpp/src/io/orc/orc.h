@@ -24,6 +24,8 @@
 #include <cudf/utilities/error.hpp>
 #include <io/comp/io_uncomp.h>
 
+#include <thrust/optional.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>

@@ -33,6 +33,10 @@
 
 #include <tests/groupby/groupby_test_util.hpp>
 
+#include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+
 using namespace cudf;
 using namespace cudf::tdigest;
 

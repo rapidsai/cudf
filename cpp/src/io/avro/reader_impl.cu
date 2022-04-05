@@ -16,7 +16,6 @@
 
 #include "avro.h"
 #include "avro_gpu.h"
-#include "thrust/iterator/transform_output_iterator.h"
 
 #include <io/comp/gpuinflate.h>
 #include <io/utilities/column_buffer.hpp>
@@ -31,15 +30,21 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <numeric>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/equal.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/tabulate.h>
+
 #include <nvcomp/snappy.h>
 
 #include <memory>
+#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>

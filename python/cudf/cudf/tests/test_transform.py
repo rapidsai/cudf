@@ -29,6 +29,7 @@ def test_applymap_python_lambda(dtype, udf, testfunc):
     lhs_arr = np.random.random(size).astype(dtype)
     lhs_ser = Series(lhs_arr)
 
-    out_ser = lhs_ser.applymap(udf)
+    with pytest.warns(FutureWarning):
+        out_ser = lhs_ser.applymap(udf)
     result = testfunc(lhs_arr)
     np.testing.assert_almost_equal(result, out_ser.to_numpy())

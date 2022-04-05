@@ -25,7 +25,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/remove.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace nvtext {
 namespace detail {

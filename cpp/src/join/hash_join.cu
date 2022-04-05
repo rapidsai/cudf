@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 #include <join/hash_join.cuh>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/uninitialized_fill.h>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
@@ -25,6 +23,14 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/count.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/scatter.h>
+#include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
 #include <iostream>
